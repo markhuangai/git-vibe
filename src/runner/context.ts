@@ -16,6 +16,12 @@ interface CommentResponse extends IssueResponse {
   id?: number;
 }
 
+interface PullRequestReviewCommentResponse extends CommentResponse {
+  diff_hunk?: string;
+  in_reply_to_id?: number;
+  path?: string;
+}
+
 export async function buildIssueContext(options: {
   client: GitHubClient;
   issueNumber: string;
@@ -34,9 +40,20 @@ export async function buildIssueContext(options: {
     path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/comments?per_page=100`,
     token: options.token,
   });
+  const reviewComments =
+    options.type === "pull-request"
+      ? await pullRequestReviewComments({
+          client: options.client,
+          owner,
+          pullNumber: options.issueNumber,
+          repo,
+          token: options.token,
+        })
+      : [];
   const timeline = [
     toTimelineItem("body", `issue-${options.issueNumber}`, issue),
     ...comments.map((comment) => toTimelineItem("comment", String(comment.id || ""), comment)),
+    ...reviewComments.map(toPullRequestReviewTimelineItem),
   ].sort(compareTimelineItems);
 
   return {
@@ -51,6 +68,20 @@ export async function buildIssueContext(options: {
     repository: options.repository,
     timeline,
   };
+}
+
+async function pullRequestReviewComments(options: {
+  client: GitHubClient;
+  owner: string;
+  pullNumber: string;
+  repo: string;
+  token: string;
+}): Promise<PullRequestReviewCommentResponse[]> {
+  return options.client.request<PullRequestReviewCommentResponse[]>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.repo}/pulls/${options.pullNumber}/comments?per_page=100`,
+    token: options.token,
+  });
 }
 
 export async function buildDiscussionContext(options: {
@@ -101,6 +132,18 @@ function toTimelineItem(kind: string, id: string, item: IssueResponse): Timeline
     kind,
     reactions: item.reactions,
     url: item.html_url || "",
+  };
+}
+
+function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentResponse): TimelineItem {
+  const path = item.path ? `Path: ${item.path}\n` : "";
+  const diff = item.diff_hunk ? `Diff:\n${item.diff_hunk}\n\n` : "";
+  return {
+    ...toTimelineItem("pull-request-review-comment", String(item.id || ""), {
+      ...item,
+      body: `${path}${diff}${item.body || ""}`,
+    }),
+    parentId: item.in_reply_to_id ? String(item.in_reply_to_id) : undefined,
   };
 }
 

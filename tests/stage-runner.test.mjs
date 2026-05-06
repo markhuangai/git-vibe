@@ -92,7 +92,11 @@ describe("stage runner discussion dry-runs", () => {
       parsedOutput: { issue_title: "GitVibe dry run: Discussion title" },
     });
 
-    globalThis.fetch = fetchMock([issueResponse("PR body"), commentsResponse([])]);
+    globalThis.fetch = fetchMock([
+      issueResponse("PR body"),
+      commentsResponse([]),
+      commentsResponse([]),
+    ]);
     await expect(
       runStage({
         cwd,
@@ -289,6 +293,10 @@ describe("stage runner materialize writes", () => {
       maxTurns: 2,
       prNumber: "",
       repository: "example/repo",
+      sourceComment: {
+        kind: "discussion-comment",
+        nodeId: "discussion-command-comment",
+      },
       stage: "materialize",
       stageTimeoutMinutes: 1,
       token: "token",
@@ -299,6 +307,9 @@ describe("stage runner materialize writes", () => {
     expect(JSON.parse(fetch.mock.calls[1][1].body).labels).toEqual(["git-vibe:story"]);
     expect(JSON.parse(fetch.mock.calls[2][1].body).variables.body).toContain(
       "GitVibe created implementation issue #13",
+    );
+    expect(JSON.parse(fetch.mock.calls[2][1].body).variables.replyToId).toBe(
+      "discussion-command-comment",
     );
   });
 });

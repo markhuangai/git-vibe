@@ -55,11 +55,16 @@ export async function addDiscussionComment(options: {
   body: string;
   client: GitHubClient;
   discussionId: string;
+  replyToId?: string;
   token: string;
 }): Promise<void> {
   await options.client.graphql(
     addDiscussionCommentMutation,
-    { body: options.body, discussionId: options.discussionId },
+    {
+      body: options.body,
+      discussionId: options.discussionId,
+      replyToId: options.replyToId || null,
+    },
     options.token,
   );
 }
@@ -168,8 +173,8 @@ const createDiscussionMutation = `
 `;
 
 const addDiscussionCommentMutation = `
-  mutation GitVibeAddDiscussionComment($body: String!, $discussionId: ID!) {
-    addDiscussionComment(input: { body: $body, discussionId: $discussionId }) {
+  mutation GitVibeAddDiscussionComment($body: String!, $discussionId: ID!, $replyToId: ID) {
+    addDiscussionComment(input: { body: $body, discussionId: $discussionId, replyToId: $replyToId }) {
       comment {
         id
         url

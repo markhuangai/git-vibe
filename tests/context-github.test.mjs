@@ -48,6 +48,18 @@ describe("GitHub context builders", () => {
             id: 1,
             user: { login: "a" },
           },
+        ])
+        .mockResolvedValueOnce([
+          {
+            body: "Review feedback",
+            created_at: "2026-01-05T00:00:00Z",
+            diff_hunk: "@@ -1 +1 @@",
+            html_url: "review-comment",
+            id: 9,
+            in_reply_to_id: 8,
+            path: "src/file.ts",
+            user: { login: "reviewer" },
+          },
         ]),
     };
 
@@ -64,7 +76,17 @@ describe("GitHub context builders", () => {
       title: "Issue title",
       type: "pull-request",
     });
-    expect(context.timeline.map((item) => item.body)).toEqual(["Issue body", "First", "Second"]);
+    expect(context.timeline.map((item) => item.body)).toEqual([
+      "Issue body",
+      "First",
+      "Second",
+      "Path: src/file.ts\nDiff:\n@@ -1 +1 @@\n\nReview feedback",
+    ]);
+    expect(context.timeline.at(-1)).toMatchObject({
+      id: "9",
+      kind: "pull-request-review-comment",
+      parentId: "8",
+    });
   });
 
   it("uses stable fallbacks for sparse issue payloads", async () => {

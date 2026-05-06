@@ -166,6 +166,7 @@ Use `/git-vibe` in issues, discussions, and pull requests:
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions.
 Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
+When a command is posted in a Discussion comment, GitVibe replies in that Discussion thread. Issue comments and pull request conversation comments receive a new flat comment with an `In reply to` source link because GitHub does not expose true threaded replies for those surfaces. `/git-vibe address-feedback` also works from pull request review comments and replies to the review thread.
 
 ## App Server
 
@@ -205,7 +206,7 @@ jobs:
 Set `runner` to a self-hosted label if the consumer repo should run GitVibe on its own runners.
 Reusable GitVibe workflows install Node `22` and pnpm `10.33.3` before invoking the source-built composite actions, so the runner image does not need global `pnpm` or Corepack for GitVibe stages.
 Implementation branches are deterministic and issue-scoped: `git-vibe/{issue-number}`.
-For source-repo testing, dispatch `investigate.yml`, `summarize.yml`, `validate.yml`, `materialize.yml`, `develop.yml`, or `address-feedback.yml` directly. Leave `action-repository` and `action-ref` empty to test the current repository and ref.
+For source-repo testing, dispatch `investigate.yml`, `summarize.yml`, `validate.yml`, `materialize.yml`, `develop.yml`, or `address-feedback.yml` directly. Leave `action-repository` and `action-ref` empty to test the current repository and ref. `source-comment` is optional JSON metadata used by webhook dispatches to reply to the triggering comment; leave it empty for manual runs.
 
 ## Current Status
 

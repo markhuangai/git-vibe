@@ -3,7 +3,13 @@ import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import type { StageLogger } from "./logging.js";
 import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
-import type { ContextPacket, JsonObject, RunnerOptions, Stage } from "../shared/types.js";
+import type {
+  ContextPacket,
+  JsonObject,
+  RunnerOptions,
+  SourceComment,
+  Stage,
+} from "../shared/types.js";
 
 export interface StagePublishingOptions {
   client: GitHubClient;
@@ -54,11 +60,17 @@ async function publishArtifactComment(options: StagePublishingOptions & { body: 
     return;
   }
 
+  if (artifact.type === "pull-request" && isPullRequestReviewReply(options.runner.sourceComment)) {
+    await publishPullRequestReviewReply(options);
+    return;
+  }
+
   options.logger.event("github.issue.comment.start", {
     artifact: `${artifact.type}#${artifact.number}`,
+    source_comment_kind: options.runner.sourceComment?.kind || "",
   });
   await createIssueComment({
-    body: options.body,
+    body: flatReplyBody(options.body, options.runner.sourceComment),
     client: options.client,
     issueNumber: artifact.number,
     repository: options.runner.repository,
@@ -79,14 +91,41 @@ async function publishDiscussionComment(options: StagePublishingOptions & { body
     return;
   }
 
-  options.logger.event("github.discussion.comment.start", { discussion: artifact.number });
+  options.logger.event("github.discussion.comment.start", {
+    discussion: artifact.number,
+    reply_to: discussionReplyToId(options.runner) || "",
+  });
   await addDiscussionComment({
     body: options.body,
     client: options.client,
     discussionId: artifact.id,
+    replyToId: discussionReplyToId(options.runner),
     token: options.runner.token,
   });
   options.logger.event("github.discussion.comment.done", { discussion: artifact.number });
+}
+
+async function publishPullRequestReviewReply(
+  options: StagePublishingOptions & { body: string },
+): Promise<void> {
+  const commentId = options.runner.sourceComment?.id || "";
+  const artifact = options.context.artifact;
+  const { owner, repo } = splitRepository(options.runner.repository);
+
+  options.logger.event("github.pr.review_comment.reply.start", {
+    comment: commentId,
+    pull_request: artifact.number,
+  });
+  await options.client.request({
+    body: { body: options.body },
+    method: "POST",
+    path: `/repos/${owner}/${repo}/pulls/${artifact.number}/comments/${commentId}/replies`,
+    token: options.runner.token,
+  });
+  options.logger.event("github.pr.review_comment.reply.done", {
+    comment: commentId,
+    pull_request: artifact.number,
+  });
 }
 
 async function createIssueComment(options: {
@@ -129,6 +168,25 @@ function labelForStage(stage: Stage, output: JsonObject): string | undefined {
   if (stage === "implement") return gitVibeLabels.inProgress.name;
   if (stage === "create-pr") return gitVibeLabels.prOpened.name;
   return undefined;
+}
+
+function discussionReplyToId(runner: RunnerOptions): string | undefined {
+  const source = runner.sourceComment;
+  return source?.kind === "discussion-comment" ? source.nodeId : undefined;
+}
+
+function flatReplyBody(body: string, source: SourceComment | undefined): string {
+  if (!source?.url) return body;
+  if (isThreadedSource(source)) return body;
+  return `${body}\n\n---\nIn reply to: ${source.url}`;
+}
+
+function isPullRequestReviewReply(source: SourceComment | undefined): boolean {
+  return Boolean(source?.kind === "pull-request-review-comment" && source.id);
+}
+
+function isThreadedSource(source: SourceComment): boolean {
+  return source.kind === "discussion-comment";
 }
 
 function isReadyForApproval(value: unknown): boolean {

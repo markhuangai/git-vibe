@@ -10,6 +10,11 @@ export type Stage =
 
 export type StageAccess = "read-only" | "branch-write" | "publish-write";
 export type JsonObject = Record<string, unknown>;
+export type SourceCommentKind =
+  | "discussion-comment"
+  | "issue-comment"
+  | "pull-request-comment"
+  | "pull-request-review-comment";
 
 export interface StageDefinition {
   access: StageAccess;
@@ -27,6 +32,7 @@ export interface RunnerOptions {
   maxTurns: number;
   prNumber: string;
   repository: string;
+  sourceComment?: SourceComment;
   stage: Stage;
   stageTimeoutMinutes: number;
   token: string;
@@ -55,6 +61,14 @@ export interface TimelineItem {
   url: string;
 }
 
+export interface SourceComment {
+  body?: string;
+  id?: string;
+  kind: SourceCommentKind;
+  nodeId?: string;
+  url?: string;
+}
+
 export interface ContextPacket {
   artifact: {
     body: string;
@@ -66,6 +80,9 @@ export interface ContextPacket {
   };
   generatedAt: string;
   repository: string;
+  source?: {
+    comment?: SourceComment;
+  };
   timeline: TimelineItem[];
 }
 

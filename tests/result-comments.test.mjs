@@ -22,7 +22,9 @@ describe("stage result comments", () => {
         branch: "git-vibe/12",
         comment_body: "Detailed notes for reviewers.",
         findings: ["The request is implementable"],
+        missing_capabilities: ["Threaded PR review replies are not implemented"],
         next_state: "git-vibe:ready-for-approval",
+        partial_capabilities: ["Issue comments are flat replies with source links"],
         pr_body: "Refs #12",
         pr_title: "GitVibe: implement feature",
         proposed_labels: ["git-vibe:ready-for-approval"],
@@ -32,6 +34,7 @@ describe("stage result comments", () => {
         status: "completed",
         summary: "Validation finished.",
         tests: ["corepack pnpm test"],
+        working_capabilities: ["Discussion comments can be posted"],
       },
       stage: "validate",
       workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
@@ -42,6 +45,11 @@ describe("stage result comments", () => {
     );
     expect(body).toContain("## GitVibe Validation");
     expect(body).toContain("**Status:** `completed`");
+    expect(body).toContain("### Already Working\n- Discussion comments can be posted");
+    expect(body).toContain("### Not Working Yet\n- Threaded PR review replies are not implemented");
+    expect(body).toContain(
+      "### Partial Or Unclear\n- Issue comments are flat replies with source links",
+    );
     expect(body).toContain("### Findings\n- The request is implementable");
     expect(body).toContain("### Pull Request");
     expect(body).toContain("- Workflow run: https://github.com/example/repo/actions/runs/99");

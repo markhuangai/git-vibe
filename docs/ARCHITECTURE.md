@@ -68,7 +68,7 @@ sequenceDiagram
   GH->>App: Repository webhook: command, label, issue, discussion, or PR event
   App->>API: Validate actor permission
   App->>API: Add label, comment, or state marker
-  App->>API: Dispatch workflow with issue, PR, and config parameters
+  App->>API: Dispatch workflow with issue, PR, and source-comment parameters
   GH->>WF: Start workflow run
   WF->>Act: Run reusable action or reusable workflow
   Act->>API: Use configured repository PAT for branch, PR, comments, and metadata writes
@@ -77,6 +77,8 @@ sequenceDiagram
 Use `GITHUB_TOKEN` only for simple read operations. Use the self-hosted server's fine-grained PAT when GitVibe must trigger follow-up workflows, push branches, create pull requests, or avoid `GITHUB_TOKEN` event recursion limits.
 
 The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes and must never log or render the token.
+
+Webhook command dispatch includes a serialized `source-comment` input when the command came from an issue comment, Discussion comment, pull request conversation comment, or pull request review comment. Runner publishing uses that metadata to choose Discussion `replyToId`, pull request review-comment replies, or flat issue/PR comments with a source link.
 
 Supported workflow auth modes:
 

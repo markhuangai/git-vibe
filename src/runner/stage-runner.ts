@@ -35,7 +35,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   logger.event("context.load.start", { target: definition.target });
-  const context = await contextFor({ client, options });
+  const context = withSourceComment(await contextFor({ client, options }), options);
   logger.event("context.load.done", {
     artifact: `${context.artifact.type}#${context.artifact.number}`,
     timeline_items: context.timeline.length,
@@ -140,6 +140,11 @@ async function contextFor({
     token: options.token,
     type: definition.target,
   });
+}
+
+function withSourceComment(context: ContextPacket, options: RunnerOptions): ContextPacket {
+  if (!options.sourceComment) return context;
+  return { ...context, source: { ...(context.source || {}), comment: options.sourceComment } };
 }
 
 async function applyDeterministicWrites(options: {
@@ -286,10 +291,16 @@ async function createImplementationIssue({
       body: `GitVibe created implementation issue #${issue.number}: ${issue.html_url}`,
       client,
       discussionId: context.artifact.id,
+      replyToId: discussionReplyToId(options),
       token: options.token,
     });
     logger.event("github.discussion.comment.done", { discussion: context.artifact.number });
   }
+}
+
+function discussionReplyToId(options: RunnerOptions): string | undefined {
+  const source = options.sourceComment;
+  return source?.kind === "discussion-comment" ? source.nodeId : undefined;
 }
 
 async function createPullRequest({

@@ -14,3 +14,7 @@ Gate an issue before implementation starts. Your job is to decide whether the re
 ## Completion Bar
 
 Use `completed` when the issue is ready for implementation or when your validated conclusion is that it should not proceed yet with clear reasons. Use `blocked` when the validation itself cannot be completed due to missing context or authority.
+
+## Capability Audit Bar
+
+When the request asks what GitVibe can currently do, inspect the repository implementation before making capability claims. Separate proven shipped behavior from missing behavior and partial or ambiguous behavior. Do not infer that a capability exists only because a related GitHub write succeeded.

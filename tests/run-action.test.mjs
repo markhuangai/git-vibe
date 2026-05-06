@@ -33,6 +33,12 @@ describe("GitVibe action launcher", () => {
           GITHUB_SERVER_URL: "https://github.enterprise.test",
           GITVIBE_DRY_RUN: "true",
           GITVIBE_MAX_TURNS: "12",
+          GITVIBE_SOURCE_COMMENT: JSON.stringify({
+            id: "99",
+            kind: "issue-comment",
+            nodeId: "IC_99",
+            url: "https://github.com/example/repo/issues/12#issuecomment-99",
+          }),
           GITVIBE_STAGE_TIMEOUT_MINUTES: "34",
         },
         log,
@@ -46,6 +52,12 @@ describe("GitVibe action launcher", () => {
         issueNumber: "12",
         maxTurns: 12,
         repository: "example/repo",
+        sourceComment: {
+          id: "99",
+          kind: "issue-comment",
+          nodeId: "IC_99",
+          url: "https://github.com/example/repo/issues/12#issuecomment-99",
+        },
         stage: "investigate",
         stageTimeoutMinutes: 34,
         workflowRunUrl: "https://github.enterprise.test/example/repo/actions/runs/99",
@@ -135,6 +147,20 @@ describe("GitVibe action launcher validation", () => {
       }),
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("GITVIBE_ISSUE_NUMBER is required for this stage.");
+
+    await expect(
+      runAction({
+        argv: ["validate"],
+        env: {
+          GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_ISSUE_NUMBER: "1",
+          GITVIBE_SOURCE_COMMENT: "{bad",
+        },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith("GITVIBE_SOURCE_COMMENT must be valid JSON.");
   });
 });
 

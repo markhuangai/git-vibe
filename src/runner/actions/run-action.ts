@@ -4,6 +4,7 @@ import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runStage } from "../stage-runner.js";
+import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { StageRunResult } from "../../shared/types.js";
 
@@ -35,6 +36,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       maxTurns: numberEnv(env, "GITVIBE_MAX_TURNS", 90),
       prNumber: target.prNumber,
       repository,
+      sourceComment: parseSourceComment(envValue(env, "GITVIBE_SOURCE_COMMENT")),
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
       token,

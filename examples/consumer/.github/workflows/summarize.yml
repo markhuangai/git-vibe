@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      source-comment:
+        description: JSON source comment metadata for replying to command comments.
+        required: false
+        type: string
+        default: ""
 
 jobs:
   summarize:
@@ -22,6 +27,7 @@ jobs:
       timeout_minutes: 60
       max_turns: 90
       dry-run: ${{ inputs.dry-run }}
+      source-comment: ${{ inputs.source-comment }}
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}

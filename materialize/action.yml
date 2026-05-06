@@ -20,6 +20,10 @@ inputs:
     description: Describe work without mutating GitHub.
     required: false
     default: "false"
+  source-comment:
+    description: JSON source comment metadata for replying to command comments.
+    required: false
+    default: ""
 
 outputs:
   summary:
@@ -52,4 +56,5 @@ runs:
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
+        GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" materialize

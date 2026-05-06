@@ -86,6 +86,10 @@ describe("stage result publishing", () => {
       maxTurns: 2,
       prNumber: "",
       repository: "example/repo",
+      sourceComment: {
+        kind: "discussion-comment",
+        nodeId: "discussion-command-comment",
+      },
       stage: "summarize",
       stageTimeoutMinutes: 1,
       token: "token",
@@ -93,14 +97,22 @@ describe("stage result publishing", () => {
 
     const variables = JSON.parse(fetch.mock.calls[1][1].body).variables;
     expect(variables.discussionId).toBe("discussion-id");
+    expect(variables.replyToId).toBe("discussion-command-comment");
     expect(variables.body).toContain("## GitVibe Discussion Summary");
   });
+});
 
+describe("stage result PR replies", () => {
   it("posts PR feedback completion results to the pull request conversation", async () => {
     const cwd = await workspace();
     commitAll(cwd);
     generateText.mockResolvedValueOnce(aiResult(feedbackOutput()));
-    const fetch = fetchMock([issueResponse("PR body"), commentsResponse([]), response(200, {})]);
+    const fetch = fetchMock([
+      issueResponse("PR body"),
+      commentsResponse([]),
+      commentsResponse([]),
+      response(200, {}),
+    ]);
     globalThis.fetch = fetch;
 
     await runStage({
@@ -110,13 +122,53 @@ describe("stage result publishing", () => {
       maxTurns: 2,
       prNumber: "12",
       repository: "example/repo",
+      sourceComment: {
+        kind: "pull-request-comment",
+        url: "https://github.com/example/repo/pull/12#issuecomment-2",
+      },
       stage: "address-pr-feedback",
       stageTimeoutMinutes: 1,
       token: "token",
     });
 
-    expect(fetch.mock.calls[2][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[2][1].body).body).toContain("## GitVibe PR Feedback Update");
+    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(JSON.parse(fetch.mock.calls[3][1].body).body).toContain("## GitVibe PR Feedback Update");
+    expect(JSON.parse(fetch.mock.calls[3][1].body).body).toContain(
+      "In reply to: https://github.com/example/repo/pull/12#issuecomment-2",
+    );
+  });
+
+  it("posts PR feedback completion results as review comment replies", async () => {
+    const cwd = await workspace();
+    commitAll(cwd);
+    generateText.mockResolvedValueOnce(aiResult(feedbackOutput()));
+    const fetch = fetchMock([
+      issueResponse("PR body"),
+      commentsResponse([]),
+      commentsResponse([]),
+      response(200, {}),
+    ]);
+    globalThis.fetch = fetch;
+
+    await runStage({
+      cwd,
+      dryRun: false,
+      issueNumber: "",
+      maxTurns: 2,
+      prNumber: "12",
+      repository: "example/repo",
+      sourceComment: {
+        id: "88",
+        kind: "pull-request-review-comment",
+        url: "https://github.com/example/repo/pull/12#discussion_r88",
+      },
+      stage: "address-pr-feedback",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/pulls/12/comments/88/replies");
+    expect(JSON.parse(fetch.mock.calls[3][1].body).body).toContain("## GitVibe PR Feedback Update");
   });
 });
 

@@ -28,7 +28,7 @@
 
 - Unit tests for command parsing, config loading, permission checks, label transitions, and hidden metadata markers.
 - Unit tests for AI context packet ordering, author weighting, stage contract validation, provider adapter errors, and comment rendering.
-- Webhook integration tests for issues, issue comments, discussions, discussion comments, PR comments, review comments, and labels.
+- Webhook integration tests for issues, issue comments, discussions, discussion comments, PR conversation comments, PR review comments, source-comment dispatch metadata, and labels.
 - End-to-end fixture repo tests for story conversion, implementation issue creation, approved development, PR creation, and PR feedback handling.
 - Security tests for guest command rejection, bot-event recursion prevention, fork PR secret protection, token redaction, and read-only AI stages performing no mutations.
 

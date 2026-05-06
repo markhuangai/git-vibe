@@ -234,13 +234,13 @@ sequenceDiagram
   participant Agent as GitVibe Coding Agent
 
   M->>PR: Add review comments
-  M->>PR: /git-vibe address-feedback
-  PR->>App: Webhook comment event
+  M->>PR: /git-vibe address-feedback in PR conversation or review thread
+  PR->>App: Webhook issue_comment or pull_request_review_comment event
   App->>App: Validate actor permission
-  App->>WF: Dispatch feedback workflow
-  WF->>Agent: Provide unresolved review threads
+  App->>WF: Dispatch feedback workflow with source-comment metadata
+  WF->>Agent: Provide PR conversation and review-comment timeline
   Agent->>PR: Push fixes or explain skipped comments
-  Agent->>PR: Post completion summary
+  Agent->>PR: Post completion summary in the matching surface
 ```
 
 ## Linking And Traceability
@@ -249,6 +249,7 @@ GitVibe must make every generated artifact discoverable from the others.
 
 - When a feature issue is converted to a discussion, the closed issue gets a comment linking the discussion, and the discussion body or first bot comment links the original issue.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
+- Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering comment. Discussions and pull request review comments use threaded replies; issue and pull request conversation comments use flat comments with an explicit source link.
 - When an investigation or development workflow starts, GitVibe posts a short issue/discussion comment containing the workflow run URL and a hidden metadata marker for the run id, stage, and source artifact.
 - Implementation branches use the deterministic format `git-vibe/{issue-number}`. When a branch is created, GitVibe comments with the branch name and workflow run URL.
 - When a pull request is created, the PR body references the source issue and discussion. If the PR targets the repository default branch, use a closing keyword such as `Fixes #123` or `Closes #123`; if it targets a non-default branch, still include explicit issue/discussion links because GitHub closing keywords only create linked issues for default-branch PRs.

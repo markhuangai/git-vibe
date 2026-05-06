@@ -7,6 +7,8 @@ import { pathToFileURL } from "node:url";
 import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../shared/discussions.js";
 import { GitHubClient } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
+import { encodeSourceComment } from "../shared/source-comments.js";
+import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import {
   buildDiscussionBody,
   buildDiscussionTitle,
@@ -22,7 +24,14 @@ import { parseCommand } from "./commands.js";
 
 export interface WebhookPayload {
   action?: string;
-  comment?: { body?: string; node_id?: string; nodeId?: string };
+  comment?: {
+    body?: string;
+    html_url?: string;
+    id?: number | string;
+    node_id?: string;
+    nodeId?: string;
+    url?: string;
+  };
   discussion?: { number?: number };
   issue?: {
     body?: string | null;
@@ -34,6 +43,7 @@ export interface WebhookPayload {
     user?: { login?: string };
   };
   label?: { name?: string };
+  pull_request?: { number?: number | string };
   repository?: { name: string; owner: { login: string } };
   sender?: { login?: string; type?: string };
 }
@@ -222,6 +232,15 @@ async function handleWebhook(
     return;
   }
 
+  if (
+    event === "pull_request_review_comment" &&
+    payload.action === "created" &&
+    payload.pull_request
+  ) {
+    await handlePullRequestReviewComment({ ...state, owner, payload, repo, token });
+    return;
+  }
+
   if (event === "issues" && payload.action === "labeled" && payload.issue) {
     await handleIssueLabeled({ ...state, owner, payload, repo, token });
     return;
@@ -283,21 +302,33 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
   const issueNumber = String(options.payload.issue?.number || "");
   if (parsed.command === "address-feedback" && options.payload.issue?.pull_request) {
     await acknowledgeCommand(options);
-    await dispatchWorkflow(options, "address-feedback.yml", { "pr-number": issueNumber });
+    await dispatchWorkflow(
+      options,
+      "address-feedback.yml",
+      commandInputs(options, { "pr-number": issueNumber }, "pull-request-comment"),
+    );
     return;
   }
 
   if (parsed.command === "approve" && !options.payload.issue?.pull_request) {
     await acknowledgeCommand(options);
     await addIssueLabel(options, issueNumber, gitVibeLabels.approved.name);
-    await dispatchWorkflow(options, "develop.yml", { "issue-number": issueNumber });
+    await dispatchWorkflow(
+      options,
+      "develop.yml",
+      commandInputs(options, { "issue-number": issueNumber }, "issue-comment"),
+    );
     return;
   }
 
   const workflow = commandWorkflow(parsed.command);
   if (workflow && !options.payload.issue?.pull_request) {
     await acknowledgeCommand(options);
-    await dispatchWorkflow(options, workflow, { "issue-number": issueNumber });
+    await dispatchWorkflow(
+      options,
+      workflow,
+      commandInputs(options, { "issue-number": issueNumber }, "issue-comment"),
+    );
     return;
   }
 
@@ -317,8 +348,26 @@ async function handleDiscussionComment(options: WebhookContext): Promise<void> {
     await acknowledgeCommand(options);
     await dispatchWorkflow(options, `${parsed.command}.yml`, {
       "discussion-number": String(options.payload.discussion?.number || ""),
+      "source-comment": sourceCommentInput(options, "discussion-comment"),
     });
   }
+}
+
+async function handlePullRequestReviewComment(options: WebhookContext): Promise<void> {
+  const parsed = parseCommand(options.payload.comment?.body?.trim() || "");
+  if (!parsed) return;
+  await requireTrustedActor(options);
+
+  if (parsed.command === "address-feedback") {
+    await acknowledgeCommand(options);
+    await dispatchWorkflow(options, "address-feedback.yml", {
+      "pr-number": String(options.payload.pull_request?.number || ""),
+      "source-comment": sourceCommentInput(options, "pull-request-review-comment"),
+    });
+    return;
+  }
+
+  options.log(`recognized command but no dispatch rule matched: ${parsed.raw}`);
 }
 
 async function handleIssueLabeled(options: WebhookContext): Promise<void> {
@@ -391,6 +440,35 @@ async function dispatchWorkflow(
     path: `/repos/${options.owner}/${options.repo}/actions/workflows/${workflow}/dispatches`,
     token: options.token,
   });
+}
+
+function commandInputs(
+  options: WebhookContext,
+  inputs: Record<string, string>,
+  kind: SourceCommentKind,
+): Record<string, string> {
+  return {
+    ...inputs,
+    "source-comment": sourceCommentInput(options, kind),
+  };
+}
+
+function sourceCommentInput(options: WebhookContext, kind: SourceCommentKind): string {
+  return encodeSourceComment(sourceCommentFromPayload(options.payload.comment, kind));
+}
+
+function sourceCommentFromPayload(
+  comment: WebhookPayload["comment"],
+  kind: SourceCommentKind,
+): SourceComment | undefined {
+  if (!comment) return undefined;
+  return {
+    body: comment.body,
+    id: comment.id === undefined ? undefined : String(comment.id),
+    kind,
+    nodeId: commandCommentNodeId(comment),
+    url: comment.html_url || comment.url,
+  };
 }
 
 async function acknowledgeCommand(options: WebhookContext): Promise<void> {

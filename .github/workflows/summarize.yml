@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: false
+      source-comment:
+        description: JSON source comment metadata for replying to command comments.
+        required: false
+        type: string
+        default: ""
       action-repository:
         description: GitVibe action source repository. Empty means this repository.
         required: false
@@ -63,6 +68,11 @@ on:
         required: false
         type: boolean
         default: false
+      source-comment:
+        description: JSON source comment metadata for replying to command comments.
+        required: false
+        type: string
+        default: ""
       action-repository:
         description: GitVibe action source repository.
         required: false
@@ -115,3 +125,4 @@ jobs:
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}

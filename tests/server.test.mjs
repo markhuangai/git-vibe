@@ -164,9 +164,14 @@ describe("GitVibe app server command dispatch", () => {
     });
 
     expect(workflowDispatches(client)).toEqual([
-      { inputs: { "issue-number": "2" }, ref: "main" },
-      { inputs: { "pr-number": "3" }, ref: "main" },
-      { inputs: { "discussion-number": "5" }, ref: "main" },
+      { inputs: expect.objectContaining({ "issue-number": "2" }), ref: "main" },
+      { inputs: expect.objectContaining({ "pr-number": "3" }), ref: "main" },
+      { inputs: expect.objectContaining({ "discussion-number": "5" }), ref: "main" },
+    ]);
+    expect(sourceCommentKinds(client)).toEqual([
+      "issue-comment",
+      "pull-request-comment",
+      "discussion-comment",
     ]);
     expect(reactionVariables(client)).toEqual([
       { content: "ROCKET", subjectId: "issue-approve-comment" },
@@ -189,7 +194,7 @@ describe("GitVibe app server command dispatch", () => {
     });
 
     expect(workflowDispatches(client)).toEqual([
-      { inputs: { "discussion-number": "6" }, ref: "main" },
+      { inputs: expect.objectContaining({ "discussion-number": "6" }), ref: "main" },
     ]);
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("command acknowledgement failed: reaction unavailable"),
@@ -347,9 +352,56 @@ describe("GitVibe app server dispatch edge cases", () => {
       ]),
     );
     expect(workflowDispatches(client).at(-1)).toEqual({
-      inputs: { "discussion-number": "5" },
+      inputs: expect.objectContaining({ "discussion-number": "5" }),
       ref: "main",
     });
+  });
+});
+
+describe("GitVibe app server PR review command dispatch", () => {
+  it("dispatches PR review comment commands with threaded reply metadata", async () => {
+    const client = createClient();
+    const app = createApp({ client });
+
+    await app.handleWebhook("pull_request_review_comment", {
+      action: "created",
+      comment: {
+        body: "/git-vibe address-feedback",
+        html_url: "https://github.com/example/repo/pull/12#discussion_r55",
+        id: 55,
+        node_id: "review-comment-node",
+      },
+      pull_request: { number: 12 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      { inputs: expect.objectContaining({ "pr-number": "12" }), ref: "main" },
+    ]);
+    expect(sourceComments(client)[0]).toMatchObject({
+      id: "55",
+      kind: "pull-request-review-comment",
+      nodeId: "review-comment-node",
+      url: "https://github.com/example/repo/pull/12#discussion_r55",
+    });
+  });
+
+  it("logs unsupported PR review comment commands", async () => {
+    const log = vi.fn();
+    const client = createClient();
+    const app = createApp({ client, log });
+
+    await app.handleWebhook("pull_request_review_comment", {
+      action: "created",
+      comment: { body: "/git-vibe validate", node_id: "review-comment-node" },
+      pull_request: { number: 12 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("recognized command"));
   });
 });
 
@@ -550,6 +602,17 @@ function workflowDispatches(client) {
     .map(([request]) => request)
     .filter((request) => request.path.includes("/actions/workflows/"))
     .map((request) => request.body);
+}
+
+function sourceComments(client) {
+  return workflowDispatches(client)
+    .map((dispatch) => dispatch.inputs["source-comment"])
+    .filter(Boolean)
+    .map((value) => JSON.parse(value));
+}
+
+function sourceCommentKinds(client) {
+  return sourceComments(client).map((comment) => comment.kind);
 }
 
 function reactionVariables(client) {
