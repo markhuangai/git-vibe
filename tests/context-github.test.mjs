@@ -178,7 +178,7 @@ describe("GitHub client", () => {
       .mockResolvedValueOnce(response(204, ""))
       .mockResolvedValueOnce(response(200, { data: { value: 3 } }));
 
-    const client = new GitHubClient({ apiBaseUrl: "https://api.test" });
+    const client = new GitHubClient({ apiBaseUrl: "https://api.test", retryBaseDelayMs: 0 });
     await expect(
       client.request({ method: "GET", path: "/repos/a/b", token: "t" }),
     ).resolves.toEqual({
@@ -203,13 +203,36 @@ describe("GitHub client", () => {
       .mockResolvedValueOnce(response(500, { message: "boom" }, false))
       .mockResolvedValueOnce(response(200, { errors: [{ message: "bad query" }] }));
 
-    const client = new GitHubClient({ apiBaseUrl: "https://api.test" });
+    const client = new GitHubClient({ apiBaseUrl: "https://api.test", retryBaseDelayMs: 0 });
     await expect(client.request({ method: "GET", path: "/bad", token: "t" })).rejects.toThrow(
       "GitHub API GET /bad failed",
     );
     await expect(client.graphql("query", {}, "t")).rejects.toThrow("GitHub GraphQL failed");
     expect(splitRepository("owner/repo")).toEqual({ owner: "owner", repo: "repo" });
     expect(() => splitRepository("missing")).toThrow("repository must be owner/repo");
+  });
+
+  it("retries transient safe GitHub reads but not writes", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response(504, { message: "timeout" }, false))
+      .mockResolvedValueOnce(response(200, { ok: true }))
+      .mockResolvedValueOnce(response(504, { message: "timeout" }, false))
+      .mockResolvedValueOnce(response(200, { data: { value: 4 } }))
+      .mockResolvedValueOnce(response(504, { message: "timeout" }, false));
+
+    const client = new GitHubClient({ apiBaseUrl: "https://api.test", retryBaseDelayMs: 0 });
+    await expect(
+      client.request({ method: "GET", path: "/repos/a/b", token: "t" }),
+    ).resolves.toEqual({ ok: true });
+    await expect(client.graphql("query Test { viewer { login } }", {}, "t")).resolves.toEqual({
+      value: 4,
+    });
+    await expect(client.graphql("mutation Test { noop }", {}, "t")).rejects.toThrow(
+      "GitHub API POST /graphql failed: 504",
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(5);
   });
 });
 
