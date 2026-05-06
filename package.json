@@ -19,7 +19,7 @@
     "build": "tsc --project tsconfig.build.json && node scripts/build-actions.mjs",
     "build:app": "tsc --project tsconfig.build.json",
     "bundle:actions": "node scripts/build-actions.mjs",
-    "check": "prettier --check . && eslint . && if command -v pnpm >/dev/null 2>&1; then PNPM=pnpm; elif command -v corepack >/dev/null 2>&1; then PNPM='corepack pnpm'; else echo 'pnpm or Corepack is required.'; exit 127; fi; $PNPM typecheck && vitest run --coverage && $PNPM build && github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml && $PNPM audit --prod",
+    "check": "prettier --check . && eslint . && (command -v pnpm >/dev/null 2>&1 || command -v corepack >/dev/null 2>&1 || (echo 'pnpm or Corepack is required.' && exit 127)) && PNPM=\"$(command -v pnpm >/dev/null 2>&1 && echo pnpm || echo 'corepack pnpm')\" && $PNPM typecheck && vitest run --coverage && $PNPM build && github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml && $PNPM audit --prod",
     "coverage": "vitest run --coverage",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

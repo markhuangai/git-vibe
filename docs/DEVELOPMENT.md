@@ -75,6 +75,7 @@ Anthropic's native installer when the `claude` command is missing, then verifies
 - Enforce JavaScript/MJS size limits through ESLint: 700 lines per file and 100 lines per function. Generated bundles are excluded.
 - Use Husky + lint-staged for staged format/lint checks, then run typecheck and coverage in pre-commit.
 - CI is a PR quality gate plus manual dispatch, runs coverage before build, and must run on `self-hosted` runners for this repository.
+- Reusable GitVibe workflows install Node `22` and pnpm `10.33.3` before invoking source-built composite actions. Do not rely on global runner `pnpm` or Corepack for stage execution.
 
 ## Assumptions
 

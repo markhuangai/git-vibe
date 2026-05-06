@@ -5,7 +5,7 @@ import { parse } from "yaml";
 /**
  * @typedef {{ env?: Record<string, string>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: unknown } }} Workflow
  * @typedef {{ env?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
- * @typedef {{ env?: Record<string, string>, name?: string, uses?: string }} WorkflowStep
+ * @typedef {{ env?: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
 
@@ -116,7 +116,9 @@ describe("GitVibe workflow wiring", () => {
       );
     }
   });
+});
 
+describe("GitVibe action runtime setup", () => {
   it("builds generated action runtime inside composite actions", () => {
     for (const file of actionFiles) {
       const content = readFileSync(file, "utf8");
@@ -140,6 +142,30 @@ describe("GitVibe workflow wiring", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
+    }
+  });
+
+  it("sets up Node and pnpm before local GitVibe actions run", () => {
+    for (const file of reusableWorkflows) {
+      const workflow = readWorkflow(file);
+      for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
+        const steps = job.steps || [];
+        const localActionIndex = steps.findIndex((step) =>
+          String(step.uses || "").startsWith("./.git-vibe/actions/"),
+        );
+        if (localActionIndex === -1) continue;
+
+        const setupSteps = steps.slice(0, localActionIndex);
+        const pnpmStep = setupSteps.find((step) => step.uses === "pnpm/action-setup@v4");
+        const nodeStep = setupSteps.find((step) => step.uses === "actions/setup-node@v4");
+
+        expect(pnpmStep, `${file} ${jobName} installs pnpm before GitVibe action`).toMatchObject({
+          with: { run_install: false, version: "10.33.3" },
+        });
+        expect(nodeStep, `${file} ${jobName} installs Node before GitVibe action`).toMatchObject({
+          with: { "node-version": 22 },
+        });
+      }
     }
   });
 });

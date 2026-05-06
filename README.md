@@ -203,6 +203,7 @@ jobs:
 ```
 
 Set `runner` to a self-hosted label if the consumer repo should run GitVibe on its own runners.
+Reusable GitVibe workflows install Node `22` and pnpm `10.33.3` before invoking the source-built composite actions, so the runner image does not need global `pnpm` or Corepack for GitVibe stages.
 Implementation branches are deterministic and issue-scoped: `git-vibe/{issue-number}`.
 For source-repo testing, dispatch `investigate.yml`, `summarize.yml`, `validate.yml`, `materialize.yml`, `develop.yml`, or `address-feedback.yml` directly. Leave `action-repository` and `action-ref` empty to test the current repository and ref.
 

@@ -142,6 +142,13 @@ jobs:
           repository: ${{ inputs.action-repository || github.repository }}
           ref: ${{ inputs.action-ref || github.ref_name }}
           path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: ./.git-vibe/actions/investigate
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
@@ -168,6 +175,13 @@ jobs:
           repository: ${{ inputs.action-repository || github.repository }}
           ref: ${{ inputs.action-ref || github.ref_name }}
           path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: ./.git-vibe/actions/implement
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
@@ -192,6 +206,13 @@ jobs:
           repository: ${{ inputs.action-repository || github.repository }}
           ref: ${{ inputs.action-ref || github.ref_name }}
           path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: ./.git-vibe/actions/review-matrix
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
@@ -218,6 +239,13 @@ jobs:
           repository: ${{ inputs.action-repository || github.repository }}
           ref: ${{ inputs.action-ref || github.ref_name }}
           path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: ./.git-vibe/actions/create-pr
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
