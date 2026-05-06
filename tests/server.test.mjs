@@ -143,21 +143,21 @@ describe("GitVibe app server command dispatch", () => {
 
     await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "@git-vibe approve" },
+      comment: { body: "/git-vibe approve" },
       issue: { number: 2 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
     await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "@git-vibe address-feedback" },
+      comment: { body: "/git-vibe address-feedback" },
       issue: { number: 3, pull_request: {} },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
     await app.handleWebhook("discussion_comment", {
       action: "created",
-      comment: { body: "@git-vibe materialize" },
+      comment: { body: "/git-vibe materialize" },
       discussion: { number: 5 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -180,7 +180,7 @@ describe("GitVibe app server command dispatch", () => {
         }),
         {
           action: "created",
-          comment: { body: "@git-vibe investigate" },
+          comment: { body: "/git-vibe investigate" },
           issue: { number: 2 },
           repository: repositoryPayload(),
           sender: { login: "guest" },
@@ -196,7 +196,7 @@ describe("GitVibe app server command dispatch", () => {
     const client = createClient();
     await createApp({ client, log }).handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "@git-vibe summarize" },
+      comment: { body: "/git-vibe summarize" },
       issue: { number: 3, pull_request: {} },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -299,7 +299,7 @@ describe("GitVibe app server dispatch edge cases", () => {
     for (const command of ["investigate", "validate", "start"]) {
       await app.handleWebhook("issue_comment", {
         action: "created",
-        comment: { body: `@git-vibe ${command}` },
+        comment: { body: `/git-vibe ${command}` },
         issue: { number: 2 },
         repository: repositoryPayload(),
         sender: { login: "maintainer" },
@@ -307,7 +307,7 @@ describe("GitVibe app server dispatch edge cases", () => {
     }
     await app.handleWebhook("discussion_comment", {
       action: "created",
-      comment: { body: "@git-vibe validate" },
+      comment: { body: "/git-vibe validate" },
       discussion: { number: 5 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -344,7 +344,7 @@ describe("GitVibe app server rejection paths", () => {
         createApp(),
         {
           action: "created",
-          comment: { body: "@git-vibe investigate" },
+          comment: { body: "/git-vibe investigate" },
           issue: { number: 2 },
           repository: repositoryPayload(),
         },
@@ -362,7 +362,7 @@ describe("GitVibe app server rejection paths", () => {
         }),
         {
           action: "created",
-          comment: { body: "@git-vibe investigate" },
+          comment: { body: "/git-vibe investigate" },
           issue: { number: 2 },
           repository: repositoryPayload(),
           sender: { login: "maintainer" },

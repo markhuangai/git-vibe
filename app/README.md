@@ -10,10 +10,10 @@ It currently handles:
 - `GET /health` for health checks.
 - GitVibe label bootstrap for webhook repositories.
 - Feature request issue-form intake conversion into linked GitHub Discussions.
-- `@git-vibe investigate` on issue comments.
-- `@git-vibe start` on issue comments.
-- `@git-vibe address-feedback` on pull request comments.
-- `/git-vibe ...` as an optional compatibility command for Actions-native slash command mode.
+- `/git-vibe investigate` on issue comments.
+- `/git-vibe start` on issue comments.
+- `/git-vibe address-feedback` on pull request comments.
+- `/git-vibe ...` as the only supported public command prefix.
 - Protected `git-vibe:*` issue labels, including `git-vibe:approved`.
 - Fine-grained PAT-backed GitHub API writes.
 - Repository permission checks before dispatching workflows.

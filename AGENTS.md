@@ -9,8 +9,8 @@ The canonical product/architecture plan is [docs/PROJECT_PLAN.md](docs/PROJECT_P
 ## Workflow
 
 - Do not create commits unless the user explicitly asks for a commit.
-- Use `@git-vibe ...` as the primary public command form.
-- Keep `/git-vibe ...` only as compatibility for Actions-native slash command mode.
+- Use `/git-vibe ...` as the only public command form.
+- Do not support `@git-vibe ...`; it looks like a GitHub account mention.
 - This repository's own CI runs on `self-hosted` runners only.
 - Consumer example workflows may remain configurable because consumer repos may not have self-hosted runners.
 

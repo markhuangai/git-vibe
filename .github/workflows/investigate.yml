@@ -89,7 +89,7 @@ env:
 jobs:
   investigate:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: ${{ inputs.timeout_minutes }}
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     permissions:
       contents: read
       issues: write
@@ -106,6 +106,6 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ inputs.timeout_minutes }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}

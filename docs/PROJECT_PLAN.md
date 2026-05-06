@@ -29,7 +29,7 @@ jobs:
 
 Core defaults:
 
-- `@git-vibe ...` is the primary public command form.
+- `/git-vibe ...` is the primary public command form.
 - Bugs are investigated before any implementation approval.
 - Feature requests start in discussions and are materialized into issues only after refinement.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.

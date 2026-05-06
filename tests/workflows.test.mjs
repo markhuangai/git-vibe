@@ -4,7 +4,7 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ env?: Record<string, string>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: unknown } }} Workflow
- * @typedef {{ env?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], uses?: string }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, name?: string, uses?: string }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
@@ -132,6 +132,20 @@ describe("GitVibe workflow wiring", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
+    }
+  });
+});
+
+describe("GitVibe workflow numeric inputs", () => {
+  it("coerces workflow-dispatch timeout inputs before assigning job timeouts", () => {
+    for (const file of reusableWorkflows) {
+      const workflow = readWorkflow(file);
+      for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
+        const timeout = job["timeout-minutes"];
+        expect(timeout, `${file} ${jobName} timeout uses fromJSON`).toMatch(
+          /^\$\{\{ fromJSON\(inputs\.[a-z_]+_minutes\) \}\}$/,
+        );
+      }
     }
   });
 });

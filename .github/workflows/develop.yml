@@ -129,7 +129,7 @@ env:
 jobs:
   investigate:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: ${{ inputs.investigation_timeout_minutes }}
+    timeout-minutes: ${{ fromJSON(inputs.investigation_timeout_minutes) }}
     permissions:
       contents: read
       issues: write
@@ -146,14 +146,14 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ inputs.investigation_timeout_minutes }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.investigation_timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
 
   implement:
     runs-on: ${{ inputs.runner }}
     needs: investigate
-    timeout-minutes: ${{ inputs.implementation_timeout_minutes }}
+    timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
     permissions:
       contents: write
       issues: write
@@ -172,14 +172,14 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ inputs.implementation_timeout_minutes }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
           max-turns: ${{ inputs.implementation_max_turns }}
           dry-run: ${{ inputs.dry-run }}
 
   review-matrix:
     runs-on: ${{ inputs.runner }}
     needs: implement
-    timeout-minutes: ${{ inputs.review_timeout_minutes }}
+    timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     permissions:
       contents: read
       issues: write
@@ -196,14 +196,14 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ inputs.review_timeout_minutes }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
 
   create-pr:
     runs-on: ${{ inputs.runner }}
     needs: review-matrix
-    timeout-minutes: ${{ inputs.publish_timeout_minutes }}
+    timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
     permissions:
       contents: write
       issues: write
@@ -222,6 +222,6 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ inputs.publish_timeout_minutes }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
           max-turns: 20
           dry-run: ${{ inputs.dry-run }}

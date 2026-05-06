@@ -12,10 +12,10 @@ stateDiagram-v2
   Intake --> ConvertedDiscussion: feature submitted as issue
   ConvertedDiscussion --> StoryDiscussion: create discussion, link issue, close issue
 
-  StoryDiscussion --> Refinement: @git-vibe summarize or @git-vibe validate
+  StoryDiscussion --> Refinement: /git-vibe summarize or /git-vibe validate
   Refinement --> NeedsAnswers: open questions found
-  NeedsAnswers --> Refinement: replies plus @git-vibe validate
-  Refinement --> ImplementationIssue: no blockers plus @git-vibe materialize
+  NeedsAnswers --> Refinement: replies plus /git-vibe validate
+  Refinement --> ImplementationIssue: no blockers plus /git-vibe materialize
 
   BugIssue --> WaitingForBugInvestigation: default state, no AI work
   WaitingForBugInvestigation --> BugInvestigation: maintainer command or configured reaction threshold
@@ -24,12 +24,12 @@ stateDiagram-v2
   BugValidation --> BugNeedsContext: feedback does not make sense, reset ready flag
   BugValidation --> ImplementationIssue: validation passes
 
-  ImplementationIssue --> Approved: @git-vibe approve plus approved label
-  Approved --> Development: @git-vibe start or protected label
+  ImplementationIssue --> Approved: /git-vibe approve plus approved label
+  Approved --> Development: /git-vibe start or protected label
 
   Development --> PullRequest: branch, commits, tests, PR
   PullRequest --> Feedback: review comments or requested changes
-  Feedback --> Development: @git-vibe address-feedback
+  Feedback --> Development: /git-vibe address-feedback
   PullRequest --> HumanMerge: admin or collaborator merges
 
   HumanMerge --> [*]
@@ -60,16 +60,16 @@ Consumer config lives at:
 Initial commands:
 
 ```text
-@git-vibe summarize
-@git-vibe investigate
-@git-vibe validate
-@git-vibe materialize
-@git-vibe approve
-@git-vibe start
-@git-vibe address-feedback
+/git-vibe summarize
+/git-vibe investigate
+/git-vibe validate
+/git-vibe materialize
+/git-vibe approve
+/git-vibe start
+/git-vibe address-feedback
 ```
 
-GitVibe should document `@git-vibe ...` as the primary public command form. `/git-vibe ...` is optional compatibility for Actions-native receiver mode and possible future GitHub slash-command support; it should not be the primary documented command. GitHub does not currently provide a stable custom repository command autocomplete contract, so command parsing must work from plain comment text.
+GitVibe uses `/git-vibe ...` as the only public command form. `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions. GitHub does not currently provide a stable custom repository command autocomplete contract, so command parsing must work from plain comment text.
 
 Initial labels:
 
@@ -142,18 +142,18 @@ sequenceDiagram
   App->>Issue: Label as bug or needs-investigation
   Note over App,Issue: No AI work starts by default
 
-  Maint->>Issue: @git-vibe investigate
+  Maint->>Issue: /git-vibe investigate
   App->>AI: Dispatch investigation-only workflow
   AI->>Issue: Post findings, likely root cause, and expected behavior questions
 
   Maint->>Issue: Provide expected behavior and context
-  Maint->>Issue: @git-vibe validate
+  Maint->>Issue: /git-vibe validate
   App->>AI: Dispatch validation pass
   AI->>Issue: Confirm actionable plan or explain contradictions
 
   alt validation passes
     App->>Issue: Mark ready-for-approval
-    Maint->>Issue: @git-vibe approve
+    Maint->>Issue: /git-vibe approve
   else validation fails
     App->>Issue: Remove ready/approved flag and wait for clarification
   end
@@ -192,7 +192,7 @@ sequenceDiagram
   Note over Disc,App: GitVibe reads body, comments, replies, reactions, and author authority
 
   alt maintainer command
-    Maint->>Disc: @git-vibe summarize
+    Maint->>Disc: /git-vibe summarize
   else configured community threshold
     Community->>Disc: Discussion reaches configured +1 threshold
   end
@@ -201,10 +201,10 @@ sequenceDiagram
   AI->>Disc: Post summary, proposed behavior, open questions, and risks
 
   Maint->>Disc: Provide clarifications
-  Maint->>Disc: @git-vibe validate
+  Maint->>Disc: /git-vibe validate
   AI->>Disc: Confirm actionable state or request more answers
 
-  Maint->>Disc: @git-vibe materialize
+  Maint->>Disc: /git-vibe materialize
   App->>Issue: Create implementation issue with backlinks and accepted summary
   App->>Disc: Link implementation issue
 ```
@@ -233,7 +233,7 @@ sequenceDiagram
   participant Agent as GitVibe Coding Agent
 
   M->>PR: Add review comments
-  M->>PR: @git-vibe address-feedback
+  M->>PR: /git-vibe address-feedback
   PR->>App: Webhook comment event
   App->>App: Validate actor permission
   App->>WF: Dispatch feedback workflow

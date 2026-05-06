@@ -30,9 +30,6 @@ labels:
 
 commands:
   prefix: /git-vibe
-  mention: "@git-vibe"
-  bot_mention: "@git-vibe"
-  slash_compatibility: true
   allow_external_agent_mentions: false
 
 runner:

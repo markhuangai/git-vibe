@@ -89,7 +89,7 @@ env:
 jobs:
   address-feedback:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: ${{ inputs.timeout_minutes }}
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     permissions:
       contents: write
       issues: write
@@ -108,6 +108,6 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
-          stage-timeout-minutes: ${{ inputs.timeout_minutes }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}

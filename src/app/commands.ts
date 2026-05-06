@@ -1,4 +1,4 @@
-const commandPattern = /^(?<trigger>@git-vibe|\/git-vibe)(?:\s+(?<rest>.*))?$/i;
+const commandPattern = /^(?<trigger>\/git-vibe)(?:\s+(?<rest>.*))?$/i;
 
 export interface ParsedCommand {
   args: string[];

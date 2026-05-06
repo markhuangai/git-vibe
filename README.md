@@ -152,19 +152,19 @@ Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 ## Commands
 
-Use `@git-vibe` in issues, discussions, and pull requests:
+Use `/git-vibe` in issues, discussions, and pull requests:
 
 ```text
-@git-vibe investigate
-@git-vibe summarize
-@git-vibe validate
-@git-vibe materialize
-@git-vibe approve
-@git-vibe start
-@git-vibe address-feedback
+/git-vibe investigate
+/git-vibe summarize
+/git-vibe validate
+/git-vibe materialize
+/git-vibe approve
+/git-vibe start
+/git-vibe address-feedback
 ```
 
-`/git-vibe ...` is reserved as an optional compatibility path for Actions-native slash command mode.
+`@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions.
 
 ## App Server
 
