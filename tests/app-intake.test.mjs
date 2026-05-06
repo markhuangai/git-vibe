@@ -4,8 +4,11 @@ import { gitVibeLabels, gitVibeLabelList, isGitVibeLabel } from "../src/lib/labe
 import { implementationIssueBody } from "../src/lib/traceability.ts";
 import {
   buildDiscussionBody,
+  buildDiscussionTitle,
   convertedIssueComment,
+  discussionSetupErrorComment,
   hasConversionMarker,
+  hasDiscussionSetupMarker,
   isFeatureRequestIssue,
 } from "../src/app/intake.ts";
 
@@ -43,6 +46,12 @@ describe("GitVibe app intake", () => {
         labels: [{ name: gitVibeLabels.story.name }],
       }),
     ).toBe(false);
+    expect(
+      isFeatureRequestIssue({
+        body: "### Intake type\r\n\r\nFeature request",
+        labels: [gitVibeLabels.story.name],
+      }),
+    ).toBe(false);
   });
 
   it("renders discussion and conversion backlinks with hidden markers", () => {
@@ -64,6 +73,28 @@ describe("GitVibe app intake", () => {
     expect(discussionBody).toContain("Opened by: @octocat");
     expect(comment).toContain("git-vibe:converted-to-discussion");
     expect(hasConversionMarker(issue, [{ body: comment }])).toBe(true);
+  });
+
+  it("renders stable fallback text for sparse issue metadata and setup failures", () => {
+    const discussionBody = buildDiscussionBody({
+      issue: { body: "", number: "" },
+      owner: "example",
+      repo: "repo",
+    });
+    const setupFailure = discussionSetupErrorComment("not enabled");
+
+    expect(buildDiscussionTitle({ number: undefined, title: "  " })).toBe(
+      "Feature request #unknown",
+    );
+    expect(discussionBody).toContain("Source issue: https://github.com/example/repo/issues/");
+    expect(discussionBody).toContain("Opened by: <unknown>");
+    expect(discussionBody).toContain("_No issue body provided._");
+    expect(hasConversionMarker({ body: null }, [{ body: null }])).toBe(false);
+    expect(hasDiscussionSetupMarker([{ body: setupFailure }])).toBe(true);
+    expect(discussionSetupErrorComment(new Error("missing category"))).toContain(
+      "missing category",
+    );
+    expect(isFeatureRequestIssue({ body: "### Issue type\n\nFeature request" })).toBe(true);
   });
 });
 

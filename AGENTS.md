@@ -43,7 +43,7 @@ corepack pnpm audit --prod
 
 Quality policies:
 
-- Minimum coverage thresholds: branches 85%, functions 90%, lines 90%, statements 90%.
+- Minimum coverage thresholds: branches 90%, functions 90%, lines 90%, statements 90%.
 - Maximum JavaScript/MJS file length: 700 lines.
 - Maximum JavaScript/MJS function length: 100 lines.
 - Mock external boundaries in tests, not internal decisions.

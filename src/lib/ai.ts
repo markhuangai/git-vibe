@@ -103,11 +103,10 @@ function createModel(config: GitVibeConfig): LanguageModel {
 
   return createOpenAI({
     apiKey,
-    baseURL: envValue(
-      provider?.base_url_variable,
-      "GITVIBE_AI_BASE_URL",
-      providerType === "openai" ? "" : undefined,
-    ),
+    baseURL:
+      providerType === "openai"
+        ? optionalEnvValue(provider?.base_url_variable, "GITVIBE_AI_BASE_URL")
+        : envValue(provider?.base_url_variable, "GITVIBE_AI_BASE_URL"),
     name: "git-vibe-ai",
   }).chat(model);
 }
@@ -181,6 +180,11 @@ function envValue(variableName: unknown, fallbackName: string, fallbackValue?: s
     throw new Error(`${name} is required for ai-sdk-agentool profile`);
   }
   return value;
+}
+
+function optionalEnvValue(variableName: unknown, fallbackName: string): string | undefined {
+  const name = typeof variableName === "string" ? variableName : fallbackName;
+  return process.env[name] || undefined;
 }
 
 export function extractValidatedOutput(result: AiResult): string {

@@ -1,81 +1,129 @@
 #!/usr/bin/env node
 
 import { appendFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { runStage } from "../lib/stage-runner.js";
 import { parseStage } from "../lib/stages.js";
+import type { StageRunResult } from "../lib/types.js";
 
-const env = (name: string, fallback = ""): string => process.env[name] || fallback;
-const stage = parseStage(process.argv[2]);
-const dryRun = env("GITVIBE_DRY_RUN").toLowerCase() === "true";
-const token = env("GITVIBE_GITHUB_TOKEN");
-const repository = env("GITHUB_REPOSITORY");
-const discussionNumber = env("GITVIBE_DISCUSSION_NUMBER");
-const issueNumber = env("GITVIBE_ISSUE_NUMBER");
-const prNumber = env("GITVIBE_PR_NUMBER");
-
-if (!token) fail("GITVIBE_GITHUB_TOKEN is required.");
-if (!repository) fail("GITHUB_REPOSITORY is required.");
-validateTargetInputs();
-
-runStage({
-  cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
-  dryRun,
-  issueNumber,
-  maxTurns: numberEnv("GITVIBE_MAX_TURNS", 90),
-  prNumber,
-  repository,
-  stage,
-  stageTimeoutMinutes: numberEnv("GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
-  token,
-})
-  .then((result) => {
-    log(`${stage} status=${result.status}`);
-    log(result.summary);
-    writeOutput("summary", result.summary);
-    writeOutput("status", result.status);
-    writeOutput("comment-body", result.commentBody);
-  })
-  .catch((error: unknown) => {
-    fail(error instanceof Error ? error.message : String(error));
-  });
-
-function numberEnv(name: string, fallback: number): number {
-  const rawValue = env(name);
-  if (!rawValue) return fallback;
-
-  const value = Number(rawValue);
-  if (!Number.isFinite(value) || value <= 0) fail(`${name} must be a positive number.`);
-  return value;
+export interface ActionRuntime {
+  appendFile?: (path: string, content: string) => void;
+  argv?: string[];
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  error?: (message: string) => void;
+  log?: (message: string) => void;
+  runStage?: typeof runStage;
 }
 
-function validateTargetInputs(): void {
+export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
+  const env = runtime.env || process.env;
+  const argv = runtime.argv || process.argv.slice(2);
+  const log = runtime.log || ((message) => console.log(`[git-vibe] ${message}`));
+  const error = runtime.error || ((message) => console.error(`[git-vibe] ${message}`));
+
+  try {
+    const stage = parseStage(argv[0]);
+    const token = requiredEnv(env, "GITVIBE_GITHUB_TOKEN");
+    const repository = requiredEnv(env, "GITHUB_REPOSITORY");
+    const target = readTargetInputs(stage, env);
+    const result = await (runtime.runStage || runStage)({
+      cwd: env.GITHUB_WORKSPACE || runtime.cwd || process.cwd(),
+      dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
+      issueNumber: target.issueNumber,
+      maxTurns: numberEnv(env, "GITVIBE_MAX_TURNS", 90),
+      prNumber: target.prNumber,
+      repository,
+      stage,
+      stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
+      token,
+    });
+
+    log(`${stage} status=${result.status}`);
+    log(result.summary);
+    writeOutputs(env, result, runtime.appendFile || appendFileSync);
+    return 0;
+  } catch (caught) {
+    error(caught instanceof Error ? caught.message : String(caught));
+    return 1;
+  }
+}
+
+export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {
+  if (!moduleUrl)
+    return Boolean(entrypoint && /(?:^|[/\\])run-action\.(?:c?js|ts)$/.test(entrypoint));
+  return Boolean(entrypoint && moduleUrl === pathToFileURL(resolve(entrypoint)).href);
+}
+
+function readTargetInputs(
+  stage: ReturnType<typeof parseStage>,
+  env: NodeJS.ProcessEnv,
+): { issueNumber: string; prNumber: string } {
+  const discussionNumber = envValue(env, "GITVIBE_DISCUSSION_NUMBER");
+  const issueNumber = envValue(env, "GITVIBE_ISSUE_NUMBER");
+  const prNumber = envValue(env, "GITVIBE_PR_NUMBER");
+
   if (stage === "address-pr-feedback" && !prNumber) {
-    fail("GITVIBE_PR_NUMBER is required for address-pr-feedback.");
+    throw new Error("GITVIBE_PR_NUMBER is required for address-pr-feedback.");
   }
   if ((stage === "summarize" || stage === "materialize") && !discussionNumber) {
-    fail("GITVIBE_DISCUSSION_NUMBER is required for this stage.");
+    throw new Error("GITVIBE_DISCUSSION_NUMBER is required for this stage.");
   }
   if (stage === "validate" && !issueNumber && !discussionNumber) {
-    fail("GITVIBE_ISSUE_NUMBER or GITVIBE_DISCUSSION_NUMBER is required for validate.");
+    throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_DISCUSSION_NUMBER is required for validate.");
   }
   if (
     !["address-pr-feedback", "summarize", "materialize", "validate"].includes(stage) &&
     !issueNumber
   ) {
-    fail("GITVIBE_ISSUE_NUMBER is required for this stage.");
+    throw new Error("GITVIBE_ISSUE_NUMBER is required for this stage.");
   }
+
+  return { issueNumber, prNumber };
 }
 
-function writeOutput(name: string, value: string): void {
-  if (!process.env.GITHUB_OUTPUT) return;
-  appendFileSync(process.env.GITHUB_OUTPUT, `${name}<<GITVIBE_OUTPUT\n${value}\nGITVIBE_OUTPUT\n`);
+function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const rawValue = envValue(env, name);
+  if (!rawValue) return fallback;
+
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number.`);
+  return value;
 }
 
-function log(message: string): void {
-  console.log(`[git-vibe] ${message}`);
+function writeOutputs(
+  env: NodeJS.ProcessEnv,
+  result: StageRunResult,
+  appendFile: (path: string, content: string) => void,
+): void {
+  if (!env.GITHUB_OUTPUT) return;
+  writeOutput(env.GITHUB_OUTPUT, "summary", result.summary, appendFile);
+  writeOutput(env.GITHUB_OUTPUT, "status", result.status, appendFile);
+  writeOutput(env.GITHUB_OUTPUT, "comment-body", result.commentBody, appendFile);
 }
 
-function fail(message: string): never {
-  console.error(`[git-vibe] ${message}`);
-  process.exit(1);
+function writeOutput(
+  outputPath: string,
+  name: string,
+  value: string,
+  appendFile: (path: string, content: string) => void,
+): void {
+  appendFile(outputPath, `${name}<<GITVIBE_OUTPUT\n${value}\nGITVIBE_OUTPUT\n`);
+}
+
+function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
+  const value = envValue(env, name);
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+function envValue(env: NodeJS.ProcessEnv, name: string): string {
+  return env[name] || "";
+}
+
+if (isDirectRun("", process.argv[1])) {
+  runAction().then((code) => {
+    process.exit(code);
+  });
 }

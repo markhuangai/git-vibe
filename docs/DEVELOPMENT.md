@@ -67,12 +67,12 @@ Anthropic's native installer when the `claude` command is missing, then verifies
 - Format Markdown, JSON, YAML, and JavaScript with Prettier.
 - Build TypeScript app output and bundled actions.
 - Run unit tests with Vitest.
-- Enforce coverage with Vitest/V8 thresholds: branches 85%, functions 90%, lines 90%, statements 90%.
+- Enforce coverage with Vitest/V8 thresholds: branches 90%, functions 90%, lines 90%, statements 90%.
 - Run `github-actionlint` against repository workflows and consumer example workflows.
 - Run `pnpm audit --prod` in PR CI.
 - Enforce JavaScript/MJS size limits through ESLint: 700 lines per file and 100 lines per function. Generated bundles are excluded.
-- Use Husky + lint-staged for pre-commit format/lint checks only; full coverage runs in CI and through `pnpm check`.
-- CI is a PR quality gate plus manual dispatch and must run on `self-hosted` runners for this repository.
+- Use Husky + lint-staged for staged format/lint checks, then run typecheck and coverage in pre-commit.
+- CI is a PR quality gate plus manual dispatch, runs coverage before build, and must run on `self-hosted` runners for this repository.
 
 ## Assumptions
 

@@ -218,13 +218,13 @@ pnpm check
 Coverage thresholds are enforced by Vitest:
 
 ```text
-branches: 85%
+branches: 90%
 functions: 90%
 lines: 90%
 statements: 90%
 ```
 
-The repository CI is PR-only plus manual dispatch and runs on `self-hosted` runners.
+The pre-commit hook runs staged format/lint checks, typecheck, and coverage. The repository CI is PR-only plus manual dispatch, runs coverage before build, and runs on `self-hosted` runners.
 
 Manual AI smoke testing is available through the `AI smoke test` workflow. It can
 test an OpenAI-compatible local proxy using `GITVIBE_AI_BASE_URL`,

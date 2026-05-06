@@ -369,23 +369,50 @@ function issueBranchForStage(stage: string, context: ContextPacket): string | un
 }
 
 function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
-  return {
+  const base = {
     assumptions: [],
-    branch: branchName(context.artifact.number),
     comment_body: `GitVibe dry run for ${stage} on ${context.artifact.type} #${context.artifact.number}.`,
     findings: [],
-    issue_body: `Dry-run implementation issue for ${context.artifact.url}`,
-    issue_title: `GitVibe dry run: ${context.artifact.title}`,
     next_state: "dry-run",
-    pr_body: `Dry-run pull request for ${context.artifact.url}`,
-    pr_title: `GitVibe dry run: ${context.artifact.title}`,
     references: [context.artifact.url].filter(Boolean),
-    skipped_feedback: [],
     stage,
     status: "completed",
     summary: `Dry run completed for ${stage}.`,
-    tests: [],
   };
+
+  if (stage === "create-pr") {
+    return {
+      ...base,
+      branch: branchName(context.artifact.number),
+      pr_body: `Dry-run pull request for ${context.artifact.url}`,
+      pr_title: `GitVibe dry run: ${context.artifact.title}`,
+    };
+  }
+
+  if (stage === "materialize") {
+    return {
+      ...base,
+      issue_body: `Dry-run implementation issue for ${context.artifact.url}`,
+      issue_title: `GitVibe dry run: ${context.artifact.title}`,
+    };
+  }
+
+  if (stage === "implement") {
+    return {
+      ...base,
+      tests: [],
+    };
+  }
+
+  if (stage === "address-pr-feedback") {
+    return {
+      ...base,
+      skipped_feedback: [],
+      tests: [],
+    };
+  }
+
+  return base;
 }
 
 function dryRunContent(stage: string, context: ContextPacket, logger: StageLogger): string {
