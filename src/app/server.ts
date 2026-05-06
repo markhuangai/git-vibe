@@ -22,7 +22,7 @@ import { parseCommand } from "./commands.js";
 
 export interface WebhookPayload {
   action?: string;
-  comment?: { body?: string };
+  comment?: { body?: string; node_id?: string; nodeId?: string };
   discussion?: { number?: number };
   issue?: {
     body?: string | null;
@@ -282,11 +282,13 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
 
   const issueNumber = String(options.payload.issue?.number || "");
   if (parsed.command === "address-feedback" && options.payload.issue?.pull_request) {
+    await acknowledgeCommand(options);
     await dispatchWorkflow(options, "address-feedback.yml", { "pr-number": issueNumber });
     return;
   }
 
   if (parsed.command === "approve" && !options.payload.issue?.pull_request) {
+    await acknowledgeCommand(options);
     await addIssueLabel(options, issueNumber, gitVibeLabels.approved.name);
     await dispatchWorkflow(options, "develop.yml", { "issue-number": issueNumber });
     return;
@@ -294,6 +296,7 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
 
   const workflow = commandWorkflow(parsed.command);
   if (workflow && !options.payload.issue?.pull_request) {
+    await acknowledgeCommand(options);
     await dispatchWorkflow(options, workflow, { "issue-number": issueNumber });
     return;
   }
@@ -311,6 +314,7 @@ async function handleDiscussionComment(options: WebhookContext): Promise<void> {
     parsed.command === "materialize" ||
     parsed.command === "validate"
   ) {
+    await acknowledgeCommand(options);
     await dispatchWorkflow(options, `${parsed.command}.yml`, {
       "discussion-number": String(options.payload.discussion?.number || ""),
     });
@@ -389,6 +393,29 @@ async function dispatchWorkflow(
   });
 }
 
+async function acknowledgeCommand(options: WebhookContext): Promise<void> {
+  const subjectId = commandCommentNodeId(options.payload.comment);
+  if (!subjectId) {
+    options.log("command acknowledgement skipped: missing comment node_id");
+    return;
+  }
+
+  try {
+    await options.client.graphql(
+      addReactionMutation,
+      { content: "ROCKET", subjectId },
+      options.token,
+    );
+  } catch (error) {
+    options.log(`command acknowledgement failed: ${summarizeError(error)}`);
+  }
+}
+
+function commandCommentNodeId(comment: WebhookPayload["comment"]): string {
+  const subjectId = comment?.node_id || comment?.nodeId;
+  return typeof subjectId === "string" ? subjectId : "";
+}
+
 async function createIssueComment(
   options: WebhookContext,
   issueNumber: string,
@@ -436,6 +463,16 @@ async function addIssueLabel(
 }
 
 const trustedPermissions = new Set(["admin", "maintain", "write"]);
+
+const addReactionMutation = /* GraphQL */ `
+  mutation GitVibeAddReaction($content: ReactionContent!, $subjectId: ID!) {
+    addReaction(input: { content: $content, subjectId: $subjectId }) {
+      reaction {
+        content
+      }
+    }
+  }
+`;
 
 function commandWorkflow(command: string): string | null {
   if (command === "investigate") return "investigate.yml";

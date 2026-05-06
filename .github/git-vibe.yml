@@ -48,9 +48,8 @@ github_auth:
 
 tests:
   commands:
-    - corepack enable
-    - corepack pnpm install --frozen-lockfile
-    - corepack pnpm check
+    - pnpm install --frozen-lockfile
+    - pnpm check
 
 ai:
   default_profile: local_proxy

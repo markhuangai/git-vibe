@@ -44,6 +44,7 @@ stateDiagram-v2
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
 - Admins and collaborators move work forward with commands plus labels.
+- Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation and summary generation; it must never start code changes.
 - GitVibe never auto-merges and never approves its own pull requests.

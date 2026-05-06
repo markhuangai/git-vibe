@@ -38,9 +38,17 @@ runs:
       shell: bash
       run: |
         cd "$GITHUB_ACTION_PATH/.."
-        corepack enable
-        corepack pnpm install --frozen-lockfile
-        corepack pnpm build
+        if command -v corepack >/dev/null 2>&1 && corepack enable; then
+          pnpm_cmd=(corepack pnpm)
+        elif command -v pnpm >/dev/null 2>&1; then
+          pnpm_cmd=(pnpm)
+        else
+          echo "::error::GitVibe requires pnpm or Corepack on the runner."
+          exit 127
+        fi
+        echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
+        "${pnpm_cmd[@]}" install --frozen-lockfile
+        "${pnpm_cmd[@]}" build
     - id: run
       shell: bash
       env:

@@ -165,6 +165,7 @@ Use `/git-vibe` in issues, discussions, and pull requests:
 ```
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions.
+Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
 
 ## App Server
 

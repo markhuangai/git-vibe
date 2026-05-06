@@ -124,11 +124,19 @@ describe("GitVibe workflow wiring", () => {
       const runStep = content.indexOf("dist/actions/run-action.js");
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
-      expect(content, `${file} should enable Corepack`).toContain("corepack enable");
-      expect(content, `${file} should install dependencies`).toContain(
-        "corepack pnpm install --frozen-lockfile",
+      expect(content, `${file} should prefer Corepack when available`).toContain(
+        "command -v corepack",
       );
-      expect(content, `${file} should build generated runtime`).toContain("corepack pnpm build");
+      expect(content, `${file} should support installed pnpm on self-hosted runners`).toContain(
+        "command -v pnpm",
+      );
+      expect(content, `${file} should install dependencies`).toContain(
+        '"${pnpm_cmd[@]}" install --frozen-lockfile',
+      );
+      expect(content, `${file} should build generated runtime`).toContain('"${pnpm_cmd[@]}" build');
+      expect(content, `${file} should explain missing runner package manager`).toContain(
+        "GitVibe requires pnpm or Corepack on the runner.",
+      );
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );

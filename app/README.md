@@ -14,6 +14,7 @@ It currently handles:
 - `/git-vibe start` on issue comments.
 - `/git-vibe address-feedback` on pull request comments.
 - `/git-vibe ...` as the only supported public command prefix.
+- Accepted admin/collaborator commands get a `rocket` reaction before workflow dispatch.
 - Protected `git-vibe:*` issue labels, including `git-vibe:approved`.
 - Fine-grained PAT-backed GitHub API writes.
 - Repository permission checks before dispatching workflows.

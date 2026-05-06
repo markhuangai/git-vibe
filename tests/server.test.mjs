@@ -143,21 +143,21 @@ describe("GitVibe app server command dispatch", () => {
 
     await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "/git-vibe approve" },
+      comment: { body: "/git-vibe approve", node_id: "issue-approve-comment" },
       issue: { number: 2 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
     await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "/git-vibe address-feedback" },
+      comment: { body: "/git-vibe address-feedback", node_id: "pr-feedback-comment" },
       issue: { number: 3, pull_request: {} },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
     await app.handleWebhook("discussion_comment", {
       action: "created",
-      comment: { body: "/git-vibe materialize" },
+      comment: { body: "/git-vibe materialize", node_id: "discussion-materialize-comment" },
       discussion: { number: 5 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -168,6 +168,32 @@ describe("GitVibe app server command dispatch", () => {
       { inputs: { "pr-number": "3" }, ref: "main" },
       { inputs: { "discussion-number": "5" }, ref: "main" },
     ]);
+    expect(reactionVariables(client)).toEqual([
+      { content: "ROCKET", subjectId: "issue-approve-comment" },
+      { content: "ROCKET", subjectId: "pr-feedback-comment" },
+      { content: "ROCKET", subjectId: "discussion-materialize-comment" },
+    ]);
+  });
+
+  it("continues dispatching when command acknowledgement fails", async () => {
+    const log = vi.fn();
+    const client = createClient({ reactionError: new Error("reaction unavailable") });
+    const app = createApp({ client, log });
+
+    await app.handleWebhook("discussion_comment", {
+      action: "created",
+      comment: { body: "/git-vibe validate", node_id: "discussion-validate-comment" },
+      discussion: { number: 6 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      { inputs: { "discussion-number": "6" }, ref: "main" },
+    ]);
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("command acknowledgement failed: reaction unavailable"),
+    );
   });
 
   it("rejects untrusted commands and logs unsupported commands", async () => {
@@ -457,6 +483,10 @@ function createClient(options = {}) {
       if (query.includes("GitVibeDiscussionCategories")) {
         return { repository: { discussionCategories: { nodes: categories }, id: "repo-id" } };
       }
+      if (query.includes("GitVibeAddReaction")) {
+        if (options.reactionError) throw options.reactionError;
+        return { addReaction: { reaction: { content: "ROCKET" } } };
+      }
       return {
         createDiscussion: {
           discussion: {
@@ -520,6 +550,12 @@ function workflowDispatches(client) {
     .map(([request]) => request)
     .filter((request) => request.path.includes("/actions/workflows/"))
     .map((request) => request.body);
+}
+
+function reactionVariables(client) {
+  return client.graphql.mock.calls
+    .filter(([query]) => query.includes("GitVibeAddReaction"))
+    .map(([, variables]) => variables);
 }
 
 function signature(body) {
