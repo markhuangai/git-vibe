@@ -35,6 +35,8 @@ GITVIBE_CONFIG_PATH=.github/git-vibe.yml
 ```
 
 Use a fine-grained PAT scoped only to the repositories managed by this server.
+When deploying through GitHub Actions, store the webhook secret as repository secret
+`WEBHOOK_SECRET`; the deploy workflow maps it to `GITHUB_WEBHOOK_SECRET`.
 
 ## Run
 
@@ -52,3 +54,6 @@ docker compose -f docker-compose.yml up -d
 The compose deployment expects runtime values from the host environment. In CI/CD,
 the `GitVibe app deploy` workflow builds `ghcr.io/z-m-huang/git-vibe`, then runs
 the compose deployment on the self-hosted runner.
+If the runner mounts a host-specific override file at
+`/opt/git-vibe/docker-compose.override.yml`, the deploy workflow includes it
+automatically for reverse proxy labels, external networks, and host-local settings.

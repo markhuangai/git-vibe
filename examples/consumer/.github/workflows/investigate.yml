@@ -20,7 +20,7 @@ on:
 
 jobs:
   investigate:
-    uses: git-vibe/actions/.github/workflows/investigate.yml@v1
+    uses: git-vibe/actions/.github/workflows/investigate.yml@main
     with:
       issue-number: ${{ inputs.issue-number }}
       config-path: ${{ inputs.config-path }}

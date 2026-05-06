@@ -32,30 +32,28 @@ The copied wrapper workflows call the public reusable workflows from this reposi
 ```yaml
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: git-vibe/actions/.github/workflows/develop.yml@main
 ```
 
 So consumer repositories keep a small local workflow entry point, while the pipeline implementation stays versioned in `git-vibe/actions`.
 Reusable workflows always operate on the repository where the workflow run starts (`github.repository`). GitVibe does not accept a separate `owner/repo` workflow input.
-The reusable workflows checkout the GitVibe action source separately. Consumer calls default to `git-vibe/actions@v1`; direct `workflow_dispatch` runs in this repository default to the current repository and ref.
+The reusable workflows checkout the GitVibe action source separately. Consumer calls default to `git-vibe/actions@main`; direct `workflow_dispatch` runs in this repository default to the current repository and ref.
 
 ## Secrets And Variables
 
 Secrets belong in GitHub repository or organization secrets, not in `.github/git-vibe.yml`.
 
-GitHub API token secret:
-
-```text
-GITVIBE_GITHUB_TOKEN
-```
-
-`GITVIBE_GITHUB_TOKEN` should be a fine-grained PAT scoped to the repository. The self-hosted server uses it for webhook-side GitHub writes, and reusable workflows use it for branch and pull request writes.
-
-Recommended AI SDK/agentool secret:
+Required GitHub secrets:
 
 ```text
 GITVIBE_AI_API_KEY
+GITVIBE_GITHUB_TOKEN
+WEBHOOK_SECRET
 ```
+
+`GITVIBE_AI_API_KEY` is the API key for the configured AI provider or OpenAI-compatible proxy.
+`GITVIBE_GITHUB_TOKEN` should be a fine-grained PAT scoped to the repository. The self-hosted server uses it for webhook-side GitHub writes, and reusable workflows use it for branch and pull request writes.
+`WEBHOOK_SECRET` is the shared secret configured on the GitHub repository webhook. The deploy workflow maps it to the container runtime variable `GITHUB_WEBHOOK_SECRET`.
 
 Optional CLI session secrets:
 
@@ -69,6 +67,7 @@ Useful variables:
 ```text
 GITVIBE_AI_MODEL
 GITVIBE_AI_BASE_URL
+GITVIBE_DISCUSSION_CATEGORY
 GITVIBE_RUNNER
 GITVIBE_LOG_LEVEL
 ```
@@ -82,12 +81,15 @@ Choose which adapter runs each process in `.github/git-vibe.yml` with
 `ai.profiles` and `ai.stages`. Profiles define adapter/model/reasoning settings;
 stages reference profile names.
 
-Self-hosted server secrets normally live in the container host environment, not in each consumer repo:
+Self-hosted server runtime variables:
 
 ```text
 GITHUB_WEBHOOK_SECRET
 GITVIBE_GITHUB_TOKEN
+GITVIBE_DISCUSSION_CATEGORY
 ```
+
+When deploying through GitHub Actions, set the GitHub secret as `WEBHOOK_SECRET`; the deploy workflow exports it as `GITHUB_WEBHOOK_SECRET` for Docker Compose.
 
 ## Timeouts
 
@@ -103,6 +105,33 @@ Default AI turn budgets:
 - implementation and PR feedback remediation: `120` turns
 
 Use the narrowest fine-grained PAT permissions that still allow GitVibe to dispatch workflows, create branches, update issues and discussions, and open pull requests.
+
+## Webhook Setup
+
+Create a repository webhook with:
+
+```text
+Payload URL: https://git-vibe.markhuang.ai/webhooks
+Content type: application/json
+Secret: same value as WEBHOOK_SECRET
+SSL verification: enabled
+```
+
+Select individual events:
+
+```text
+Issues
+Issue comments
+Sub-issues
+Discussions
+Discussion comments
+Pull requests
+Pull request reviews
+Pull request review comments
+Pull request review threads
+```
+
+Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 ## Commands
 
@@ -136,7 +165,7 @@ corepack pnpm start
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: git-vibe/actions/investigate@v1
+  - uses: git-vibe/actions/investigate@main
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
@@ -148,7 +177,7 @@ steps:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: git-vibe/actions/.github/workflows/develop.yml@main
     with:
       issue-number: "123"
       runner: self-hosted
@@ -162,7 +191,7 @@ For source-repo testing, dispatch `investigate.yml`, `summarize.yml`, `validate.
 
 ## Current Status
 
-This repository contains the TypeScript GitVibe app implementation, bundled runner actions, stage prompts, JSON Schema contracts, and reusable workflow entry points. Webhook mode and `ai-sdk-agentool` are implemented first; relay, polling, Actions-native receivers, and additional AI adapters are deferred behind interfaces.
+This repository contains the TypeScript GitVibe app implementation, source-built runner actions, stage prompts, JSON Schema contracts, and reusable workflow entry points. Webhook mode and `ai-sdk-agentool` are implemented first; relay, polling, Actions-native receivers, and additional AI adapters are deferred behind interfaces.
 
 ## Development Checks
 

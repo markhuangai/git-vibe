@@ -20,7 +20,7 @@ on:
 
 jobs:
   materialize:
-    uses: git-vibe/actions/.github/workflows/materialize.yml@v1
+    uses: git-vibe/actions/.github/workflows/materialize.yml@main
     with:
       discussion-number: ${{ inputs.discussion-number }}
       config-path: ${{ inputs.config-path }}

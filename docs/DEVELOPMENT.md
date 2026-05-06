@@ -11,7 +11,7 @@
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
 - `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
-- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to `git-vibe/actions@v1`.
+- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to `git-vibe/actions@main` until a release tag exists.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
@@ -28,7 +28,7 @@
 - Unit tests for AI context packet ordering, author weighting, stage contract validation, provider adapter errors, and comment rendering.
 - Webhook integration tests for issues, issue comments, discussions, discussion comments, PR comments, review comments, and labels.
 - End-to-end fixture repo tests for story conversion, implementation issue creation, approved development, PR creation, and PR feedback handling.
-- Security tests for guest command rejection, bot-event recursion prevention, fork PR secret protection, write-token isolation, and read-only AI stages receiving no mutation token.
+- Security tests for guest command rejection, bot-event recursion prevention, fork PR secret protection, token redaction, and read-only AI stages performing no mutations.
 
 ## Manual AI Smoke Tests
 

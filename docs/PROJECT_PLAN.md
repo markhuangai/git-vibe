@@ -16,7 +16,7 @@ GitVibe is a self-hostable repository webhook server plus reusable GitHub Action
 The public action namespace should be:
 
 ```yaml
-uses: git-vibe/actions/investigate@v1
+uses: git-vibe/actions/investigate@main
 ```
 
 Reusable full pipelines should be published from the same repository:
@@ -24,7 +24,7 @@ Reusable full pipelines should be published from the same repository:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: git-vibe/actions/.github/workflows/develop.yml@main
 ```
 
 Core defaults:
@@ -34,4 +34,4 @@ Core defaults:
 - Feature requests start in discussions and are materialized into issues only after refinement.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
 - AI returns structured results; deterministic GitVibe code performs GitHub writes.
-- The repository uses pnpm, TypeScript source, bundled action runtimes, PR-only CI on `self-hosted`, 90% function/line/statement coverage, and ESLint-enforced JavaScript/MJS size limits of 700 lines per file and 100 lines per function.
+- The repository uses pnpm, TypeScript source, runner-built action runtimes, PR-only CI on `self-hosted`, 90% function/line/statement coverage, and ESLint-enforced JavaScript/MJS size limits of 700 lines per file and 100 lines per function.

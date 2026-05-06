@@ -134,7 +134,7 @@ Bug reports have a separate investigation-only path before implementation. The g
 sequenceDiagram
   participant Guest as Guest or Community
   participant Issue as Bug Issue
-  participant App as GitVibe App
+  participant App as GitVibe Server
   participant AI as Investigation Pipeline
   participant Maint as Admin or Collaborator
 
@@ -183,7 +183,7 @@ Feature discussions use the same weighted full-conversation analysis as bugs. Th
 sequenceDiagram
   participant Community as Community
   participant Disc as Feature Discussion
-  participant App as GitVibe App
+  participant App as GitVibe Server
   participant AI as Summary and Validation Pipeline
   participant Maint as Admin or Collaborator
   participant Issue as Implementation Issue
@@ -228,7 +228,7 @@ feature_refinement:
 sequenceDiagram
   participant M as Admin or Collaborator
   participant PR as Pull Request
-  participant App as GitVibe App
+  participant App as GitVibe Server
   participant WF as Feedback Workflow
   participant Agent as GitVibe Coding Agent
 

@@ -26,7 +26,7 @@ on:
 
 jobs:
   validate:
-    uses: git-vibe/actions/.github/workflows/validate.yml@v1
+    uses: git-vibe/actions/.github/workflows/validate.yml@main
     with:
       issue-number: ${{ inputs.issue-number }}
       discussion-number: ${{ inputs.discussion-number }}

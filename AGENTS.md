@@ -52,4 +52,4 @@ Quality policies:
 
 - Keep files focused and under the size limits.
 - Prefer deterministic code for GitHub writes; AI should return structured results that GitVibe validates and renders.
-- Preserve PAT isolation guidance: fetch the server-held write token only immediately before write operations.
+- Preserve PAT safety guidance: scope the token narrowly, never log it, and keep GitHub writes in deterministic GitVibe code.

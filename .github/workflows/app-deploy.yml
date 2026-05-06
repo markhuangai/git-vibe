@@ -53,12 +53,17 @@ jobs:
           password: ${{ github.token }}
       - name: Deploy app with Docker Compose
         env:
-          GITHUB_WEBHOOK_SECRET: ${{ secrets.GITVIBE_WEBHOOK_SECRET }}
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
           GITVIBE_DISCUSSION_CATEGORY: ${{ vars.GITVIBE_DISCUSSION_CATEGORY }}
           GITVIBE_DISPATCH_REF: main
           GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
           GITVIBE_IMAGE: ${{ env.GITVIBE_IMAGE }}
         run: |
-          docker compose -f docker-compose.yml pull
-          docker compose -f docker-compose.yml up -d
+          compose_files=(-f docker-compose.yml)
+          if [ -f /opt/git-vibe/docker-compose.override.yml ]; then
+            compose_files+=(-f /opt/git-vibe/docker-compose.override.yml)
+          fi
+
+          docker compose "${compose_files[@]}" pull
+          docker compose "${compose_files[@]}" up -d
           docker image prune -f

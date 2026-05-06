@@ -20,7 +20,7 @@ on:
 
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: git-vibe/actions/.github/workflows/develop.yml@main
     with:
       issue-number: ${{ inputs.issue-number }}
       config-path: ${{ inputs.config-path }}

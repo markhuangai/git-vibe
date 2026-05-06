@@ -7,7 +7,7 @@ GitVibe is a self-hostable repository webhook server plus reusable GitHub Action
 The public action namespace should be:
 
 ```yaml
-uses: git-vibe/actions/investigate@v1
+uses: git-vibe/actions/investigate@main
 ```
 
 Reusable full pipelines should be published from the same repository:
@@ -15,7 +15,7 @@ Reusable full pipelines should be published from the same repository:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: git-vibe/actions/.github/workflows/develop.yml@main
 ```
 
 Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The GitVibe orchestrator is hosted by the repository owner, receives or polls GitHub events, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
@@ -61,14 +61,12 @@ sequenceDiagram
   App->>API: Dispatch workflow with issue, PR, and config parameters
   GH->>WF: Start workflow run
   WF->>Act: Run reusable action or reusable workflow
-  Act->>App: Request write token near mutation step
-  App->>Act: Return configured repository PAT
-  Act->>API: Use PAT for branch, PR, and comments when needed
+  Act->>API: Use configured repository PAT for branch, PR, comments, and metadata writes
 ```
 
 Use `GITHUB_TOKEN` only for simple read operations. Use the self-hosted server's fine-grained PAT when GitVibe must trigger follow-up workflows, push branches, create pull requests, or avoid `GITHUB_TOKEN` event recursion limits.
 
-The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes.
+The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes and must never log or render the token.
 
 Supported workflow auth modes:
 
@@ -128,7 +126,7 @@ event_delivery:
 
 ## Consumer Setup
 
-Consumer repositories do not clone GitVibe's internal action implementation. They copy a small starter `.github` folder and reference GitVibe's public reusable workflows by version.
+Consumer repositories do not clone GitVibe's internal action implementation. They copy a small starter `.github` folder and reference GitVibe's public reusable workflows by branch during pre-release setup. After a release tag exists, consumers can pin to that tag.
 
 Copy source:
 
@@ -154,19 +152,20 @@ The wrapper workflows call reusable workflows such as:
 ```yaml
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: git-vibe/actions/.github/workflows/develop.yml@main
 ```
 
 Required repository or organization secrets/variables:
 
 - `GITVIBE_GITHUB_TOKEN`: fine-grained PAT used by the server and workflows for GitHub API access.
+- `WEBHOOK_SECRET`: repository webhook shared secret used by the deploy workflow to set runtime `GITHUB_WEBHOOK_SECRET`.
 - `GITVIBE_AI_API_KEY`: preferred generic AI provider secret.
-- `GITVIBE_AI_MODEL`, `GITVIBE_AI_BASE_URL`, `GITVIBE_RUNNER`, `GITVIBE_LOG_LEVEL`: optional variables.
+- `GITVIBE_AI_MODEL`, `GITVIBE_AI_BASE_URL`, `GITVIBE_DISCUSSION_CATEGORY`, `GITVIBE_RUNNER`, `GITVIBE_LOG_LEVEL`: optional variables.
 - `CODEX_AUTH_JSON`, `CLAUDE_CODE_OAUTH_TOKEN`: optional CLI session credentials.
 
-Self-hosted server secrets normally live outside consumer repos:
+Self-hosted server runtime secrets:
 
-- `GITVIBE_WEBHOOK_SECRET`: mapped to runtime `GITHUB_WEBHOOK_SECRET`.
+- `GITHUB_WEBHOOK_SECRET`: webhook shared secret. In GitHub Actions deployment, this comes from repository secret `WEBHOOK_SECRET`.
 - `GITVIBE_GITHUB_TOKEN`: mapped to runtime `GITVIBE_GITHUB_TOKEN`.
 
 Self-hosted server variables:

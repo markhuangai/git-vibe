@@ -87,8 +87,8 @@ AI result envelope:
 ## Execution Rules
 
 - AI cannot authorize itself. Approval, merge, protected-label acceptance, and release decisions always require admin/collaborator authority.
-- Read-only stages must not receive write tokens or repo mutation tools.
-- Implementation and feedback stages run on isolated branches and receive only the minimum token needed to push that branch and comment on the source artifact.
+- Read-only stages must not perform GitHub writes or use repo mutation tools.
+- Implementation and feedback stages run on isolated branches and may use the configured repository PAT only for deterministic GitHub writes performed by GitVibe code.
 - GitHub writes are deterministic code operations. AI returns a structured result envelope; GitVibe validates it, renders comments, updates labels, links artifacts, and dispatches workflows.
 - Every AI comment should include a concise summary, concrete evidence/references, unresolved questions, and the next expected human action.
 - If the AI is uncertain, finds contradictory maintainer guidance, or cannot map the request to the repository, it must stop and ask for context instead of inventing behavior.
