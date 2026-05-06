@@ -10,8 +10,9 @@ services:
       - "3000:3000"
     environment:
       GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
+      # GitHub Actions provides this automatically; manual Docker runs may omit it.
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET is required}
       GITVIBE_GITHUB_TOKEN: ${GITVIBE_GITHUB_TOKEN:?GITVIBE_GITHUB_TOKEN is required}
-      GITVIBE_CONFIG_PATH: ${GITVIBE_CONFIG_PATH:-.github/git-vibe.yml}
       GITVIBE_DISCUSSION_CATEGORY: ${GITVIBE_DISCUSSION_CATEGORY:-Ideas}
       GITVIBE_DISPATCH_REF: ${GITVIBE_DISPATCH_REF:-main}

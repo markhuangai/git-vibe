@@ -108,6 +108,12 @@ describe("GitVibe workflow wiring", () => {
       expect(content, `${file} should not pass repository env overrides`).not.toContain(
         "GITVIBE_REPOSITORY",
       );
+      expect(content, `${file} should not expose GitVibe config path overrides`).not.toContain(
+        "config-path",
+      );
+      expect(content, `${file} should not pass GitVibe config path env`).not.toContain(
+        "GITVIBE_CONFIG_PATH",
+      );
     }
   });
 

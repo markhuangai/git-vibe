@@ -81,15 +81,24 @@ Choose which adapter runs each process in `.github/git-vibe.yml` with
 `ai.profiles` and `ai.stages`. Profiles define adapter/model/reasoning settings;
 stages reference profile names.
 
-Self-hosted server runtime variables:
+Required self-hosted server runtime variables:
 
 ```text
 GITHUB_WEBHOOK_SECRET
 GITVIBE_GITHUB_TOKEN
+```
+
+Optional self-hosted server runtime variables:
+
+```text
+GITHUB_API_URL
+GITHUB_REPOSITORY
 GITVIBE_DISCUSSION_CATEGORY
+GITVIBE_DISPATCH_REF
 ```
 
 When deploying through GitHub Actions, set the GitHub secret as `WEBHOOK_SECRET`; the deploy workflow exports it as `GITHUB_WEBHOOK_SECRET` for Docker Compose.
+Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub Actions already provides it to workflow steps, and Docker Compose forwards that existing value into the container so startup preflight can check Discussions before the first webhook arrives. Manual Docker deployments may set `GITHUB_REPOSITORY=owner/repo` to enable the same startup preflight; if omitted, GitVibe still learns the repository from incoming webhook payloads.
 
 ## Timeouts
 
@@ -169,7 +178,6 @@ steps:
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
-      config-path: .github/git-vibe.yml
 ```
 
 ## Example Reusable Workflow Usage

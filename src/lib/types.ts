@@ -21,7 +21,6 @@ export interface StageDefinition {
 }
 
 export interface RunnerOptions {
-  configPath: string;
   cwd: string;
   dryRun: boolean;
   issueNumber: string;

@@ -24,19 +24,30 @@ the actor for GitHub writes performed by the server and workflows.
 
 ## Environment
 
+Required runtime values:
+
 ```text
-PORT=3000
 GITHUB_WEBHOOK_SECRET=...
 GITVIBE_GITHUB_TOKEN=...
+```
+
+Optional runtime values:
+
+```text
 GITHUB_API_URL=https://api.github.com
+GITHUB_REPOSITORY=owner/repo
 GITVIBE_DISPATCH_REF=main
 GITVIBE_DISCUSSION_CATEGORY=Ideas
-GITVIBE_CONFIG_PATH=.github/git-vibe.yml
 ```
 
 Use a fine-grained PAT scoped only to the repositories managed by this server.
 When deploying through GitHub Actions, store the webhook secret as repository secret
 `WEBHOOK_SECRET`; the deploy workflow maps it to `GITHUB_WEBHOOK_SECRET`.
+Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub
+Actions provides it to the deploy workflow automatically, and Docker Compose
+passes that existing value into the container. Manual Docker deployments may set
+`GITHUB_REPOSITORY=owner/repo` to enable startup preflight; otherwise GitVibe
+checks repository-specific setup when webhooks arrive.
 
 ## Run
 
@@ -54,6 +65,8 @@ docker compose -f docker-compose.yml up -d
 The compose deployment expects runtime values from the host environment. In CI/CD,
 the `GitVibe app deploy` workflow builds `ghcr.io/z-m-huang/git-vibe`, then runs
 the compose deployment on the self-hosted runner.
+The container listens on port `3000`; change the host-side mapping in Compose or
+an override file instead of setting a `PORT` variable.
 If the runner mounts a host-specific override file at
 `/opt/git-vibe/docker-compose.override.yml`, the deploy workflow includes it
 automatically for reverse proxy labels, external networks, and host-local settings.

@@ -13,11 +13,6 @@ on:
         required: false
         type: string
         default: ""
-      config-path:
-        description: Path to the GitVibe config.
-        required: false
-        type: string
-        default: .github/git-vibe.yml
       dry-run:
         description: Validate without writing to GitHub.
         required: false
@@ -30,7 +25,6 @@ jobs:
     with:
       issue-number: ${{ inputs.issue-number }}
       discussion-number: ${{ inputs.discussion-number }}
-      config-path: ${{ inputs.config-path }}
       runner: ubuntu-latest
       timeout_minutes: 60
       max_turns: 90

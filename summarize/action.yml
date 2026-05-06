@@ -8,10 +8,6 @@ inputs:
   discussion-number:
     description: Discussion number to summarize.
     required: true
-  config-path:
-    description: Path to .github/git-vibe.yml.
-    required: false
-    default: .github/git-vibe.yml
   stage-timeout-minutes:
     description: Maximum minutes allocated to this stage.
     required: false
@@ -45,7 +41,6 @@ runs:
       env:
         GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_DISCUSSION_NUMBER: ${{ inputs.discussion-number }}
-        GITVIBE_CONFIG_PATH: ${{ inputs.config-path }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}

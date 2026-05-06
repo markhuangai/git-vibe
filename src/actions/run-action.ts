@@ -18,7 +18,6 @@ if (!repository) fail("GITHUB_REPOSITORY is required.");
 validateTargetInputs();
 
 runStage({
-  configPath: env("GITVIBE_CONFIG_PATH", ".github/git-vibe.yml"),
   cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
   dryRun,
   issueNumber,

@@ -7,11 +7,6 @@ on:
         description: Approved implementation issue number.
         required: true
         type: string
-      config-path:
-        description: Path to the GitVibe config.
-        required: false
-        type: string
-        default: .github/git-vibe.yml
       dry-run:
         description: Validate without writing to GitHub.
         required: false
@@ -23,7 +18,6 @@ jobs:
     uses: git-vibe/actions/.github/workflows/develop.yml@main
     with:
       issue-number: ${{ inputs.issue-number }}
-      config-path: ${{ inputs.config-path }}
       runner: ubuntu-latest
       investigation_timeout_minutes: 60
       implementation_timeout_minutes: 120

@@ -29,7 +29,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     repository: options.repository,
   });
 
-  const config = loadConfig(options.configPath, options.cwd);
+  const config = loadConfig(options.cwd);
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   logger.event("context.load.start", { target: definition.target });

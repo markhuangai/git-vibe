@@ -6,6 +6,13 @@ export interface CreatedDiscussion {
   url: string;
 }
 
+export interface DiscussionSetupCheck {
+  categoryName: string;
+  categorySlug: string;
+  matchedConfiguredCategory: boolean;
+  repository: string;
+}
+
 export async function createRepositoryDiscussion(options: {
   body: string;
   categoryName: string;
@@ -27,6 +34,21 @@ export async function createRepositoryDiscussion(options: {
   );
   const discussion = result.createDiscussion.discussion;
   return { id: discussion.id, number: discussion.number, url: discussion.url };
+}
+
+export async function checkRepositoryDiscussions(options: {
+  categoryName: string;
+  client: GitHubClient;
+  repository: string;
+  token: string;
+}): Promise<DiscussionSetupCheck> {
+  const category = await discussionCategoryFor(options);
+  return {
+    categoryName: category.name,
+    categorySlug: category.slug,
+    matchedConfiguredCategory: matchesCategory(category, options.categoryName),
+    repository: options.repository,
+  };
 }
 
 export async function addDiscussionComment(options: {
@@ -70,13 +92,14 @@ function chooseCategory(
   categories: DiscussionCategory[],
   preferredName: string,
 ): DiscussionCategory | undefined {
-  const preferred = normalizeCategory(preferredName);
+  return categories.find((category) => matchesCategory(category, preferredName)) || categories[0];
+}
+
+function matchesCategory(category: DiscussionCategory, value: string): boolean {
+  const normalized = normalizeCategory(value);
   return (
-    categories.find(
-      (category) =>
-        normalizeCategory(category.name) === preferred ||
-        normalizeCategory(category.slug) === preferred,
-    ) || categories[0]
+    normalizeCategory(category.name) === normalized ||
+    normalizeCategory(category.slug) === normalized
   );
 }
 

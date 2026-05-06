@@ -4,6 +4,8 @@ import { parse } from "yaml";
 import { z } from "zod";
 import type { GitVibeConfig } from "./types.js";
 
+const gitVibeConfigPath = ".github/git-vibe.yml";
+
 const configSchema = z
   .object({
     ai: z.record(z.string(), z.unknown()).optional(),
@@ -20,8 +22,8 @@ const configSchema = z
   })
   .passthrough();
 
-export function loadConfig(configPath: string, cwd = process.cwd()): GitVibeConfig {
-  const absolutePath = resolve(cwd, configPath);
+export function loadConfig(cwd = process.cwd()): GitVibeConfig {
+  const absolutePath = resolve(cwd, gitVibeConfigPath);
   if (!existsSync(absolutePath)) {
     return {};
   }

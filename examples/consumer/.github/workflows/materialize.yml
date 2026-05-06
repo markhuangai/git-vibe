@@ -7,11 +7,6 @@ on:
         description: Discussion number to materialize.
         required: true
         type: string
-      config-path:
-        description: Path to the GitVibe config.
-        required: false
-        type: string
-        default: .github/git-vibe.yml
       dry-run:
         description: Validate without writing to GitHub.
         required: false
@@ -23,7 +18,6 @@ jobs:
     uses: git-vibe/actions/.github/workflows/materialize.yml@main
     with:
       discussion-number: ${{ inputs.discussion-number }}
-      config-path: ${{ inputs.config-path }}
       runner: ubuntu-latest
       timeout_minutes: 60
       max_turns: 90

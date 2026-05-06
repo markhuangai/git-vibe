@@ -7,11 +7,6 @@ on:
         description: Discussion number to materialize.
         required: true
         type: string
-      config-path:
-        description: Path to the GitVibe config.
-        required: false
-        type: string
-        default: .github/git-vibe.yml
       runner:
         description: Runner label for this job.
         required: false
@@ -48,11 +43,6 @@ on:
         description: Discussion number to materialize.
         required: true
         type: string
-      config-path:
-        description: Path to the consumer GitVibe config.
-        required: false
-        type: string
-        default: .github/git-vibe.yml
       runner:
         description: Runner label for this job.
         required: false
@@ -116,7 +106,6 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           discussion-number: ${{ inputs.discussion-number }}
-          config-path: ${{ inputs.config-path }}
           stage-timeout-minutes: ${{ inputs.timeout_minutes }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}

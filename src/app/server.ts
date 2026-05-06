@@ -2,7 +2,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
-import { createRepositoryDiscussion } from "../lib/discussions.js";
+import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../lib/discussions.js";
 import { GitHubClient } from "../lib/github.js";
 import { gitVibeLabels } from "../lib/labels.js";
 import {
@@ -48,6 +48,7 @@ const webhookSecret = requiredEnv("GITHUB_WEBHOOK_SECRET");
 const githubToken = requiredEnv("GITVIBE_GITHUB_TOKEN");
 const dispatchRef = process.env.GITVIBE_DISPATCH_REF || "main";
 const discussionCategory = process.env.GITVIBE_DISCUSSION_CATEGORY || "Ideas";
+const configuredRepository = process.env.GITHUB_REPOSITORY || "";
 const trustedPermissions = new Set(["admin", "maintain", "write"]);
 const client = new GitHubClient();
 const bootstrappedRepositories = new Set<string>();
@@ -77,7 +78,48 @@ createServer(async (req, res) => {
   }
 }).listen(port, () => {
   console.log(`[git-vibe] app server listening on :${port}`);
+  void runStartupPreflight();
 });
+
+async function runStartupPreflight(): Promise<void> {
+  if (!configuredRepository) {
+    log(
+      "startup preflight skipped: GITHUB_REPOSITORY is unavailable; Discussions will be checked when repository webhooks arrive",
+    );
+    return;
+  }
+
+  try {
+    const result = await checkRepositoryDiscussions({
+      categoryName: discussionCategory,
+      client,
+      repository: configuredRepository,
+      token: githubToken,
+    });
+    logDiscussionPreflightResult(result);
+  } catch (error) {
+    console.error(
+      `[git-vibe] startup preflight failed: GitHub Discussions unavailable for ${configuredRepository}: ${summarizeError(error)}. Enable repository Discussions, create category "${discussionCategory}", and ensure GITVIBE_GITHUB_TOKEN has Discussions read/write permission.`,
+    );
+  }
+}
+
+function logDiscussionPreflightResult(result: {
+  categoryName: string;
+  matchedConfiguredCategory: boolean;
+  repository: string;
+}): void {
+  if (result.matchedConfiguredCategory) {
+    log(
+      `startup preflight ok: GitHub Discussions available for ${result.repository} using category "${result.categoryName}"`,
+    );
+    return;
+  }
+
+  log(
+    `startup preflight warning: GitHub Discussions available for ${result.repository}, but category "${discussionCategory}" was not found; using "${result.categoryName}"`,
+  );
+}
 
 async function handleWebhook(event: string, payload: WebhookPayload): Promise<void> {
   if (!payload.repository) {
@@ -262,10 +304,7 @@ async function dispatchWorkflow(
 ): Promise<void> {
   await client.request({
     body: {
-      inputs: {
-        ...inputs,
-        "config-path": process.env.GITVIBE_CONFIG_PATH || ".github/git-vibe.yml",
-      },
+      inputs,
       ref: dispatchRef,
     },
     method: "POST",

@@ -171,3 +171,4 @@ Self-hosted server runtime secrets:
 Self-hosted server variables:
 
 - `GITVIBE_DISCUSSION_CATEGORY`: preferred Discussion category for converted feature issues, default `Ideas`.
+- `GITHUB_REPOSITORY`: optional `owner/repo` used by startup preflight. GitHub Actions provides this automatically during deployment; operators do not create a secret or repository variable for it.

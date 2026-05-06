@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRepositoryDiscussion } from "../src/lib/discussions.ts";
+import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../src/lib/discussions.ts";
 import { gitVibeLabels, gitVibeLabelList, isGitVibeLabel } from "../src/lib/labels.ts";
 import { implementationIssueBody } from "../src/lib/traceability.ts";
 import {
@@ -79,6 +79,34 @@ describe("GitVibe labels", () => {
 });
 
 describe("GitHub discussion creation", () => {
+  it("checks discussion setup without creating a discussion", async () => {
+    const graphql = vi.fn().mockResolvedValueOnce({
+      repository: {
+        discussionCategories: {
+          nodes: [
+            { id: "general", name: "General", slug: "general" },
+            { id: "ideas", name: "Ideas", slug: "ideas" },
+          ],
+        },
+        id: "repo-id",
+      },
+    });
+
+    await expect(
+      checkRepositoryDiscussions({
+        categoryName: "Ideas",
+        client: /** @type {any} */ ({ graphql }),
+        repository: "example/repo",
+        token: "token",
+      }),
+    ).resolves.toMatchObject({
+      categoryName: "Ideas",
+      matchedConfiguredCategory: true,
+      repository: "example/repo",
+    });
+    expect(graphql).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the preferred category when creating a repository discussion", async () => {
     const graphql = vi
       .fn()
