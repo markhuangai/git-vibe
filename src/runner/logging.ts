@@ -8,6 +8,11 @@ export interface StageLoggerOptions {
 }
 
 const maxFieldLength = 180;
+const tokenPatterns = [
+  /\bgithub_pat_[A-Za-z0-9_]+\b/g,
+  /\bgh[pousr]_[A-Za-z0-9_]+\b/g,
+  /\bsk-[A-Za-z0-9_-]+\b/g,
+];
 
 export function createStageLogger(stage: string, options: StageLoggerOptions = {}): StageLogger {
   const enabled = options.enabled ?? process.env.GITVIBE_LOG_PROGRESS !== "false";
@@ -43,7 +48,25 @@ function formatValue(value: unknown): string {
 }
 
 function sanitizeValue(value: string): string {
-  const compact = value.replace(/\s+/g, " ").trim();
+  const compact = redactSecrets(value).replace(/\s+/g, " ").trim();
   if (compact.length <= maxFieldLength) return compact;
   return `${compact.slice(0, maxFieldLength - 1)}...`;
+}
+
+function redactSecrets(value: string): string {
+  let redacted = value;
+  for (const pattern of tokenPatterns) {
+    redacted = redacted.replace(pattern, "<redacted>");
+  }
+
+  for (const [name, secret] of Object.entries(process.env)) {
+    if (!sensitiveName(name) || !secret || secret.length < 6) continue;
+    redacted = redacted.split(secret).join(`<redacted:${name}>`);
+  }
+
+  return redacted;
+}
+
+function sensitiveName(name: string): boolean {
+  return /(AUTH|CREDENTIAL|KEY|PASSWORD|SECRET|TOKEN)/i.test(name);
 }

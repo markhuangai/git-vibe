@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "pr-feedback-remediation.v1",
+  "$id": "validate.v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,9 +11,7 @@
     "findings",
     "assumptions",
     "references",
-    "next_state",
-    "tests",
-    "skipped_feedback"
+    "next_state"
   ],
   "properties": {
     "stage": { "type": "string" },
@@ -21,10 +19,10 @@
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
+    "questions": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
     "next_state": { "type": "string" },
-    "tests": { "type": "array", "items": { "type": "string" } },
-    "skipped_feedback": { "type": "array", "items": { "type": "string" } }
+    "proposed_labels": { "type": "array", "items": { "type": "string" } }
   }
 }

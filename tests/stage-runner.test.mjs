@@ -62,7 +62,7 @@ describe("stage runner issue dry-runs", () => {
     });
 
     expect(result).toMatchObject({
-      schemaId: "bug-investigation.v1",
+      schemaId: "investigate.v1",
       status: "completed",
       summary: "Dry run completed for investigate.",
     });

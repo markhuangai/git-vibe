@@ -66,7 +66,7 @@ describe("stage contracts", () => {
     process.env.GITHUB_ACTION_PATH = `${process.cwd()}/investigate`;
     try {
       expect(loadStageSchema(stageDefinitions.investigate.schemaFile)).toMatchObject({
-        $id: "bug-investigation.v1",
+        $id: "investigate.v1",
       });
     } finally {
       if (original === undefined) delete process.env.GITHUB_ACTION_PATH;

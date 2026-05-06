@@ -70,7 +70,7 @@ AI result envelope:
 
 ```json
 {
-  "stage": "bug-investigation",
+  "stage": "investigate",
   "status": "needs-context",
   "confidence": 0.74,
   "summary": "...",

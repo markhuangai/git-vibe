@@ -39,16 +39,7 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
     process.env.OPENAI_MODEL = "gpt-test";
     process.env.OPENAI_BASE_URL = "https://proxy.test/v1";
     const logger = { event: vi.fn() };
-    generateText.mockImplementationOnce(async (request) => {
-      request.experimental_onToolCallStart({ toolCall: { toolName: "read" } });
-      request.experimental_onToolCallFinish({ success: true, toolName: "read" });
-      request.experimental_onToolCallFinish({ error: new Error("denied"), toolName: "bash" });
-      request.onStepFinish({ finishReason: "stop", toolCalls: [{ toolName: "read" }] });
-      return {
-        steps: [{ toolCalls: [{ toolName: "output_validator" }] }],
-        text: '{"stage":"investigate","status":"completed"}',
-      };
-    });
+    mockTelemetryGenerateText();
 
     await expect(
       runAiStage({
@@ -78,17 +69,227 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
       }),
     );
     expect(logger.event).toHaveBeenCalledWith("ai.request.start", expect.any(Object));
-    expect(logger.event).toHaveBeenCalledWith("ai.tool.start", { tool: "read" });
-    expect(logger.event).toHaveBeenCalledWith("ai.tool.done", {
-      error: undefined,
+    expect(logger.event).toHaveBeenCalledWith("ai.tool.start", {
+      call_id: "call-read",
+      file: "src/index.ts",
+      limit: 20,
+      offset: 10,
+      step: 1,
       tool: "read",
     });
+    expect(logger.event).toHaveBeenCalledWith("ai.tool.done", {
+      call_id: "call-read",
+      duration_ms: 12,
+      error: undefined,
+      result_chars: 21,
+      result_lines: 2,
+      step: undefined,
+      tool: "read",
+    });
+    expect(logger.event).toHaveBeenCalledWith("ai.tool.start", {
+      call_id: undefined,
+      content_chars: 67,
+      content_keys: "comment_body,stage,status",
+      stage: "investigate",
+      step: undefined,
+      status: "completed",
+      tool: "output_validator",
+    });
     expect(logger.event).toHaveBeenCalledWith("ai.tool.failed", {
+      call_id: "call-bash",
+      duration_ms: undefined,
       error: "denied",
+      step: undefined,
       tool: "bash",
+    });
+    expect(logger.event).toHaveBeenCalledWith("ai.step.done", {
+      finish_reason: "stop",
+      step: 1,
+      tool_calls: 2,
+      tools: "read,output_validator",
+    });
+    expect(logger.event).toHaveBeenCalledWith("ai.request.done", {
+      steps: 1,
+      tool_calls: 2,
+      tools_used: "read,output_validator",
     });
   });
 });
+
+describe("AI stage runner tool telemetry", () => {
+  it("logs compact summaries for supported tool inputs", async () => {
+    const logger = { event: vi.fn() };
+    mockToolSummaryGenerateText();
+
+    await expect(
+      runAiStage({
+        config: {},
+        cwd: process.cwd(),
+        logger,
+        maxTurns: 2,
+        prompt: "Prompt",
+        schema: {},
+        schemaId: "schema",
+        stageDefinition: stageDefinitions.implement,
+        system: "System",
+      }),
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
+
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.tool.start",
+      expect.objectContaining({ path: "src", pattern: "**/*.ts", tool: "glob" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.tool.start",
+      expect.objectContaining({ glob: "*.ts", output_mode: "content", tool: "grep" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.tool.start",
+      expect.objectContaining({ command: "rg TODO src", tool: "bash" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.tool.start",
+      expect.objectContaining({ file: "src/index.ts", new_chars: 3, tool: "edit" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.tool.start",
+      expect.objectContaining({
+        allowed_domains: "github.com,docs.github.com",
+        tool: "web_search",
+      }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.tool.done",
+      expect.objectContaining({ result_keys: "valid", tool: "glob" }),
+    );
+  });
+});
+
+function mockTelemetryGenerateText() {
+  generateText.mockImplementationOnce(async (request) => {
+    emitReadToolTelemetry(request);
+    emitOutputValidatorTelemetry(request);
+    emitFailedBashTelemetry(request);
+    request.onStepFinish({
+      finishReason: "stop",
+      toolCalls: [{ toolName: "read" }, { toolName: "output_validator" }],
+    });
+    return {
+      steps: [{ toolCalls: [{ toolName: "read" }, { toolName: "output_validator" }] }],
+      text: '{"stage":"investigate","status":"completed"}',
+    };
+  });
+}
+
+function emitReadToolTelemetry(request) {
+  request.experimental_onToolCallStart({
+    stepNumber: 0,
+    toolCall: {
+      input: { file_path: "src/index.ts", limit: 20, offset: 10 },
+      toolCallId: "call-read",
+      toolName: "read",
+    },
+  });
+  request.experimental_onToolCallFinish({
+    durationMs: 12,
+    output: "1\tline one\n2\tline two",
+    success: true,
+    toolCall: {
+      input: { file_path: "src/index.ts" },
+      toolCallId: "call-read",
+      toolName: "read",
+    },
+  });
+}
+
+function emitOutputValidatorTelemetry(request) {
+  request.experimental_onToolCallStart({
+    toolCall: {
+      input: {
+        content: JSON.stringify({
+          comment_body: "Done.",
+          stage: "investigate",
+          status: "completed",
+        }),
+      },
+      toolName: "output_validator",
+    },
+  });
+}
+
+function emitFailedBashTelemetry(request) {
+  request.experimental_onToolCallFinish({
+    error: new Error("denied"),
+    success: false,
+    toolCall: {
+      input: { command: "rg TODO src" },
+      toolCallId: "call-bash",
+      toolName: "bash",
+    },
+  });
+}
+
+function mockToolSummaryGenerateText() {
+  generateText.mockImplementationOnce(async (request) => {
+    for (const toolCall of toolSummaryCalls()) {
+      request.experimental_onToolCallStart({ toolCall });
+    }
+    request.experimental_onToolCallStart({
+      input: { count: 2, flag: true, items: ["a", "b"], nested: { value: true } },
+      toolName: "custom_tool",
+    });
+    request.experimental_onToolCallStart({
+      toolCall: { input: { content: "not json" }, toolName: "output_validator" },
+    });
+    request.experimental_onToolCallFinish({
+      durationMs: 4,
+      output: { valid: true },
+      success: true,
+      toolCall: { toolName: "glob" },
+    });
+    return {
+      steps: [{ toolCalls: [] }],
+      text: '{"stage":"validate","status":"completed"}',
+    };
+  });
+}
+
+function toolSummaryCalls() {
+  return [
+    { input: { path: "src", pattern: "**/*.ts" }, toolName: "glob" },
+    {
+      input: { glob: "*.ts", output_mode: "content", pattern: "TODO", path: "src", "-n": true },
+      toolName: "grep",
+    },
+    {
+      input: { command: "rg TODO src", description: "Find todos", timeout: 1000 },
+      toolName: "bash",
+    },
+    {
+      input: {
+        file_path: "src/index.ts",
+        new_content: "new",
+        old_content: "old text",
+        other_file_path: "src/other.ts",
+      },
+      toolName: "diff",
+    },
+    {
+      input: { file_path: "src/index.ts", new_string: "new", old_string: "old", replace_all: true },
+      toolName: "edit",
+    },
+    { input: { content: "hello", file_path: "README.md" }, toolName: "write" },
+    {
+      input: { edits: [{ new_string: "b", old_string: "a" }], file_path: "src/a.ts" },
+      toolName: "multi_edit",
+    },
+    { input: { url: "https://example.com" }, toolName: "web_fetch" },
+    {
+      input: { allowed_domains: ["github.com", "docs.github.com"], query: "GitHub API" },
+      toolName: "web_search",
+    },
+  ];
+}
 
 describe("AI stage runner provider failures", () => {
   it("supports anthropic profiles and reports malformed AI responses", async () => {
@@ -167,10 +368,12 @@ describe("AI stage runner telemetry edge cases", () => {
       finish_reason: undefined,
       step: 1,
       tool_calls: 0,
+      tools: "none",
     });
     expect(logger.event).toHaveBeenCalledWith("ai.request.done", {
       steps: 1,
       tool_calls: 0,
+      tools_used: "none",
     });
   });
 });

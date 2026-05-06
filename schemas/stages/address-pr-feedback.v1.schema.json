@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "feature-refinement.v1",
+  "$id": "address-pr-feedback.v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,7 +11,9 @@
     "findings",
     "assumptions",
     "references",
-    "next_state"
+    "next_state",
+    "tests",
+    "skipped_feedback"
   ],
   "properties": {
     "stage": { "type": "string" },
@@ -19,12 +21,10 @@
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
-    "questions": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
     "next_state": { "type": "string" },
-    "proposed_labels": { "type": "array", "items": { "type": "string" } },
-    "issue_title": { "type": "string" },
-    "issue_body": { "type": "string" }
+    "tests": { "type": "array", "items": { "type": "string" } },
+    "skipped_feedback": { "type": "array", "items": { "type": "string" } }
   }
 }
