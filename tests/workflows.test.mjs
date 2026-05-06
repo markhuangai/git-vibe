@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 /**
- * @typedef {{ env?: Record<string, string>, jobs?: Record<string, WorkflowJob>, on?: { workflow_call?: { secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: unknown } }} Workflow
- * @typedef {{ env?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], uses?: string }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: unknown } }} Workflow
+ * @typedef {{ env?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, name?: string, uses?: string }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
@@ -133,6 +133,53 @@ describe("GitVibe workflow wiring", () => {
         runStep,
       );
     }
+  });
+});
+
+describe("GitVibe workflow write permissions", () => {
+  it("grants write permissions where stage result comments are published", () => {
+    expect(
+      readWorkflow(".github/workflows/summarize.yml").jobs?.summarize?.permissions,
+    ).toMatchObject({
+      discussions: "write",
+    });
+    expect(
+      readWorkflow(".github/workflows/validate.yml").jobs?.validate?.permissions,
+    ).toMatchObject({
+      discussions: "write",
+      issues: "write",
+    });
+    expect(
+      readWorkflow(".github/workflows/develop.yml").jobs?.investigate?.permissions,
+    ).toMatchObject({
+      issues: "write",
+    });
+  });
+});
+
+describe("GitVibe app deployment boundary", () => {
+  it("deploys the app only when app, shared, package, or deploy files change", () => {
+    const paths = readWorkflow(".github/workflows/app-deploy.yml").on?.push?.paths || [];
+
+    expect(paths).toContain("src/app/**");
+    expect(paths).toContain("src/shared/**");
+    expect(paths).not.toContain("src/**");
+    expect(paths).not.toContain("src/runner/**");
+    expect(paths).not.toContain("prompts/**");
+    expect(paths).not.toContain("schemas/**");
+  });
+
+  it("builds the app image without bundled runner runtime assets", () => {
+    const dockerfile = readFileSync("Dockerfile", "utf8");
+    const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+
+    expect(packageJson.scripts["build:app"]).toBe("tsc --project tsconfig.build.json");
+    expect(dockerfile).toContain("corepack pnpm build:app");
+    expect(dockerfile).toContain("COPY --from=build /app/dist/app ./dist/app");
+    expect(dockerfile).toContain("COPY --from=build /app/dist/shared ./dist/shared");
+    expect(dockerfile).not.toContain("COPY --from=build /app/dist ./dist");
+    expect(dockerfile).not.toContain("COPY --from=build /app/prompts ./prompts");
+    expect(dockerfile).not.toContain("COPY --from=build /app/schemas ./schemas");
   });
 });
 

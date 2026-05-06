@@ -132,7 +132,7 @@ jobs:
     timeout-minutes: ${{ inputs.investigation_timeout_minutes }}
     permissions:
       contents: read
-      issues: read
+      issues: write
       pull-requests: read
     steps:
       - uses: actions/checkout@v4

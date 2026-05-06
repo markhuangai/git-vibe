@@ -17,7 +17,7 @@ vi.mock("ai", () => ({
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 
-const { runStage } = await import("../src/lib/stage-runner.ts");
+const { runStage } = await import("../src/runner/stage-runner.ts");
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -223,7 +223,11 @@ describe("stage runner implementation writes", () => {
       ],
       text: "{}",
     });
-    globalThis.fetch = fetchMock([issueResponse("Issue body"), commentsResponse([])]);
+    globalThis.fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([]),
+      response(200, {}),
+    ]);
 
     await expect(
       runStage({
@@ -399,6 +403,8 @@ describe("stage runner pull request writes", () => {
       commentsResponse([]),
       response(200, []),
       response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
+      response(200, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
@@ -454,7 +460,12 @@ describe("stage runner write skips and branch validation", () => {
       ],
       text: "{}",
     });
-    const fetch = fetchMock([issueResponse("Issue body"), commentsResponse([])]);
+    const fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([]),
+      response(200, {}),
+      response(200, {}),
+    ]);
     globalThis.fetch = fetch;
 
     await expect(
@@ -470,7 +481,9 @@ describe("stage runner write skips and branch validation", () => {
         token: "token",
       }),
     ).resolves.toMatchObject({ status: "blocked" });
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch.mock.calls[2][0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(JSON.parse(fetch.mock.calls[3][1].body).labels).toEqual(["git-vibe:blocked"]);
 
     globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
     await expect(
@@ -537,6 +550,8 @@ async function runCreatePr(cwd, existingPulls, expected) {
     commentsResponse([]),
     response(200, existingPulls),
     response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
+    response(200, {}),
+    response(200, {}),
   ]);
   globalThis.fetch = fetch;
 

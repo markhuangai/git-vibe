@@ -9,10 +9,9 @@ on:
       - docker-compose.yml
       - package.json
       - pnpm-lock.yaml
-      - src/**
+      - src/app/**
+      - src/shared/**
       - app/**
-      - prompts/**
-      - schemas/**
       - .github/workflows/app-deploy.yml
   workflow_dispatch:
 

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../src/lib/discussions.ts";
-import { gitVibeLabels, gitVibeLabelList, isGitVibeLabel } from "../src/lib/labels.ts";
-import { implementationIssueBody } from "../src/lib/traceability.ts";
+import {
+  checkRepositoryDiscussions,
+  createRepositoryDiscussion,
+} from "../src/shared/discussions.ts";
+import { gitVibeLabels, gitVibeLabelList, isGitVibeLabel } from "../src/shared/labels.ts";
+import { implementationIssueBody } from "../src/shared/traceability.ts";
 import {
   buildDiscussionBody,
   buildDiscussionTitle,

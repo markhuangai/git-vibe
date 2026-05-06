@@ -17,6 +17,7 @@
   "scripts": {
     "actionlint": "github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml",
     "build": "tsc --project tsconfig.build.json && node scripts/build-actions.mjs",
+    "build:app": "tsc --project tsconfig.build.json",
     "bundle:actions": "node scripts/build-actions.mjs",
     "check": "prettier --check . && eslint . && corepack pnpm typecheck && vitest run --coverage && corepack pnpm build && github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml && corepack pnpm audit --prod",
     "coverage": "vitest run --coverage",

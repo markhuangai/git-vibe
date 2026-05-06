@@ -2,12 +2,12 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { extractValidatedOutput } from "../src/lib/ai.ts";
-import { renderPrompts } from "../src/lib/prompts.ts";
-import { loadStageSchema, validateOutput } from "../src/lib/schemas.ts";
-import { parseStage, stageDefinitions } from "../src/lib/stages.ts";
+import { extractValidatedOutput } from "../src/runner/ai.ts";
+import { renderPrompts } from "../src/runner/prompts.ts";
+import { loadStageSchema, validateOutput } from "../src/runner/schemas.ts";
+import { parseStage, stageDefinitions } from "../src/shared/stages.ts";
 
-/** @type {import("../src/lib/types.ts").ContextPacket} */
+/** @type {import("../src/shared/types.ts").ContextPacket} */
 const baseContext = {
   artifact: {
     body: "Body",

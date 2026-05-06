@@ -9,10 +9,10 @@ import {
   isProtectedGitVibeLabel,
   removeIssueLabel,
 } from "../src/app/labels.ts";
-import { loadConfig, testCommandsFor } from "../src/lib/config.ts";
-import { buildDiscussionContext, buildIssueContext } from "../src/lib/context.ts";
-import { GitHubClient, splitRepository } from "../src/lib/github.ts";
-import { gitVibeLabelList } from "../src/lib/labels.ts";
+import { loadConfig, testCommandsFor } from "../src/runner/config.ts";
+import { buildDiscussionContext, buildIssueContext } from "../src/runner/context.ts";
+import { GitHubClient, splitRepository } from "../src/shared/github.ts";
+import { gitVibeLabelList } from "../src/shared/labels.ts";
 
 const originalFetch = globalThis.fetch;
 

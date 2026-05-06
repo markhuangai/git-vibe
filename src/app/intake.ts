@@ -1,6 +1,6 @@
-import type { CreatedDiscussion } from "../lib/discussions.js";
-import { gitVibeLabels } from "../lib/labels.js";
-import { sourceDiscussionMarker } from "../lib/traceability.js";
+import type { CreatedDiscussion } from "../shared/discussions.js";
+import { gitVibeLabels } from "../shared/labels.js";
+import { sourceDiscussionMarker } from "../shared/traceability.js";
 
 export const conversionMarker = "<!-- git-vibe:converted-to-discussion";
 export const discussionSetupMarker = "<!-- git-vibe:discussion-setup-error";

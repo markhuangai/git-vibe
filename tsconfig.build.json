@@ -9,5 +9,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/actions/**/*.ts", "tests", "coverage", "dist", "node_modules"]
+  "exclude": ["src/runner/**/*.ts", "tests", "coverage", "dist", "node_modules"]
 }

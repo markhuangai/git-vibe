@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: read
-      discussions: read
+      discussions: write
     steps:
       - uses: actions/checkout@v4
       - name: Checkout GitVibe action source

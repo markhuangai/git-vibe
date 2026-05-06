@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ContextPacket, JsonObject } from "./types.js";
+import type { ContextPacket, JsonObject } from "../shared/types.js";
 
 export interface RenderPromptOptions {
   context: ContextPacket;

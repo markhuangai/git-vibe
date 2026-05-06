@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { createGitVibeApp, isDirectRun, startServerFromEnv } from "../src/app/server.ts";
-import { gitVibeLabels } from "../src/lib/labels.ts";
+import { gitVibeLabels } from "../src/shared/labels.ts";
 
 describe("GitVibe app server", () => {
   it("handles health, not found, signature errors, and accepted webhooks", async () => {

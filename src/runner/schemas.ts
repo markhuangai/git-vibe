@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createOutputValidator } from "agentool/output-validator";
-import type { JsonObject } from "./types.js";
+import type { JsonObject } from "../shared/types.js";
 
 export function loadStageSchema(schemaFile: string): JsonObject {
   return JSON.parse(

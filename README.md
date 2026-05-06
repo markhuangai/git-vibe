@@ -10,6 +10,14 @@ The intended public action repository is `git-vibe/actions`.
 - Reusable GitHub Actions execute the pipeline stages on GitHub-hosted or self-hosted runners.
 - GitHub remains the source of truth through labels, comments, links, and pull requests.
 
+The TypeScript source is split by runtime boundary while staying in one package:
+
+- `src/app`: self-hosted webhook server code that ships in the Docker image.
+- `src/runner`: GitHub Action runner code, AI stage execution, prompts, schemas, and deterministic runner writes.
+- `src/shared`: shared GitHub helpers, labels, stage definitions, traceability helpers, and common types used by both runtimes.
+
+The Docker app image builds only app/shared output. Runner-only source, prompts, and schemas are built by composite actions on the runner and do not trigger app deployment unless shared/package/deploy files change.
+
 ## Consumer Repo Quick Start
 
 In the repository that should use GitVibe:
@@ -163,7 +171,7 @@ Use `@git-vibe` in issues, discussions, and pull requests:
 The self-hosted server source lives in [src/app/server.ts](src/app/server.ts). It verifies GitHub webhook signatures, uses the configured fine-grained PAT for GitHub writes, checks the actor's repository permission, and dispatches reusable workflows.
 
 ```bash
-corepack pnpm build
+corepack pnpm build:app
 GITHUB_WEBHOOK_SECRET=... \
 GITVIBE_GITHUB_TOKEN=... \
 corepack pnpm start
@@ -199,7 +207,7 @@ For source-repo testing, dispatch `investigate.yml`, `summarize.yml`, `validate.
 
 ## Current Status
 
-This repository contains the TypeScript GitVibe app implementation, source-built runner actions, stage prompts, JSON Schema contracts, and reusable workflow entry points. Webhook mode and `ai-sdk-agentool` are implemented first; relay, polling, Actions-native receivers, and additional AI adapters are deferred behind interfaces.
+This repository contains the TypeScript GitVibe app implementation, source-built runner actions, stage prompts, JSON Schema contracts, shared runtime helpers, and reusable workflow entry points. App and runner code are separated under `src/app` and `src/runner`, with common code under `src/shared`. Webhook mode and `ai-sdk-agentool` are implemented first; relay, polling, Actions-native receivers, and additional AI adapters are deferred behind interfaces.
 
 ## Development Checks
 

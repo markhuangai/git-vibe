@@ -104,7 +104,7 @@ jobs:
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: read
-      discussions: read
+      discussions: write
       issues: write
     steps:
       - uses: actions/checkout@v4

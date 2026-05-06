@@ -8,7 +8,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN corepack pnpm install --frozen-lockfile
 
 COPY . .
-RUN corepack pnpm build
+RUN corepack pnpm build:app
 RUN corepack pnpm prune --prod --ignore-scripts
 
 FROM node:22-bookworm-slim AS runtime
@@ -20,10 +20,9 @@ WORKDIR /app
 
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist/app ./dist/app
+COPY --from=build /app/dist/shared ./dist/shared
 COPY --from=build /app/app ./app
-COPY --from=build /app/prompts ./prompts
-COPY --from=build /app/schemas ./schemas
 
 EXPOSE 3000
 

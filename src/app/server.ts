@@ -4,9 +4,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../lib/discussions.js";
-import { GitHubClient } from "../lib/github.js";
-import { gitVibeLabels } from "../lib/labels.js";
+import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../shared/discussions.js";
+import { GitHubClient } from "../shared/github.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import {
   buildDiscussionBody,
   buildDiscussionTitle,

@@ -15,11 +15,13 @@
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
-- `src/actions/run-action.ts`: runner entry point built by composite actions before execution.
-- `src/lib`: config loading, GitHub API access, context assembly, prompt rendering, stage definitions, schema validation, and `ai-sdk-agentool` execution.
+- `src/runner/actions/run-action.ts`: runner entry point built by composite actions before execution.
+- `src/runner`: config loading, context assembly, prompt rendering, schema validation, stage execution, result publishing, and `ai-sdk-agentool` integration.
+- `src/shared`: shared GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both the app and runner.
+- `package.json`: single package and lockfile for app, runner, and shared code. Runtime release separation is handled by source boundaries, Docker build output, and workflow path filters rather than package splitting.
 - `prompts/`: versioned system and user prompt templates.
 - `schemas/stages`: JSON Schema contracts for stage outputs.
-- `dist/`: generated build output. It is ignored in git, built by the Docker build stage for the app container, and built by composite actions on the runner before action execution.
+- `dist/`: generated build output. It is ignored in git. Docker builds only app/shared output for the app container, while composite actions build the bundled runner action before execution.
 - `Dockerfile` and `docker-compose.yml`: self-hosted app deployment packaging.
 
 ## Test Plan

@@ -3,23 +3,25 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runAiStage } from "./ai.js";
 import { loadConfig, testCommandsFor } from "./config.js";
-import { addDiscussionComment } from "./discussions.js";
+import { addDiscussionComment } from "../shared/discussions.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
-import { GitHubClient, splitRepository } from "./github.js";
-import { gitVibeLabels } from "./labels.js";
+import { GitHubClient, splitRepository } from "../shared/github.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
+import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
-import { stageDefinitions } from "./stages.js";
-import { implementationIssueBody } from "./traceability.js";
+import { applyStageLabelTransition, publishStageResultComment } from "./stage-publishing.js";
+import { stageDefinitions } from "../shared/stages.js";
+import { implementationIssueBody } from "../shared/traceability.js";
 import type {
   ContextPacket,
   GitVibeConfig,
   JsonObject,
   RunnerOptions,
   StageRunResult,
-} from "./types.js";
+} from "../shared/types.js";
 
 export async function runStage(options: RunnerOptions): Promise<StageRunResult> {
   const logger = createStageLogger(options.stage);
@@ -86,7 +88,12 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     status: String(parsedOutput.status || "completed"),
   });
   return {
-    commentBody: String(parsedOutput.comment_body || parsedOutput.summary || ""),
+    commentBody: renderStageResultComment({
+      context,
+      parsedOutput,
+      stage: options.stage,
+      workflowRunUrl: options.workflowRunUrl,
+    }),
     parsedOutput,
     schemaId: definition.schemaId,
     status: String(parsedOutput.status || "completed"),
@@ -148,15 +155,38 @@ async function applyDeterministicWrites(options: {
     return;
   }
 
-  const status = String(options.parsedOutput.status || "");
+  const status = String(options.parsedOutput.status || "completed");
   if (status !== "completed") {
+    await publishStageResultComment({ ...options, runner: options.options });
+    await applyStageLabelTransition({ ...options, runner: options.options });
     options.logger.event("writes.skip", { reason: "status", status });
     return;
   }
 
-  if (options.options.stage === "implement") await commitImplementation(options);
+  if (stageDefinitions[options.options.stage].access === "read-only") {
+    await publishStageResultComment({ ...options, runner: options.options });
+    await applyStageLabelTransition({ ...options, runner: options.options });
+    return;
+  }
+
+  if (options.options.stage === "implement") {
+    await applyStageLabelTransition({ ...options, runner: options.options });
+    await commitImplementation(options);
+  }
   if (options.options.stage === "materialize") await createImplementationIssue(options);
-  if (options.options.stage === "create-pr") await createPullRequest(options);
+  if (options.options.stage === "create-pr") {
+    const pullRequest = await createPullRequest(options);
+    await publishStageResultComment({
+      ...options,
+      links: pullRequestLinks(pullRequest),
+      runner: options.options,
+    });
+    await applyStageLabelTransition({ ...options, runner: options.options });
+  }
+  if (options.options.stage === "address-pr-feedback") {
+    await commitImplementation(options);
+    await publishStageResultComment({ ...options, runner: options.options });
+  }
 }
 
 async function commitImplementation({
@@ -276,7 +306,7 @@ async function createPullRequest({
   logger: StageLogger;
   options: RunnerOptions;
   parsedOutput: JsonObject;
-}): Promise<void> {
+}): Promise<{ html_url?: string; number?: number }> {
   logger.event("token.use", {
     access: "publish-write",
   });
@@ -302,7 +332,7 @@ async function createPullRequest({
       token: options.token,
     });
     logger.event("github.pr.update.done", { number: updated.number, url: updated.html_url });
-    return;
+    return updated;
   }
 
   logger.event("github.pr.lookup.done", { found: false });
@@ -320,6 +350,13 @@ async function createPullRequest({
     token: options.token,
   });
   logger.event("github.pr.create.done", { number: pullRequest.number, url: pullRequest.html_url });
+  return pullRequest;
+}
+
+function pullRequestLinks(pullRequest: { html_url?: string; number?: number }): StageResultLink[] {
+  if (!pullRequest.html_url) return [];
+  const suffix = pullRequest.number ? ` #${pullRequest.number}` : "";
+  return [{ label: `Pull request${suffix}`, url: pullRequest.html_url }];
 }
 
 function ensureGitIdentity(cwd: string): void {

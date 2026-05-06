@@ -1,5 +1,5 @@
-import { GitHubClient } from "../lib/github.js";
-import { type GitVibeLabelDefinition, gitVibeLabelList, isGitVibeLabel } from "../lib/labels.js";
+import { GitHubClient } from "../shared/github.js";
+import { type GitVibeLabelDefinition, gitVibeLabelList, isGitVibeLabel } from "../shared/labels.js";
 
 export async function ensureGitVibeLabels(options: {
   client: GitHubClient;

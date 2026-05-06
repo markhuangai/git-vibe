@@ -20,6 +20,16 @@ jobs:
 
 Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The GitVibe orchestrator is hosted by the repository owner, receives or polls GitHub events, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
 
+## Runtime Boundaries
+
+GitVibe uses one package and one lockfile, but source is separated by runtime ownership:
+
+- `src/app`: webhook server and repository orchestration logic that ships in the self-hosted Docker image.
+- `src/runner`: reusable action runtime, AI stage execution, context assembly, prompt/schema handling, branch writes, PR creation, and result comments.
+- `src/shared`: GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both app and runner.
+
+The Docker image builds only app/shared output. Composite actions build the runner bundle on the GitHub runner before executing a stage. Runner-only changes should not deploy the app unless they also change shared code, package metadata, Docker/deploy files, or app code.
+
 ## System Shape
 
 ```mermaid

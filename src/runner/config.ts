@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
-import type { GitVibeConfig } from "./types.js";
+import type { GitVibeConfig } from "../shared/types.js";
 
 const gitVibeConfigPath = ".github/git-vibe.yml";
 

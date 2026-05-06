@@ -30,6 +30,7 @@ export interface RunnerOptions {
   stage: Stage;
   stageTimeoutMinutes: number;
   token: string;
+  workflowRunUrl?: string;
 }
 
 export interface GitVibeConfig {

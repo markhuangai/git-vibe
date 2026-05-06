@@ -15,7 +15,7 @@ import { createWrite } from "agentool/write";
 import type { LanguageModel, ToolSet } from "ai";
 import type { StageLogger } from "./logging.js";
 import { summarizeError } from "./logging.js";
-import type { GitVibeConfig, JsonObject, StageDefinition } from "./types.js";
+import type { GitVibeConfig, JsonObject, StageDefinition } from "../shared/types.js";
 
 interface AiToolCall {
   input?: unknown;

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
-import { isDirectRun, runAction } from "../src/actions/run-action.ts";
+import { isDirectRun, runAction } from "../src/runner/actions/run-action.ts";
 
 const baseEnv = {
   GITHUB_REPOSITORY: "example/repo",
@@ -29,6 +29,8 @@ describe("GitVibe action launcher", () => {
         env: {
           ...baseEnv,
           GITHUB_OUTPUT: "/tmp/output",
+          GITHUB_RUN_ID: "99",
+          GITHUB_SERVER_URL: "https://github.enterprise.test",
           GITVIBE_DRY_RUN: "true",
           GITVIBE_MAX_TURNS: "12",
           GITVIBE_STAGE_TIMEOUT_MINUTES: "34",
@@ -46,6 +48,7 @@ describe("GitVibe action launcher", () => {
         repository: "example/repo",
         stage: "investigate",
         stageTimeoutMinutes: 34,
+        workflowRunUrl: "https://github.enterprise.test/example/repo/actions/runs/99",
       }),
     );
     expect(log).toHaveBeenCalledWith("investigate status=completed");
@@ -175,7 +178,7 @@ describe("GitVibe action launcher targets and defaults", () => {
       stage: "address-pr-feedback",
     });
     expect(
-      isDirectRun(new URL("../src/actions/run-action.ts", import.meta.url).href, undefined),
+      isDirectRun(new URL("../src/runner/actions/run-action.ts", import.meta.url).href, undefined),
     ).toBe(false);
   });
 

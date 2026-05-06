@@ -3,9 +3,9 @@
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { runStage } from "../lib/stage-runner.js";
-import { parseStage } from "../lib/stages.js";
-import type { StageRunResult } from "../lib/types.js";
+import { runStage } from "../stage-runner.js";
+import { parseStage } from "../../shared/stages.js";
+import type { StageRunResult } from "../../shared/types.js";
 
 export interface ActionRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -38,6 +38,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
       token,
+      workflowRunUrl: workflowRunUrl(env),
     });
 
     log(`${stage} status=${result.status}`);
@@ -90,6 +91,14 @@ function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number): numb
   const value = Number(rawValue);
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number.`);
   return value;
+}
+
+function workflowRunUrl(env: NodeJS.ProcessEnv): string | undefined {
+  const repository = envValue(env, "GITHUB_REPOSITORY");
+  const runId = envValue(env, "GITHUB_RUN_ID");
+  if (!repository || !runId) return undefined;
+  const serverUrl = envValue(env, "GITHUB_SERVER_URL") || "https://github.com";
+  return `${serverUrl}/${repository}/actions/runs/${runId}`;
 }
 
 function writeOutputs(

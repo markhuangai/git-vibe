@@ -52,7 +52,7 @@ checks repository-specific setup when webhooks arrive.
 ## Run
 
 ```bash
-corepack pnpm build
+corepack pnpm build:app
 corepack pnpm start
 ```
 

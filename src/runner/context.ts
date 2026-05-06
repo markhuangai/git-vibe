@@ -1,5 +1,5 @@
-import { GitHubClient, splitRepository } from "./github.js";
-import type { ContextPacket, JsonObject, TimelineItem } from "./types.js";
+import { GitHubClient, splitRepository } from "../shared/github.js";
+import type { ContextPacket, JsonObject, TimelineItem } from "../shared/types.js";
 
 interface IssueResponse extends JsonObject {
   author_association?: string;

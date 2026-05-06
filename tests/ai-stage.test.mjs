@@ -12,8 +12,8 @@ vi.mock("ai", () => ({
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 
-const { runAiStage } = await import("../src/lib/ai.ts");
-const { stageDefinitions } = await import("../src/lib/stages.ts");
+const { runAiStage } = await import("../src/runner/ai.ts");
+const { stageDefinitions } = await import("../src/shared/stages.ts");
 
 const originalEnv = { ...process.env };
 

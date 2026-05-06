@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createStageLogger, summarizeError } from "../src/lib/logging.ts";
+import { createStageLogger, summarizeError } from "../src/runner/logging.ts";
 
 describe("stage logging", () => {
   it("emits compact structured progress lines", () => {

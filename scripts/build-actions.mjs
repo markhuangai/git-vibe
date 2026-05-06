@@ -9,7 +9,7 @@ const bundleFile = "dist/actions/run-action.cjs";
 
 await build({
   bundle: true,
-  entryPoints: ["src/actions/run-action.ts"],
+  entryPoints: ["src/runner/actions/run-action.ts"],
   format: "cjs",
   logLevel: "info",
   minify: false,
