@@ -40,7 +40,7 @@ stateDiagram-v2
 - Bugs remain issues.
 - New bug issues do not automatically start AI work by default.
 - Bug fixing is always gated: investigate first, post findings, ask for expected behavior, wait for admin/collaborator context, validate that context, then approve implementation.
-- If the pre-implementation validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
+- If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
 - Admins and collaborators move work forward with commands plus labels.
@@ -107,7 +107,7 @@ GitHub labels are not natively protected per label. GitVibe must treat approval 
 
 ```mermaid
 flowchart TD
-  A[Approved implementation issue] --> B[Pre-implementation validation]
+  A[Approved implementation issue] --> B[Validation]
   B --> C{Admin context coherent?}
   C -->|no| D[Abort, post feedback, reset ready flag]
   C -->|yes| E[Implement]

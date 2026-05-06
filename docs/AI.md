@@ -26,7 +26,7 @@ Context assembly rules:
 - Weight analysis by authority: admin/owner/maintain > write/collaborator/member > contributor > first-time contributor/guest/none.
 - When repository permission and `author_association` disagree, repository permission is stronger for approval and command authorization; `author_association` remains useful analysis metadata.
 
-The same context assembly and weighted analysis pipeline applies to bug investigation, feature discussion refinement, implementation validation, and PR feedback handling.
+The same context assembly and weighted analysis pipeline applies to bug investigation, feature discussion refinement, validation, and PR feedback handling.
 
 ## Stage Contracts
 
@@ -57,15 +57,15 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                         | Access                               | Output                                                                       | May advance state                            |
-| ----------------------------- | ------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| Triage classification         | Read issue/discussion only           | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
-| Bug investigation             | Read repo and issue timeline         | Findings, suspected areas, reproduction gaps, expected behavior questions    | No code changes                              |
-| Feature refinement            | Read repo and discussion timeline    | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without maintainer command |
-| Pre-implementation validation | Read repo and accepted context       | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
-| Implementation                | Write `git-vibe/{issue-number}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
-| Review matrix                 | Read branch and diff                 | Findings by reviewer role, pass/fail, required fixes                         | May send back to implementation              |
-| PR feedback remediation       | Write existing branch only           | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
+| Stage                   | Access                               | Output                                                                       | May advance state                            |
+| ----------------------- | ------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------- |
+| Triage classification   | Read issue/discussion only           | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
+| Bug investigation       | Read repo and issue timeline         | Findings, suspected areas, reproduction gaps, expected behavior questions    | No code changes                              |
+| Feature refinement      | Read repo and discussion timeline    | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without maintainer command |
+| Validation              | Read repo and accepted context       | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
+| Implementation          | Write `git-vibe/{issue-number}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
+| Review matrix           | Read branch and diff                 | Findings by reviewer role, pass/fail, required fixes                         | May send back to implementation              |
+| PR feedback remediation | Write existing branch only           | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
 
 AI result envelope:
 
