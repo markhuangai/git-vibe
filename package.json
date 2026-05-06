@@ -1,0 +1,63 @@
+{
+  "name": "@git-vibe/app",
+  "version": "0.0.0",
+  "private": false,
+  "type": "module",
+  "packageManager": "pnpm@10.33.3",
+  "bin": {
+    "git-vibe-app": "./dist/app/server.js"
+  },
+  "files": [
+    "dist",
+    "prompts",
+    "schemas",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "actionlint": "github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml",
+    "build": "tsc --project tsconfig.build.json && node scripts/build-actions.mjs",
+    "bundle:actions": "node scripts/build-actions.mjs",
+    "check": "prettier --check . && eslint . && corepack pnpm typecheck && corepack pnpm build && vitest run && vitest run --coverage && github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml && corepack pnpm audit --prod",
+    "coverage": "vitest run --coverage",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "prepare": "husky",
+    "start": "node dist/app/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "lint-staged": {
+    "*.{js,mjs,ts,json,md,yml,yaml}": "prettier --check",
+    "*.{js,mjs}": "eslint"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.74",
+    "@ai-sdk/openai": "^3.0.60",
+    "acorn": "^8.15.0",
+    "acorn-walk": "^8.3.4",
+    "agentool": "^1.4.0",
+    "ai": "^6.0.175",
+    "yaml": "^2.8.4",
+    "zod": "^4.4.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "diff": "9.0.0"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "github-actionlint": "^1.7.12",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

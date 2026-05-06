@@ -1,0 +1,64 @@
+name: GitVibe app deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - package.json
+      - pnpm-lock.yaml
+      - src/**
+      - app/**
+      - prompts/**
+      - schemas/**
+      - .github/workflows/app-deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  GITVIBE_IMAGE: ghcr.io/z-m-huang/git-vibe:${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.GITVIBE_IMAGE }}
+            ghcr.io/z-m-huang/git-vibe:latest
+
+  deploy:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Deploy app with Docker Compose
+        env:
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.GITVIBE_WEBHOOK_SECRET }}
+          GITVIBE_DISCUSSION_CATEGORY: ${{ vars.GITVIBE_DISCUSSION_CATEGORY }}
+          GITVIBE_DISPATCH_REF: main
+          GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+          GITVIBE_IMAGE: ${{ env.GITVIBE_IMAGE }}
+        run: |
+          docker compose -f docker-compose.yml pull
+          docker compose -f docker-compose.yml up -d
+          docker image prune -f

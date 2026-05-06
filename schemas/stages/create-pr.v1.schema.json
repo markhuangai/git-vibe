@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "create-pr.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stage",
+    "status",
+    "summary",
+    "comment_body",
+    "findings",
+    "assumptions",
+    "references",
+    "next_state",
+    "branch",
+    "pr_title",
+    "pr_body"
+  ],
+  "properties": {
+    "stage": { "type": "string" },
+    "status": { "type": "string" },
+    "summary": { "type": "string" },
+    "comment_body": { "type": "string" },
+    "findings": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "references": { "type": "array", "items": { "type": "string" } },
+    "next_state": { "type": "string" },
+    "branch": { "type": "string" },
+    "pr_title": { "type": "string" },
+    "pr_body": { "type": "string" }
+  }
+}

@@ -1,0 +1,33 @@
+name: GitVibe address feedback
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: Pull request number with feedback to address.
+        required: true
+        type: string
+      config-path:
+        description: Path to the GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      dry-run:
+        description: Validate without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  address-feedback:
+    uses: git-vibe/actions/.github/workflows/address-feedback.yml@v1
+    with:
+      pr-number: ${{ inputs.pr-number }}
+      config-path: ${{ inputs.config-path }}
+      runner: ubuntu-latest
+      timeout_minutes: 120
+      max_turns: 120
+      dry-run: ${{ inputs.dry-run }}
+    secrets:
+      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}

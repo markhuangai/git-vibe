@@ -1,0 +1,93 @@
+# Copy this file to .github/git-vibe.yml in the consumer repository.
+
+version: 1
+
+branches:
+  base: ""
+
+runner:
+  default: ubuntu-latest
+
+github_auth:
+  mode: webhook-pat
+  # GitHub Actions Secret name. Stores the GitHub write token.
+  token_secret: GITVIBE_GITHUB_TOKEN
+
+ai:
+  default_profile: local_proxy
+  profiles:
+    local_proxy:
+      enabled: true
+      adapter: ai-sdk-agentool
+      provider:
+        type: openai-compatible # openai | anthropic | openai-compatible
+        # GitHub Actions Variable name. Model names are configuration, not credentials.
+        model_variable: GITVIBE_AI_MODEL
+        # GitHub Actions Variable name. Use a secret only if the endpoint itself is sensitive.
+        base_url_variable: GITVIBE_AI_BASE_URL
+        # GitHub Actions Secret name. Stores the AI provider or local proxy API key.
+        api_key_secret: GITVIBE_AI_API_KEY
+      reasoning:
+        effort: high
+      generation:
+        temperature: 0.2
+        max_output_tokens: 6000
+        max_steps: 90
+    codex_cli:
+      enabled: false
+      adapter: cli-codex
+      command: codex exec
+      # GitHub Actions Secret name. Stores auth.json contents for trusted self-hosted runners.
+      auth_json_secret: CODEX_AUTH_JSON
+      model: gpt-5.3-codex
+      reasoning:
+        effort: high
+        summary: concise
+    claude_code:
+      enabled: false
+      adapter: cli-claude-code
+      command: claude -p
+      # GitHub Actions Secret name. Stores the Claude Code OAuth access token.
+      oauth_token_secret: CLAUDE_CODE_OAUTH_TOKEN
+      model: opus
+      reasoning:
+        effort: xhigh
+  budgets:
+    default_timeout_minutes: 60
+    implementation_timeout_minutes: 120
+    feedback_timeout_minutes: 120
+    publish_timeout_minutes: 15
+    default_max_turns: 90
+    implementation_max_turns: 120
+    feedback_max_turns: 120
+  stages:
+    bug_investigation:
+      profile: local_proxy
+      fallback_profile: codex_cli
+    feature_refinement:
+      profile: local_proxy
+    review_matrix:
+      profiles:
+        - local_proxy
+    implementation:
+      profile: local_proxy
+
+bug_investigation:
+  auto_start_on_new_bug: false
+  community_trigger:
+    enabled: false
+    reaction: "+1"
+    threshold: 6
+    eligible_labels:
+      - git-vibe:bug
+    dispatch: investigation-only
+
+feature_refinement:
+  community_trigger:
+    enabled: false
+    reaction: "+1"
+    threshold: 10
+    dispatch: summarize-and-validate
+
+tests:
+  commands: []

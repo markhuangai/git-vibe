@@ -1,0 +1,241 @@
+name: GitVibe develop
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: Issue number to implement.
+        required: true
+        type: string
+      config-path:
+        description: Path to the GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      runner:
+        description: Runner label for all jobs.
+        required: false
+        type: string
+        default: self-hosted
+      investigation_timeout_minutes:
+        description: Maximum minutes for the pre-implementation investigation job.
+        required: false
+        type: number
+        default: 60
+      implementation_timeout_minutes:
+        description: Maximum minutes for the implementation job.
+        required: false
+        type: number
+        default: 120
+      review_timeout_minutes:
+        description: Maximum minutes for the review matrix job.
+        required: false
+        type: number
+        default: 60
+      publish_timeout_minutes:
+        description: Maximum minutes for the PR publish job.
+        required: false
+        type: number
+        default: 15
+      max_turns:
+        description: Default maximum AI turns for stages in this workflow.
+        required: false
+        type: number
+        default: 90
+      implementation_max_turns:
+        description: Maximum AI turns for implementation and feedback-style coding work.
+        required: false
+        type: number
+        default: 120
+      dry-run:
+        description: Validate and describe actions without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+      action-repository:
+        description: GitVibe action source repository. Empty means this repository.
+        required: false
+        type: string
+        default: ""
+      action-ref:
+        description: GitVibe action source ref. Empty means this workflow ref.
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      issue-number:
+        description: Issue number to implement.
+        required: true
+        type: string
+      config-path:
+        description: Path to the consumer GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      runner:
+        description: Runner label for all jobs.
+        required: false
+        type: string
+        default: self-hosted
+      investigation_timeout_minutes:
+        description: Maximum minutes for the pre-implementation investigation job.
+        required: false
+        type: number
+        default: 60
+      implementation_timeout_minutes:
+        description: Maximum minutes for the implementation job.
+        required: false
+        type: number
+        default: 120
+      review_timeout_minutes:
+        description: Maximum minutes for the review matrix job.
+        required: false
+        type: number
+        default: 60
+      publish_timeout_minutes:
+        description: Maximum minutes for the PR publish job.
+        required: false
+        type: number
+        default: 15
+      max_turns:
+        description: Default maximum AI turns for stages in this workflow.
+        required: false
+        type: number
+        default: 90
+      implementation_max_turns:
+        description: Maximum AI turns for implementation and feedback-style coding work.
+        required: false
+        type: number
+        default: 120
+      dry-run:
+        description: Validate and describe actions without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+      action-repository:
+        description: GitVibe action source repository.
+        required: false
+        type: string
+        default: git-vibe/actions
+      action-ref:
+        description: GitVibe action source ref.
+        required: false
+        type: string
+        default: v1
+    secrets:
+      GITVIBE_GITHUB_TOKEN:
+        description: Fine-grained PAT used for GitHub API access.
+        required: true
+      GITVIBE_AI_API_KEY:
+        description: AI provider API key for GitVibe stage execution.
+        required: true
+
+env:
+  GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
+  GITVIBE_AI_BASE_URL: ${{ vars.GITVIBE_AI_BASE_URL }}
+  GITVIBE_AI_MODEL: ${{ vars.GITVIBE_AI_MODEL }}
+
+jobs:
+  investigate:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.investigation_timeout_minutes }}
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: ./.git-vibe/actions/investigate
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          config-path: ${{ inputs.config-path }}
+          stage-timeout-minutes: ${{ inputs.investigation_timeout_minutes }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+
+  implement:
+    runs-on: ${{ inputs.runner }}
+    needs: investigate
+    timeout-minutes: ${{ inputs.implementation_timeout_minutes }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: ./.git-vibe/actions/implement
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          config-path: ${{ inputs.config-path }}
+          stage-timeout-minutes: ${{ inputs.implementation_timeout_minutes }}
+          max-turns: ${{ inputs.implementation_max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+
+  review-matrix:
+    runs-on: ${{ inputs.runner }}
+    needs: implement
+    timeout-minutes: ${{ inputs.review_timeout_minutes }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: ./.git-vibe/actions/review-matrix
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          config-path: ${{ inputs.config-path }}
+          stage-timeout-minutes: ${{ inputs.review_timeout_minutes }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+
+  create-pr:
+    runs-on: ${{ inputs.runner }}
+    needs: review-matrix
+    timeout-minutes: ${{ inputs.publish_timeout_minutes }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: ./.git-vibe/actions/create-pr
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          config-path: ${{ inputs.config-path }}
+          stage-timeout-minutes: ${{ inputs.publish_timeout_minutes }}
+          max-turns: 20
+          dry-run: ${{ inputs.dry-run }}

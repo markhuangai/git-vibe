@@ -1,0 +1,54 @@
+# GitVibe Server
+
+This is the self-hosted repository webhook server. The source of truth is
+`../src/app/server.ts`; `app/server.mjs` loads the compiled output from
+`../dist/app/server.js`.
+
+It currently handles:
+
+- `POST /webhooks` with GitHub webhook signature verification.
+- `GET /health` for health checks.
+- GitVibe label bootstrap for webhook repositories.
+- Feature request issue-form intake conversion into linked GitHub Discussions.
+- `@git-vibe investigate` on issue comments.
+- `@git-vibe start` on issue comments.
+- `@git-vibe address-feedback` on pull request comments.
+- `/git-vibe ...` as an optional compatibility command for Actions-native slash command mode.
+- Protected `git-vibe:*` issue labels, including `git-vibe:approved`.
+- Fine-grained PAT-backed GitHub API writes.
+- Repository permission checks before dispatching workflows.
+- Workflow dispatch to reusable GitVibe workflows.
+
+GitVibe uses repository webhooks plus a fine-grained PAT. The PAT owner appears as
+the actor for GitHub writes performed by the server and workflows.
+
+## Environment
+
+```text
+PORT=3000
+GITHUB_WEBHOOK_SECRET=...
+GITVIBE_GITHUB_TOKEN=...
+GITHUB_API_URL=https://api.github.com
+GITVIBE_DISPATCH_REF=main
+GITVIBE_DISCUSSION_CATEGORY=Ideas
+GITVIBE_CONFIG_PATH=.github/git-vibe.yml
+```
+
+Use a fine-grained PAT scoped only to the repositories managed by this server.
+
+## Run
+
+```bash
+corepack pnpm build
+corepack pnpm start
+```
+
+## Docker
+
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
+The compose deployment expects runtime values from the host environment. In CI/CD,
+the `GitVibe app deploy` workflow builds `ghcr.io/z-m-huang/git-vibe`, then runs
+the compose deployment on the self-hosted runner.

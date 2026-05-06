@@ -1,0 +1,18 @@
+services:
+  git-vibe-app:
+    image: ${GITVIBE_IMAGE:-ghcr.io/z-m-huang/git-vibe:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: git-vibe-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET is required}
+      GITVIBE_GITHUB_TOKEN: ${GITVIBE_GITHUB_TOKEN:?GITVIBE_GITHUB_TOKEN is required}
+      GITVIBE_CONFIG_PATH: ${GITVIBE_CONFIG_PATH:-.github/git-vibe.yml}
+      GITVIBE_DISCUSSION_CATEGORY: ${GITVIBE_DISCUSSION_CATEGORY:-Ideas}
+      GITVIBE_DISPATCH_REF: ${GITVIBE_DISPATCH_REF:-main}

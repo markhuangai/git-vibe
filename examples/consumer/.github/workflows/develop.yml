@@ -1,0 +1,37 @@
+name: GitVibe develop
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: Approved implementation issue number.
+        required: true
+        type: string
+      config-path:
+        description: Path to the GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      dry-run:
+        description: Validate without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  develop:
+    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    with:
+      issue-number: ${{ inputs.issue-number }}
+      config-path: ${{ inputs.config-path }}
+      runner: ubuntu-latest
+      investigation_timeout_minutes: 60
+      implementation_timeout_minutes: 120
+      review_timeout_minutes: 60
+      publish_timeout_minutes: 15
+      max_turns: 90
+      implementation_max_turns: 120
+      dry-run: ${{ inputs.dry-run }}
+    secrets:
+      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}

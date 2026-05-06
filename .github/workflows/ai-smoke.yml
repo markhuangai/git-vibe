@@ -1,0 +1,121 @@
+name: AI smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      run-local-proxy:
+        description: Run AI SDK plus agentool against GITVIBE_AI_BASE_URL.
+        required: false
+        type: boolean
+        default: true
+      require-local-proxy-tool:
+        description: Require the local proxy model to call an agentool read tool.
+        required: false
+        type: boolean
+        default: true
+      run-codex:
+        description: Run Codex CLI smoke test with auth.json on the self-hosted runner.
+        required: false
+        type: boolean
+        default: false
+      run-claude-code:
+        description: Install and verify Claude Code on the self-hosted runner.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  local-proxy:
+    if: ${{ inputs.run-local-proxy }}
+    runs-on: self-hosted
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - name: Run local proxy smoke test
+        env:
+          GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
+          GITVIBE_AI_BASE_URL: ${{ vars.GITVIBE_AI_BASE_URL }}
+          GITVIBE_AI_MODEL: ${{ vars.GITVIBE_AI_MODEL }}
+          GITVIBE_AI_SMOKE_REQUIRE_TOOL: ${{ inputs.require-local-proxy-tool }}
+        run: node scripts/smoke-test-ai.mjs
+
+  codex:
+    if: ${{ inputs.run-codex }}
+    runs-on: self-hosted
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Codex CLI
+        shell: bash
+        run: |
+          if command -v codex >/dev/null; then
+            codex --version
+            exit 0
+          fi
+
+          export npm_config_prefix="$RUNNER_TEMP/npm-global"
+          mkdir -p "$npm_config_prefix"
+          echo "$npm_config_prefix/bin" >> "$GITHUB_PATH"
+          npm install -g @openai/codex
+      - name: Configure Codex auth
+        shell: bash
+        env:
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: |
+          export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+          mkdir -p "$CODEX_HOME"
+          chmod 700 "$CODEX_HOME"
+
+          if [ ! -f "$CODEX_HOME/auth.json" ]; then
+            if [ -z "$CODEX_AUTH_JSON" ]; then
+              echo "Set CODEX_AUTH_JSON or pre-seed CODEX_HOME/auth.json before running Codex."
+              exit 1
+            fi
+
+            printf '%s' "$CODEX_AUTH_JSON" > "$CODEX_HOME/auth.json"
+            chmod 600 "$CODEX_HOME/auth.json"
+          fi
+
+          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
+          echo "Using persistent CODEX_HOME for Codex smoke test."
+      - name: Run Codex smoke test
+        shell: bash
+        run: |
+          codex --version
+          codex exec --json \
+            "Reply with JSON: {\"ok\": true, \"source\": \"codex\"}. Do not modify files."
+
+  claude-code:
+    if: ${{ inputs.run-claude-code }}
+    runs-on: self-hosted
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Install Claude Code CLI
+        shell: bash
+        run: |
+          if command -v claude >/dev/null; then
+            claude --version
+            exit 0
+          fi
+
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify Claude Code CLI
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          claude --version

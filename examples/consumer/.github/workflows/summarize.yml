@@ -1,0 +1,33 @@
+name: GitVibe summarize
+
+on:
+  workflow_dispatch:
+    inputs:
+      discussion-number:
+        description: Discussion number to summarize.
+        required: true
+        type: string
+      config-path:
+        description: Path to the GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      dry-run:
+        description: Validate without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  summarize:
+    uses: git-vibe/actions/.github/workflows/summarize.yml@v1
+    with:
+      discussion-number: ${{ inputs.discussion-number }}
+      config-path: ${{ inputs.config-path }}
+      runner: ubuntu-latest
+      timeout_minutes: 60
+      max_turns: 90
+      dry-run: ${{ inputs.dry-run }}
+    secrets:
+      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}

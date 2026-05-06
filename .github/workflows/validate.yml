@@ -1,0 +1,135 @@
+name: GitVibe validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: Issue number to validate.
+        required: false
+        type: string
+        default: ""
+      discussion-number:
+        description: Discussion number to validate.
+        required: false
+        type: string
+        default: ""
+      config-path:
+        description: Path to the GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      runner:
+        description: Runner label for this job.
+        required: false
+        type: string
+        default: self-hosted
+      timeout_minutes:
+        description: Maximum minutes for this job.
+        required: false
+        type: number
+        default: 60
+      max_turns:
+        description: Maximum AI turns for this stage.
+        required: false
+        type: number
+        default: 90
+      dry-run:
+        description: Validate and describe actions without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+      action-repository:
+        description: GitVibe action source repository. Empty means this repository.
+        required: false
+        type: string
+        default: ""
+      action-ref:
+        description: GitVibe action source ref. Empty means this workflow ref.
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      issue-number:
+        description: Issue number to validate.
+        required: false
+        type: string
+        default: ""
+      discussion-number:
+        description: Discussion number to validate.
+        required: false
+        type: string
+        default: ""
+      config-path:
+        description: Path to the consumer GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      runner:
+        description: Runner label for this job.
+        required: false
+        type: string
+        default: self-hosted
+      timeout_minutes:
+        description: Maximum minutes for this job.
+        required: false
+        type: number
+        default: 60
+      max_turns:
+        description: Maximum AI turns for this stage.
+        required: false
+        type: number
+        default: 90
+      dry-run:
+        description: Validate and describe actions without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+      action-repository:
+        description: GitVibe action source repository.
+        required: false
+        type: string
+        default: git-vibe/actions
+      action-ref:
+        description: GitVibe action source ref.
+        required: false
+        type: string
+        default: v1
+    secrets:
+      GITVIBE_GITHUB_TOKEN:
+        description: Fine-grained PAT used for GitHub API access.
+        required: true
+      GITVIBE_AI_API_KEY:
+        description: AI provider API key for GitVibe stage execution.
+        required: true
+
+env:
+  GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
+  GITVIBE_AI_BASE_URL: ${{ vars.GITVIBE_AI_BASE_URL }}
+  GITVIBE_AI_MODEL: ${{ vars.GITVIBE_AI_MODEL }}
+
+jobs:
+  validate:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      contents: read
+      discussions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: ./.git-vibe/actions/validate
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          discussion-number: ${{ inputs.discussion-number }}
+          config-path: ${{ inputs.config-path }}
+          stage-timeout-minutes: ${{ inputs.timeout_minutes }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}

@@ -1,0 +1,250 @@
+# Copy this file to .github/git-vibe.yml in a consumer repository.
+
+version: 1
+
+branches:
+  # Empty means "use the repository default branch" for pull requests.
+  # GitVibe implementation branches are deterministic: git-vibe/{issue-number}.
+  base: ""
+
+permissions:
+  # Users with write, maintain, or admin can approve/start automation.
+  approver_roles:
+    - write
+    - maintain
+    - admin
+
+labels:
+  story: git-vibe:story
+  bug: git-vibe:bug
+  needs_discussion: git-vibe:needs-discussion
+  needs_investigation: git-vibe:needs-investigation
+  investigating: git-vibe:investigating
+  investigation_complete: git-vibe:investigation-complete
+  needs_expected_behavior: git-vibe:needs-expected-behavior
+  ready_for_approval: git-vibe:ready-for-approval
+  approved: git-vibe:approved
+  in_progress: git-vibe:in-progress
+  blocked: git-vibe:blocked
+  pr_opened: git-vibe:pr-opened
+
+commands:
+  prefix: /git-vibe
+  mention: "@git-vibe"
+  bot_mention: "@git-vibe"
+  slash_compatibility: true
+  allow_external_agent_mentions: false
+
+runner:
+  # Consumer workflows can override this with a self-hosted runner label.
+  default: ubuntu-latest
+
+event_delivery:
+  # webhook: repository webhook points at the self-hosted GitVibe server.
+  # relay: webhook proxy/tunnel such as Smee, Hookdeck, Cloudflare Tunnel, or ngrok.
+  # actions: no-server receiver workflows in the consumer repository.
+  # polling: local/scheduled worker polls GitHub APIs with cursors/ETags.
+  mode: webhook
+  relay:
+    provider: smee
+    # GitHub Actions Secret name. Relay URLs may contain delivery tokens; do not commit the real URL.
+    url_secret: GITVIBE_RELAY_URL
+  actions_receiver:
+    enabled: false
+    scheduled_scan: "*/15 * * * *"
+  polling:
+    enabled: false
+    interval_seconds: 300
+
+github_auth:
+  # Self-hosted default: the GitVibe server uses a fine-grained PAT scoped to this repository.
+  mode: webhook-pat
+  # GitHub Actions Secret name. Stores the GitHub write token.
+  token_secret: GITVIBE_GITHUB_TOKEN
+
+tests:
+  commands: []
+
+ai:
+  default_profile: local_proxy
+  profiles:
+    local_proxy:
+      enabled: true
+      adapter: ai-sdk-agentool
+      provider:
+        # openai, anthropic, or openai-compatible.
+        type: openai-compatible
+        # GitHub Actions Variable name. Model names are configuration, not credentials.
+        model_variable: GITVIBE_AI_MODEL
+        # GitHub Actions Variable name. Use a secret only if the endpoint itself is sensitive.
+        base_url_variable: GITVIBE_AI_BASE_URL
+        # GitHub Actions Secret name. Stores the AI provider or local proxy API key.
+        api_key_secret: GITVIBE_AI_API_KEY
+      reasoning:
+        effort: high
+      generation:
+        temperature: 0.2
+        max_output_tokens: 6000
+        max_steps: 90
+        prompt_version: v1
+      provider_options:
+        openai:
+          reasoningEffort: high
+          reasoningSummary: concise
+        anthropic:
+          effort: high
+    codex_cli:
+      enabled: false
+      adapter: cli-codex
+      command: codex exec
+      # GitHub Actions Secret name. Stores auth.json contents for trusted self-hosted runners.
+      auth_json_secret: CODEX_AUTH_JSON
+      model: gpt-5.3-codex
+      reasoning:
+        effort: high
+        summary: concise
+    claude_code:
+      enabled: false
+      adapter: cli-claude-code
+      command: claude -p
+      # GitHub Actions Secret name. Stores the Claude Code OAuth access token.
+      oauth_token_secret: CLAUDE_CODE_OAUTH_TOKEN
+      model: opus
+      reasoning:
+        effort: xhigh
+  safety:
+    require_structured_output: true
+    deny_write_tokens_for_read_only_stages: true
+    stop_on_contradictory_maintainer_context: true
+    post_raw_model_output: false
+    github_writes: deterministic-code-only
+  budgets:
+    default_timeout_minutes: 60
+    implementation_timeout_minutes: 120
+    feedback_timeout_minutes: 120
+    publish_timeout_minutes: 15
+    default_max_turns: 90
+    implementation_max_turns: 120
+    feedback_max_turns: 120
+    max_context_items: 200
+    max_files_per_stage: 80
+  stages:
+    triage:
+      enabled: true
+      access: read-only
+      profile: local_proxy
+      tools: []
+    bug_investigation:
+      enabled: true
+      access: read-only
+      profile: local_proxy
+      fallback_profile: codex_cli
+      tools:
+        - read
+        - grep
+        - glob
+        - web-fetch
+        - web-search
+    feature_refinement:
+      enabled: true
+      access: read-only
+      profile: local_proxy
+      tools:
+        - read
+        - grep
+        - glob
+        - web-fetch
+        - web-search
+    pre_implementation_validation:
+      enabled: true
+      access: read-only
+      profile: local_proxy
+      tools:
+        - read
+        - grep
+        - glob
+        - web-fetch
+        - web-search
+    implementation:
+      enabled: true
+      access: branch-write
+      profile: local_proxy
+      tools:
+        - read
+        - grep
+        - glob
+        - edit
+        - write
+        - multi-edit
+        - bash
+        - diff
+    review_matrix:
+      enabled: true
+      access: read-only
+      profiles:
+        - local_proxy
+      tools:
+        - read
+        - grep
+        - glob
+        - diff
+    pr_feedback_remediation:
+      enabled: true
+      access: branch-write
+      profile: local_proxy
+      tools:
+        - read
+        - grep
+        - glob
+        - edit
+        - write
+        - multi-edit
+        - bash
+        - diff
+
+bug_investigation:
+  auto_start_on_new_bug: false
+  community_trigger:
+    enabled: false
+    reaction: "+1"
+    threshold: 6
+    eligible_labels:
+      - git-vibe:bug
+    dispatch: investigation-only
+
+feature_refinement:
+  community_trigger:
+    enabled: false
+    reaction: "+1"
+    threshold: 10
+    dispatch: summarize-and-validate
+
+analysis:
+  author_weight_order:
+    - admin
+    - maintain
+    - write
+    - collaborator
+    - member
+    - contributor
+    - first_time_contributor
+    - guest
+  include_reactions: true
+  chronological: true
+  preserve_thread_parents: true
+
+review_matrix:
+  - correctness
+  - tests
+  - security
+  - maintainability
+
+external_agents:
+  codex:
+    enabled: false
+    review_command: "@codex review"
+  claude:
+    enabled: false
+    review_command: "@claude review this plan or PR"
+  copilot:
+    enabled: false

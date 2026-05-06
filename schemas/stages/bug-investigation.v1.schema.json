@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "bug-investigation.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stage",
+    "status",
+    "summary",
+    "comment_body",
+    "findings",
+    "assumptions",
+    "references",
+    "next_state"
+  ],
+  "properties": {
+    "stage": { "type": "string" },
+    "status": { "type": "string" },
+    "summary": { "type": "string" },
+    "comment_body": { "type": "string" },
+    "findings": { "type": "array", "items": { "type": "string" } },
+    "questions": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "references": { "type": "array", "items": { "type": "string" } },
+    "next_state": { "type": "string" },
+    "proposed_labels": { "type": "array", "items": { "type": "string" } },
+    "branch": { "type": "string" },
+    "pr_title": { "type": "string" },
+    "pr_body": { "type": "string" },
+    "issue_title": { "type": "string" },
+    "issue_body": { "type": "string" },
+    "tests": { "type": "array", "items": { "type": "string" } },
+    "skipped_feedback": { "type": "array", "items": { "type": "string" } }
+  }
+}

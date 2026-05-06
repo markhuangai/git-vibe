@@ -1,0 +1,4 @@
+#!/bin/sh
+corepack pnpm exec lint-staged
+corepack pnpm typecheck
+corepack pnpm coverage

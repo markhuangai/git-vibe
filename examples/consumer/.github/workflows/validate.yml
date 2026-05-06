@@ -1,0 +1,40 @@
+name: GitVibe validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: Issue number to validate.
+        required: false
+        type: string
+        default: ""
+      discussion-number:
+        description: Discussion number to validate.
+        required: false
+        type: string
+        default: ""
+      config-path:
+        description: Path to the GitVibe config.
+        required: false
+        type: string
+        default: .github/git-vibe.yml
+      dry-run:
+        description: Validate without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  validate:
+    uses: git-vibe/actions/.github/workflows/validate.yml@v1
+    with:
+      issue-number: ${{ inputs.issue-number }}
+      discussion-number: ${{ inputs.discussion-number }}
+      config-path: ${{ inputs.config-path }}
+      runner: ubuntu-latest
+      timeout_minutes: 60
+      max_turns: 90
+      dry-run: ${{ inputs.dry-run }}
+    secrets:
+      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}

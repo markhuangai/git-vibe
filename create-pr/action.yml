@@ -1,0 +1,52 @@
+name: GitVibe create PR
+description: Create or update the GitVibe pull request for an implementation issue.
+
+inputs:
+  token:
+    description: GitHub token used for API access.
+    required: true
+  issue-number:
+    description: Issue number being implemented.
+    required: true
+  config-path:
+    description: Path to .github/git-vibe.yml.
+    required: false
+    default: .github/git-vibe.yml
+  stage-timeout-minutes:
+    description: Maximum minutes allocated to this stage.
+    required: false
+    default: "15"
+  max-turns:
+    description: Maximum AI turns allocated to this stage.
+    required: false
+    default: "20"
+  dry-run:
+    description: Describe work without mutating GitHub.
+    required: false
+    default: "false"
+
+outputs:
+  summary:
+    description: Short stage summary.
+    value: ${{ steps.run.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build GitVibe action runtime
+      shell: bash
+      run: |
+        cd "$GITHUB_ACTION_PATH/.."
+        corepack enable
+        corepack pnpm install --frozen-lockfile
+        corepack pnpm build
+    - id: run
+      shell: bash
+      env:
+        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
+        GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        GITVIBE_CONFIG_PATH: ${{ inputs.config-path }}
+        GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
+        GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
+        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
+      run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" create-pr
