@@ -207,15 +207,14 @@ Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 Use `/git-vibe` in issues, discussions, and pull requests:
 
-| Command                      | Typical surface               | Effect                                                        |
-| ---------------------------- | ----------------------------- | ------------------------------------------------------------- |
-| `/git-vibe investigate`      | Bug issue                     | Runs investigation-only analysis and posts findings/questions |
-| `/git-vibe summarize`        | Feature Discussion            | Summarizes the full conversation and open questions           |
-| `/git-vibe validate`         | Issue or Discussion           | Checks whether the current context is coherent and actionable |
-| `/git-vibe materialize`      | Validated Discussion          | Creates or links an implementation issue                      |
-| `/git-vibe approve`          | Implementation issue          | Marks work as approved when the actor is allowed              |
-| `/git-vibe start`            | Approved issue                | Dispatches the development pipeline                           |
-| `/git-vibe address-feedback` | Pull request or review thread | Applies requested PR feedback on the GitVibe branch           |
+| Command                      | Typical surface               | Effect                                                         |
+| ---------------------------- | ----------------------------- | -------------------------------------------------------------- |
+| `/git-vibe investigate`      | Bug issue                     | Runs investigation-only analysis and posts findings/questions  |
+| `/git-vibe summarize`        | Feature Discussion            | Summarizes the full conversation and open questions            |
+| `/git-vibe validate`         | Issue or Discussion           | Checks whether the current context is coherent and actionable  |
+| `/git-vibe materialize`      | Validated Discussion          | Creates or links an implementation issue                       |
+| `/git-vibe approve`          | Implementation issue          | Marks work as approved and dispatches the development pipeline |
+| `/git-vibe address-feedback` | Pull request or review thread | Applies requested PR feedback on the GitVibe branch            |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.

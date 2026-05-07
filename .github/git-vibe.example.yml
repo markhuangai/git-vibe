@@ -8,7 +8,7 @@ branches:
   base: ""
 
 permissions:
-  # Users with write, maintain, or admin can approve/start automation.
+  # Users with write, maintain, or admin can approve automation.
   approver_roles:
     - write
     - maintain

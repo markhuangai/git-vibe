@@ -327,7 +327,7 @@ describe("GitVibe app server dispatch edge cases", () => {
     const client = createClient();
     const app = createApp({ client });
 
-    for (const command of ["investigate", "validate", "start"]) {
+    for (const command of ["investigate", "validate"]) {
       await app.handleWebhook("issue_comment", {
         action: "created",
         comment: { body: `/git-vibe ${command}` },
@@ -348,13 +348,32 @@ describe("GitVibe app server dispatch edge cases", () => {
       expect.arrayContaining([
         "/repos/example/repo/actions/workflows/investigate.yml/dispatches",
         "/repos/example/repo/actions/workflows/validate.yml/dispatches",
-        "/repos/example/repo/actions/workflows/develop.yml/dispatches",
       ]),
     );
     expect(workflowDispatches(client).at(-1)).toEqual({
       inputs: expect.objectContaining({ "discussion-number": "5" }),
       ref: "main",
     });
+  });
+
+  it("logs start as an unsupported command", async () => {
+    const client = createClient();
+    const log = vi.fn();
+    const app = createApp({ client, log });
+
+    await app.handleWebhook("issue_comment", {
+      action: "created",
+      comment: { body: "/git-vibe start", node_id: "start-comment" },
+      issue: { number: 2 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(reactionVariables(client)).toEqual([]);
+    expect(log).toHaveBeenCalledWith(
+      "recognized command but no dispatch rule matched: /git-vibe start",
+    );
   });
 });
 

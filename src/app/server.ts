@@ -555,7 +555,6 @@ const addReactionMutation = /* GraphQL */ `
 function commandWorkflow(command: string): string | null {
   if (command === "investigate") return "investigate.yml";
   if (command === "validate") return "validate.yml";
-  if (command === "start") return "develop.yml";
   return null;
 }
 
