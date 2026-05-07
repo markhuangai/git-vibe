@@ -20,6 +20,7 @@ import {
   stageConfigFor,
   stringValue,
 } from "./ai-config.js";
+import { runClaudeCodeCliStage } from "./claude-code-cli.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
 import { summarizeError } from "./logging.js";
@@ -88,6 +89,14 @@ async function runAiStageWithProfile(
   const adapter = adapterName(profile);
   if (adapter === "cli-codex") {
     return runCodexCliStage({
+      options,
+      profile,
+      profileName,
+      tools: toolsForStage(options),
+    });
+  }
+  if (adapter === "cli-claude-code") {
+    return runClaudeCodeCliStage({
       options,
       profile,
       profileName,

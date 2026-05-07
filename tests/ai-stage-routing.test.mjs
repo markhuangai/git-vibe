@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateText = vi.fn();
@@ -151,8 +151,17 @@ describe("AI stage runner stage fallbacks", () => {
   it("runs configured Codex CLI profiles with runtime stage context", async () => {
     process.env.CODEX_AUTH_JSON = '{"tokens":[]}\n';
     mockCodexOutput('{"stage":"validate","status":"completed"}');
+    const schema = {
+      additionalProperties: false,
+      properties: {
+        stage: { type: "string" },
+        working_capabilities: { items: { type: "string" }, type: "array" },
+      },
+      required: ["stage"],
+      type: "object",
+    };
 
-    await expect(runAiStage(validateStageOptions(codexCliConfig()))).resolves.toBe(
+    await expect(runAiStage({ ...validateStageOptions(codexCliConfig()), schema })).resolves.toBe(
       '{"stage":"validate","status":"completed"}',
     );
 
@@ -175,6 +184,12 @@ describe("AI stage runner stage fallbacks", () => {
         input: expect.stringContaining("System\n\nPrompt"),
       }),
     );
+    expect(JSON.parse(readFileSync(schemaPathFrom(execFileSync.mock.calls[0][1]), "utf8"))).toEqual(
+      expect.objectContaining({
+        required: ["stage", "working_capabilities"],
+      }),
+    );
+    expect(schema.required).toEqual(["stage"]);
     expect(generateText).not.toHaveBeenCalled();
   });
 });
@@ -371,6 +386,10 @@ function mockCodexOutput(content) {
 
 function outputPathFrom(args) {
   return args[args.indexOf("--output-last-message") + 1];
+}
+
+function schemaPathFrom(args) {
+  return args[args.indexOf("--output-schema") + 1];
 }
 
 function codexCliConfig() {

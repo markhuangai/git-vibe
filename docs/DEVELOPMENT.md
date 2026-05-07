@@ -61,7 +61,9 @@ the file when it is missing, so Codex can refresh it between runs.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, then verifies
-`claude --version`. Authentication is separate from the install smoke test.
+`claude --version`. `cli-claude-code` stages run `claude -p` with
+`--output-format json` and `--json-schema`; profile `bare: true` adds Claude
+Code's minimal mode for API-key or third-party provider auth.
 
 ## Quality Gates
 

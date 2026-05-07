@@ -51,7 +51,7 @@ AI integration layers:
 - Context builder: gathers issue/discussion/PR timelines, repo snapshots, relevant files, reactions, workflow history, and linked artifacts into a stage-specific context packet.
 - Stage contracts: typed task definitions for investigation, refinement, validation, implementation, review, and feedback remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
-- CLI adapters: `cli-codex` runs Codex in non-interactive mode and parses structured output. `cli-claude-code` is reserved as a config surface until that adapter is implemented.
+- CLI adapters: `cli-codex` and `cli-claude-code` run their CLIs in non-interactive mode and parse structured output.
 - External mention adapter: optional GitHub-visible comments to Codex, Claude, Copilot, or similar apps.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 
@@ -145,6 +145,9 @@ ai:
       adapter: cli-claude-code
       oauth_token_secret: CLAUDE_CODE_OAUTH_TOKEN
       model: opus
+      # Optional: use Claude Code's minimal mode for API-key or third-party provider setups.
+      # Do not use bare mode for OAuth/keychain sessions.
+      bare: false
       reasoning:
         effort: xhigh
 
@@ -165,7 +168,7 @@ Normalized reasoning config:
 Adapter mappings:
 
 - `cli-codex`: map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
-- `cli-claude-code`: reserved; when implemented, map `reasoning.effort` to `CLAUDE_CODE_EFFORT_LEVEL` or the `--effort` flag.
+- `cli-claude-code`: pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`; set `bare: true` to add Claude Code's `--bare` minimal mode when the runner uses API-key or third-party provider auth instead of OAuth/keychain auth.
 - `ai-sdk-agentool` with OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable.
 - `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use.
 
