@@ -76,13 +76,13 @@ ai:
         anthropic:
           effort: high
     codex_cli:
-      enabled: false
+      enabled: true
       adapter: cli-codex
       command: codex exec
       auth_json_secret: CODEX_AUTH_JSON
-      model: gpt-5.3-codex
+      model: gpt-5.5
       reasoning:
-        effort: high
+        effort: xhigh
         summary: concise
     claude_code:
       enabled: false
@@ -112,7 +112,7 @@ ai:
     investigate:
       enabled: true
       access: read-only
-      profile: local_proxy
+      profile: codex_cli
       fallback_profile: codex_cli
       tools:
         - read
@@ -123,7 +123,7 @@ ai:
     summarize:
       enabled: true
       access: read-only
-      profile: local_proxy
+      profile: codex_cli
       tools:
         - read
         - grep
@@ -133,7 +133,7 @@ ai:
     validate:
       enabled: true
       access: read-only
-      profile: local_proxy
+      profile: codex_cli
       tools:
         - read
         - grep
@@ -157,7 +157,7 @@ ai:
       enabled: true
       access: read-only
       profiles:
-        - local_proxy
+        - codex_cli
       tools:
         - read
         - grep
