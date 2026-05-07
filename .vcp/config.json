@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Z-M-Huang/vcp/main/schemas/vcp.schema.json",
+  "version": "1.0",
+  "scopes": {
+    "web-backend": true,
+    "cli": true,
+    "devops": true,
+    "agentic-ai": true,
+    "web-frontend": false,
+    "database": false,
+    "mobile": false,
+    "desktop": false
+  },
+  "compliance": [],
+  "frameworks": [
+    "node",
+    "typescript",
+    "github-actions",
+    "docker",
+    "vercel-ai-sdk",
+    "agentool",
+    "vitest",
+    "eslint",
+    "prettier",
+    "esbuild",
+    "zod"
+  ],
+  "exclude": ["node_modules/**", "dist/**", "coverage/**", ".git/**", ".pnpm-store/**"],
+  "severity": "medium",
+  "ignore": [],
+  "pluginRoot": "/home/ubuntu/.codex/plugins/cache/vcp/vcp/0.6.0"
+}
