@@ -8,6 +8,7 @@ import { buildDiscussionContext, buildIssueContext } from "./context.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
+import { withStageHandoffs, writeStageResultFile } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
@@ -36,9 +37,13 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   logger.event("context.load.start", { target: definition.target });
-  const context = withSourceComment(await contextFor({ client, options }), options);
+  const context = withStageHandoffs(
+    withSourceComment(await contextFor({ client, options }), options),
+    options.handoffDir,
+  );
   logger.event("context.load.done", {
     artifact: `${context.artifact.type}#${context.artifact.number}`,
+    handoffs: context.handoffs?.length || 0,
     timeline_items: context.timeline.length,
   });
 
@@ -83,13 +88,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   logger.event("output.validation.done", {
     status: String(parsedOutput.status || "completed"),
   });
-
-  await applyDeterministicWrites({ client, config, context, logger, options, parsedOutput });
-
-  logger.event("stage.done", {
-    status: String(parsedOutput.status || "completed"),
-  });
-  return {
+  const result: StageRunResult = {
     commentBody: renderStageResultComment({
       context,
       parsedOutput,
@@ -102,6 +101,19 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     summary: String(parsedOutput.summary || `${options.stage} completed`),
     validationErrors: [],
   };
+  result.resultFile = writeStageResultFile({
+    directory: contextDir,
+    result,
+    stage: options.stage,
+  });
+  logger.event("result.persisted", { file: `git-vibe-${options.stage}-result.json` });
+
+  await applyDeterministicWrites({ client, config, context, logger, options, parsedOutput });
+
+  logger.event("stage.done", {
+    status: String(parsedOutput.status || "completed"),
+  });
+  return result;
 }
 
 async function contextFor({

@@ -148,6 +148,10 @@ jobs:
   investigate:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ fromJSON(inputs.investigation_timeout_minutes) }}
+    outputs:
+      result-file: ${{ steps.investigate.outputs.result-file }}
+      status: ${{ steps.investigate.outputs.status }}
+      summary: ${{ steps.investigate.outputs.summary }}
     permissions:
       contents: read
       issues: write
@@ -167,7 +171,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: ./.git-vibe/actions/investigate
+      - id: investigate
+        uses: ./.git-vibe/actions/investigate
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
@@ -175,10 +180,19 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          fail-on-blocked: "true"
+      - name: Upload investigation handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-vibe-investigation-${{ inputs.issue-number }}
+          path: ${{ runner.temp }}/git-vibe-investigate-result.json
+          if-no-files-found: ignore
 
   implement:
     runs-on: ${{ inputs.runner }}
     needs: investigate
+    if: needs.investigate.outputs.status == 'completed'
     timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
     permissions:
       contents: write
@@ -201,6 +215,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Download investigation handoff
+        uses: actions/download-artifact@v4
+        with:
+          name: git-vibe-investigation-${{ inputs.issue-number }}
+          path: .git-vibe/handoffs
       - uses: ./.git-vibe/actions/implement
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
@@ -209,6 +228,7 @@ jobs:
           max-turns: ${{ inputs.implementation_max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          handoff-dir: .git-vibe/handoffs
 
   review-matrix:
     runs-on: ${{ inputs.runner }}

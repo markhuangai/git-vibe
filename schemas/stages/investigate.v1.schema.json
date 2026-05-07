@@ -20,6 +20,7 @@
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
     "questions": { "type": "array", "items": { "type": "string" } },
+    "implementation_plan": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
     "next_state": { "type": "string" },

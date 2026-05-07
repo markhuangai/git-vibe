@@ -15,6 +15,7 @@ describe("GitVibe action launcher", () => {
     const runStage = vi.fn().mockResolvedValue({
       commentBody: "Long body",
       parsedOutput: {},
+      resultFile: "/tmp/git-vibe-investigate-result.json",
       schemaId: "investigate.v1",
       status: "completed",
       summary: "Done",
@@ -32,6 +33,7 @@ describe("GitVibe action launcher", () => {
           GITHUB_RUN_ID: "99",
           GITHUB_SERVER_URL: "https://github.enterprise.test",
           GITVIBE_DRY_RUN: "true",
+          GITVIBE_HANDOFF_DIR: "/tmp/handoffs",
           GITVIBE_MAX_TURNS: "12",
           GITVIBE_SOURCE_COMMENT: JSON.stringify({
             id: "99",
@@ -49,6 +51,7 @@ describe("GitVibe action launcher", () => {
     expect(runStage).toHaveBeenCalledWith(
       expect.objectContaining({
         dryRun: true,
+        handoffDir: "/tmp/handoffs",
         issueNumber: "12",
         maxTurns: 12,
         repository: "example/repo",
@@ -68,6 +71,7 @@ describe("GitVibe action launcher", () => {
       "summary<<GITVIBE_OUTPUT\nDone\nGITVIBE_OUTPUT\n",
       "status<<GITVIBE_OUTPUT\ncompleted\nGITVIBE_OUTPUT\n",
       "comment-body<<GITVIBE_OUTPUT\nLong body\nGITVIBE_OUTPUT\n",
+      "result-file<<GITVIBE_OUTPUT\n/tmp/git-vibe-investigate-result.json\nGITVIBE_OUTPUT\n",
     ]);
   });
 });
@@ -248,6 +252,40 @@ describe("GitVibe action launcher targets and defaults", () => {
 });
 
 describe("GitVibe action launcher failure paths", () => {
+  it("can fail the action when a stage returns a blocked status", async () => {
+    const appendFile = vi.fn();
+    const error = vi.fn();
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "Needs answers",
+      parsedOutput: {},
+      resultFile: "/tmp/git-vibe-investigate-result.json",
+      schemaId: "investigate.v1",
+      status: "blocked",
+      summary: "Critical questions are unanswered.",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        appendFile,
+        argv: ["investigate"],
+        env: {
+          ...baseEnv,
+          GITHUB_OUTPUT: "/tmp/output",
+          GITVIBE_FAIL_ON_BLOCKED: "true",
+        },
+        error,
+        runStage,
+      }),
+    ).resolves.toBe(1);
+
+    expect(error).toHaveBeenCalledWith("investigate returned status blocked; stopping workflow.");
+    expect(appendFile).toHaveBeenCalledWith(
+      "/tmp/output",
+      "status<<GITVIBE_OUTPUT\nblocked\nGITVIBE_OUTPUT\n",
+    );
+  });
+
   it("reports non-error stage failures and detects bundled direct execution", async () => {
     const error = vi.fn();
 

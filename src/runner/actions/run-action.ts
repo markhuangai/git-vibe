@@ -32,6 +32,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     const result = await (runtime.runStage || runStage)({
       cwd: env.GITHUB_WORKSPACE || runtime.cwd || process.cwd(),
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
+      handoffDir: envValue(env, "GITVIBE_HANDOFF_DIR") || undefined,
       issueNumber: target.issueNumber,
       maxTurns: numberEnv(env, "GITVIBE_MAX_TURNS", 90),
       prNumber: target.prNumber,
@@ -46,6 +47,10 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     log(`${stage} status=${result.status}`);
     log(result.summary);
     writeOutputs(env, result, runtime.appendFile || appendFileSync);
+    if (shouldFailOnStatus(env, result.status)) {
+      error(`${stage} returned status ${result.status}; stopping workflow.`);
+      return 1;
+    }
     return 0;
   } catch (caught) {
     error(caught instanceof Error ? caught.message : String(caught));
@@ -112,6 +117,14 @@ function writeOutputs(
   writeOutput(env.GITHUB_OUTPUT, "summary", result.summary, appendFile);
   writeOutput(env.GITHUB_OUTPUT, "status", result.status, appendFile);
   writeOutput(env.GITHUB_OUTPUT, "comment-body", result.commentBody, appendFile);
+  if (result.resultFile)
+    writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
+}
+
+function shouldFailOnStatus(env: NodeJS.ProcessEnv, status: string): boolean {
+  return (
+    envValue(env, "GITVIBE_FAIL_ON_BLOCKED").toLowerCase() === "true" && status !== "completed"
+  );
 }
 
 function writeOutput(

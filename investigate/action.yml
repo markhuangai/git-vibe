@@ -24,11 +24,24 @@ inputs:
     description: JSON source comment metadata for replying to command comments.
     required: false
     default: ""
+  fail-on-blocked:
+    description: Return a non-zero action status when the stage result is not completed.
+    required: false
+    default: "false"
 
 outputs:
   summary:
     description: Short stage summary.
     value: ${{ steps.run.outputs.summary }}
+  status:
+    description: Stage result status.
+    value: ${{ steps.run.outputs.status }}
+  comment-body:
+    description: Rendered stage result comment body.
+    value: ${{ steps.run.outputs.comment-body }}
+  result-file:
+    description: Path to the persisted stage result JSON file.
+    value: ${{ steps.run.outputs.result-file }}
 
 runs:
   using: composite
@@ -60,4 +73,5 @@ runs:
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
+        GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" investigate

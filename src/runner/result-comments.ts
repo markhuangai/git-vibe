@@ -40,6 +40,7 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
     ...listSection("Partial Or Unclear", arrayField(output.partial_capabilities)),
     ...listSection("Findings", arrayField(output.findings)),
     ...listSection("Open Questions", arrayField(output.questions)),
+    ...listSection("Implementation Plan", arrayField(output.implementation_plan)),
     ...listSection("Assumptions", arrayField(output.assumptions)),
     ...listSection("Proposed Labels", arrayField(output.proposed_labels)),
     ...issueSection(output),

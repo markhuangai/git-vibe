@@ -5,6 +5,7 @@ Implement the approved issue in the working tree with focused code and test chan
 <implementation_process>
 
 - Read the issue context, relevant comments, existing files, and nearby tests before editing.
+- Treat any `handoffs` in the GitHub context as required prior-stage guidance. Start from the investigation findings and implementation plan unless local code evidence disproves them.
 - Make the smallest coherent change that satisfies the approved behavior.
 - Reuse existing utilities, conventions, workflows, and test style.
 - Add or update tests for changed behavior unless there is a concrete reason not to.

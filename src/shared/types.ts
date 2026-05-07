@@ -28,6 +28,7 @@ export interface StageDefinition {
 export interface RunnerOptions {
   cwd: string;
   dryRun: boolean;
+  handoffDir?: string;
   issueNumber: string;
   maxTurns: number;
   prNumber: string;
@@ -61,6 +62,15 @@ export interface TimelineItem {
   url: string;
 }
 
+export interface StageHandoff {
+  commentBody?: string;
+  parsedOutput: JsonObject;
+  schemaId: string;
+  stage: Stage;
+  status: string;
+  summary: string;
+}
+
 export interface SourceComment {
   body?: string;
   id?: string;
@@ -79,6 +89,7 @@ export interface ContextPacket {
     url: string;
   };
   generatedAt: string;
+  handoffs?: StageHandoff[];
   repository: string;
   source?: {
     comment?: SourceComment;
@@ -89,6 +100,7 @@ export interface ContextPacket {
 export interface StageRunResult {
   commentBody: string;
   parsedOutput: JsonObject;
+  resultFile?: string;
   schemaId: string;
   status: string;
   summary: string;

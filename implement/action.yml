@@ -24,6 +24,10 @@ inputs:
     description: JSON source comment metadata for replying to command comments.
     required: false
     default: ""
+  handoff-dir:
+    description: Directory containing previous GitVibe stage result JSON files.
+    required: false
+    default: ""
 
 outputs:
   summary:
@@ -60,4 +64,5 @@ runs:
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
+        GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" implement

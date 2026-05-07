@@ -4,8 +4,8 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ env?: Record<string, string>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: unknown } }} Workflow
- * @typedef {{ env?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
- * @typedef {{ env?: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
+ * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
 
@@ -224,6 +224,44 @@ describe("GitVibe workflow write permissions", () => {
       readWorkflow(".github/workflows/develop.yml").jobs?.investigate?.permissions,
     ).toMatchObject({
       issues: "write",
+    });
+  });
+});
+
+describe("GitVibe develop workflow handoff", () => {
+  it("gates implementation on completed investigation and passes the handoff artifact", () => {
+    const workflow = readWorkflow(".github/workflows/develop.yml");
+    const investigate = workflow.jobs?.investigate;
+    const implement = workflow.jobs?.implement;
+
+    expect(investigate?.outputs).toMatchObject({
+      status: "${{ steps.investigate.outputs.status }}",
+    });
+    expect(investigate?.steps?.find((step) => step.id === "investigate")).toMatchObject({
+      uses: "./.git-vibe/actions/investigate",
+      with: expect.objectContaining({ "fail-on-blocked": "true" }),
+    });
+    expect(
+      investigate?.steps?.find((step) => step.uses === "actions/upload-artifact@v4"),
+    ).toMatchObject({
+      if: "always()",
+      with: expect.objectContaining({
+        path: "${{ runner.temp }}/git-vibe-investigate-result.json",
+      }),
+    });
+    expect(implement).toMatchObject({
+      if: "needs.investigate.outputs.status == 'completed'",
+      needs: "investigate",
+    });
+    expect(
+      implement?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
+    ).toMatchObject({
+      with: expect.objectContaining({ path: ".git-vibe/handoffs" }),
+    });
+    expect(
+      implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement"),
+    ).toMatchObject({
+      with: expect.objectContaining({ "handoff-dir": ".git-vibe/handoffs" }),
     });
   });
 });

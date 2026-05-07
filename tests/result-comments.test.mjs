@@ -22,6 +22,7 @@ describe("stage result comments", () => {
         branch: "git-vibe/12",
         comment_body: "Detailed notes for reviewers.",
         findings: ["The request is implementable"],
+        implementation_plan: ["src/app/server.ts: add command routing test coverage"],
         missing_capabilities: ["Threaded PR review replies are not implemented"],
         next_state: "git-vibe:ready-for-approval",
         partial_capabilities: ["Issue comments are flat replies with source links"],
@@ -51,6 +52,9 @@ describe("stage result comments", () => {
       "### Partial Or Unclear\n- Issue comments are flat replies with source links",
     );
     expect(body).toContain("### Findings\n- The request is implementable");
+    expect(body).toContain(
+      "### Implementation Plan\n- src/app/server.ts: add command routing test coverage",
+    );
     expect(body).toContain("### Pull Request");
     expect(body).toContain("- Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(body).not.toContain('"findings"');

@@ -15,6 +15,7 @@ Investigate the reported bug and produce a triage-quality result. The result sho
 
 - `findings`: Evidence-backed observations, each with a path, URL, command, or artifact reference when possible.
 - `questions`: Specific missing information needed from the reporter or maintainer.
+- `implementation_plan`: When the issue is ready for implementation, list concrete implementation steps for the next agent. Name target files, functions, tests, workflow files, or schemas when evidence supports them. Do not include speculative code.
 - `proposed_labels`: Useful triage labels only when justified by the evidence.
 - `next_state`: Use `needs-info`, `ready-for-validation`, `ready-for-implementation`, or `blocked`.
   </required_fields_guidance>

@@ -108,14 +108,17 @@ flowchart TD
   A[Approved implementation issue] --> B[Validation]
   B --> C{Admin context coherent?}
   C -->|no| D[Abort, post feedback, reset ready flag]
-  C -->|yes| E[Implement]
-  E --> F[Run configured tests]
-  F --> G[Self-review]
-  G --> H[Review matrix]
-  H --> I{Pass?}
-  I -->|no| E
-  I -->|yes| J[Create or update PR]
-  J --> K[Wait for human review]
+  C -->|yes| E[Investigate]
+  E --> F{Critical questions answered?}
+  F -->|no| D
+  F -->|yes| G[Implement with investigation handoff]
+  G --> H[Run configured tests]
+  H --> I[Self-review]
+  I --> J[Review matrix]
+  J --> K{Pass?}
+  K -->|no| G
+  K -->|yes| L[Create or update PR]
+  L --> M[Wait for human review]
 ```
 
 Review matrix defaults:
@@ -128,6 +131,12 @@ Review matrix defaults:
 ## Bug Investigation Flow
 
 Bug reports have a separate investigation-only path before implementation. The goal is to let AI help summarize reproduction evidence, likely affected code, suspected root cause, missing information, and expected behavior questions without changing code.
+
+In the `develop` workflow, investigation is a hard gate. A blocked investigation
+posts its findings and questions, then stops implementation. A completed
+investigation is persisted as a handoff artifact so implementation receives the
+investigation summary, findings, and concrete implementation plan directly in
+its stage context.
 
 ```mermaid
 sequenceDiagram
