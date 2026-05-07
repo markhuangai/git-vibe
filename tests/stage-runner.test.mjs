@@ -295,7 +295,7 @@ describe("stage runner materialize writes", () => {
       repository: "example/repo",
       sourceComment: {
         kind: "discussion-comment",
-        nodeId: "discussion-command-comment",
+        nodeId: "discussion-command-reply",
       },
       stage: "materialize",
       stageTimeoutMinutes: 1,
@@ -309,7 +309,7 @@ describe("stage runner materialize writes", () => {
       "GitVibe created implementation issue #13",
     );
     expect(JSON.parse(fetch.mock.calls[2][1].body).variables.replyToId).toBe(
-      "discussion-command-comment",
+      "discussion-parent-comment",
     );
   });
 });
@@ -640,7 +640,20 @@ function discussionResponse() {
       discussion: {
         author: { login: "octocat" },
         body: "Discussion body",
-        comments: { nodes: [] },
+        comments: {
+          nodes: [
+            {
+              id: "discussion-parent-comment",
+              replies: {
+                nodes: [
+                  {
+                    id: "discussion-command-reply",
+                  },
+                ],
+              },
+            },
+          ],
+        },
         createdAt: "2026-01-02T00:00:00Z",
         id: "discussion-id",
         title: "Discussion title",

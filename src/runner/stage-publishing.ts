@@ -1,6 +1,7 @@
 import { addDiscussionComment } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
+import { discussionReplyToId } from "./discussion-replies.js";
 import type { StageLogger } from "./logging.js";
 import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
 import type {
@@ -93,13 +94,13 @@ async function publishDiscussionComment(options: StagePublishingOptions & { body
 
   options.logger.event("github.discussion.comment.start", {
     discussion: artifact.number,
-    reply_to: discussionReplyToId(options.runner) || "",
+    reply_to: discussionReplyToId(options.runner, options.context) || "",
   });
   await addDiscussionComment({
     body: options.body,
     client: options.client,
     discussionId: artifact.id,
-    replyToId: discussionReplyToId(options.runner),
+    replyToId: discussionReplyToId(options.runner, options.context),
     token: options.runner.token,
   });
   options.logger.event("github.discussion.comment.done", { discussion: artifact.number });
@@ -168,11 +169,6 @@ function labelForStage(stage: Stage, output: JsonObject): string | undefined {
   if (stage === "implement") return gitVibeLabels.inProgress.name;
   if (stage === "create-pr") return gitVibeLabels.prOpened.name;
   return undefined;
-}
-
-function discussionReplyToId(runner: RunnerOptions): string | undefined {
-  const source = runner.sourceComment;
-  return source?.kind === "discussion-comment" ? source.nodeId : undefined;
 }
 
 function flatReplyBody(body: string, source: SourceComment | undefined): string {

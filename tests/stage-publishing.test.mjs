@@ -104,6 +104,36 @@ describe("stage publishing helpers", () => {
   });
 });
 
+describe("stage publishing discussion replies", () => {
+  it("posts discussion reply results to the parent thread when the source is already a reply", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: {
+        ...context("discussion"),
+        artifact: { ...context("discussion").artifact, id: "D_1" },
+        timeline: [
+          { id: "parent-comment", kind: "comment" },
+          { id: "command-reply", kind: "reply", parentId: "parent-comment" },
+        ],
+      },
+      logger: createLogger(),
+      parsedOutput: output(),
+      runner: runner({
+        sourceComment: { kind: "discussion-comment", nodeId: "command-reply" },
+        stage: "summarize",
+      }),
+    });
+
+    expect(client.graphql).toHaveBeenCalledWith(
+      expect.stringContaining("GitVibeAddDiscussionComment"),
+      expect.objectContaining({ discussionId: "D_1", replyToId: "parent-comment" }),
+      "token",
+    );
+  });
+});
+
 describe("stage label publishing helpers", () => {
   it("applies only deterministic stage labels", async () => {
     const client = createClient();

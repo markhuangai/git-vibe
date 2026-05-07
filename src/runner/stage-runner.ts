@@ -7,6 +7,7 @@ import { addDiscussionComment } from "../shared/discussions.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
+import { discussionReplyToId } from "./discussion-replies.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
@@ -292,16 +293,11 @@ async function createImplementationIssue({
       body: `GitVibe created implementation issue #${issue.number}: ${issue.html_url}`,
       client,
       discussionId: context.artifact.id,
-      replyToId: discussionReplyToId(options),
+      replyToId: discussionReplyToId(options, context),
       token: options.token,
     });
     logger.event("github.discussion.comment.done", { discussion: context.artifact.number });
   }
-}
-
-function discussionReplyToId(options: RunnerOptions): string | undefined {
-  const source = options.sourceComment;
-  return source?.kind === "discussion-comment" ? source.nodeId : undefined;
 }
 
 async function createPullRequest({
