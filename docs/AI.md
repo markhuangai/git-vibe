@@ -51,7 +51,7 @@ AI integration layers:
 - Context builder: gathers issue/discussion/PR timelines, repo snapshots, relevant files, reactions, workflow history, and linked artifacts into a stage-specific context packet.
 - Stage contracts: typed task definitions for investigation, refinement, validation, implementation, review, and feedback remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
-- CLI adapters: optional `cli-codex` and `cli-claude-code` adapters run Codex or Claude Code in non-interactive/print mode and parse structured output.
+- CLI adapters: `cli-codex` runs Codex in non-interactive mode and parses structured output. `cli-claude-code` is reserved as a config surface until that adapter is implemented.
 - External mention adapter: optional GitHub-visible comments to Codex, Claude, Copilot, or similar apps.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 
@@ -114,10 +114,10 @@ CLI authentication guidance:
 
 ## Profile-Based Routing
 
-GitVibe should route AI work through named profiles. A profile owns the adapter,
+GitVibe routes AI work through named profiles. A profile owns the adapter,
 auth source, model, reasoning settings, generation defaults, and provider-specific
-escape hatches. A stage only chooses one profile, a fallback profile, or a list of
-profiles for matrix-style work.
+escape hatches. A stage chooses one profile, a fallback profile, or an ordered
+profile list for failover.
 
 ```yaml
 ai:
@@ -148,14 +148,13 @@ ai:
         effort: xhigh
 
   stages:
-    bug_investigation:
+    investigate:
       profile: codex_cli
       fallback_profile: local_proxy
-    review_matrix:
+    review-matrix:
       profiles:
         - local_proxy
         - codex_cli
-        - claude_code
 ```
 
 Normalized reasoning config:
@@ -167,7 +166,7 @@ Normalized reasoning config:
 Adapter mappings:
 
 - `cli-codex`: map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
-- `cli-claude-code`: map `reasoning.effort` to `CLAUDE_CODE_EFFORT_LEVEL` or the `--effort` flag.
+- `cli-claude-code`: reserved; when implemented, map `reasoning.effort` to `CLAUDE_CODE_EFFORT_LEVEL` or the `--effort` flag.
 - `ai-sdk-agentool` with OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable.
 - `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use.
 

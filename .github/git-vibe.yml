@@ -109,7 +109,7 @@ ai:
     max_context_items: 200
     max_files_per_stage: 80
   stages:
-    bug_investigation:
+    investigate:
       enabled: true
       access: read-only
       profile: local_proxy
@@ -120,7 +120,7 @@ ai:
         - glob
         - web-fetch
         - web-search
-    feature_refinement:
+    summarize:
       enabled: true
       access: read-only
       profile: local_proxy
@@ -130,7 +130,7 @@ ai:
         - glob
         - web-fetch
         - web-search
-    pre_implementation_validation:
+    validate:
       enabled: true
       access: read-only
       profile: local_proxy
@@ -140,7 +140,7 @@ ai:
         - glob
         - web-fetch
         - web-search
-    implementation:
+    implement:
       enabled: true
       access: branch-write
       profile: local_proxy
@@ -153,7 +153,7 @@ ai:
         - multi-edit
         - bash
         - diff
-    review_matrix:
+    review-matrix:
       enabled: true
       access: read-only
       profiles:
@@ -163,7 +163,7 @@ ai:
         - grep
         - glob
         - diff
-    pr_feedback_remediation:
+    address-pr-feedback:
       enabled: true
       access: branch-write
       profile: local_proxy

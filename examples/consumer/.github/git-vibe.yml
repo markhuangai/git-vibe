@@ -61,15 +61,15 @@ ai:
     implementation_max_turns: 120
     feedback_max_turns: 120
   stages:
-    bug_investigation:
+    investigate:
       profile: local_proxy
       fallback_profile: codex_cli
-    feature_refinement:
+    summarize:
       profile: local_proxy
-    review_matrix:
+    review-matrix:
       profiles:
         - local_proxy
-    implementation:
+    implement:
       profile: local_proxy
 
 bug_investigation:

@@ -73,6 +73,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
         prompt: prompts.prompt,
         schema,
         schemaId: definition.schemaId,
+        stage: options.stage,
         stageDefinition: definition,
         system: prompts.system,
       });

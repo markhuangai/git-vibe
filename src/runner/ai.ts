@@ -13,9 +13,10 @@ import { createWebFetch } from "agentool/web-fetch";
 import { createWebSearch } from "agentool/web-search";
 import { createWrite } from "agentool/write";
 import type { LanguageModel, ToolSet } from "ai";
+import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
 import { summarizeError } from "./logging.js";
-import type { GitVibeConfig, JsonObject, StageDefinition } from "../shared/types.js";
+import type { GitVibeConfig, JsonObject, Stage, StageDefinition } from "../shared/types.js";
 
 interface AiToolCall {
   input?: unknown;
@@ -38,20 +39,74 @@ export interface RunAiStageOptions {
   prompt: string;
   schema: JsonObject;
   schemaId: string;
+  stage: Stage;
   stageDefinition: StageDefinition;
   system: string;
   logger?: StageLogger;
 }
 
 export async function runAiStage(options: RunAiStageOptions): Promise<string> {
+  validateStageConfig(options);
+  const profiles = profileNamesForStage(options.config, options.stage);
+  let failure: unknown;
+
+  for (const [index, profileName] of profiles.entries()) {
+    if (index > 0) {
+      options.logger?.event("ai.request.retry", {
+        previous_error: summarizeError(failure),
+        profile: profileName,
+      });
+    }
+
+    try {
+      return await runAiStageWithProfile(options, profileName);
+    } catch (error) {
+      failure = error;
+      if (index === profiles.length - 1) throw error;
+      options.logger?.event("ai.request.failed", {
+        error: summarizeError(error),
+        profile: profileName,
+      });
+    }
+  }
+
+  throw new Error(`No AI profile configured for ${options.stage}.`);
+}
+
+async function runAiStageWithProfile(
+  options: RunAiStageOptions,
+  profileName: string,
+): Promise<string> {
+  const profile = activeProfileByName(options.config, profileName);
+  const adapter = adapterName(profile);
+  if (adapter === "cli-codex") {
+    return runCodexCliStage({
+      options,
+      profile,
+      profileName,
+      tools: toolsForStage(options),
+    });
+  }
+  if (adapter !== "ai-sdk-agentool") {
+    throw new Error(`AI profile ${profileName} uses unsupported adapter ${adapter}.`);
+  }
+
+  return runAiSdkStageWithProfile(options, profileName, profile);
+}
+
+async function runAiSdkStageWithProfile(
+  options: RunAiStageOptions,
+  profileName: string,
+  profile: Record<string, unknown>,
+): Promise<string> {
   const logger = options.logger;
   const tools = createTools(options);
   let stepCount = 0;
   logger?.event("ai.request.start", {
     max_turns: options.maxTurns,
-    model: modelName(options.config),
-    profile: activeProfileName(options.config),
-    provider: providerType(options.config),
+    model: modelName(profile),
+    profile: profileName,
+    provider: providerType(profile),
     tools: Object.keys(tools).join(","),
   });
 
@@ -66,7 +121,7 @@ export async function runAiStage(options: RunAiStageOptions): Promise<string> {
       logger?.event("ai.tool.start", toolStartFields(event));
     },
     maxRetries: 0,
-    model: createModel(options.config),
+    model: createModel(profileName, profile),
     onStepFinish: (event: unknown) => {
       stepCount += 1;
       logger?.event("ai.step.done", {
@@ -77,10 +132,10 @@ export async function runAiStage(options: RunAiStageOptions): Promise<string> {
       });
     },
     prompt: options.prompt,
-    providerOptions: providerOptions(options.config) as never,
+    providerOptions: providerOptions(profile) as never,
     stopWhen: stepCountIs(options.maxTurns),
     system: options.system,
-    temperature: generationNumber(options.config, "temperature", 0.2),
+    temperature: generationNumber(profile, "temperature", 0.2),
     tools,
   });
 
@@ -93,8 +148,7 @@ export async function runAiStage(options: RunAiStageOptions): Promise<string> {
   return extractValidatedOutput(result);
 }
 
-function createModel(config: GitVibeConfig): LanguageModel {
-  const profile = activeProfile(config);
+function createModel(profileName: string, profile: Record<string, unknown>): LanguageModel {
   const provider = profile.provider as Record<string, unknown> | undefined;
   const providerType = String(provider?.type || "openai-compatible");
   const model = envValue(provider?.model_variable, "GITVIBE_AI_MODEL");
@@ -123,7 +177,7 @@ function createTools(options: RunAiStageOptions): ToolSet {
     }),
   };
 
-  for (const toolName of options.stageDefinition.tools) {
+  for (const toolName of toolsForStage(options)) {
     if (toolName === "read") tools.read = createRead({ cwd });
     if (toolName === "grep") tools.grep = createGrep({ cwd });
     if (toolName === "glob") tools.glob = createGlob({ cwd });
@@ -141,39 +195,127 @@ function createTools(options: RunAiStageOptions): ToolSet {
   return tools;
 }
 
-function activeProfile(config: GitVibeConfig): Record<string, unknown> {
-  return activeProfileByName(config, activeProfileName(config));
-}
-
 function activeProfileByName(config: GitVibeConfig, profileName: string): Record<string, unknown> {
   const ai = config.ai || {};
   const profiles = (ai.profiles as Record<string, unknown> | undefined) || {};
   return (profiles[profileName] as Record<string, unknown> | undefined) || {};
 }
 
-function activeProfileName(config: GitVibeConfig): string {
-  return String(config.ai?.default_profile || "local_proxy");
+function adapterName(profile: Record<string, unknown>): string {
+  return String(profile.adapter || "ai-sdk-agentool");
 }
 
-function modelName(config: GitVibeConfig): string {
-  const provider = activeProfile(config).provider as Record<string, unknown> | undefined;
+function profileNamesForStage(config: GitVibeConfig, stage: Stage): string[] {
+  const stageConfig = stageConfigFor(config, stage);
+  const profileNames = explicitProfileNames(stageConfig) || [defaultProfileName(config)];
+  const fallback = stringValue(stageConfig.fallback_profile);
+
+  if (fallback && !profileNames.includes(fallback)) {
+    return [...profileNames, fallback];
+  }
+
+  return profileNames;
+}
+
+function explicitProfileNames(stageConfig: Record<string, unknown>): string[] | undefined {
+  const profile = stringValue(stageConfig.profile);
+  if (profile && stageConfig.profiles !== undefined) {
+    throw new Error("Stage AI config cannot define both profile and profiles.");
+  }
+  if (profile) return [profile];
+  if (stageConfig.profiles === undefined) return undefined;
+  if (!Array.isArray(stageConfig.profiles) || stageConfig.profiles.length === 0) {
+    throw new Error("Stage AI config profiles must be a non-empty string array.");
+  }
+
+  const profiles = stageConfig.profiles.map((value) => stringValue(value));
+  if (profiles.some((value) => !value)) {
+    throw new Error("Stage AI config profiles must be a non-empty string array.");
+  }
+
+  return [...new Set(profiles as string[])];
+}
+
+function defaultProfileName(config: GitVibeConfig): string {
+  return stringValue(config.ai?.default_profile) || "local_proxy";
+}
+
+function modelName(profile: Record<string, unknown>): string {
+  const provider = profile.provider as Record<string, unknown> | undefined;
   return envValue(provider?.model_variable, "GITVIBE_AI_MODEL");
 }
 
-function providerType(config: GitVibeConfig): string {
-  const provider = activeProfile(config).provider as Record<string, unknown> | undefined;
+function providerType(profile: Record<string, unknown>): string {
+  const provider = profile.provider as Record<string, unknown> | undefined;
   return String(provider?.type || "openai-compatible");
 }
 
-function providerOptions(config: GitVibeConfig): Record<string, unknown> | undefined {
-  const profile = activeProfile(config);
+function providerOptions(profile: Record<string, unknown>): Record<string, unknown> | undefined {
   return profile.provider_options as Record<string, unknown> | undefined;
 }
 
-function generationNumber(config: GitVibeConfig, key: string, fallback: number): number {
-  const generation = activeProfile(config).generation as Record<string, unknown> | undefined;
+function generationNumber(profile: Record<string, unknown>, key: string, fallback: number): number {
+  const generation = profile.generation as Record<string, unknown> | undefined;
   const value = generation?.[key];
   return typeof value === "number" ? value : fallback;
+}
+
+function toolsForStage(options: RunAiStageOptions): string[] {
+  const configuredTools = stageConfigFor(options.config, options.stage).tools;
+  if (configuredTools === undefined) return options.stageDefinition.tools;
+  if (!Array.isArray(configuredTools) || configuredTools.some((tool) => !stringValue(tool))) {
+    throw new Error(`ai.stages.${options.stage}.tools must be a string array.`);
+  }
+
+  const tools = configuredTools as string[];
+  const disallowed = tools.filter((tool) => !options.stageDefinition.tools.includes(tool));
+  if (disallowed.length > 0) {
+    throw new Error(
+      `ai.stages.${options.stage}.tools includes disallowed tools: ${disallowed.join(", ")}.`,
+    );
+  }
+
+  return tools;
+}
+
+function validateStageConfig(options: RunAiStageOptions): void {
+  const stageConfig = stageConfigFor(options.config, options.stage);
+  if (stageConfig.enabled === false) {
+    throw new Error(`ai.stages.${options.stage} is disabled.`);
+  }
+  if (stageConfig.enabled !== undefined && typeof stageConfig.enabled !== "boolean") {
+    throw new Error(`ai.stages.${options.stage}.enabled must be a boolean.`);
+  }
+
+  const access = stringValue(stageConfig.access);
+  if (stageConfig.access !== undefined && !access) {
+    throw new Error(`ai.stages.${options.stage}.access must be a string.`);
+  }
+  if (access && access !== options.stageDefinition.access) {
+    throw new Error(
+      `ai.stages.${options.stage}.access must match canonical access ${options.stageDefinition.access}.`,
+    );
+  }
+}
+
+function stageConfigFor(config: GitVibeConfig, stage: Stage): Record<string, unknown> {
+  const stages = config.ai?.stages;
+  if (stages === undefined) return {};
+  if (!isRecord(stages)) throw new Error("ai.stages must be an object.");
+
+  const stageConfig = stages[stage];
+  if (stageConfig === undefined) return {};
+  if (!isRecord(stageConfig)) throw new Error(`ai.stages.${stage} must be an object.`);
+
+  return stageConfig;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function envValue(variableName: unknown, fallbackName: string, fallbackValue?: string): string {

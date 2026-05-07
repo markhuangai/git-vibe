@@ -1,41 +1,112 @@
-# GitVibe
+<h1 align="center">GitVibe</h1>
 
-GitVibe is an experimental workflow for using GitHub issues, discussions, labels, pull requests, and reusable Actions as an AI-assisted development pipeline.
+<p align="center">
+  <img src="https://img.shields.io/badge/GitVibe-AI_development_pipeline-2563eb?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitVibe" />
+</p>
 
-The intended public action repository is `git-vibe/actions`.
+<p align="center">
+  <strong>Turn GitHub issues, discussions, labels, Actions, branches, and pull requests into a maintainer-gated AI development pipeline.</strong>
+</p>
 
-## Shape
+<p align="center">
+  <a href="https://github.com/Z-M-Huang/git-vibe"><img src="https://img.shields.io/github/stars/Z-M-Huang/git-vibe?style=flat-square&logo=github" alt="GitHub stars" /></a>
+  <a href="https://github.com/Z-M-Huang/git-vibe/issues"><img src="https://img.shields.io/github/issues/Z-M-Huang/git-vibe?style=flat-square&logo=github" alt="GitHub issues" /></a>
+  <a href="https://github.com/Z-M-Huang/git-vibe/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Z-M-Huang/git-vibe?style=flat-square" alt="License" /></a>
+  <img src="https://img.shields.io/badge/node-22-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22" />
+  <img src="https://img.shields.io/badge/pnpm-10.33.3-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 10.33.3" />
+</p>
 
-- A self-hosted repository webhook server receives events, validates repo permissions, updates GitHub-native state, and dispatches workflows.
-- Reusable GitHub Actions execute the pipeline stages on GitHub-hosted or self-hosted runners.
-- GitHub remains the source of truth through labels, comments, links, and pull requests.
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-6.0+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6" />
+  <img src="https://img.shields.io/badge/coverage-%3E%3D90%25-brightgreen?style=flat-square" alt="Coverage threshold" />
+  <img src="https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker image on GHCR" />
+  <img src="https://img.shields.io/badge/AI_SDK-agentool-111827?style=flat-square" alt="AI SDK and agentool" />
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=Z-M-Huang.git-vibe&style=flat-square" alt="Visitors" />
+</p>
 
-The TypeScript source is split by runtime boundary while staying in one package:
+<p align="center">
+  <a href="#what-it-does">What it does</a> &nbsp;|&nbsp;
+  <a href="#quick-start">Quick Start</a> &nbsp;|&nbsp;
+  <a href="#commands">Commands</a> &nbsp;|&nbsp;
+  <a href="#configuration">Configuration</a> &nbsp;|&nbsp;
+  <a href="#security-model">Security</a> &nbsp;|&nbsp;
+  <a href="#architecture">Architecture</a> &nbsp;|&nbsp;
+  <a href="#development">Development</a>
+</p>
 
-- `src/app`: self-hosted webhook server code that ships in the Docker image.
-- `src/runner`: GitHub Action runner code, AI stage execution, prompts, schemas, and deterministic runner writes.
-- `src/shared`: shared GitHub helpers, labels, stage definitions, traceability helpers, and common types used by both runtimes.
+---
 
-The Docker app image builds only app/shared output. Runner-only source, prompts, and schemas are built by composite actions on the runner and do not trigger app deployment unless shared/package/deploy files change.
+## What it does
 
-## Consumer Repo Quick Start
+GitVibe is a self-hostable GitHub automation layer for teams that want AI help
+without moving product decisions, review, or merge authority out of GitHub.
 
-In the repository that should use GitVibe:
+It listens to repository webhooks, verifies who is allowed to act, dispatches
+reusable GitHub workflows, runs stage-specific AI workers, validates structured
+AI output, and writes routine GitHub state changes with deterministic code.
 
-1. Configure a repository webhook that points to the self-hosted GitVibe server.
-2. Copy the starter files from this repository:
+| GitHub problem                                  | GitVibe answer                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then approve implementation             |
+| Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria, then materialize an implementation issue |
+| AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                          |
+| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                        |
+| Consumer repositories should stay small         | Copy a tiny `.github` starter and call reusable workflows from `git-vibe/actions`                                  |
 
-   ```bash
-   cp -R examples/consumer/.github /path/to/your-repo/.github
-   ```
+## Pipeline at a glance
 
-3. Edit `.github/git-vibe.yml` for the target repo.
-4. Add the required repository or organization secrets and variables.
-5. Run one of the copied wrapper workflows manually, or let the GitVibe server dispatch it.
+```mermaid
+flowchart LR
+  A[Issue or Discussion] --> B["/git-vibe command"]
+  B --> C[Webhook server validates actor]
+  C --> D[Reusable GitHub workflow]
+  D --> E[Stage-specific AI worker]
+  E --> F[Schema validation]
+  F --> G[Labels, comments, branch, or PR]
+  G --> H[Human review and merge]
+```
 
-Users should copy only the files under `examples/consumer/.github`. They should not copy GitVibe's internal action folders such as `investigate/`, `implement/`, or `app/`.
+GitVibe does not auto-merge, approve its own pull requests, or treat AI output as
+authority. Maintainers stay in control of approval and release decisions.
 
-The copied wrapper workflows call the public reusable workflows from this repository:
+## Workflows
+
+| Workflow               | Use it for                                                  | Writes code?                      |
+| ---------------------- | ----------------------------------------------------------- | --------------------------------- |
+| `investigate.yml`      | Bug investigation and likely-root-cause analysis            | No                                |
+| `summarize.yml`        | Feature discussion summary and open-question extraction     | No                                |
+| `validate.yml`         | Check whether maintainer context is coherent and actionable | No                                |
+| `materialize.yml`      | Convert a validated Discussion into an implementation issue | No                                |
+| `develop.yml`          | Investigate, implement, review, and create or update a PR   | Yes, on `git-vibe/{issue-number}` |
+| `address-feedback.yml` | Apply requested PR feedback to the existing GitVibe branch  | Yes, on the existing PR branch    |
+| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                   |
+
+The reusable workflows install Node `22` and pnpm `10.33.3` before building and
+running the source-backed composite actions. Consumer repos can run on
+GitHub-hosted runners or a configured self-hosted runner label.
+
+## Quick Start
+
+### 1. Copy the consumer starter
+
+Run this from the repository that should use GitVibe:
+
+```bash
+cp -R /path/to/git-vibe/examples/consumer/.github /path/to/your-repo/.github
+```
+
+Copy only `examples/consumer/.github`. Do not copy GitVibe's internal action
+folders such as `investigate/`, `implement/`, `app/`, or `src/`.
+
+### 2. Configure the consumer repo
+
+Edit:
+
+```text
+.github/git-vibe.yml
+```
+
+The starter workflows call the public reusable workflow namespace:
 
 ```yaml
 jobs:
@@ -43,32 +114,22 @@ jobs:
     uses: git-vibe/actions/.github/workflows/develop.yml@main
 ```
 
-So consumer repositories keep a small local workflow entry point, while the pipeline implementation stays versioned in `git-vibe/actions`.
-Reusable workflows always operate on the repository where the workflow run starts (`github.repository`). GitVibe does not accept a separate `owner/repo` workflow input.
-The reusable workflows checkout the GitVibe action source separately. Consumer calls default to `git-vibe/actions@main`; direct `workflow_dispatch` runs in this repository default to the current repository and ref.
+Reusable workflows operate on the repository where the workflow run starts
+(`github.repository`). GitVibe does not accept a separate `owner/repo` workflow
+input.
 
-## Secrets And Variables
+### 3. Add secrets and variables
 
-Secrets belong in GitHub repository or organization secrets, not in `.github/git-vibe.yml`.
+Secrets belong in GitHub repository or organization secrets, not in
+`.github/git-vibe.yml`.
 
-Required GitHub secrets:
-
-```text
-GITVIBE_AI_API_KEY
-GITVIBE_GITHUB_TOKEN
-WEBHOOK_SECRET
-```
-
-`GITVIBE_AI_API_KEY` is the API key for the configured AI provider or OpenAI-compatible proxy.
-`GITVIBE_GITHUB_TOKEN` should be a fine-grained PAT scoped to the repository. The self-hosted server uses it for webhook-side GitHub writes, and reusable workflows use it for branch and pull request writes.
-`WEBHOOK_SECRET` is the shared secret configured on the GitHub repository webhook. The deploy workflow maps it to the container runtime variable `GITHUB_WEBHOOK_SECRET`.
-
-Optional CLI session secrets:
-
-```text
-CODEX_AUTH_JSON
-CLAUDE_CODE_OAUTH_TOKEN
-```
+| Name                      | Required | Purpose                                                                     |
+| ------------------------- | -------- | --------------------------------------------------------------------------- |
+| `GITVIBE_AI_API_KEY`      | Yes      | API key for OpenAI, Anthropic, or an OpenAI-compatible endpoint             |
+| `GITVIBE_GITHUB_TOKEN`    | Yes      | Fine-grained PAT for server-side and workflow GitHub writes                 |
+| `WEBHOOK_SECRET`          | Yes      | GitHub webhook shared secret; deployment maps it to `GITHUB_WEBHOOK_SECRET` |
+| `CODEX_AUTH_JSON`         | Optional | Trusted self-hosted runner smoke testing for Codex CLI auth                 |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Optional | Trusted self-hosted runner smoke testing for Claude Code install/auth flows |
 
 Useful variables:
 
@@ -80,55 +141,46 @@ GITVIBE_RUNNER
 GITVIBE_LOG_LEVEL
 ```
 
-API-key based OpenAI, Anthropic, OpenAI-compatible proxy, or Codex API style
-providers should go through the AI SDK/agentool adapter. The CLI adapters are for
-session-style tools only: Codex uses `CODEX_AUTH_JSON`, and Claude Code uses
-`CLAUDE_CODE_OAUTH_TOKEN`.
+Use the narrowest fine-grained PAT permissions that still allow GitVibe to
+dispatch workflows, create branches, update issues and discussions, and open pull
+requests.
 
-Choose which adapter runs each process in `.github/git-vibe.yml` with
-`ai.profiles` and `ai.stages`. Profiles define adapter/model/reasoning settings;
-stages reference profile names.
+### 4. Run the app server
 
-Required self-hosted server runtime variables:
+For local source runs:
 
-```text
-GITHUB_WEBHOOK_SECRET
-GITVIBE_GITHUB_TOKEN
+```bash
+corepack pnpm build:app
+GITHUB_WEBHOOK_SECRET=... \
+GITVIBE_GITHUB_TOKEN=... \
+corepack pnpm start
 ```
 
-Optional self-hosted server runtime variables:
+For Docker Compose:
 
-```text
-GITHUB_API_URL
-GITHUB_REPOSITORY
-GITVIBE_DISCUSSION_CATEGORY
-GITVIBE_DISPATCH_REF
+```bash
+GITHUB_WEBHOOK_SECRET=... \
+GITVIBE_GITHUB_TOKEN=... \
+docker compose up -d
 ```
 
-When deploying through GitHub Actions, set the GitHub secret as `WEBHOOK_SECRET`; the deploy workflow exports it as `GITHUB_WEBHOOK_SECRET` for Docker Compose.
-Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub Actions already provides it to workflow steps, and Docker Compose forwards that existing value into the container so startup preflight can check Discussions before the first webhook arrives. Manual Docker deployments may set `GITHUB_REPOSITORY=owner/repo` to enable the same startup preflight; if omitted, GitVibe still learns the repository from incoming webhook payloads.
+Runtime variables:
 
-## Timeouts
+| Name                          | Required | Notes                                             |
+| ----------------------------- | -------- | ------------------------------------------------- |
+| `GITHUB_WEBHOOK_SECRET`       | Yes      | Must match the repository webhook secret          |
+| `GITVIBE_GITHUB_TOKEN`        | Yes      | Fine-grained PAT scoped to the managed repository |
+| `GITHUB_API_URL`              | Optional | Defaults to `https://api.github.com`              |
+| `GITHUB_REPOSITORY`           | Optional | `owner/repo` for startup Discussion preflight     |
+| `GITVIBE_DISCUSSION_CATEGORY` | Optional | Defaults to `Ideas`                               |
+| `GITVIBE_DISPATCH_REF`        | Optional | Defaults to `main`                                |
 
-Default workflow budgets:
+### 5. Configure the repository webhook
 
-- investigation, refinement, validation, review: `60` minutes
-- implementation and PR feedback remediation: `120` minutes
-- PR creation/linking: `15` minutes
-
-Default AI turn budgets:
-
-- normal stages: `90` turns
-- implementation and PR feedback remediation: `120` turns
-
-Use the narrowest fine-grained PAT permissions that still allow GitVibe to dispatch workflows, create branches, update issues and discussions, and open pull requests.
-
-## Webhook Setup
-
-Create a repository webhook with:
+Create a repository webhook:
 
 ```text
-Payload URL: https://git-vibe.markhuang.ai/webhooks
+Payload URL: https://<your-gitvibe-host>/webhooks
 Content type: application/json
 Secret: same value as WEBHOOK_SECRET
 SSL verification: enabled
@@ -154,32 +206,122 @@ Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 Use `/git-vibe` in issues, discussions, and pull requests:
 
+| Command                      | Typical surface               | Effect                                                        |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `/git-vibe investigate`      | Bug issue                     | Runs investigation-only analysis and posts findings/questions |
+| `/git-vibe summarize`        | Feature Discussion            | Summarizes the full conversation and open questions           |
+| `/git-vibe validate`         | Issue or Discussion           | Checks whether the current context is coherent and actionable |
+| `/git-vibe materialize`      | Validated Discussion          | Creates or links an implementation issue                      |
+| `/git-vibe approve`          | Implementation issue          | Marks work as approved when the actor is allowed              |
+| `/git-vibe start`            | Approved issue                | Dispatches the development pipeline                           |
+| `/git-vibe address-feedback` | Pull request or review thread | Applies requested PR feedback on the GitVibe branch           |
+
+`@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
+account mentions.
+
+Accepted commands from admins and collaborators receive a `rocket` reaction
+before GitVibe dispatches the workflow. Discussion comments receive threaded
+replies where GitHub supports them. Issue comments and pull request conversation
+comments receive a flat reply with an `In reply to` source link.
+
+## Configuration
+
+The main consumer config file is:
+
 ```text
-/git-vibe investigate
-/git-vibe summarize
-/git-vibe validate
-/git-vibe materialize
-/git-vibe approve
-/git-vibe start
-/git-vibe address-feedback
+.github/git-vibe.yml
 ```
 
-`@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions.
-Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
-When a command is posted in a Discussion comment, GitVibe replies in that Discussion thread. Issue comments and pull request conversation comments receive a new flat comment with an `In reply to` source link because GitHub does not expose true threaded replies for those surfaces. `/git-vibe address-feedback` also works from pull request review comments and replies to the review thread.
+Minimal shape:
 
-## App Server
+```yaml
+version: 1
 
-The self-hosted server source lives in [src/app/server.ts](src/app/server.ts). It verifies GitHub webhook signatures, uses the configured fine-grained PAT for GitHub writes, checks the actor's repository permission, and dispatches reusable workflows.
+commands:
+  prefix: /git-vibe
 
-```bash
-corepack pnpm build:app
-GITHUB_WEBHOOK_SECRET=... \
-GITVIBE_GITHUB_TOKEN=... \
-corepack pnpm start
+runner:
+  default: ubuntu-latest
+
+github_auth:
+  mode: webhook-pat
+  token_secret: GITVIBE_GITHUB_TOKEN
+
+ai:
+  default_profile: local_proxy
+  profiles:
+    local_proxy:
+      enabled: true
+      adapter: ai-sdk-agentool
+      provider:
+        type: openai-compatible
+        model_variable: GITVIBE_AI_MODEL
+        base_url_variable: GITVIBE_AI_BASE_URL
+        api_key_secret: GITVIBE_AI_API_KEY
+      reasoning:
+        effort: high
+
+tests:
+  commands: []
 ```
 
-## Example Action Usage
+Set `tests.commands` to the consumer repository's own verification gate, such as
+its lint, typecheck, unit test, or integration test commands.
+
+Current implementation status:
+
+| Area                                                                     | Status                                        |
+| ------------------------------------------------------------------------ | --------------------------------------------- |
+| Direct repository webhook mode                                           | Implemented first                             |
+| `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first                             |
+| Source-built composite actions and reusable workflows                    | Implemented                                   |
+| JSON Schema stage contracts                                              | Implemented                                   |
+| Relay, Actions-native receiver, and polling delivery modes               | Planned behind config shape                   |
+| Active `cli-codex` and `cli-claude-code` stage adapters                  | Planned; smoke-test support exists separately |
+| External GitHub mention partners                                         | Planned opt-in surface                        |
+
+See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
+
+## Security Model
+
+| Boundary      | Rule                                                                               |
+| ------------- | ---------------------------------------------------------------------------------- |
+| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events              |
+| Commands      | The server checks repository permission before protected actions                   |
+| Labels        | Protected approval labels are policy-gated and unauthorized changes are removed    |
+| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config               |
+| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state  |
+| Branch writes | Implementation uses deterministic issue-scoped branches: `git-vibe/{issue-number}` |
+| Pull requests | GitVibe can open or update PRs, but humans review and merge                        |
+
+The PAT is long-lived. Scope it narrowly to the managed repository and never log
+or render it.
+
+## Architecture
+
+GitVibe is one TypeScript package split by runtime boundary:
+
+```text
+src/
+  app/       self-hosted webhook server and repository orchestration
+  runner/    action runtime, context assembly, prompts, schemas, AI execution
+  shared/    GitHub helpers, labels, stage definitions, traceability types
+```
+
+The Docker image builds only app/shared output. Runner-only source, prompts, and
+schemas are built by composite actions on the GitHub runner and do not trigger
+app deployment unless shared, package, Docker, deploy, or app files change.
+
+Detailed docs:
+
+| Document                                     | Covers                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System shape, webhook/PAT model, event delivery modes, consumer setup   |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md)         | Issue, Discussion, label, approval, PR feedback, and traceability flows |
+| [docs/AI.md](docs/AI.md)                     | Context assembly, AI contracts, provider strategy, tool policy, budgets |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)   | Repo shape, quality gates, smoke tests, assumptions                     |
+
+## Example action usage
 
 ```yaml
 steps:
@@ -190,7 +332,7 @@ steps:
       issue-number: "123"
 ```
 
-## Example Reusable Workflow Usage
+## Example reusable workflow usage
 
 ```yaml
 jobs:
@@ -201,32 +343,41 @@ jobs:
       runner: self-hosted
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
 ```
 
-Set `runner` to a self-hosted label if the consumer repo should run GitVibe on its own runners.
-Reusable GitVibe workflows install Node `22` and pnpm `10.33.3` before invoking the source-built composite actions, so the runner image does not need global `pnpm` or Corepack for GitVibe stages.
-Implementation branches are deterministic and issue-scoped: `git-vibe/{issue-number}`.
-For source-repo testing, dispatch `investigate.yml`, `summarize.yml`, `validate.yml`, `materialize.yml`, `develop.yml`, or `address-feedback.yml` directly. Leave `action-repository` and `action-ref` empty to test the current repository and ref. `source-comment` is optional JSON metadata used by webhook dispatches to reply to the triggering comment; leave it empty for manual runs.
+For source-repo testing, dispatch `investigate.yml`, `summarize.yml`,
+`validate.yml`, `materialize.yml`, `develop.yml`, or `address-feedback.yml`
+directly. Leave `action-repository` and `action-ref` empty to test the current
+repository and ref.
 
-## Current Status
+## Development
 
-This repository contains the TypeScript GitVibe app implementation, source-built runner actions, stage prompts, JSON Schema contracts, shared runtime helpers, and reusable workflow entry points. App and runner code are separated under `src/app` and `src/runner`, with common code under `src/shared`. Webhook mode and `ai-sdk-agentool` are implemented first; relay, polling, Actions-native receivers, and additional AI adapters are deferred behind interfaces.
-
-## Development Checks
-
-Local quality commands:
+Package manager:
 
 ```bash
-pnpm format:check
-pnpm lint
-pnpm build
-pnpm test
-pnpm coverage
-pnpm actionlint
-pnpm check
+corepack pnpm install --frozen-lockfile
 ```
 
-Coverage thresholds are enforced by Vitest:
+Full local gate:
+
+```bash
+corepack pnpm check
+```
+
+Individual checks:
+
+```bash
+corepack pnpm format:check
+corepack pnpm lint
+corepack pnpm build
+corepack pnpm test
+corepack pnpm coverage
+corepack pnpm actionlint
+corepack pnpm audit --prod
+```
+
+Quality thresholds:
 
 ```text
 branches: 90%
@@ -235,18 +386,9 @@ lines: 90%
 statements: 90%
 ```
 
-The pre-commit hook runs staged format/lint checks, typecheck, and coverage. The repository CI is PR-only plus manual dispatch, runs coverage before build, and runs on `self-hosted` runners.
-
-Manual AI smoke testing is available through the `AI smoke test` workflow. It can
-test an OpenAI-compatible local proxy using `GITVIBE_AI_BASE_URL`,
-`GITVIBE_AI_API_KEY`, and `GITVIBE_AI_MODEL`, and can optionally test the Codex CLI
-with `CODEX_AUTH_JSON` or a pre-seeded `CODEX_HOME/auth.json` on the runner.
-
-JavaScript/MJS size limits:
+JavaScript/MJS limits:
 
 ```text
 max file length: 700 lines
 max function length: 100 lines
 ```
-
-These limits are enforced by ESLint.
