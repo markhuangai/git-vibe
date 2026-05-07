@@ -51,7 +51,7 @@ AI integration layers:
 - Context builder: gathers issue/discussion/PR timelines, repo snapshots, relevant files, reactions, workflow history, and linked artifacts into a stage-specific context packet.
 - Stage contracts: typed task definitions for investigation, refinement, validation, implementation, review, and feedback remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
-- CLI adapters: `cli-codex` and `cli-claude-code` run their CLIs in non-interactive mode and parse structured output.
+- CLI adapters: `cli-codex` and `cli-claude-code` run their CLIs in non-interactive mode, stream CLI output to the action log, and parse structured output.
 - External mention adapter: optional GitHub-visible comments to Codex, Claude, Copilot, or similar apps.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 
@@ -169,6 +169,7 @@ Adapter mappings:
 
 - `cli-codex`: map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
 - `cli-claude-code`: pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`; set `bare: true` to add Claude Code's `--bare` minimal mode when the runner uses API-key or third-party provider auth instead of OAuth/keychain auth.
+- CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native tool loop and run without per-tool permission prompts in this workflow.
 - `ai-sdk-agentool` with OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable.
 - `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use.
 

@@ -1,25 +1,23 @@
-import { execFileSync } from "node:child_process";
 import type { StageDefinition } from "../shared/types.js";
 import type { RunAiStageOptions } from "./ai.js";
 import {
   cliModelName,
   commandParts,
   isRecord,
+  runStreamingCommand,
   strictOutputSchema,
   stringValue,
 } from "./cli-adapter-utils.js";
 
-export function runClaudeCodeCliStage({
+export async function runClaudeCodeCliStage({
   options,
   profile,
   profileName,
-  tools,
 }: {
   options: RunAiStageOptions;
   profile: Record<string, unknown>;
   profileName: string;
-  tools: string[];
-}): string {
+}): Promise<string> {
   const [command, ...configuredArgs] = commandParts(profile, "claude -p");
   const model = cliModelName(profile, "cli-claude-code");
   const args = [
@@ -33,8 +31,6 @@ export function runClaudeCodeCliStage({
     JSON.stringify(strictOutputSchema(options.schema)),
     "--system-prompt",
     options.system,
-    "--tools",
-    claudeTools(tools),
     "--permission-mode",
     claudePermissionMode(options.stageDefinition.access),
     "--no-session-persistence",
@@ -43,28 +39,26 @@ export function runClaudeCodeCliStage({
 
   options.logger?.event("ai.request.start", {
     adapter: "cli-claude-code",
-    max_turns: options.maxTurns,
     model,
     profile: profileName,
     provider: "cli-claude-code",
-    tools: tools.join(","),
   });
 
-  const output = execFileSync(command, args, {
+  const output = await runStreamingCommand({
+    args,
+    command,
     cwd: options.cwd,
     env: claudeEnv(profile),
     input: options.prompt,
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ["pipe", "pipe", "pipe"],
   });
-  const stdout = output.toString("utf8");
   options.logger?.event("ai.request.done", {
     adapter: "cli-claude-code",
-    output_chars: stdout.length,
+    stderr_chars: output.stderr.length,
+    stdout_chars: output.stdout.length,
     profile: profileName,
   });
 
-  return claudeOutput(stdout);
+  return claudeOutput(output.stdout);
 }
 
 function claudeReasoningArgs(profile: Record<string, unknown>): string[] {
@@ -87,11 +81,6 @@ function claudeEnv(profile: Record<string, unknown>): NodeJS.ProcessEnv {
 
 function claudePermissionMode(access: StageDefinition["access"]): string {
   return access === "branch-write" ? "acceptEdits" : "dontAsk";
-}
-
-function claudeTools(tools: string[]): string {
-  const allowed = tools.flatMap((tool) => claudeToolNames[tool] || []);
-  return [...new Set(allowed)].join(",");
 }
 
 function claudeOutput(stdout: string): string {
@@ -121,16 +110,3 @@ function extractJson(text: string): string {
 
   throw new Error("Claude Code CLI result did not contain a JSON object.");
 }
-
-const claudeToolNames: Record<string, string[]> = {
-  "bash-readonly": ["Bash"],
-  bash: ["Bash"],
-  edit: ["Edit"],
-  glob: ["Glob"],
-  grep: ["Grep"],
-  "multi-edit": ["MultiEdit"],
-  read: ["Read"],
-  "web-fetch": ["WebFetch"],
-  "web-search": ["WebSearch"],
-  write: ["Write"],
-};

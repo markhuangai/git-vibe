@@ -1,11 +1,14 @@
 // @ts-nocheck
+import { EventEmitter } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
+import { setImmediate } from "node:timers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
-const execFileSync = vi.fn();
+const spawn = vi.fn();
+const spawnedChildren = [];
 
 vi.mock("ai", () => ({
   generateText,
@@ -13,7 +16,7 @@ vi.mock("ai", () => ({
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
-vi.mock("node:child_process", () => ({ execFileSync }));
+vi.mock("node:child_process", () => ({ spawn }));
 
 const { runAiStage } = await import("../src/runner/ai.ts");
 const { stageDefinitions } = await import("../src/shared/stages.ts");
@@ -24,7 +27,10 @@ beforeEach(() => {
   generateText.mockReset();
   createOpenAI.mockClear();
   createAnthropic.mockClear();
-  execFileSync.mockReset();
+  spawn.mockReset();
+  spawnedChildren.length = 0;
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   process.env = {
     ...originalEnv,
     GITVIBE_AI_API_KEY: "test-key",
@@ -34,6 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   process.env = { ...originalEnv };
 });
 
@@ -165,7 +172,7 @@ describe("AI stage runner stage fallbacks", () => {
       '{"stage":"validate","status":"completed"}',
     );
 
-    expect(execFileSync).toHaveBeenCalledWith(
+    expect(spawn).toHaveBeenCalledWith(
       "codex",
       expect.arrayContaining([
         "exec",
@@ -181,10 +188,15 @@ describe("AI stage runner stage fallbacks", () => {
         'model_reasoning_summary="concise"',
       ]),
       expect.objectContaining({
-        input: expect.stringContaining("System\n\nPrompt"),
+        cwd: process.cwd(),
+        stdio: ["pipe", "pipe", "pipe"],
       }),
     );
-    expect(JSON.parse(readFileSync(schemaPathFrom(execFileSync.mock.calls[0][1]), "utf8"))).toEqual(
+    expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith(
+      expect.stringContaining("System\n\nPrompt"),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(Buffer.from("codex event\n"));
+    expect(JSON.parse(readFileSync(schemaPathFrom(spawn.mock.calls[0][1]), "utf8"))).toEqual(
       expect.objectContaining({
         required: ["stage", "working_capabilities"],
       }),
@@ -219,12 +231,12 @@ describe("AI stage runner Codex CLI defaults", () => {
       ),
     ).resolves.toBe('{"stage":"implement","status":"completed"}');
 
-    const args = execFileSync.mock.calls[0][1];
-    expect(execFileSync.mock.calls[0][0]).toBe("codex");
+    const args = spawn.mock.calls[0][1];
+    expect(spawn.mock.calls[0][0]).toBe("codex");
     expect(args).toEqual(expect.arrayContaining(["exec", "--model", "codex-env-model"]));
     expect(args).toEqual(expect.arrayContaining(["--sandbox", "workspace-write"]));
     expect(args).not.toContain("-c");
-    expect(execFileSync.mock.calls[0][2].env.CODEX_HOME).toBeUndefined();
+    expect(spawn.mock.calls[0][2].env.CODEX_HOME).toBeUndefined();
   });
 
   it("requires a model for Codex CLI profiles", async () => {
@@ -248,7 +260,7 @@ describe("AI stage runner Codex CLI defaults", () => {
       ),
     ).rejects.toThrow("MISSING_CODEX_MODEL is required for cli-codex profile");
 
-    expect(execFileSync).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
   });
 });
 
@@ -378,10 +390,30 @@ function implementStageOptions(config) {
 }
 
 function mockCodexOutput(content) {
-  execFileSync.mockImplementationOnce((_command, args) => {
-    writeFileSync(outputPathFrom(args), content);
-    return Buffer.from("codex event\n");
+  spawn.mockImplementationOnce((_command, args) => {
+    return mockChildProcess({
+      onInput: () => writeFileSync(outputPathFrom(args), content),
+      stdout: "codex event\n",
+    });
   });
+}
+
+function mockChildProcess({ exitCode = 0, onInput, stderr = "", stdout = "" }) {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = {
+    end: vi.fn((input) => {
+      onInput?.(input);
+      setImmediate(() => {
+        if (stdout) child.stdout.emit("data", Buffer.from(stdout));
+        if (stderr) child.stderr.emit("data", Buffer.from(stderr));
+        child.emit("close", exitCode, null);
+      });
+    }),
+  };
+  spawnedChildren.push(child);
+  return child;
 }
 
 function outputPathFrom(args) {

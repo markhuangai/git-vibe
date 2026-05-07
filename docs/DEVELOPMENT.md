@@ -63,7 +63,9 @@ Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, then verifies
 `claude --version`. `cli-claude-code` stages run `claude -p` with
 `--output-format json` and `--json-schema`; profile `bare: true` adds Claude
-Code's minimal mode for API-key or third-party provider auth.
+Code's minimal mode for API-key or third-party provider auth. CLI adapter
+stdout and stderr are streamed to the action log while GitVibe still captures
+the structured result for validation.
 
 ## Quality Gates
 

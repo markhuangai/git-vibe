@@ -1,10 +1,13 @@
 // @ts-nocheck
+import { EventEmitter } from "node:events";
+import { setImmediate } from "node:timers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
-const execFileSync = vi.fn();
+const spawn = vi.fn();
+const spawnedChildren = [];
 
 vi.mock("ai", () => ({
   generateText,
@@ -12,7 +15,7 @@ vi.mock("ai", () => ({
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
-vi.mock("node:child_process", () => ({ execFileSync }));
+vi.mock("node:child_process", () => ({ spawn }));
 
 const { runAiStage } = await import("../src/runner/ai.ts");
 const { stageDefinitions } = await import("../src/shared/stages.ts");
@@ -23,7 +26,10 @@ beforeEach(() => {
   generateText.mockReset();
   createOpenAI.mockClear();
   createAnthropic.mockClear();
-  execFileSync.mockReset();
+  spawn.mockReset();
+  spawnedChildren.length = 0;
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   process.env = {
     ...originalEnv,
     GITVIBE_AI_API_KEY: "test-key",
@@ -33,6 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   process.env = { ...originalEnv };
 });
 
@@ -59,8 +66,8 @@ describe("Claude Code CLI adapter", () => {
       '{"stage":"validate","status":"completed"}',
     );
 
-    const args = execFileSync.mock.calls[0][1];
-    expect(execFileSync.mock.calls[0][0]).toBe("claude");
+    const args = spawn.mock.calls[0][1];
+    expect(spawn.mock.calls[0][0]).toBe("claude");
     expect(args).toEqual(
       expect.arrayContaining([
         "-p",
@@ -75,14 +82,26 @@ describe("Claude Code CLI adapter", () => {
         "xhigh",
       ]),
     );
+    expect(args).not.toContain("--tools");
     expect(JSON.parse(jsonSchemaFrom(args))).toEqual(
       expect.objectContaining({ required: ["stage", "status", "questions"] }),
     );
-    expect(execFileSync.mock.calls[0][2]).toEqual(
+    expect(spawn.mock.calls[0][2]).toEqual(
       expect.objectContaining({
+        cwd: process.cwd(),
         env: expect.objectContaining({ CLAUDE_CODE_OAUTH_TOKEN: "claude-token" }),
-        input: "Prompt",
+        stdio: ["pipe", "pipe", "pipe"],
       }),
+    );
+    expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
+    expect(process.stdout.write).toHaveBeenCalledWith(
+      Buffer.from(
+        JSON.stringify({
+          is_error: false,
+          structured_output: { stage: "validate", status: "completed" },
+          type: "result",
+        }),
+      ),
     );
     expect(schema.required).toEqual(["stage", "status"]);
     expect(generateText).not.toHaveBeenCalled();
@@ -93,12 +112,12 @@ describe("Claude Code CLI adapter", () => {
       "MISSING_CLAUDE_MODEL is required for cli-claude-code profile",
     );
 
-    expect(execFileSync).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
   });
 });
 
 describe("Claude Code CLI adapter defaults", () => {
-  it("uses branch-write permissions, model env, and configured tools", async () => {
+  it("uses branch-write permissions and model env without tool restrictions", async () => {
     process.env.CLAUDE_MODEL = "claude-env-model";
     mockClaudeOutput({
       is_error: false,
@@ -110,13 +129,13 @@ describe("Claude Code CLI adapter defaults", () => {
       '{"stage":"implement","status":"completed"}',
     );
 
-    const args = execFileSync.mock.calls[0][1];
+    const args = spawn.mock.calls[0][1];
     expect(args).toEqual(expect.arrayContaining(["--model", "claude-env-model"]));
     expect(args).toEqual(expect.arrayContaining(["--permission-mode", "acceptEdits"]));
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
-    expect(args[args.indexOf("--tools") + 1]).toBe("Read,Grep,Glob,Edit,Write,MultiEdit,Bash");
-    expect(execFileSync.mock.calls[0][2].env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(args).not.toContain("--tools");
+    expect(spawn.mock.calls[0][2].env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 
   it("extracts fenced and raw JSON from result text", async () => {
@@ -137,6 +156,22 @@ describe("Claude Code CLI adapter defaults", () => {
     await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).resolves.toBe(
       '{"stage":"validate","status":"completed"}',
     );
+  });
+
+  it("streams stderr while preserving structured stdout", async () => {
+    const output = JSON.stringify({
+      is_error: false,
+      structured_output: { stage: "validate", status: "completed" },
+      type: "result",
+    });
+    mockClaudeRawOutput(output, { stderr: "claude warning\n", stdoutAsString: true });
+
+    await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
+    );
+
+    expect(process.stdout.write).toHaveBeenCalledWith(Buffer.from(output));
+    expect(process.stderr.write).toHaveBeenCalledWith(Buffer.from("claude warning\n"));
   });
 });
 
@@ -169,14 +204,49 @@ describe("Claude Code CLI adapter errors", () => {
       "Claude Code CLI result did not contain a JSON object.",
     );
   });
+
+  it("reports failed CLI exits with stderr and signals", async () => {
+    mockClaudeRawOutput("", { exitCode: 2, stderr: "bad flags\n" });
+    await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).rejects.toThrow(
+      "claude failed with exit code 2: bad flags",
+    );
+
+    mockClaudeRawOutput("", { exitCode: null, signal: "SIGTERM" });
+    await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).rejects.toThrow(
+      "claude failed with signal SIGTERM",
+    );
+  });
 });
 
 function mockClaudeOutput(result) {
-  execFileSync.mockImplementationOnce(() => Buffer.from(JSON.stringify(result)));
+  mockClaudeRawOutput(JSON.stringify(result));
 }
 
-function mockClaudeRawOutput(result) {
-  execFileSync.mockImplementationOnce(() => Buffer.from(result));
+function mockClaudeRawOutput(result, options = {}) {
+  spawn.mockImplementationOnce(() => mockChildProcess({ ...options, stdout: result }));
+}
+
+function mockChildProcess({
+  exitCode = 0,
+  signal = null,
+  stderr = "",
+  stdout = "",
+  stdoutAsString = false,
+}) {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = {
+    end: vi.fn(() => {
+      setImmediate(() => {
+        if (stdout) child.stdout.emit("data", stdoutAsString ? stdout : Buffer.from(stdout));
+        if (stderr) child.stderr.emit("data", Buffer.from(stderr));
+        child.emit("close", exitCode, signal);
+      });
+    }),
+  };
+  spawnedChildren.push(child);
+  return child;
 }
 
 function jsonSchemaFrom(args) {

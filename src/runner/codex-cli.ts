@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,21 +6,20 @@ import type { RunAiStageOptions } from "./ai.js";
 import {
   cliModelName,
   commandParts,
+  runStreamingCommand,
   strictOutputSchema,
   stringValue,
 } from "./cli-adapter-utils.js";
 
-export function runCodexCliStage({
+export async function runCodexCliStage({
   options,
   profile,
   profileName,
-  tools,
 }: {
   options: RunAiStageOptions;
   profile: Record<string, unknown>;
   profileName: string;
-  tools: string[];
-}): string {
+}): Promise<string> {
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-codex-"));
   const schemaFile = join(contextDir, `${options.stage}.schema.json`);
   const outputFile = join(contextDir, `${options.stage}.output.json`);
@@ -45,23 +43,22 @@ export function runCodexCliStage({
   ];
   options.logger?.event("ai.request.start", {
     adapter: "cli-codex",
-    max_turns: options.maxTurns,
     model,
     profile: profileName,
     provider: "cli-codex",
-    tools: tools.join(","),
   });
 
-  const output = execFileSync(command, args, {
+  const output = await runStreamingCommand({
+    args,
+    command,
     cwd: options.cwd,
     env: codexEnv(profile, contextDir),
     input: cliPrompt(options),
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ["pipe", "pipe", "pipe"],
   });
   options.logger?.event("ai.request.done", {
     adapter: "cli-codex",
-    output_chars: output.toString("utf8").length,
+    stderr_chars: output.stderr.length,
+    stdout_chars: output.stdout.length,
     profile: profileName,
   });
 

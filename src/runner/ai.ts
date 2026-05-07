@@ -92,7 +92,6 @@ async function runAiStageWithProfile(
       options,
       profile,
       profileName,
-      tools: toolsForStage(options),
     });
   }
   if (adapter === "cli-claude-code") {
@@ -100,7 +99,6 @@ async function runAiStageWithProfile(
       options,
       profile,
       profileName,
-      tools: toolsForStage(options),
     });
   }
   if (adapter !== "ai-sdk-agentool") {
