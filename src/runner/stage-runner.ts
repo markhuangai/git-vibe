@@ -15,6 +15,13 @@ import { renderPrompts } from "./prompts.js";
 import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
 import { applyStageLabelTransition, publishStageResultComment } from "./stage-publishing.js";
+import {
+  buildValidationRepairPrompt,
+  runValidationCommand,
+  validationRepairAttemptsFor,
+  validationRepairMaxTurnsFor,
+  type ValidationCommandFailure,
+} from "./validation.js";
 import { stageDefinitions } from "../shared/stages.js";
 import { implementationIssueBody } from "../shared/traceability.js";
 import type {
@@ -69,21 +76,99 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   );
   logger.event("context.persisted", { file: `git-vibe-${options.stage}-context.json` });
 
+  const aiRunOptions = {
+    config,
+    cwd: options.cwd,
+    logger,
+    maxTurns: options.maxTurns,
+    prompt: prompts.prompt,
+    schema,
+    schemaId: definition.schemaId,
+    stage: options.stage,
+    stageDefinition: definition,
+    system: prompts.system,
+  };
   const content = options.dryRun
     ? dryRunContent(options.stage, context, logger)
-    : await runAiStage({
-        config,
-        cwd: options.cwd,
-        logger,
-        maxTurns: options.maxTurns,
-        prompt: prompts.prompt,
-        schema,
-        schemaId: definition.schemaId,
-        stage: options.stage,
-        stageDefinition: definition,
-        system: prompts.system,
-      });
+    : await runAiStage(aiRunOptions);
+  let result = await stageRunResult({
+    content,
+    context,
+    definition,
+    logger,
+    options,
+  });
+  result = await applyDeterministicWrites({
+    client,
+    config,
+    context,
+    logger,
+    options,
+    repair: validationRepairRunner({ aiRunOptions, config, context, definition, logger, options }),
+    result,
+  });
+
+  logger.event("stage.done", {
+    status: result.status,
+  });
+  return result;
+}
+
+function validationRepairRunner({
+  aiRunOptions,
+  config,
+  context,
+  definition,
+  logger,
+  options,
+}: {
+  aiRunOptions: Parameters<typeof runAiStage>[0];
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+}) {
+  return async (
+    failure: ValidationCommandFailure,
+    attempt: number,
+    maxAttempts: number,
+  ): Promise<StageRunResult> =>
+    stageRunResult({
+      content: await runAiStage({
+        ...aiRunOptions,
+        maxTurns: validationRepairMaxTurnsFor(config, options),
+        prompt: buildValidationRepairPrompt({
+          attempt,
+          basePrompt: aiRunOptions.prompt,
+          cwd: options.cwd,
+          failure,
+          maxAttempts,
+          runner: options,
+        }),
+      }),
+      context,
+      definition,
+      logger,
+      options,
+    });
+}
+
+async function stageRunResult({
+  content,
+  context,
+  definition,
+  logger,
+  options,
+}: {
+  content: string;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<StageRunResult> {
   logger.event("output.validation.start", { schema_id: definition.schemaId });
+  const schema = loadStageSchema(definition.schemaFile);
   const parsedOutput = await validateOutput({ content, schema, schemaId: definition.schemaId });
   logger.event("output.validation.done", {
     status: String(parsedOutput.status || "completed"),
@@ -101,18 +186,13 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     summary: String(parsedOutput.summary || `${options.stage} completed`),
     validationErrors: [],
   };
+  const contextDir = process.env.RUNNER_TEMP || options.cwd;
   result.resultFile = writeStageResultFile({
     directory: contextDir,
     result,
     stage: options.stage,
   });
   logger.event("result.persisted", { file: `git-vibe-${options.stage}-result.json` });
-
-  await applyDeterministicWrites({ client, config, context, logger, options, parsedOutput });
-
-  logger.event("stage.done", {
-    status: String(parsedOutput.status || "completed"),
-  });
   return result;
 }
 
@@ -167,64 +247,133 @@ async function applyDeterministicWrites(options: {
   context: ContextPacket;
   logger: StageLogger;
   options: RunnerOptions;
-  parsedOutput: JsonObject;
-}): Promise<void> {
+  repair: (
+    failure: ValidationCommandFailure,
+    attempt: number,
+    maxAttempts: number,
+  ) => Promise<StageRunResult>;
+  result: StageRunResult;
+}): Promise<StageRunResult> {
   if (options.options.dryRun) {
     options.logger.event("writes.skip", { reason: "dry-run" });
-    return;
+    return options.result;
   }
 
-  const status = String(options.parsedOutput.status || "completed");
+  const status = options.result.status;
   if (status !== "completed") {
-    await publishStageResultComment({ ...options, runner: options.options });
-    await applyStageLabelTransition({ ...options, runner: options.options });
+    await publishStageResultComment({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+      runner: options.options,
+    });
+    await applyStageLabelTransition({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+      runner: options.options,
+    });
     options.logger.event("writes.skip", { reason: "status", status });
-    return;
+    return options.result;
   }
 
   if (stageDefinitions[options.options.stage].access === "read-only") {
-    await publishStageResultComment({ ...options, runner: options.options });
-    await applyStageLabelTransition({ ...options, runner: options.options });
-    return;
+    await publishStageResultComment({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+      runner: options.options,
+    });
+    await applyStageLabelTransition({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+      runner: options.options,
+    });
+    return options.result;
   }
 
   if (options.options.stage === "implement") {
-    await applyStageLabelTransition({ ...options, runner: options.options });
-    await commitImplementation(options);
+    await applyStageLabelTransition({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+      runner: options.options,
+    });
+    return commitImplementation(options);
   }
-  if (options.options.stage === "materialize") await createImplementationIssue(options);
+  if (options.options.stage === "materialize")
+    await createImplementationIssue({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+    });
   if (options.options.stage === "create-pr") {
-    const pullRequest = await createPullRequest(options);
+    const pullRequest = await createPullRequest({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+    });
     await publishStageResultComment({
       ...options,
       links: pullRequestLinks(pullRequest),
+      parsedOutput: options.result.parsedOutput,
       runner: options.options,
     });
-    await applyStageLabelTransition({ ...options, runner: options.options });
+    await applyStageLabelTransition({
+      ...options,
+      parsedOutput: options.result.parsedOutput,
+      runner: options.options,
+    });
   }
   if (options.options.stage === "address-pr-feedback") {
-    await commitImplementation(options);
-    await publishStageResultComment({ ...options, runner: options.options });
+    const result = await commitImplementation(options);
+    if (result.status === "completed")
+      await publishStageResultComment({
+        ...options,
+        parsedOutput: result.parsedOutput,
+        runner: options.options,
+      });
+    return result;
   }
+  return options.result;
 }
 
 async function commitImplementation({
+  client,
   config,
   context,
   logger,
   options,
+  repair,
+  result,
 }: {
+  client: GitHubClient;
   config: GitVibeConfig;
   context: ContextPacket;
   logger: StageLogger;
   options: RunnerOptions;
-}): Promise<void> {
+  repair: (
+    failure: ValidationCommandFailure,
+    attempt: number,
+    maxAttempts: number,
+  ) => Promise<StageRunResult>;
+  result: StageRunResult;
+}): Promise<StageRunResult> {
   const branch = branchName(context.artifact.number);
   logger.event("git.branch.checkout", { branch });
   execFileSync("git", ["checkout", "-B", branch], { cwd: options.cwd, stdio: "inherit" });
-  for (const command of testCommandsFor(config)) {
-    logger.event("tests.run", { command });
-    execFileSync(command, { cwd: options.cwd, shell: true, stdio: "inherit" });
+  const finalResult = await runValidationWithRepair({ config, logger, options, repair, result });
+  if (finalResult.status !== "completed") {
+    await publishStageResultComment({
+      client,
+      context,
+      logger,
+      parsedOutput: finalResult.parsedOutput,
+      runner: options,
+    });
+    await applyStageLabelTransition({
+      client,
+      context,
+      logger,
+      parsedOutput: finalResult.parsedOutput,
+      runner: options,
+    });
+    logger.event("writes.skip", { reason: "status", status: finalResult.status });
+    return finalResult;
   }
   logger.event("tests.done");
   const status = execFileSync("git", ["status", "--porcelain"], { cwd: options.cwd })
@@ -232,7 +381,7 @@ async function commitImplementation({
     .trim();
   if (!status) {
     logger.event("git.no_changes");
-    return;
+    return finalResult;
   }
   logger.event("git.status.changed", { files: summarizeGitStatus(status) });
 
@@ -263,6 +412,61 @@ async function commitImplementation({
     { cwd: options.cwd, stdio: "inherit" },
   );
   logger.event("git.push.done", { branch });
+  return finalResult;
+}
+
+async function runValidationWithRepair({
+  config,
+  logger,
+  options,
+  repair,
+  result,
+}: {
+  config: GitVibeConfig;
+  logger: StageLogger;
+  options: RunnerOptions;
+  repair: (
+    failure: ValidationCommandFailure,
+    attempt: number,
+    maxAttempts: number,
+  ) => Promise<StageRunResult>;
+  result: StageRunResult;
+}): Promise<StageRunResult> {
+  const maxAttempts = validationRepairAttemptsFor(config, options);
+  let current = result;
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      runValidationCommands(config, logger, options.cwd);
+      return current;
+    } catch (error) {
+      if (!(error instanceof Error && "failure" in error)) throw error;
+      const failure = (error as { failure: ValidationCommandFailure }).failure;
+      if (attempt >= maxAttempts) {
+        logger.event("tests.repair.exhausted", {
+          attempts: maxAttempts,
+          command: failure.command,
+        });
+        throw error;
+      }
+
+      logger.event("tests.repair.start", {
+        attempt: attempt + 1,
+        command: failure.command,
+        max_attempts: maxAttempts,
+      });
+      current = await repair(failure, attempt + 1, maxAttempts);
+      if (current.status !== "completed") return current;
+      logger.event("tests.repair.done", { attempt: attempt + 1, status: current.status });
+    }
+  }
+}
+
+function runValidationCommands(config: GitVibeConfig, logger: StageLogger, cwd: string): void {
+  for (const command of testCommandsFor(config)) {
+    logger.event("tests.run", { command });
+    runValidationCommand(cwd, command);
+  }
 }
 
 async function createImplementationIssue({

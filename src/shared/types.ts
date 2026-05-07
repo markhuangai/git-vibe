@@ -37,6 +37,8 @@ export interface RunnerOptions {
   stage: Stage;
   stageTimeoutMinutes: number;
   token: string;
+  validationRepairAttempts?: number;
+  validationRepairMaxTurns?: number;
   workflowRunUrl?: string;
 }
 

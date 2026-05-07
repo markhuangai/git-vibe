@@ -106,6 +106,9 @@ ai:
     default_max_turns: 90
     implementation_max_turns: 120
     feedback_max_turns: 120
+    review_max_iterations: 5
+    validation_repair_attempts: 2
+    validation_repair_max_turns: 90
     max_context_items: 200
     max_files_per_stage: 80
   stages:

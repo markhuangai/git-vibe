@@ -22,6 +22,11 @@ on:
         required: false
         type: number
         default: 120
+      develop_timeout_minutes:
+        description: Maximum minutes for the full implement/review/PR loop job.
+        required: false
+        type: number
+        default: 240
       review_timeout_minutes:
         description: Maximum minutes for the review matrix job.
         required: false
@@ -42,6 +47,21 @@ on:
         required: false
         type: number
         default: 120
+      review_max_iterations:
+        description: Maximum review-to-implementation loopbacks before failing.
+        required: false
+        type: number
+        default: 5
+      validation_repair_attempts:
+        description: Maximum validation repair attempts inside each implementation run.
+        required: false
+        type: number
+        default: 2
+      validation_repair_max_turns:
+        description: Maximum AI turns for each validation repair attempt.
+        required: false
+        type: number
+        default: 90
       dry-run:
         description: Validate and describe actions without writing to GitHub.
         required: false
@@ -83,6 +103,11 @@ on:
         required: false
         type: number
         default: 120
+      develop_timeout_minutes:
+        description: Maximum minutes for the full implement/review/PR loop job.
+        required: false
+        type: number
+        default: 240
       review_timeout_minutes:
         description: Maximum minutes for the review matrix job.
         required: false
@@ -103,6 +128,21 @@ on:
         required: false
         type: number
         default: 120
+      review_max_iterations:
+        description: Maximum review-to-implementation loopbacks before failing.
+        required: false
+        type: number
+        default: 5
+      validation_repair_attempts:
+        description: Maximum validation repair attempts inside each implementation run.
+        required: false
+        type: number
+        default: 2
+      validation_repair_max_turns:
+        description: Maximum AI turns for each validation repair attempt.
+        required: false
+        type: number
+        default: 90
       dry-run:
         description: Validate and describe actions without writing to GitHub.
         required: false
@@ -189,11 +229,15 @@ jobs:
           path: ${{ runner.temp }}/git-vibe-investigate-result.json
           if-no-files-found: ignore
 
-  implement:
+  develop:
     runs-on: ${{ inputs.runner }}
     needs: investigate
     if: needs.investigate.outputs.status == 'completed'
-    timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
+    timeout-minutes: ${{ fromJSON(inputs.develop_timeout_minutes) }}
+    outputs:
+      review-iterations: ${{ steps.develop.outputs.review-iterations }}
+      status: ${{ steps.develop.outputs.status }}
+      summary: ${{ steps.develop.outputs.summary }}
     permissions:
       contents: write
       issues: write
@@ -220,78 +264,20 @@ jobs:
         with:
           name: git-vibe-investigation-${{ inputs.issue-number }}
           path: .git-vibe/handoffs
-      - uses: ./.git-vibe/actions/implement
+      - id: develop
+        uses: ./.git-vibe/actions/develop
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
-          max-turns: ${{ inputs.implementation_max_turns }}
+          implementation-timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
+          review-timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+          publish-timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
+          max-turns: ${{ inputs.max_turns }}
+          implementation-max-turns: ${{ inputs.implementation_max_turns }}
+          publish-max-turns: 20
+          review-max-iterations: ${{ inputs.review_max_iterations }}
+          validation-repair-attempts: ${{ inputs.validation_repair_attempts }}
+          validation-repair-max-turns: ${{ inputs.validation_repair_max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           handoff-dir: .git-vibe/handoffs
-
-  review-matrix:
-    runs-on: ${{ inputs.runner }}
-    needs: implement
-    timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Checkout GitVibe action source
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.action-repository || github.repository }}
-          ref: ${{ inputs.action-ref || github.ref_name }}
-          path: .git-vibe/actions
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.3
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: ./.git-vibe/actions/review-matrix
-        with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-          issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
-          max-turns: ${{ inputs.max_turns }}
-          dry-run: ${{ inputs.dry-run }}
-          source-comment: ${{ inputs.source-comment }}
-
-  create-pr:
-    runs-on: ${{ inputs.runner }}
-    needs: review-matrix
-    timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-      - name: Checkout GitVibe action source
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.action-repository || github.repository }}
-          ref: ${{ inputs.action-ref || github.ref_name }}
-          path: .git-vibe/actions
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.3
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: ./.git-vibe/actions/create-pr
-        with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-          issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
-          max-turns: 20
-          dry-run: ${{ inputs.dry-run }}
-          source-comment: ${{ inputs.source-comment }}

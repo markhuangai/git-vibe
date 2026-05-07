@@ -1,0 +1,112 @@
+name: GitVibe develop loop
+description: Implement, review, repair, and publish a GitVibe pull request.
+
+inputs:
+  token:
+    description: GitHub token used for API access.
+    required: true
+  issue-number:
+    description: Issue number to implement.
+    required: true
+  implementation-timeout-minutes:
+    description: Maximum minutes allocated to each implementation stage run.
+    required: false
+    default: "120"
+  review-timeout-minutes:
+    description: Maximum minutes allocated to each review matrix run.
+    required: false
+    default: "60"
+  publish-timeout-minutes:
+    description: Maximum minutes allocated to PR creation.
+    required: false
+    default: "15"
+  max-turns:
+    description: Maximum AI turns allocated to review stages.
+    required: false
+    default: "90"
+  implementation-max-turns:
+    description: Maximum AI turns allocated to implementation stage runs.
+    required: false
+    default: "120"
+  publish-max-turns:
+    description: Maximum AI turns allocated to PR creation.
+    required: false
+    default: "20"
+  review-max-iterations:
+    description: Maximum review-to-implementation loopbacks before failing.
+    required: false
+    default: "5"
+  validation-repair-attempts:
+    description: Maximum validation repair attempts inside each implementation run.
+    required: false
+    default: "2"
+  validation-repair-max-turns:
+    description: Maximum AI turns for each validation repair attempt.
+    required: false
+    default: "90"
+  dry-run:
+    description: Describe work without mutating GitHub.
+    required: false
+    default: "false"
+  source-comment:
+    description: JSON source comment metadata for replying to command comments.
+    required: false
+    default: ""
+  handoff-dir:
+    description: Directory containing previous GitVibe stage result JSON files.
+    required: false
+    default: ""
+
+outputs:
+  summary:
+    description: Short develop summary.
+    value: ${{ steps.run.outputs.summary }}
+  status:
+    description: Final develop status.
+    value: ${{ steps.run.outputs.status }}
+  review-iterations:
+    description: Number of review loopbacks used.
+    value: ${{ steps.run.outputs.review-iterations }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build GitVibe action runtime
+      shell: bash
+      run: |
+        cd "$GITHUB_ACTION_PATH/.."
+        if command -v corepack >/dev/null 2>&1 && corepack enable; then
+          pnpm_cmd=(corepack pnpm)
+        elif command -v pnpm >/dev/null 2>&1; then
+          pnpm_cmd=(pnpm)
+        else
+          echo "::error::GitVibe requires pnpm or Corepack on the runner."
+          exit 127
+        fi
+        echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
+        "${pnpm_cmd[@]}" install --frozen-lockfile
+        "${pnpm_cmd[@]}" build
+    - name: Set up configured AI CLIs
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" implement
+        node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" review-matrix
+        node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" create-pr
+    - id: run
+      shell: bash
+      env:
+        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
+        GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        GITVIBE_IMPLEMENTATION_TIMEOUT_MINUTES: ${{ inputs.implementation-timeout-minutes }}
+        GITVIBE_REVIEW_TIMEOUT_MINUTES: ${{ inputs.review-timeout-minutes }}
+        GITVIBE_PUBLISH_TIMEOUT_MINUTES: ${{ inputs.publish-timeout-minutes }}
+        GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
+        GITVIBE_IMPLEMENTATION_MAX_TURNS: ${{ inputs.implementation-max-turns }}
+        GITVIBE_PUBLISH_MAX_TURNS: ${{ inputs.publish-max-turns }}
+        GITVIBE_REVIEW_MAX_ITERATIONS: ${{ inputs.review-max-iterations }}
+        GITVIBE_VALIDATION_REPAIR_ATTEMPTS: ${{ inputs.validation-repair-attempts }}
+        GITVIBE_VALIDATION_REPAIR_MAX_TURNS: ${{ inputs.validation-repair-max-turns }}
+        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
+        GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
+        GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
+      run: node "$GITHUB_ACTION_PATH/../dist/actions/run-develop.js"

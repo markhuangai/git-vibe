@@ -13,9 +13,10 @@
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
 - Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to `git-vibe/actions@main` until a release tag exists.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
-- `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
+- `investigate/`, `develop/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
-- `src/runner/actions/run-action.ts`: runner entry point built by composite actions before execution.
+- `src/runner/actions/run-action.ts`: single-stage runner entry point built by composite actions before execution.
+- `src/runner/actions/run-develop.ts`: develop workflow orchestrator for implementation validation repair, review loopback, and PR creation.
 - `src/runner`: config loading, context assembly, prompt rendering, schema validation, stage execution, result publishing, and `ai-sdk-agentool` integration.
 - `src/shared`: shared GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both the app and runner.
 - `package.json`: single package and lockfile for app, runner, and shared code. Runtime release separation is handled by source boundaries, Docker build output, and workflow path filters rather than package splitting.

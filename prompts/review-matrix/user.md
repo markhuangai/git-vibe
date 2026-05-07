@@ -15,13 +15,15 @@ Review the proposed change before PR creation or merge preparation. Report only 
 
 - Validate each finding against the diff or code path before reporting it.
 - Include file paths, commands, URLs, or schema fields that prove the issue.
-- Do not report preferences, speculative improvements, or broad refactors as blockers.
-- If no blocker exists, say so in `summary` and keep `findings` empty.
+- Do not report preferences, speculative improvements, over-engineering requests, or broad refactors as blockers.
+- If required fixes exist, keep `status` as `completed`, set `next_state` to `changes-required`, and put only actionable required fixes in `findings`.
+- If no required fix exists, say so in `summary`, keep `findings` empty, and set `next_state` to `review-passed`.
+- Use `blocked` only when the review itself cannot be completed or a maintainer decision is required before code can continue.
   </finding_standard>
 
 <required_fields_guidance>
 
 - `tests`: Review-relevant checks observed or recommended.
 - `findings`: Blocking issues only, ordered by severity.
-- `next_state`: Use `review-passed` when completed or `blocked` when required fixes remain.
+- `next_state`: Use `review-passed` when the branch can proceed to PR creation, `changes-required` when implementation should loop again, or `blocked` when automation must stop.
   </required_fields_guidance>

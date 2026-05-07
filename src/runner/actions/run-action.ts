@@ -29,18 +29,21 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     const token = requiredEnv(env, "GITVIBE_GITHUB_TOKEN");
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
     const target = readTargetInputs(stage, env);
+    const maxTurns = numberEnv(env, "GITVIBE_MAX_TURNS", 90);
     const result = await (runtime.runStage || runStage)({
       cwd: env.GITHUB_WORKSPACE || runtime.cwd || process.cwd(),
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
       handoffDir: envValue(env, "GITVIBE_HANDOFF_DIR") || undefined,
       issueNumber: target.issueNumber,
-      maxTurns: numberEnv(env, "GITVIBE_MAX_TURNS", 90),
+      maxTurns,
       prNumber: target.prNumber,
       repository,
       sourceComment: parseSourceComment(envValue(env, "GITVIBE_SOURCE_COMMENT")),
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
       token,
+      validationRepairAttempts: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_ATTEMPTS", 2),
+      validationRepairMaxTurns: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_MAX_TURNS", 90),
       workflowRunUrl: workflowRunUrl(env),
     });
 

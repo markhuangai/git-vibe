@@ -86,6 +86,13 @@ source-backed composite actions. Each composite action then reads
 `.github/git-vibe.yml` for its stage and installs Codex CLI or Claude Code only
 when the selected profile uses `cli-codex` or `cli-claude-code`.
 
+`develop.yml` runs investigation first, then a bounded implementation loop. Each
+implementation run validates with the repository's configured `tests.commands`;
+failed validation output is fed back into a repair attempt before GitVibe
+commits. After validation passes, `review-matrix` can send evidence-backed
+required fixes back to implementation up to `review_max_iterations`, which
+defaults to five loopbacks. A passing review proceeds to PR creation.
+
 ## Quick Start
 
 ### 1. Copy the consumer starter

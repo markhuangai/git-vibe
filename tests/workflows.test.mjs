@@ -41,6 +41,7 @@ const consumerWorkflows = [
 const actionFiles = [
   "address-pr-feedback/action.yml",
   "create-pr/action.yml",
+  "develop/action.yml",
   "implement/action.yml",
   "investigate/action.yml",
   "materialize/action.yml",
@@ -143,7 +144,9 @@ describe("GitVibe action runtime setup", () => {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
       const setupStep = content.indexOf("dist/actions/setup-ai-cli.js");
-      const runStep = content.indexOf("dist/actions/run-action.js");
+      const runActionStep = content.indexOf("dist/actions/run-action.js");
+      const runDevelopStep = content.indexOf("dist/actions/run-develop.js");
+      const runStep = Math.max(runActionStep, runDevelopStep);
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
       expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
@@ -229,10 +232,10 @@ describe("GitVibe workflow write permissions", () => {
 });
 
 describe("GitVibe develop workflow handoff", () => {
-  it("gates implementation on completed investigation and passes the handoff artifact", () => {
+  it("gates the develop loop on completed investigation and passes the handoff artifact", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
     const investigate = workflow.jobs?.investigate;
-    const implement = workflow.jobs?.implement;
+    const develop = workflow.jobs?.develop;
 
     expect(investigate?.outputs).toMatchObject({
       status: "${{ steps.investigate.outputs.status }}",
@@ -249,19 +252,22 @@ describe("GitVibe develop workflow handoff", () => {
         path: "${{ runner.temp }}/git-vibe-investigate-result.json",
       }),
     });
-    expect(implement).toMatchObject({
+    expect(develop).toMatchObject({
       if: "needs.investigate.outputs.status == 'completed'",
       needs: "investigate",
     });
     expect(
-      implement?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
+      develop?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
     ).toMatchObject({
       with: expect.objectContaining({ path: ".git-vibe/handoffs" }),
     });
     expect(
-      implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement"),
+      develop?.steps?.find((step) => step.uses === "./.git-vibe/actions/develop"),
     ).toMatchObject({
-      with: expect.objectContaining({ "handoff-dir": ".git-vibe/handoffs" }),
+      with: expect.objectContaining({
+        "handoff-dir": ".git-vibe/handoffs",
+        "review-max-iterations": "${{ inputs.review_max_iterations }}",
+      }),
     });
   });
 });

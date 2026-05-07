@@ -112,11 +112,12 @@ flowchart TD
   E --> F{Critical questions answered?}
   F -->|no| D
   F -->|yes| G[Implement with investigation handoff]
-  G --> H[Run configured tests]
-  H --> I[Self-review]
-  I --> J[Review matrix]
-  J --> K{Pass?}
-  K -->|no| G
+  G --> H[Run configured validation]
+  H --> I{Validation passes?}
+  I -->|no| G
+  I -->|yes| J[Review matrix]
+  J --> K{Review passed?}
+  K -->|changes required| G
   K -->|yes| L[Create or update PR]
   L --> M[Wait for human review]
 ```
@@ -127,6 +128,21 @@ Review matrix defaults:
 - test coverage review
 - security and regression review
 - maintainability review
+
+The implementation stage has an inner validation repair loop. GitVibe runs the
+configured `tests.commands` mechanically after the AI returns JSON. If a command
+fails, GitVibe feeds the failed command, bounded stdout/stderr excerpts, git
+status, and diff stat back into the implementation stage for a bounded repair
+attempt before any commit is created. `validation_repair_attempts` is scoped to
+one implementation run, and each repair attempt gets
+`validation_repair_max_turns` turns for adapters that support turn limits.
+
+The review matrix forms a second loop. Review findings must be evidence-backed
+required fixes; speculative or over-engineering suggestions are non-blocking.
+When review returns `changes-required`, GitVibe persists the review result as a
+handoff and runs implementation again. `review_max_iterations` counts these
+review-to-implementation loopbacks and defaults to five. When review returns
+`review-passed`, GitVibe creates or updates the pull request.
 
 ## Bug Investigation Flow
 

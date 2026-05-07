@@ -28,6 +28,14 @@ inputs:
     description: Directory containing previous GitVibe stage result JSON files.
     required: false
     default: ""
+  validation-repair-attempts:
+    description: Maximum validation repair attempts before implementation fails.
+    required: false
+    default: "2"
+  validation-repair-max-turns:
+    description: Maximum AI turns for each validation repair attempt.
+    required: false
+    default: "90"
 
 outputs:
   summary:
@@ -65,4 +73,6 @@ runs:
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
+        GITVIBE_VALIDATION_REPAIR_ATTEMPTS: ${{ inputs.validation-repair-attempts }}
+        GITVIBE_VALIDATION_REPAIR_MAX_TURNS: ${{ inputs.validation-repair-max-turns }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" implement
