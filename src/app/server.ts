@@ -310,17 +310,6 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (parsed.command === "approve" && !options.payload.issue?.pull_request) {
-    await acknowledgeCommand(options);
-    await addIssueLabel(options, issueNumber, gitVibeLabels.approved.name);
-    await dispatchWorkflow(
-      options,
-      "develop.yml",
-      commandInputs(options, { "issue-number": issueNumber }, "issue-comment"),
-    );
-    return;
-  }
-
   const workflow = commandWorkflow(parsed.command);
   if (workflow && !options.payload.issue?.pull_request) {
     await acknowledgeCommand(options);

@@ -143,7 +143,7 @@ describe("GitVibe app server command dispatch", () => {
 
     await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "/git-vibe approve", node_id: "issue-approve-comment" },
+      comment: { body: "/git-vibe investigate", node_id: "issue-investigate-comment" },
       issue: { number: 2 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -174,7 +174,7 @@ describe("GitVibe app server command dispatch", () => {
       "discussion-comment",
     ]);
     expect(reactionVariables(client)).toEqual([
-      { content: "ROCKET", subjectId: "issue-approve-comment" },
+      { content: "ROCKET", subjectId: "issue-investigate-comment" },
       { content: "ROCKET", subjectId: "pr-feedback-comment" },
       { content: "ROCKET", subjectId: "discussion-materialize-comment" },
     ]);
@@ -356,23 +356,28 @@ describe("GitVibe app server dispatch edge cases", () => {
     });
   });
 
-  it("logs start as an unsupported command", async () => {
+  it("logs unsupported commands without dispatching workflows", async () => {
     const client = createClient();
     const log = vi.fn();
     const app = createApp({ client, log });
 
-    await app.handleWebhook("issue_comment", {
-      action: "created",
-      comment: { body: "/git-vibe start", node_id: "start-comment" },
-      issue: { number: 2 },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
+    for (const command of ["start", "approve"]) {
+      await app.handleWebhook("issue_comment", {
+        action: "created",
+        comment: { body: `/git-vibe ${command}`, node_id: `${command}-comment` },
+        issue: { number: 2 },
+        repository: repositoryPayload(),
+        sender: { login: "maintainer" },
+      });
+    }
 
     expect(workflowDispatches(client)).toEqual([]);
     expect(reactionVariables(client)).toEqual([]);
     expect(log).toHaveBeenCalledWith(
       "recognized command but no dispatch rule matched: /git-vibe start",
+    );
+    expect(log).toHaveBeenCalledWith(
+      "recognized command but no dispatch rule matched: /git-vibe approve",
     );
   });
 });

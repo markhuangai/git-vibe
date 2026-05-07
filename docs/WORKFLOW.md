@@ -24,7 +24,7 @@ stateDiagram-v2
   BugValidation --> BugNeedsContext: feedback does not make sense, reset ready flag
   BugValidation --> ImplementationIssue: validation passes
 
-  ImplementationIssue --> Development: /git-vibe approve or protected approved label
+  ImplementationIssue --> Development: protected approved label
 
   Development --> PullRequest: branch, commits, tests, PR
   PullRequest --> Feedback: review comments or requested changes
@@ -64,7 +64,6 @@ Initial commands:
 /git-vibe investigate
 /git-vibe validate
 /git-vibe materialize
-/git-vibe approve
 /git-vibe address-feedback
 ```
 
@@ -177,7 +176,7 @@ sequenceDiagram
 
   alt validation passes
     App->>Issue: Mark ready-for-approval
-    Maint->>Issue: /git-vibe approve
+    Maint->>Issue: Apply git-vibe:approved label
   else validation fails
     App->>Issue: Remove ready/approved flag and wait for clarification
   end

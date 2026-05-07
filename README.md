@@ -47,7 +47,7 @@ AI output, and writes routine GitHub state changes with deterministic code.
 
 | GitHub problem                                  | GitVibe answer                                                                                                     |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then approve implementation             |
+| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then apply the protected approval label |
 | Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria, then materialize an implementation issue |
 | AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                          |
 | Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                        |
@@ -214,17 +214,18 @@ Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 Use `/git-vibe` in issues, discussions, and pull requests:
 
-| Command                      | Typical surface               | Effect                                                         |
-| ---------------------------- | ----------------------------- | -------------------------------------------------------------- |
-| `/git-vibe investigate`      | Bug issue                     | Runs investigation-only analysis and posts findings/questions  |
-| `/git-vibe summarize`        | Feature Discussion            | Summarizes the full conversation and open questions            |
-| `/git-vibe validate`         | Issue or Discussion           | Checks whether the current context is coherent and actionable  |
-| `/git-vibe materialize`      | Validated Discussion          | Creates or links an implementation issue                       |
-| `/git-vibe approve`          | Implementation issue          | Marks work as approved and dispatches the development pipeline |
-| `/git-vibe address-feedback` | Pull request or review thread | Applies requested PR feedback on the GitVibe branch            |
+| Command                      | Typical surface               | Effect                                                        |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `/git-vibe investigate`      | Bug issue                     | Runs investigation-only analysis and posts findings/questions |
+| `/git-vibe summarize`        | Feature Discussion            | Summarizes the full conversation and open questions           |
+| `/git-vibe validate`         | Issue or Discussion           | Checks whether the current context is coherent and actionable |
+| `/git-vibe materialize`      | Validated Discussion          | Creates or links an implementation issue                      |
+| `/git-vibe address-feedback` | Pull request or review thread | Applies requested PR feedback on the GitVibe branch           |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
+Apply the protected `git-vibe:approved` label to an implementation issue to
+dispatch the development pipeline.
 
 Accepted commands from admins and collaborators receive a `rocket` reaction
 before GitVibe dispatches the workflow. Discussion comments receive threaded
