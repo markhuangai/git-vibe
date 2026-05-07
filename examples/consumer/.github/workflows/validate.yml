@@ -38,3 +38,5 @@ jobs:
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
+      CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

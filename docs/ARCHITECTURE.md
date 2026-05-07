@@ -173,7 +173,7 @@ Required repository or organization secrets/variables:
 - `WEBHOOK_SECRET`: repository webhook shared secret used by the deploy workflow to set runtime `GITHUB_WEBHOOK_SECRET`.
 - `GITVIBE_AI_API_KEY`: preferred generic AI provider secret.
 - `GITVIBE_AI_MODEL`, `GITVIBE_AI_BASE_URL`, `GITVIBE_DISCUSSION_CATEGORY`, `GITVIBE_RUNNER`, `GITVIBE_LOG_LEVEL`: optional variables.
-- `CODEX_AUTH_JSON`, `CLAUDE_CODE_OAUTH_TOKEN`: optional CLI session credentials.
+- `CODEX_AUTH_JSON`, `CLAUDE_CODE_OAUTH_TOKEN`: optional session credentials for stages routed through CLI profiles.
 
 Self-hosted server runtime secrets:
 

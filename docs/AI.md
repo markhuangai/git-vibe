@@ -111,6 +111,7 @@ CLI authentication guidance:
 - API-key based OpenAI, Anthropic, OpenAI-compatible proxy, or Codex API style providers should go through `ai-sdk-agentool`.
 - Codex CLI should use `CODEX_AUTH_JSON` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner.
 - Claude Code CLI should use `CLAUDE_CODE_OAUTH_TOKEN`. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned secret name.
+- Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 
 ## Profile-Based Routing
 
@@ -150,10 +151,8 @@ ai:
   stages:
     investigate:
       profile: codex_cli
-      fallback_profile: local_proxy
     review-matrix:
       profiles:
-        - local_proxy
         - codex_cli
 ```
 

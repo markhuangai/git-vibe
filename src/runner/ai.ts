@@ -13,6 +13,13 @@ import { createWebFetch } from "agentool/web-fetch";
 import { createWebSearch } from "agentool/web-search";
 import { createWrite } from "agentool/write";
 import type { LanguageModel, ToolSet } from "ai";
+import {
+  activeProfileByName,
+  adapterName,
+  profileNamesForStage,
+  stageConfigFor,
+  stringValue,
+} from "./ai-config.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
 import { summarizeError } from "./logging.js";
@@ -195,51 +202,6 @@ function createTools(options: RunAiStageOptions): ToolSet {
   return tools;
 }
 
-function activeProfileByName(config: GitVibeConfig, profileName: string): Record<string, unknown> {
-  const ai = config.ai || {};
-  const profiles = (ai.profiles as Record<string, unknown> | undefined) || {};
-  return (profiles[profileName] as Record<string, unknown> | undefined) || {};
-}
-
-function adapterName(profile: Record<string, unknown>): string {
-  return String(profile.adapter || "ai-sdk-agentool");
-}
-
-function profileNamesForStage(config: GitVibeConfig, stage: Stage): string[] {
-  const stageConfig = stageConfigFor(config, stage);
-  const profileNames = explicitProfileNames(stageConfig) || [defaultProfileName(config)];
-  const fallback = stringValue(stageConfig.fallback_profile);
-
-  if (fallback && !profileNames.includes(fallback)) {
-    return [...profileNames, fallback];
-  }
-
-  return profileNames;
-}
-
-function explicitProfileNames(stageConfig: Record<string, unknown>): string[] | undefined {
-  const profile = stringValue(stageConfig.profile);
-  if (profile && stageConfig.profiles !== undefined) {
-    throw new Error("Stage AI config cannot define both profile and profiles.");
-  }
-  if (profile) return [profile];
-  if (stageConfig.profiles === undefined) return undefined;
-  if (!Array.isArray(stageConfig.profiles) || stageConfig.profiles.length === 0) {
-    throw new Error("Stage AI config profiles must be a non-empty string array.");
-  }
-
-  const profiles = stageConfig.profiles.map((value) => stringValue(value));
-  if (profiles.some((value) => !value)) {
-    throw new Error("Stage AI config profiles must be a non-empty string array.");
-  }
-
-  return [...new Set(profiles as string[])];
-}
-
-function defaultProfileName(config: GitVibeConfig): string {
-  return stringValue(config.ai?.default_profile) || "local_proxy";
-}
-
 function modelName(profile: Record<string, unknown>): string {
   const provider = profile.provider as Record<string, unknown> | undefined;
   return envValue(provider?.model_variable, "GITVIBE_AI_MODEL");
@@ -296,26 +258,6 @@ function validateStageConfig(options: RunAiStageOptions): void {
       `ai.stages.${options.stage}.access must match canonical access ${options.stageDefinition.access}.`,
     );
   }
-}
-
-function stageConfigFor(config: GitVibeConfig, stage: Stage): Record<string, unknown> {
-  const stages = config.ai?.stages;
-  if (stages === undefined) return {};
-  if (!isRecord(stages)) throw new Error("ai.stages must be an object.");
-
-  const stageConfig = stages[stage];
-  if (stageConfig === undefined) return {};
-  if (!isRecord(stageConfig)) throw new Error(`ai.stages.${stage} must be an object.`);
-
-  return stageConfig;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function envValue(variableName: unknown, fallbackName: string, fallbackValue?: string): string {

@@ -81,9 +81,10 @@ authority. Maintainers stay in control of approval and release decisions.
 | `address-feedback.yml` | Apply requested PR feedback to the existing GitVibe branch  | Yes, on the existing PR branch    |
 | `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                   |
 
-The reusable workflows install Node `22` and pnpm `10.33.3` before building and
-running the source-backed composite actions. Consumer repos can run on
-GitHub-hosted runners or a configured self-hosted runner label.
+The reusable workflows install Node `22` and pnpm `10.33.3` before building the
+source-backed composite actions. Each composite action then reads
+`.github/git-vibe.yml` for its stage and installs Codex CLI or Claude Code only
+when the selected profile uses `cli-codex` or `cli-claude-code`.
 
 ## Quick Start
 
@@ -128,8 +129,8 @@ Secrets belong in GitHub repository or organization secrets, not in
 | `GITVIBE_AI_API_KEY`      | Yes      | API key for OpenAI, Anthropic, or an OpenAI-compatible endpoint             |
 | `GITVIBE_GITHUB_TOKEN`    | Yes      | Fine-grained PAT for server-side and workflow GitHub writes                 |
 | `WEBHOOK_SECRET`          | Yes      | GitHub webhook shared secret; deployment maps it to `GITHUB_WEBHOOK_SECRET` |
-| `CODEX_AUTH_JSON`         | Optional | Trusted self-hosted runner smoke testing for Codex CLI auth                 |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Optional | Trusted self-hosted runner smoke testing for Claude Code install/auth flows |
+| `CODEX_AUTH_JSON`         | Optional | Codex CLI `auth.json` contents for stages using `cli-codex`                 |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Optional | Claude Code OAuth token for stages using `cli-claude-code`                  |
 
 Useful variables:
 

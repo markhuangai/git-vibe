@@ -48,6 +48,9 @@ runs:
         echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
         "${pnpm_cmd[@]}" install --frozen-lockfile
         "${pnpm_cmd[@]}" build
+    - name: Set up configured AI CLI
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" materialize
     - id: run
       shell: bash
       env:

@@ -15,6 +15,11 @@ const aiEnv = {
   GITVIBE_AI_MODEL: "${{ vars.GITVIBE_AI_MODEL }}",
 };
 
+const cliSecretEnv = {
+  CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+  CODEX_AUTH_JSON: "${{ secrets.CODEX_AUTH_JSON }}",
+};
+
 const reusableWorkflows = [
   ".github/workflows/address-feedback.yml",
   ".github/workflows/develop.yml",
@@ -56,6 +61,9 @@ describe("GitVibe workflow wiring", () => {
       ).toBeGreaterThan(0);
       for (const step of steps) {
         expect(step.env, `${file} ${step.uses} receives AI env`).toMatchObject(aiEnv);
+        expect(step.env, `${file} ${step.uses} receives CLI secret env`).toMatchObject(
+          cliSecretEnv,
+        );
       }
     }
   });
@@ -69,6 +77,15 @@ describe("GitVibe workflow wiring", () => {
       expect(workflow.on?.workflow_dispatch, `${file} declares workflow_dispatch`).toBeTruthy();
       expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} declares AI key`).toMatchObject({
         required: true,
+      });
+      expect(workflowCall?.secrets?.CODEX_AUTH_JSON, `${file} declares Codex auth`).toMatchObject({
+        required: false,
+      });
+      expect(
+        workflowCall?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
+        `${file} declares Claude Code auth`,
+      ).toMatchObject({
+        required: false,
       });
       expect(
         checkoutSteps.some((step) => step.name === "Checkout GitVibe action source"),
@@ -88,6 +105,8 @@ describe("GitVibe workflow wiring", () => {
       const reusableJob = reusableJobs[0];
       expect(reusableJobs.length, `${file} should call a GitVibe reusable workflow`).toBe(1);
       expect(reusableJob?.secrets).toMatchObject({
+        CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+        CODEX_AUTH_JSON: "${{ secrets.CODEX_AUTH_JSON }}",
         GITVIBE_AI_API_KEY: "${{ secrets.GITVIBE_AI_API_KEY }}",
         GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
       });
@@ -123,9 +142,11 @@ describe("GitVibe action runtime setup", () => {
     for (const file of actionFiles) {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
+      const setupStep = content.indexOf("dist/actions/setup-ai-cli.js");
       const runStep = content.indexOf("dist/actions/run-action.js");
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
+      expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
       expect(content, `${file} should prefer Corepack when available`).toContain(
         "command -v corepack",
       );
@@ -142,6 +163,8 @@ describe("GitVibe action runtime setup", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
+      expect(setupStep, `${file} should set up CLIs before stage execution`).toBeLessThan(runStep);
+      expect(buildStep, `${file} should build before setting up CLIs`).toBeLessThan(setupStep);
     }
   });
 
