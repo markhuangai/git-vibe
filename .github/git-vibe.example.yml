@@ -126,6 +126,8 @@ ai:
     review_max_iterations: 5
     validation_repair_attempts: 2
     validation_repair_max_turns: 90
+    request_retry_attempts: 3
+    request_retry_delay_seconds: 60
     max_context_items: 200
     max_files_per_stage: 80
   stages:

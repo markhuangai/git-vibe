@@ -188,6 +188,7 @@ Default AI budgets:
 - validation repair max turns: `90` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
 - validation repair attempts: `2` per implementation run.
 - review-to-implementation loopbacks: `5`.
+- provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
 - investigation/refinement/validation/review timeout: `60` minutes.
 - implementation and PR feedback timeout: `120` minutes.
 - PR creation/linking timeout: `15` minutes.

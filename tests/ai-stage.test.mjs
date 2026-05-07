@@ -12,10 +12,11 @@ vi.mock("ai", () => ({
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 
-const { runAiStage } = await import("../src/runner/ai.ts");
+const { retryDelayMsForHeaders, runAiStage } = await import("../src/runner/ai.ts");
 const { stageDefinitions } = await import("../src/shared/stages.ts");
 
 const originalEnv = { ...process.env };
+const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
   generateText.mockReset();
@@ -31,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env = { ...originalEnv };
+  globalThis.fetch = originalFetch;
 });
 
 describe("AI stage runner OpenAI-compatible profiles", () => {
@@ -256,6 +258,28 @@ function mockToolSummaryGenerateText() {
   });
 }
 
+async function createRetryingProviderFetch({ config = {}, logger }) {
+  generateText.mockResolvedValueOnce({
+    steps: [],
+    text: '{"stage":"investigate","status":"completed"}',
+  });
+
+  await runAiStage({
+    config,
+    cwd: process.cwd(),
+    logger,
+    maxTurns: 1,
+    prompt: "Prompt",
+    schema: {},
+    schemaId: "schema",
+    stage: "investigate",
+    stageDefinition: stageDefinitions.investigate,
+    system: "System",
+  });
+
+  return createOpenAI.mock.calls.at(-1)[0].fetch;
+}
+
 function toolSummaryCalls() {
   return [
     { input: { path: "src", pattern: "**/*.ts" }, toolName: "glob" },
@@ -313,7 +337,9 @@ describe("AI stage runner provider failures", () => {
       }),
     ).rejects.toThrow("AI response did not contain a JSON object");
 
-    expect(createAnthropic).toHaveBeenCalledWith({ apiKey: "anthropic-key" });
+    expect(createAnthropic).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: "anthropic-key", fetch: expect.any(Function) }),
+    );
   });
 
   it("requires configured AI environment variables", async () => {
@@ -332,6 +358,168 @@ describe("AI stage runner provider failures", () => {
         system: "System",
       }),
     ).rejects.toThrow("GITVIBE_AI_MODEL is required");
+  });
+});
+
+describe("AI stage runner provider HTTP retries", () => {
+  it("retries transient provider fetch failures with the configured delay", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = await createRetryingProviderFetch({
+      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      logger,
+    });
+
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Cannot connect to API: Headers Timeout Error"))
+      .mockResolvedValueOnce(new globalThis.Response("ok", { status: 200 }));
+
+    await expect(retryingFetch("https://api.test/v1/chat/completions")).resolves.toMatchObject({
+      status: 200,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(logger.event).toHaveBeenCalledWith("ai.http.retry", {
+      attempt: 1,
+      delay_ms: 0,
+      error: "Cannot connect to API: Headers Timeout Error",
+      max_retries: 3,
+    });
+  });
+
+  it("retries 429 provider responses using retry headers", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = await createRetryingProviderFetch({ logger });
+
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new globalThis.Response("rate limited", {
+          headers: { "retry-after-ms": "0" },
+          status: 429,
+        }),
+      )
+      .mockResolvedValueOnce(new globalThis.Response("ok", { status: 200 }));
+
+    await expect(retryingFetch("https://api.test/v1/chat/completions")).resolves.toMatchObject({
+      status: 200,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(logger.event).toHaveBeenCalledWith("ai.http.retry", {
+      attempt: 1,
+      delay_ms: 0,
+      max_retries: 3,
+      status: 429,
+    });
+    expect(retryDelayMsForHeaders(new globalThis.Headers({ "retry-after": "2" }), 60000)).toBe(
+      2000,
+    );
+  });
+});
+
+describe("AI stage runner provider retry delays", () => {
+  it("parses alternate retry timing headers and falls back to the default delay", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+
+    expect(
+      retryDelayMsForHeaders(
+        new globalThis.Headers({ "retry-after": new Date(4000).toUTCString() }),
+        60000,
+      ),
+    ).toBe(3000);
+    expect(
+      retryDelayMsForHeaders(new globalThis.Headers({ "x-ratelimit-reset": "5" }), 60000),
+    ).toBe(4000);
+    expect(retryDelayMsForHeaders(new globalThis.Headers({ "retry-after": "soon" }), 60000)).toBe(
+      60000,
+    );
+    expect(retryDelayMsForHeaders(undefined, 60000)).toBe(60000);
+
+    now.mockRestore();
+  });
+});
+
+describe("AI stage runner provider retry limits", () => {
+  it("does not retry non-retryable provider responses", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = await createRetryingProviderFetch({
+      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      logger,
+    });
+
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new globalThis.Response("bad request", { status: 400 }));
+
+    await expect(retryingFetch("https://api.test/v1/chat/completions")).resolves.toMatchObject({
+      status: 400,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(logger.event).not.toHaveBeenCalledWith("ai.http.retry", expect.any(Object));
+  });
+
+  it("stops retrying provider responses after the configured retry budget", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = await createRetryingProviderFetch({
+      config: { ai: { budgets: { request_retry_attempts: 1, request_retry_delay_seconds: 0 } } },
+      logger,
+    });
+
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new globalThis.Response("rate limited", {
+          headers: { "retry-after-ms": "0" },
+          status: 429,
+        }),
+      )
+      .mockResolvedValueOnce(new globalThis.Response("still limited", { status: 429 }));
+
+    await expect(retryingFetch("https://api.test/v1/chat/completions")).resolves.toMatchObject({
+      status: 429,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(logger.event.mock.calls.filter(([name]) => name === "ai.http.retry")).toHaveLength(1);
+  });
+});
+
+describe("AI stage runner provider retry error classification", () => {
+  it("retries provider errors marked retryable", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = await createRetryingProviderFetch({
+      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      logger,
+    });
+
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValueOnce({ isRetryable: true })
+      .mockResolvedValueOnce(new globalThis.Response("ok", { status: 200 }));
+
+    await expect(retryingFetch("https://api.test/v1/chat/completions")).resolves.toMatchObject({
+      status: 200,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(logger.event.mock.calls.filter(([name]) => name === "ai.http.retry")).toHaveLength(1);
+  });
+
+  it("does not retry provider errors marked non-retryable", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = await createRetryingProviderFetch({
+      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      logger,
+    });
+    const error = { isRetryable: false };
+    globalThis.fetch = vi.fn().mockRejectedValueOnce(error);
+
+    await expect(retryingFetch("https://api.test/v1/chat/completions")).rejects.toBe(error);
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(logger.event).not.toHaveBeenCalledWith("ai.http.retry", expect.any(Object));
   });
 });
 
