@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
   booleanEnv,
@@ -55,6 +56,7 @@ describe("smoke-test-ai config", () => {
     expect(() => requiredEnv({}, "GITVIBE_AI_API_KEY")).toThrow("GITVIBE_AI_API_KEY is required.");
     expect(() => numberEnv({ VALUE: "0" }, "VALUE", 1)).toThrow("VALUE must be a positive number.");
     expect(booleanEnv({}, "FLAG", true)).toBe(true);
+    expect(booleanEnv({ FLAG: "true" }, "FLAG", false)).toBe(true);
   });
 });
 
@@ -177,6 +179,12 @@ describe("smoke-test-ai helpers", () => {
     expect(
       isDirectRun(new URL("../scripts/smoke-test-ai.mjs", import.meta.url).href, undefined),
     ).toBe(false);
+    expect(
+      isDirectRun(
+        new URL("../scripts/smoke-test-ai.mjs", import.meta.url).href,
+        fileURLToPath(new URL("../scripts/smoke-test-ai.mjs", import.meta.url)),
+      ),
+    ).toBe(true);
   });
 
   it("extracts and validates JSON text output", () => {

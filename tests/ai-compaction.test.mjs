@@ -273,7 +273,23 @@ function textMessage(content) {
 
 function aiSdkOptions({ logger }) {
   return {
-    config: { ai: { budgets: { max_context_window_tokens: 10 } } },
+    config: {
+      ai: {
+        budgets: { max_context_window_tokens: 10 },
+        profiles: {
+          local_proxy: {
+            provider: {
+              type: "openai-compatible",
+            },
+          },
+        },
+        stages: {
+          investigate: {
+            profile: "local_proxy",
+          },
+        },
+      },
+    },
     cwd: process.cwd(),
     logger,
     maxTurns: 1,

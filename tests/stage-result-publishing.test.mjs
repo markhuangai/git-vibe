@@ -5,6 +5,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
@@ -180,7 +181,7 @@ async function workspace(config = "") {
   const cwd = await mkdtemp(join(tmpdir(), "git-vibe-publish-"));
   process.env.RUNNER_TEMP = mkdtempSync(join(tmpdir(), "git-vibe-runner-"));
   mkdirSync(join(cwd, ".github"));
-  writeFileSync(join(cwd, ".github", "git-vibe.yml"), config);
+  writeFileSync(join(cwd, ".github", "git-vibe.yml"), workspaceConfigWithTestAi(config));
   execFileSync("git", ["init"], { cwd, stdio: "ignore" });
   return cwd;
 }

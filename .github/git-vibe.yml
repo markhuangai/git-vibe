@@ -53,7 +53,6 @@ tests:
     - pnpm check
 
 ai:
-  default_profile: local_proxy
   profiles:
     local_proxy:
       enabled: true
@@ -156,6 +155,14 @@ ai:
         - glob
         - web-fetch
         - web-search
+    materialize:
+      enabled: true
+      access: publish-write
+      profile: codex_cli_high
+      tools:
+        - read
+        - grep
+        - glob
     implement:
       enabled: true
       access: branch-write
@@ -174,6 +181,15 @@ ai:
       access: read-only
       profiles:
         - codex_cli_xhigh
+      tools:
+        - read
+        - grep
+        - glob
+        - diff
+    create-pr:
+      enabled: true
+      access: publish-write
+      profile: codex_cli_high
       tools:
         - read
         - grep

@@ -119,8 +119,8 @@ CLI authentication guidance:
 
 GitVibe routes AI work through named profiles. A profile owns the adapter,
 auth source, model, reasoning settings, generation defaults, and provider-specific
-escape hatches. A stage chooses one profile, a fallback profile, or an ordered
-profile list for failover.
+escape hatches. Each AI stage must choose one profile or an ordered profile list;
+GitVibe fails fast when a stage does not define `profile` or `profiles`.
 
 ```yaml
 ai:
@@ -157,6 +157,10 @@ ai:
 
   stages:
     investigate:
+      profile: codex_cli
+    materialize:
+      profile: codex_cli
+    create-pr:
       profile: codex_cli
     review-matrix:
       profiles:

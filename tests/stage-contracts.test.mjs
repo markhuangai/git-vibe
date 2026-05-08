@@ -59,18 +59,55 @@ describe("stage contracts", () => {
     expect(prompts.prompt).toContain("<stage_goal>");
     expect(prompts.prompt).toContain("<investigation_focus>");
   });
+});
 
+describe("stage contract prompt loading", () => {
   it("loads assets relative to GITHUB_ACTION_PATH when provided", () => {
     const original = process.env.GITHUB_ACTION_PATH;
     delete process.env.GITVIBE_ASSET_ROOT;
     process.env.GITHUB_ACTION_PATH = `${process.cwd()}/investigate`;
     try {
-      expect(loadStageSchema(stageDefinitions.investigate.schemaFile)).toMatchObject({
+      const schema = loadStageSchema(stageDefinitions.investigate.schemaFile);
+      const prompts = renderPrompts({
+        context: baseContext,
+        outputSchema: schema,
+        promptDir: stageDefinitions.investigate.promptDir,
+        repositoryContext: "## main",
+        stageContract: "Return JSON.",
+      });
+
+      expect(schema).toMatchObject({
         $id: "investigate.v1",
       });
+      expect(prompts.system).toContain("GitVibe Stage Agent Contract");
     } finally {
       if (original === undefined) delete process.env.GITHUB_ACTION_PATH;
       else process.env.GITHUB_ACTION_PATH = original;
+    }
+  });
+
+  it("loads assets relative to GITVIBE_ASSET_ROOT when provided", () => {
+    const originalAssetRoot = process.env.GITVIBE_ASSET_ROOT;
+    const originalActionPath = process.env.GITHUB_ACTION_PATH;
+    process.env.GITVIBE_ASSET_ROOT = process.cwd();
+    delete process.env.GITHUB_ACTION_PATH;
+    try {
+      const schema = loadStageSchema(stageDefinitions.investigate.schemaFile);
+      const prompts = renderPrompts({
+        context: baseContext,
+        outputSchema: schema,
+        promptDir: stageDefinitions.investigate.promptDir,
+        repositoryContext: "## main",
+        stageContract: "Return JSON.",
+      });
+
+      expect(schema).toMatchObject({ $id: "investigate.v1" });
+      expect(prompts.system).toContain("GitVibe Stage Agent Contract");
+    } finally {
+      if (originalAssetRoot === undefined) delete process.env.GITVIBE_ASSET_ROOT;
+      else process.env.GITVIBE_ASSET_ROOT = originalAssetRoot;
+      if (originalActionPath === undefined) delete process.env.GITHUB_ACTION_PATH;
+      else process.env.GITHUB_ACTION_PATH = originalActionPath;
     }
   });
 

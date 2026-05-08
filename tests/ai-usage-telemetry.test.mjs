@@ -171,7 +171,6 @@ function eventFields(logger, eventName) {
 function configWithProfile(profileFields = {}) {
   return {
     ai: {
-      default_profile: "test",
       profiles: {
         test: {
           ...profileFields,
@@ -181,6 +180,11 @@ function configWithProfile(profileFields = {}) {
             model_variable: "GITVIBE_AI_MODEL",
             type: "openai-compatible",
           },
+        },
+      },
+      stages: {
+        investigate: {
+          profile: "test",
         },
       },
     },

@@ -5,8 +5,14 @@ export function activeProfileByName(
   profileName: string,
 ): Record<string, unknown> {
   const ai = config.ai || {};
-  const profiles = (ai.profiles as Record<string, unknown> | undefined) || {};
-  return (profiles[profileName] as Record<string, unknown> | undefined) || {};
+  const profiles = ai.profiles;
+  if (!isRecord(profiles)) throw new Error("ai.profiles must be an object.");
+
+  const profile = profiles[profileName];
+  if (profile === undefined) throw new Error(`ai.profiles.${profileName} must be configured.`);
+  if (!isRecord(profile)) throw new Error(`ai.profiles.${profileName} must be an object.`);
+
+  return profile;
 }
 
 export function adapterName(profile: Record<string, unknown>): string {
@@ -15,7 +21,10 @@ export function adapterName(profile: Record<string, unknown>): string {
 
 export function profileNamesForStage(config: GitVibeConfig, stage: Stage): string[] {
   const stageConfig = stageConfigFor(config, stage);
-  const profileNames = explicitProfileNames(stageConfig) || [defaultProfileName(config)];
+  const profileNames = explicitProfileNames(stageConfig);
+  if (!profileNames) {
+    throw new Error(`ai.stages.${stage} must define profile or profiles.`);
+  }
   const fallback = stringValue(stageConfig.fallback_profile);
 
   if (fallback && !profileNames.includes(fallback)) {
@@ -58,10 +67,6 @@ function explicitProfileNames(stageConfig: Record<string, unknown>): string[] | 
   }
 
   return [...new Set(profiles as string[])];
-}
-
-function defaultProfileName(config: GitVibeConfig): string {
-  return stringValue(config.ai?.default_profile) || "local_proxy";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

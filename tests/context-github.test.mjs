@@ -346,6 +346,12 @@ describe("GitVibe config and labels", () => {
     expect(config.branches?.base).toBe("develop");
     expect(testCommandsFor(config)).toEqual(["pnpm test"]);
     expect(loadConfig(join(cwd, "missing"))).toEqual({});
+
+    const emptyCwd = await mkdtemp(join(tmpdir(), "git-vibe-config-empty-"));
+    mkdirSync(join(emptyCwd, ".github"));
+    writeFileSync(join(emptyCwd, ".github", "git-vibe.yml"), "");
+    expect(loadConfig(emptyCwd)).toEqual({});
+    expect(testCommandsFor({})).toEqual([]);
   });
 
   it("creates missing labels, ignores existing labels, and removes labels with encoded names", async () => {

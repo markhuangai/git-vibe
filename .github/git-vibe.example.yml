@@ -64,7 +64,6 @@ tests:
   commands: []
 
 ai:
-  default_profile: local_proxy
   profiles:
     local_proxy:
       enabled: true
@@ -166,6 +165,14 @@ ai:
         - glob
         - web-fetch
         - web-search
+    materialize:
+      enabled: true
+      access: publish-write
+      profile: local_proxy
+      tools:
+        - read
+        - grep
+        - glob
     implement:
       enabled: true
       access: branch-write
@@ -184,6 +191,15 @@ ai:
       access: read-only
       profiles:
         - local_proxy
+      tools:
+        - read
+        - grep
+        - glob
+        - diff
+    create-pr:
+      enabled: true
+      access: publish-write
+      profile: local_proxy
       tools:
         - read
         - grep

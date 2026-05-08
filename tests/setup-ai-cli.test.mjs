@@ -173,10 +173,12 @@ describe("GitVibe AI CLI setup no-op stages", () => {
   it("does not install a CLI for ai-sdk-agentool stages", () => {
     const cwd = configuredWorkspace(`
 ai:
-  default_profile: local_proxy
   profiles:
     local_proxy:
       adapter: ai-sdk-agentool
+  stages:
+    validate:
+      profile: local_proxy
 `);
     /** @type {CommandCall[]} */
     const calls = [];

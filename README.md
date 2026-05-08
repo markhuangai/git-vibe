@@ -279,7 +279,6 @@ github_auth:
   token_secret: GITVIBE_GITHUB_TOKEN
 
 ai:
-  default_profile: local_proxy
   profiles:
     local_proxy:
       enabled: true
@@ -291,10 +290,31 @@ ai:
         api_key_secret: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
+  stages:
+    investigate:
+      profile: local_proxy
+    summarize:
+      profile: local_proxy
+    validate:
+      profile: local_proxy
+    materialize:
+      profile: local_proxy
+    implement:
+      profile: local_proxy
+    review-matrix:
+      profiles:
+        - local_proxy
+    create-pr:
+      profile: local_proxy
+    address-pr-feedback:
+      profile: local_proxy
 
 tests:
   commands: []
 ```
+
+Each AI stage must define `profile` or `profiles`; GitVibe fails fast instead of
+falling back to a profile name the repository may not have configured.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.

@@ -126,7 +126,7 @@ describe("AI stage runner tool telemetry", () => {
 
     await expect(
       runAiStage({
-        config: {},
+        config: localProxyConfig({ stage: "implement" }),
         cwd: process.cwd(),
         logger,
         maxTurns: 2,
@@ -258,7 +258,7 @@ function mockToolSummaryGenerateText() {
   });
 }
 
-async function createRetryingProviderFetch({ config = {}, logger }) {
+async function createRetryingProviderFetch({ config = localProxyConfig(), logger }) {
   generateText.mockResolvedValueOnce({
     steps: [],
     text: '{"stage":"investigate","status":"completed"}',
@@ -347,7 +347,7 @@ describe("AI stage runner provider failures", () => {
 
     await expect(
       runAiStage({
-        config: {},
+        config: localProxyConfig(),
         cwd: process.cwd(),
         maxTurns: 1,
         prompt: "Prompt",
@@ -365,7 +365,7 @@ describe("AI stage runner provider HTTP retries", () => {
   it("retries transient provider fetch failures with the configured delay", async () => {
     const logger = { event: vi.fn() };
     const retryingFetch = await createRetryingProviderFetch({
-      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      config: localProxyConfig({ budgets: { request_retry_delay_seconds: 0 } }),
       logger,
     });
 
@@ -444,7 +444,7 @@ describe("AI stage runner provider retry limits", () => {
   it("does not retry non-retryable provider responses", async () => {
     const logger = { event: vi.fn() };
     const retryingFetch = await createRetryingProviderFetch({
-      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      config: localProxyConfig({ budgets: { request_retry_delay_seconds: 0 } }),
       logger,
     });
 
@@ -463,7 +463,9 @@ describe("AI stage runner provider retry limits", () => {
   it("stops retrying provider responses after the configured retry budget", async () => {
     const logger = { event: vi.fn() };
     const retryingFetch = await createRetryingProviderFetch({
-      config: { ai: { budgets: { request_retry_attempts: 1, request_retry_delay_seconds: 0 } } },
+      config: localProxyConfig({
+        budgets: { request_retry_attempts: 1, request_retry_delay_seconds: 0 },
+      }),
       logger,
     });
 
@@ -490,7 +492,7 @@ describe("AI stage runner provider retry error classification", () => {
   it("retries provider errors marked retryable", async () => {
     const logger = { event: vi.fn() };
     const retryingFetch = await createRetryingProviderFetch({
-      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      config: localProxyConfig({ budgets: { request_retry_delay_seconds: 0 } }),
       logger,
     });
 
@@ -510,7 +512,7 @@ describe("AI stage runner provider retry error classification", () => {
   it("does not retry provider errors marked non-retryable", async () => {
     const logger = { event: vi.fn() };
     const retryingFetch = await createRetryingProviderFetch({
-      config: { ai: { budgets: { request_retry_delay_seconds: 0 } } },
+      config: localProxyConfig({ budgets: { request_retry_delay_seconds: 0 } }),
       logger,
     });
     const error = { isRetryable: false };
@@ -571,10 +573,29 @@ describe("AI stage runner telemetry edge cases", () => {
   });
 });
 
-function openAiCompatibleConfig() {
+function localProxyConfig({ budgets, stage = "investigate" } = {}) {
   return {
     ai: {
-      default_profile: "test",
+      ...(budgets ? { budgets } : {}),
+      profiles: {
+        local_proxy: {
+          provider: {
+            type: "openai-compatible",
+          },
+        },
+      },
+      stages: {
+        [stage]: {
+          profile: "local_proxy",
+        },
+      },
+    },
+  };
+}
+
+function openAiCompatibleConfig({ stage = "investigate" } = {}) {
+  return {
+    ai: {
       profiles: {
         test: {
           generation: { temperature: 0.5 },
@@ -587,6 +608,11 @@ function openAiCompatibleConfig() {
           provider_options: { custom: true },
         },
       },
+      stages: {
+        [stage]: {
+          profile: "test",
+        },
+      },
     },
   };
 }
@@ -594,7 +620,6 @@ function openAiCompatibleConfig() {
 function anthropicConfig() {
   return {
     ai: {
-      default_profile: "claude",
       profiles: {
         claude: {
           provider: {
@@ -604,6 +629,11 @@ function anthropicConfig() {
           },
         },
       },
+      stages: {
+        summarize: {
+          profile: "claude",
+        },
+      },
     },
   };
 }
@@ -611,12 +641,16 @@ function anthropicConfig() {
 function nativeOpenAiConfig() {
   return {
     ai: {
-      default_profile: "openai",
       profiles: {
         openai: {
           provider: {
             type: "openai",
           },
+        },
+      },
+      stages: {
+        investigate: {
+          profile: "openai",
         },
       },
     },

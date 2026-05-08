@@ -19,6 +19,7 @@ vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 vi.mock("node:child_process", () => ({ spawn }));
 
 const { runAiStage } = await import("../src/runner/ai.ts");
+const { activeProfileByName } = await import("../src/runner/ai-config.ts");
 const { stageDefinitions } = await import("../src/shared/stages.ts");
 
 const originalEnv = { ...process.env };
@@ -98,11 +99,104 @@ describe("AI stage runner stage routing", () => {
 
   it("rejects stage tool overrides that expand canonical stage permissions", async () => {
     await expectValidationConfigError(
-      { ai: { stages: { validate: { tools: ["read", "edit"] } } } },
+      validationConfigWithStage({ tools: ["read", "edit"] }),
       "ai.stages.validate.tools includes disallowed tools: edit.",
     );
 
     expect(generateText).not.toHaveBeenCalled();
+  });
+});
+
+describe("AI stage runner explicit profile routing", () => {
+  it("requires explicit stage profile routing", async () => {
+    await expectValidationConfigError(
+      {
+        ai: {
+          profiles: {
+            local_proxy: { provider: { type: "openai-compatible" } },
+          },
+        },
+      },
+      "ai.stages.validate must define profile or profiles.",
+    );
+    await expectValidationConfigError(
+      {
+        ai: {
+          profiles: {
+            local_proxy: { provider: { type: "openai-compatible" } },
+          },
+          stages: {
+            investigate: {
+              profile: "local_proxy",
+            },
+          },
+        },
+      },
+      "ai.stages.validate must define profile or profiles.",
+    );
+    await expectValidationConfigError(
+      {
+        ai: {
+          default_profile: "local_proxy",
+          profiles: {
+            local_proxy: { provider: { type: "openai-compatible" } },
+          },
+          stages: {
+            validate: {
+              tools: ["read"],
+            },
+          },
+        },
+      },
+      "ai.stages.validate must define profile or profiles.",
+    );
+    await expectValidationConfigError(
+      {
+        ai: {
+          profiles: {
+            local_proxy: { provider: { type: "openai-compatible" } },
+          },
+          stages: {
+            validate: {
+              profile: "missing_profile",
+            },
+          },
+        },
+      },
+      "ai.profiles.missing_profile must be configured.",
+    );
+  });
+
+  it("rejects malformed named profile config", async () => {
+    expect(() => activeProfileByName({}, "local_proxy")).toThrow("ai.profiles must be an object.");
+    await expectValidationConfigError(
+      {
+        ai: {
+          profiles: [],
+          stages: {
+            validate: {
+              profile: "local_proxy",
+            },
+          },
+        },
+      },
+      "ai.profiles must be an object.",
+    );
+    await expectValidationConfigError(
+      {
+        ai: {
+          profiles: {
+            local_proxy: "enabled",
+          },
+          stages: {
+            validate: {
+              profile: "local_proxy",
+            },
+          },
+        },
+      },
+      "ai.profiles.local_proxy must be an object.",
+    );
   });
 });
 
@@ -133,7 +227,7 @@ describe("AI stage runner stage config validation", () => {
       "ai.stages.validate.access must be a string.",
     );
     await expectValidationConfigError(
-      { ai: { stages: { validate: { tools: ["read", ""] } } } },
+      validationConfigWithStage({ tools: ["read", ""] }),
       "ai.stages.validate.tools must be a string array.",
     );
   });
@@ -361,6 +455,26 @@ async function expectValidationConfigError(config, message) {
   await expect(runAiStage(validateStageOptions(config))).rejects.toThrow(message);
 }
 
+function validationConfigWithStage(stageConfig) {
+  return {
+    ai: {
+      profiles: {
+        local_proxy: {
+          provider: {
+            type: "openai-compatible",
+          },
+        },
+      },
+      stages: {
+        validate: {
+          profile: "local_proxy",
+          ...stageConfig,
+        },
+      },
+    },
+  };
+}
+
 function validateStageOptions(config) {
   return {
     config,
@@ -451,13 +565,7 @@ function codexCliConfig() {
 function stageRoutingConfig() {
   return {
     ai: {
-      default_profile: "default",
       profiles: {
-        default: {
-          provider: {
-            type: "openai-compatible",
-          },
-        },
         validation_profile: {
           generation: { temperature: 0.1 },
           provider: {
@@ -481,13 +589,7 @@ function stageRoutingConfig() {
 function fallbackRoutingConfig() {
   return {
     ai: {
-      default_profile: "default",
       profiles: {
-        default: {
-          provider: {
-            type: "openai-compatible",
-          },
-        },
         fallback: {
           provider: {
             api_key_secret: "FALLBACK_KEY",
