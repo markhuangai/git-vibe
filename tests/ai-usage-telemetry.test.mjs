@@ -84,7 +84,7 @@ describe("AI usage telemetry", () => {
     });
   });
 
-  it("omits context percentages when no context window is configured", async () => {
+  it("logs context percentages from the default context window budget", async () => {
     const logger = { event: vi.fn() };
     mockUsageResult({
       stepUsage: usage({ inputTokens: 100, outputTokens: 20, totalTokens: 120 }),
@@ -93,13 +93,16 @@ describe("AI usage telemetry", () => {
 
     await runUsageStage({ config: configWithProfile(), logger });
 
+    expect(eventFields(logger, "ai.request.start")).toMatchObject({
+      context_window_tokens: 200000,
+    });
     expect(eventFields(logger, "ai.step.done")).toMatchObject({
+      context_used_pct: 0.1,
       input_tokens: 100,
       output_tokens: 20,
       total_tokens: 120,
     });
-    expect(eventFields(logger, "ai.step.done")).not.toHaveProperty("context_used_pct");
-    expect(eventFields(logger, "ai.request.done")).not.toHaveProperty("max_context_used_pct");
+    expect(eventFields(logger, "ai.request.done")).toMatchObject({ max_context_used_pct: 0.1 });
   });
 
   it("rejects invalid context window telemetry config", async () => {

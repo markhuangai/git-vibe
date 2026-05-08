@@ -112,6 +112,7 @@ ai:
     validation_repair_max_turns: 45
     request_retry_attempts: 3
     request_retry_delay_seconds: 60
+    max_context_window_tokens: 200000
     max_context_items: 200
     max_files_per_stage: 80
   stages:

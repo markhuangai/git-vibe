@@ -20,6 +20,10 @@ import {
   stageConfigFor,
   stringValue,
 } from "./ai-config.js";
+import {
+  contextWindowTokensForProfile,
+  createContextCompactionPrepareStep,
+} from "./ai-compaction.js";
 import { runClaudeCodeCliStage } from "./claude-code-cli.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
@@ -117,7 +121,8 @@ async function runAiSdkStageWithProfile(
 ): Promise<string> {
   const logger = options.logger;
   const tools = createTools(options);
-  const contextWindowTokens = contextWindowTokensForProfile(profileName, profile);
+  const model = createModel(options, profileName, profile);
+  const contextWindowTokens = contextWindowTokensForProfile(profileName, profile, options.config);
   let maxContextUsedPct: number | undefined;
   let stepCount = 0;
   logger?.event("ai.request.start", {
@@ -140,7 +145,7 @@ async function runAiSdkStageWithProfile(
       logger?.event("ai.tool.start", toolStartFields(event));
     },
     maxRetries: 0,
-    model: createModel(options, profileName, profile),
+    model,
     onStepFinish: (event: unknown) => {
       stepCount += 1;
       const contextUsedPct = contextUsedPctForUsage(usageRecord(event), contextWindowTokens);
@@ -154,6 +159,13 @@ async function runAiSdkStageWithProfile(
         ...optionalNumberField("context_used_pct", contextUsedPct),
       });
     },
+    prepareStep: createContextCompactionPrepareStep({
+      config: options.config,
+      logger,
+      model,
+      profile,
+      profileName,
+    }),
     prompt: options.prompt,
     providerOptions: providerOptions(profile) as never,
     stopWhen: stepCountIs(options.maxTurns),
@@ -204,16 +216,6 @@ function requestUsageRecord(result: AiResult): Record<string, unknown> | undefin
 
 function usageRecord(event: unknown): Record<string, unknown> | undefined {
   return recordField(recordValue(event), "usage");
-}
-
-function contextWindowTokensForProfile(
-  profileName: string,
-  profile: Record<string, unknown>,
-): number | undefined {
-  const value = profile.context_window_tokens;
-  if (value === undefined) return undefined;
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
-  throw new Error(`AI profile ${profileName} context_window_tokens must be a positive integer.`);
 }
 
 function contextUsedPctForUsage(

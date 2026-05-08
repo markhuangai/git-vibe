@@ -169,6 +169,7 @@ Normalized reasoning config:
 - `reasoning.summary`: `auto`, `concise`, `detailed`, or `none` where the adapter supports summaries.
 - `context_window_tokens`: optional positive integer on an AI profile. When set, `ai-sdk-agentool` logs per-step `context_used_pct` from reported input tokens.
 - `provider_options`: adapter-specific passthrough for settings GitVibe does not normalize yet.
+- `ai.budgets.max_context_window_tokens`: positive integer context budget for `ai-sdk-agentool` compaction and context usage logs. Default: `200000`.
 
 Adapter mappings:
 
@@ -194,6 +195,7 @@ Default AI budgets:
 - validation repair attempts: `3` per implementation run.
 - review-fix continuation depth limit: `5` review-fix issues before GitVibe blocks and asks for human intervention.
 - provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
+- ai-sdk-agentool context window: `200000` estimated tokens, with compaction before a model call when messages reach `90%` of the configured window.
 - investigation/refinement/validation/review timeout: `60` minutes.
 - implementation and PR feedback timeout: `120` minutes.
 - PR creation/linking timeout: `15` minutes.
