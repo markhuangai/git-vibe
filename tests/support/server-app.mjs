@@ -31,7 +31,8 @@ export function createClient(options = {}) {
         return { addDiscussionComment: { comment: { id: "comment-id", url: "comment-url" } } };
       }
       if (query.includes("GitVibeRemoveDiscussionLabel")) {
-        return { removeLabelsFromLabelable: { labelable: { id: "discussion-node" } } };
+        if (options.discussionLabelRemovalError) throw options.discussionLabelRemovalError;
+        return { removeLabelsFromLabelable: { clientMutationId: null } };
       }
       if (query.includes("GitVibeDiscussionLabelId")) {
         return { repository: { label: { id: "resolved-label-node" } } };

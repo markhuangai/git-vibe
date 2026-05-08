@@ -254,9 +254,7 @@ const discussionLabelIdQuery = `
 const removeDiscussionLabelMutation = `
   mutation GitVibeRemoveDiscussionLabel($discussionId: ID!, $labelIds: [ID!]!) {
     removeLabelsFromLabelable(input: { labelableId: $discussionId, labelIds: $labelIds }) {
-      labelable {
-        id
-      }
+      clientMutationId
     }
   }
 `;

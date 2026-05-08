@@ -478,7 +478,6 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
     const dispatch = await dispatchWorkflow(options, "validate.yml", {
       "discussion-number": discussionNumber,
     });
-    await removeDiscussionLabelFromPayload(options, label);
     await postQueuedWorkflowComment(options, {
       artifact: "discussion",
       number: discussionNumber,
@@ -486,6 +485,7 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       workflow: "validate.yml",
       workflowRunUrl: dispatch.html_url,
     });
+    await removeDiscussionLabelBestEffort(options, label);
     return;
   }
 
@@ -739,6 +739,17 @@ async function removeDiscussionLabelFromPayload(
     repository: `${options.owner}/${options.repo}`,
     token: options.token,
   });
+}
+
+async function removeDiscussionLabelBestEffort(
+  options: WebhookContext,
+  label: string,
+): Promise<void> {
+  try {
+    await removeDiscussionLabelFromPayload(options, label);
+  } catch (error) {
+    options.log(`discussion label cleanup failed for ${label}: ${summarizeError(error)}`);
+  }
 }
 
 function labelNodeId(label: WebhookPayload["label"]): string | undefined {

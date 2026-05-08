@@ -21,6 +21,9 @@ describe("discussion label helpers", () => {
       { discussionId: "discussion-node", labelIds: ["label-node"] },
       "token",
     );
+    const mutation = client.graphql.mock.calls[0][0];
+    expect(mutation).toContain("clientMutationId");
+    expect(mutation).not.toContain("labelable {");
   });
 
   it("resolves missing label node IDs before removing labels", async () => {

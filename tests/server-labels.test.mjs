@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { gitVibeInternalLabels, gitVibeLabels } from "../src/shared/labels.ts";
 import {
   createApp,
@@ -182,6 +182,32 @@ describe("GitVibe app server discussion labels", () => {
     expect(discussionCommentBodies(client).join("\n")).toContain("materialize.yml");
     expect(discussionCommentBodies(client).join("\n")).toContain(
       "Workflow run: https://github.com/example/repo/actions/runs/1",
+    );
+  });
+});
+
+describe("GitVibe app server discussion label cleanup", () => {
+  it("posts queued comments even when validate trigger label cleanup fails", async () => {
+    const log = vi.fn();
+    const client = createClient({
+      discussionLabelRemovalError: new Error("label cleanup failed"),
+      permission: { permission: "write" },
+    });
+
+    await createApp({ client, log }).handleWebhook("discussion", {
+      action: "labeled",
+      discussion: { node_id: "discussion-node", number: 5 },
+      label: { name: gitVibeLabels.validate.name, node_id: "validate-label-node" },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({ inputs: { "discussion-number": "5" } }),
+    ]);
+    expect(discussionCommentBodies(client).at(-1)).toContain("validate.yml");
+    expect(log).toHaveBeenCalledWith(
+      "discussion label cleanup failed for git-vibe:validate: label cleanup failed",
     );
   });
 
