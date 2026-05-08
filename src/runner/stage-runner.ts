@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runAiStage } from "./ai.js";
 import { loadConfig, testCommandsFor } from "./config.js";
-import { addDiscussionComment } from "../shared/discussions.js";
+import { addDiscussionComment, closeDiscussion } from "../shared/discussions.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
@@ -554,6 +554,36 @@ async function createImplementationIssue({
       token: options.token,
     });
     logger.event("github.discussion.comment.done", { discussion: context.artifact.number });
+    await closeSourceDiscussion({
+      client,
+      discussionId: context.artifact.id,
+      logger,
+      number: context.artifact.number,
+      runner: options,
+    });
+  }
+}
+
+async function closeSourceDiscussion(options: {
+  client: GitHubClient;
+  discussionId: string;
+  logger: StageLogger;
+  number: string;
+  runner: RunnerOptions;
+}): Promise<void> {
+  options.logger.event("github.discussion.close.start", { discussion: options.number });
+  try {
+    await closeDiscussion({
+      client: options.client,
+      discussionId: options.discussionId,
+      token: options.runner.token,
+    });
+    options.logger.event("github.discussion.close.done", { discussion: options.number });
+  } catch (error) {
+    options.logger.event("github.discussion.close.failed", {
+      discussion: options.number,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

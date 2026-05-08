@@ -70,6 +70,11 @@ export const gitVibeLabels = {
     description: "Implementation issue materialized from a GitVibe discussion.",
     name: "git-vibe:story",
   },
+  validate: {
+    color: "C5DEF5",
+    description: "Trusted actor requested GitVibe validation automation.",
+    name: "git-vibe:validate",
+  },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
 export const gitVibeInternalLabels = {

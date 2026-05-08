@@ -61,7 +61,7 @@ Initial stage contracts:
 | ----------------------- | ---------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
 | Triage classification   | Read issue/discussion only         | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
 | Bug investigation       | Read repo and issue timeline       | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                              |
-| Feature refinement      | Read repo and discussion timeline  | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without maintainer command |
+| Feature refinement      | Read repo and discussion timeline  | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without protected approval |
 | Validation              | Read repo and accepted context     | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
 | Implementation          | Write `git-vibe/{root-issue}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
 | Review matrix           | Read branch and diff               | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` follow-up issues |

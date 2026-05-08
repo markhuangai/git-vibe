@@ -271,21 +271,24 @@ async function dispatchDevelopWorkflow(options: {
     throw new Error("Cannot dispatch review-fix workflow without an issue number.");
   const { owner, repo } = splitRepository(options.runner.repository);
   options.logger.event("github.workflow.dispatch.start", { issue: options.issueNumber });
-  await options.client.request({
-    body: {
-      inputs: { "issue-number": options.issueNumber },
-      ref: process.env.GITVIBE_DISPATCH_REF || process.env.GITHUB_REF_NAME || "main",
-    },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/actions/workflows/develop.yml/dispatches`,
+  const ref = process.env.GITVIBE_DISPATCH_REF || process.env.GITHUB_REF_NAME || "main";
+  const dispatch = await dispatchWorkflowWithRunDetails({
+    client: options.client,
+    inputs: { "issue-number": options.issueNumber },
+    logger: options.logger,
+    owner,
+    ref,
+    repo,
     token: options.runner.token,
+    workflow: "develop.yml",
   });
   await options.client.request({
     body: {
       body: queuedReviewFixWorkflowComment({
         issueNumber: options.issueNumber,
-        ref: process.env.GITVIBE_DISPATCH_REF || process.env.GITHUB_REF_NAME || "main",
+        ref,
         workflow: "develop.yml",
+        workflowRunUrl: dispatch.html_url,
       }),
     },
     method: "POST",
@@ -317,14 +320,69 @@ function queuedReviewFixWorkflowComment(options: {
   issueNumber: string;
   ref: string;
   workflow: string;
+  workflowRunUrl?: string;
 }): string {
-  return [
+  const lines = [
     `<!-- git-vibe:workflow-queued workflow=${options.workflow} artifact=issue number=${options.issueNumber} -->`,
     "## GitVibe Workflow Queued",
     "",
     `GitVibe queued \`${options.workflow}\` on \`${options.ref}\` for review-fix issue #${options.issueNumber}.`,
-    "The runner will post again when the stage starts.",
-  ].join("\n");
+  ];
+  if (options.workflowRunUrl) lines.push("", `Workflow run: ${options.workflowRunUrl}`);
+  lines.push("The runner will post again when the stage starts.");
+  return lines.join("\n");
+}
+
+async function dispatchWorkflowWithRunDetails(options: {
+  client: GitHubClient;
+  inputs: Record<string, string>;
+  logger: StageLogger;
+  owner: string;
+  ref: string;
+  repo: string;
+  token: string;
+  workflow: string;
+}): Promise<WorkflowDispatchResult> {
+  const path = `/repos/${options.owner}/${options.repo}/actions/workflows/${options.workflow}/dispatches`;
+  try {
+    return await options.client.request<WorkflowDispatchResult>({
+      apiVersion: "2026-03-10",
+      body: {
+        inputs: options.inputs,
+        ref: options.ref,
+        return_run_details: true,
+      },
+      method: "POST",
+      path,
+      token: options.token,
+    });
+  } catch (error) {
+    if (!isDispatchRunDetailsCompatibilityError(error)) throw error;
+    options.logger.event("github.workflow.dispatch.run_details_unavailable", {
+      error: error instanceof Error ? error.message : String(error),
+      workflow: options.workflow,
+    });
+  }
+
+  await options.client.request({
+    body: {
+      inputs: options.inputs,
+      ref: options.ref,
+    },
+    method: "POST",
+    path,
+    token: options.token,
+  });
+  return {};
+}
+
+function isDispatchRunDetailsCompatibilityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("return_run_details") || message.includes("not a permitted key");
+}
+
+interface WorkflowDispatchResult extends Record<string, unknown> {
+  html_url?: string;
 }
 
 function arrayField(value: unknown): string[] {

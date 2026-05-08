@@ -45,19 +45,19 @@ It listens to repository webhooks, verifies who is allowed to act, dispatches
 reusable GitHub workflows, runs stage-specific AI workers, validates structured
 AI output, and writes routine GitHub state changes with deterministic code.
 
-| GitHub problem                                  | GitVibe answer                                                                                                     |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then apply the protected approval label |
-| Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria, then materialize an implementation issue |
-| AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                          |
-| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                        |
-| Consumer repositories should stay small         | Copy a tiny `.github` starter and call reusable workflows from `git-vibe/actions`                                  |
+| GitHub problem                                  | GitVibe answer                                                                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then apply the protected approval label  |
+| Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria with a label, then approve materialization |
+| AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                           |
+| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                         |
+| Consumer repositories should stay small         | Copy a tiny `.github` starter and call reusable workflows from `git-vibe/actions`                                   |
 
 ## Pipeline at a glance
 
 ```mermaid
 flowchart LR
-  A[Issue, Discussion, or PR] --> B["/git-vibe command or protected label"]
+  A[Issue, Discussion, or PR] --> B["/git-vibe command or git-vibe:* label"]
   B --> C[Webhook server validates actor and marker]
   C --> D[Reusable GitHub workflow]
   D --> E[Stage-specific AI worker]
@@ -222,22 +222,26 @@ Pull request reviews
 
 Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
-## Commands
+## Commands And Labels
 
-Use `/git-vibe` in issues, discussions, and pull requests:
+Use `/git-vibe` for the remaining comment-triggered workflows:
 
 | Command                      | Typical surface           | Effect                                                        |
 | ---------------------------- | ------------------------- | ------------------------------------------------------------- |
 | `/git-vibe investigate`      | Bug issue                 | Runs investigation-only analysis and posts findings/questions |
 | `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
-| `/git-vibe validate`         | Issue or Discussion       | Checks whether the current context is coherent and actionable |
-| `/git-vibe materialize`      | Validated Discussion      | Creates or links an implementation issue                      |
 | `/git-vibe address-feedback` | Pull request conversation | Applies requested PR feedback on the GitVibe branch           |
+
+Use protected labels for validation and approval transitions:
+
+| Label               | Typical surface      | Effect                                                                       |
+| ------------------- | -------------------- | ---------------------------------------------------------------------------- |
+| `git-vibe:validate` | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                      |
+| `git-vibe:approved` | Implementation issue | Dispatches the development pipeline                                          |
+| `git-vibe:approved` | Feature Discussion   | Dispatches materialization, which creates an issue and closes the Discussion |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
-Apply the protected `git-vibe:approved` label to an implementation issue to
-dispatch the development pipeline.
 
 Accepted commands from admins and collaborators receive a `rocket` reaction
 before GitVibe dispatches the workflow, then a queued comment after dispatch
@@ -245,11 +249,11 @@ succeeds. Discussion comments receive threaded replies where GitHub supports
 them. Issue comments and pull request conversation comments receive a flat reply
 with an `In reply to` source link.
 
-Protected label dispatches, such as `git-vibe:approved`, and trusted
-`changes_requested` review dispatches also post queued comments after dispatch
-succeeds. Runner stages post a separate running comment with the workflow run URL
-when the GitHub Actions job actually starts. Approval reviews and untrusted
-reviews do not start automation.
+Protected label dispatches and trusted `changes_requested` review dispatches
+also post queued comments after dispatch succeeds. The queued comment includes
+the exact workflow run URL when GitHub returns it; runner stages still post a
+separate running comment when the GitHub Actions job starts. Approval reviews
+and untrusted reviews do not start automation.
 
 ## Configuration
 

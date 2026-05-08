@@ -69,6 +69,56 @@ export async function addDiscussionComment(options: {
   );
 }
 
+export async function removeDiscussionLabel(options: {
+  client: GitHubClient;
+  discussionId: string;
+  label: string;
+  labelId?: string;
+  repository: string;
+  token: string;
+}): Promise<void> {
+  const labelId = options.labelId || (await discussionLabelId(options));
+  await options.client.graphql(
+    removeDiscussionLabelMutation,
+    {
+      discussionId: options.discussionId,
+      labelIds: [labelId],
+    },
+    options.token,
+  );
+}
+
+export async function closeDiscussion(options: {
+  client: GitHubClient;
+  discussionId: string;
+  token: string;
+}): Promise<void> {
+  await options.client.graphql(
+    closeDiscussionMutation,
+    { discussionId: options.discussionId },
+    options.token,
+  );
+}
+
+async function discussionLabelId(options: {
+  client: GitHubClient;
+  label: string;
+  repository: string;
+  token: string;
+}): Promise<string> {
+  const { owner, repo } = splitRepository(options.repository);
+  const data = await options.client.graphql<DiscussionLabelIdResult>(
+    discussionLabelIdQuery,
+    { label: options.label, name: repo, owner },
+    options.token,
+  );
+  const labelId = data.repository?.label?.id;
+  if (!labelId) {
+    throw new Error(`GitHub label ${options.label} was not found in ${options.repository}`);
+  }
+  return labelId;
+}
+
 async function discussionCategoryFor(options: {
   categoryName: string;
   client: GitHubClient;
@@ -133,6 +183,14 @@ interface CreateDiscussionResult {
   };
 }
 
+interface DiscussionLabelIdResult {
+  repository?: {
+    label?: {
+      id?: string;
+    } | null;
+  } | null;
+}
+
 const discussionCategoriesQuery = `
   query GitVibeDiscussionCategories($owner: String!, $name: String!) {
     repository(owner: $owner, name: $name) {
@@ -178,6 +236,36 @@ const addDiscussionCommentMutation = `
       comment {
         id
         url
+      }
+    }
+  }
+`;
+
+const discussionLabelIdQuery = `
+  query GitVibeDiscussionLabelId($label: String!, $name: String!, $owner: String!) {
+    repository(owner: $owner, name: $name) {
+      label(name: $label) {
+        id
+      }
+    }
+  }
+`;
+
+const removeDiscussionLabelMutation = `
+  mutation GitVibeRemoveDiscussionLabel($discussionId: ID!, $labelIds: [ID!]!) {
+    removeLabelsFromLabelable(input: { labelableId: $discussionId, labelIds: $labelIds }) {
+      labelable {
+        id
+      }
+    }
+  }
+`;
+
+const closeDiscussionMutation = `
+  mutation GitVibeCloseDiscussion($discussionId: ID!) {
+    closeDiscussion(input: { discussionId: $discussionId, reason: RESOLVED }) {
+      discussion {
+        id
       }
     }
   }

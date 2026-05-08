@@ -1,9 +1,23 @@
 // @ts-nocheck
-import { createHmac } from "node:crypto";
-import { createServer } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { createGitVibeApp, isDirectRun, startServerFromEnv } from "../src/app/server.ts";
-import { gitVibeLabels } from "../src/shared/labels.ts";
+import {
+  createApp,
+  createClient,
+  discussionCommentBodies,
+  featureIssue,
+  reactionVariables,
+  repositoryPayload,
+  requestBodies,
+  requestJson,
+  requestPaths,
+  requestSignedWebhook,
+  signature,
+  sourceCommentKinds,
+  sourceComments,
+  withHttpServer,
+  workflowDispatches,
+} from "./support/server-app.mjs";
 
 describe("GitVibe app server", () => {
   it("handles health, not found, signature errors, and accepted webhooks", async () => {
@@ -69,6 +83,24 @@ describe("GitVibe app server", () => {
     });
     await failing.runStartupPreflight();
     expect(errorLog).toHaveBeenCalledWith(expect.stringContaining("startup preflight failed"));
+  });
+
+  it("logs startup label bootstrap failures with the default error logger", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const app = createGitVibeApp({
+      client: createClient({ labelError: new Error("label write failed") }),
+      configuredRepository: "example/repo",
+      githubToken: "token",
+      log: vi.fn(),
+      webhookSecret: "secret",
+    });
+
+    await app.runStartupPreflight();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("startup label bootstrap failed for example/repo"),
+    );
+    consoleError.mockRestore();
   });
 });
 
@@ -143,7 +175,7 @@ describe("GitVibe app server command dispatch", () => {
 
     await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "/git-vibe investigate", node_id: "issue-investigate-comment" },
+      comment: { body: "/git-vibe investigate", id: 44, node_id: "issue-investigate-comment" },
       issue: { number: 2 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -157,16 +189,16 @@ describe("GitVibe app server command dispatch", () => {
     });
     await app.handleWebhook("discussion_comment", {
       action: "created",
-      comment: { body: "/git-vibe materialize", node_id: "discussion-materialize-comment" },
+      comment: { body: "/git-vibe summarize", node_id: "discussion-summarize-comment" },
       discussion: { node_id: "discussion-node", number: 5 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
 
     expect(workflowDispatches(client)).toEqual([
-      { inputs: expect.objectContaining({ "issue-number": "2" }), ref: "main" },
-      { inputs: expect.objectContaining({ "pr-number": "3" }), ref: "main" },
-      { inputs: expect.objectContaining({ "discussion-number": "5" }), ref: "main" },
+      expect.objectContaining({ inputs: expect.objectContaining({ "issue-number": "2" }) }),
+      expect.objectContaining({ inputs: expect.objectContaining({ "pr-number": "3" }) }),
+      expect.objectContaining({ inputs: expect.objectContaining({ "discussion-number": "5" }) }),
     ]);
     expect(sourceCommentKinds(client)).toEqual([
       "issue-comment",
@@ -176,7 +208,7 @@ describe("GitVibe app server command dispatch", () => {
     expect(reactionVariables(client)).toEqual([
       { content: "ROCKET", subjectId: "issue-investigate-comment" },
       { content: "ROCKET", subjectId: "pr-feedback-comment" },
-      { content: "ROCKET", subjectId: "discussion-materialize-comment" },
+      { content: "ROCKET", subjectId: "discussion-summarize-comment" },
     ]);
     expect(requestBodies(client, "POST", "/issues/2/comments").at(-1).body).toContain(
       "investigate.yml",
@@ -184,7 +216,10 @@ describe("GitVibe app server command dispatch", () => {
     expect(requestBodies(client, "POST", "/issues/3/comments").at(-1).body).toContain(
       "address-feedback.yml",
     );
-    expect(JSON.stringify(client.graphql.mock.calls)).toContain("materialize.yml");
+    expect(discussionCommentBodies(client).at(-1)).toContain("summarize.yml");
+    expect(discussionCommentBodies(client).at(-1)).toContain(
+      "Workflow run: https://github.com/example/repo/actions/runs/1",
+    );
   });
 });
 
@@ -196,14 +231,18 @@ describe("GitVibe app server command edge cases", () => {
 
     await app.handleWebhook("discussion_comment", {
       action: "created",
-      comment: { body: "/git-vibe validate", node_id: "discussion-validate-comment" },
+      comment: { body: "/git-vibe summarize", node_id: "discussion-summarize-comment" },
       discussion: { number: 6 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
 
     expect(workflowDispatches(client)).toEqual([
-      { inputs: expect.objectContaining({ "discussion-number": "6" }), ref: "main" },
+      expect.objectContaining({
+        inputs: expect.objectContaining({ "discussion-number": "6" }),
+        ref: "main",
+        return_run_details: true,
+      }),
     ]);
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("command acknowledgement failed: reaction unavailable"),
@@ -245,61 +284,99 @@ describe("GitVibe app server command edge cases", () => {
   });
 });
 
-describe("GitVibe app server label handling", () => {
-  it("rejects untrusted protected labels and dispatches trusted approved labels", async () => {
-    const client = createClient({ permission: new Error("GitHub API GET permission failed: 404") });
-    const app = createApp({ client });
-
-    await app.handleWebhook("issues", {
-      action: "labeled",
-      issue: { number: 2 },
-      label: { name: gitVibeLabels.approved.name },
-      repository: repositoryPayload(),
-      sender: { login: "guest" },
+describe("GitVibe app server dispatch edge cases", () => {
+  it("falls back when workflow dispatch run details are unavailable", async () => {
+    const log = vi.fn();
+    const client = createClient({
+      workflowDispatchError: new Error("return_run_details is not a permitted key"),
+      workflowDispatchErrorCount: 1,
     });
+    const app = createApp({ client, log });
 
-    expect(requestPaths(client, "DELETE")).toContain(
-      "/repos/example/repo/issues/2/labels/git-vibe%3Aapproved",
-    );
-    expect(requestBodies(client, "POST", "/issues/2/comments")[0].body).toContain("removed");
-
-    const trustedClient = createClient({ permission: { role_name: "maintain" } });
-    await createApp({ client: trustedClient }).handleWebhook("issues", {
-      action: "labeled",
-      issue: { number: 9 },
-      label: { name: gitVibeLabels.approved.name },
+    await app.handleWebhook("issue_comment", {
+      action: "created",
+      comment: { body: "/git-vibe investigate" },
+      issue: { number: 2 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
-    expect(workflowDispatches(trustedClient)).toEqual([
-      { inputs: { "issue-number": "9" }, ref: "main" },
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: expect.objectContaining({ "issue-number": "2" }),
+        ref: "main",
+        return_run_details: true,
+      }),
+      expect.objectContaining({
+        inputs: expect.objectContaining({ "issue-number": "2" }),
+        ref: "main",
+      }),
     ]);
+    expect(workflowDispatches(client)[1]).not.toHaveProperty("return_run_details");
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("workflow dispatch run details unavailable for investigate.yml"),
+    );
+    expect(requestBodies(client, "POST", "/issues/2/comments").at(-1).body).not.toContain(
+      "Workflow run:",
+    );
   });
 
-  it("ignores unprotected and non-approved labels", async () => {
-    const client = createClient();
-    const app = createApp({ client });
+  it("logs queued workflow comment failures after dispatching", async () => {
+    const log = vi.fn();
+    const client = createClient({ issueCommentError: new Error("comments unavailable") });
+    const app = createApp({ client, log });
 
-    await app.handleWebhook("issues", {
-      action: "labeled",
+    await app.handleWebhook("issue_comment", {
+      action: "created",
+      comment: { body: "/git-vibe investigate" },
       issue: { number: 2 },
-      label: { name: "bug" },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
-    await app.handleWebhook("issues", {
-      action: "labeled",
-      issue: { number: 2 },
-      label: { name: gitVibeLabels.needsDiscussion.name },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
 
-    expect(workflowDispatches(client)).toEqual([]);
+    expect(workflowDispatches(client)).toHaveLength(1);
+    expect(log).toHaveBeenCalledWith("workflow queued comment failed: comments unavailable");
   });
 });
 
-describe("GitVibe app server dispatch edge cases", () => {
+describe("GitVibe app server workflow dispatch compatibility", () => {
+  it("falls back for generic dispatch permitted-key errors", async () => {
+    const client = createClient({
+      workflowDispatchError: new Error("body is not a permitted key"),
+      workflowDispatchErrorCount: 1,
+    });
+
+    await createApp({ client }).handleWebhook("issue_comment", {
+      action: "created",
+      comment: { body: "/git-vibe investigate" },
+      issue: { number: 2 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toHaveLength(2);
+    expect(workflowDispatches(client)[1]).not.toHaveProperty("return_run_details");
+  });
+});
+
+describe("GitVibe app server ignored dispatch paths", () => {
+  it("omits queued workflow run links when dispatch does not return a run URL", async () => {
+    const client = createClient({ workflowDispatchResponse: {} });
+    const app = createApp({ client });
+
+    await app.handleWebhook("issue_comment", {
+      action: "created",
+      comment: { body: "/git-vibe investigate" },
+      issue: { number: 2 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    const body = requestBodies(client, "POST", "/issues/2/comments").at(-1).body;
+    expect(body).toContain("GitVibe Workflow Queued");
+    expect(body).not.toContain("Workflow run:");
+  });
+
   it("handles ignored events and non-command comments without dispatching workflows", async () => {
     const log = vi.fn();
     const client = createClient();
@@ -331,10 +408,13 @@ describe("GitVibe app server dispatch edge cases", () => {
     expect(log).toHaveBeenCalledWith("ignored issues: missing repository");
     expect(workflowDispatches(client)).toEqual([]);
   });
+});
 
-  it("dispatches the supported issue command workflow variants", async () => {
+describe("GitVibe app server command workflow variants", () => {
+  it("dispatches only the supported command workflow variants", async () => {
     const client = createClient();
-    const app = createApp({ client });
+    const log = vi.fn();
+    const app = createApp({ client, log });
 
     for (const command of ["investigate", "validate"]) {
       await app.handleWebhook("issue_comment", {
@@ -354,15 +434,14 @@ describe("GitVibe app server dispatch edge cases", () => {
     });
 
     expect(requestPaths(client, "POST")).toEqual(
-      expect.arrayContaining([
-        "/repos/example/repo/actions/workflows/investigate.yml/dispatches",
-        "/repos/example/repo/actions/workflows/validate.yml/dispatches",
-      ]),
+      expect.arrayContaining(["/repos/example/repo/actions/workflows/investigate.yml/dispatches"]),
     );
-    expect(workflowDispatches(client).at(-1)).toEqual({
-      inputs: expect.objectContaining({ "discussion-number": "5" }),
-      ref: "main",
-    });
+    expect(requestPaths(client, "POST")).not.toContain(
+      "/repos/example/repo/actions/workflows/validate.yml/dispatches",
+    );
+    expect(log).toHaveBeenCalledWith(
+      "recognized command but no dispatch rule matched: /git-vibe validate",
+    );
   });
 
   it("logs unsupported commands without dispatching workflows", async () => {
@@ -370,7 +449,7 @@ describe("GitVibe app server dispatch edge cases", () => {
     const log = vi.fn();
     const app = createApp({ client, log });
 
-    for (const command of ["start", "approve"]) {
+    for (const command of ["start", "approve", "materialize"]) {
       await app.handleWebhook("issue_comment", {
         action: "created",
         comment: { body: `/git-vibe ${command}`, node_id: `${command}-comment` },
@@ -411,7 +490,11 @@ describe("GitVibe app server PR review dispatch", () => {
     });
 
     expect(workflowDispatches(client)).toEqual([
-      { inputs: expect.objectContaining({ "pr-number": "12" }), ref: "main" },
+      expect.objectContaining({
+        inputs: expect.objectContaining({ "pr-number": "12" }),
+        ref: "main",
+        return_run_details: true,
+      }),
     ]);
     expect(sourceComments(client)[0]).toMatchObject({
       id: "99",
@@ -566,135 +649,3 @@ describe("GitVibe app server runtime edge cases", () => {
     expect(isDirectRun("", "/tmp/server.js")).toBe(true);
   });
 });
-
-function createApp(options = {}) {
-  return createGitVibeApp({
-    client: options.client || createClient(),
-    configuredRepository: options.configuredRepository || "",
-    errorLog: options.errorLog || vi.fn(),
-    githubToken: "token",
-    log: options.log || vi.fn(),
-    webhookSecret: "secret",
-  });
-}
-
-function createClient(options = {}) {
-  const categories = options.categories || [{ id: "ideas", name: "Ideas", slug: "ideas" }];
-  const client = {
-    graphql: vi.fn(async (query, _variables) => {
-      if (query.includes("GitVibeDiscussionCategories")) {
-        return { repository: { discussionCategories: { nodes: categories }, id: "repo-id" } };
-      }
-      if (query.includes("GitVibeAddReaction")) {
-        if (options.reactionError) throw options.reactionError;
-        return { addReaction: { reaction: { content: "ROCKET" } } };
-      }
-      return {
-        createDiscussion: {
-          discussion: {
-            id: "discussion-id",
-            number: 7,
-            url: "https://github.com/example/repo/discussions/7",
-          },
-        },
-      };
-    }),
-    request: vi.fn(async (request) => {
-      if (request.path.includes("/collaborators/")) {
-        const permission = options.permission || { permission: "write" };
-        if (permission instanceof Error) throw permission;
-        return permission;
-      }
-      if (request.method === "GET" && request.path.includes("/comments?")) {
-        return options.comments || [];
-      }
-      if (request.method === "POST" && request.path.endsWith("/labels")) return {};
-      if (request.method === "POST" && request.path.includes("/actions/workflows/")) return {};
-      if (request.method === "POST" && request.path.includes("/issues/")) return {};
-      if (request.method === "PATCH" && request.path.includes("/issues/")) return {};
-      if (request.method === "DELETE" && request.path.includes("/labels/")) return {};
-      throw new Error(`unexpected request ${request.method} ${request.path}`);
-    }),
-  };
-  return client;
-}
-
-function featureIssue() {
-  return {
-    body: "### Request type\n\nFeature request\n\n### Background story\n\nNeed it.",
-    html_url: "https://github.com/example/repo/issues/2",
-    number: 2,
-    title: "[Feature]: Add workflows",
-    user: { login: "octocat" },
-  };
-}
-
-const repositoryPayload = () => ({ name: "repo", owner: { login: "example" } });
-
-const requests = (client) => client.request.mock.calls.map(([request]) => request);
-
-function requestBodies(client, method, pathPart) {
-  return requests(client)
-    .filter((request) => request.method === method && request.path.includes(pathPart))
-    .map((request) => request.body);
-}
-
-const requestPaths = (client, method) =>
-  requests(client)
-    .filter((request) => request.method === method)
-    .map((request) => request.path);
-
-const workflowDispatches = (client) =>
-  requests(client)
-    .filter((request) => request.path.includes("/actions/workflows/"))
-    .map((request) => request.body);
-
-function sourceComments(client) {
-  return workflowDispatches(client)
-    .map((dispatch) => dispatch.inputs["source-comment"])
-    .filter(Boolean)
-    .map((value) => JSON.parse(value));
-}
-
-const sourceCommentKinds = (client) => sourceComments(client).map((comment) => comment.kind);
-
-function reactionVariables(client) {
-  return client.graphql.mock.calls
-    .filter(([query]) => query.includes("GitVibeAddReaction"))
-    .map(([, variables]) => variables);
-}
-
-const signature = (body) => `sha256=${createHmac("sha256", "secret").update(body).digest("hex")}`;
-
-async function withHttpServer(handler, run) {
-  const server = createServer(handler);
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  const url = `http://127.0.0.1:${address.port}`;
-  try {
-    return await run(url);
-  } finally {
-    await new Promise((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
-  }
-}
-
-async function requestJson(baseUrl, method, path, body = "", headers = {}) {
-  const response = await fetch(`${baseUrl}${path}`, {
-    body: method === "GET" ? undefined : body,
-    headers,
-    method,
-  });
-  return { body: await response.json(), status: response.status };
-}
-
-async function requestSignedWebhook(app, payload, event) {
-  return withHttpServer(app.handleRequest, (url) => {
-    const body = JSON.stringify(payload);
-    return requestJson(url, "POST", "/webhooks", body, {
-      "x-github-event": event,
-      "x-hub-signature-256": signature(body),
-    });
-  });
-}

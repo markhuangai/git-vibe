@@ -68,7 +68,7 @@ sequenceDiagram
   GH->>App: Repository webhook: command, label, issue, discussion, or PR event
   App->>API: Validate actor permission
   App->>API: Add label, comment, or state marker
-  App->>API: Dispatch workflow with issue, PR, and source-comment parameters
+  App->>API: Dispatch workflow with target parameters and run details request
   GH->>WF: Start workflow run
   WF->>Act: Run reusable action or reusable workflow
   Act->>API: Use configured repository PAT for branch, PR, comments, and metadata writes

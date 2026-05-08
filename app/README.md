@@ -11,14 +11,14 @@ It currently handles:
 - GitVibe label bootstrap for webhook repositories.
 - Feature request issue-form intake conversion into linked GitHub Discussions.
 - `/git-vibe investigate` on issue comments.
-- `/git-vibe start` on issue comments.
+- `/git-vibe summarize` on discussion comments.
 - `/git-vibe address-feedback` on pull request comments.
 - `/git-vibe ...` as the only supported public command prefix.
 - Accepted admin/collaborator commands get a `rocket` reaction before workflow dispatch.
-- Protected `git-vibe:*` issue labels, including `git-vibe:approved`.
+- Protected `git-vibe:*` issue and discussion labels, including `git-vibe:validate` and `git-vibe:approved`.
 - Fine-grained PAT-backed GitHub API writes.
 - Repository permission checks before dispatching workflows.
-- Workflow dispatch to reusable GitVibe workflows.
+- Workflow dispatch to reusable GitVibe workflows, with queued comments linking exact workflow runs when GitHub returns them.
 
 GitVibe uses repository webhooks plus a fine-grained PAT. The PAT owner appears as
 the actor for GitHub writes performed by the server and workflows.

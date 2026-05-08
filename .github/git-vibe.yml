@@ -22,6 +22,7 @@ labels:
   in_progress: git-vibe:in-progress
   blocked: git-vibe:blocked
   pr_opened: git-vibe:pr-opened
+  validate: git-vibe:validate
 
 commands:
   prefix: /git-vibe
@@ -76,7 +77,16 @@ ai:
           reasoningSummary: concise
         anthropic:
           effort: high
-    codex_cli:
+    codex_cli_high:
+      enabled: true
+      adapter: cli-codex
+      command: codex exec
+      auth_json_secret: CODEX_AUTH_JSON
+      model: gpt-5.5
+      reasoning:
+        effort: high
+        summary: concise
+    codex_cli_xhigh:
       enabled: true
       adapter: cli-codex
       command: codex exec
@@ -119,8 +129,7 @@ ai:
     investigate:
       enabled: true
       access: read-only
-      profile: codex_cli
-      fallback_profile: codex_cli
+      profile: codex_cli_high
       tools:
         - read
         - grep
@@ -130,7 +139,7 @@ ai:
     summarize:
       enabled: true
       access: read-only
-      profile: codex_cli
+      profile: codex_cli_high
       tools:
         - read
         - grep
@@ -140,7 +149,7 @@ ai:
     validate:
       enabled: true
       access: read-only
-      profile: codex_cli
+      profile: codex_cli_high
       tools:
         - read
         - grep
@@ -164,7 +173,7 @@ ai:
       enabled: true
       access: read-only
       profiles:
-        - codex_cli
+        - codex_cli_xhigh
       tools:
         - read
         - grep
@@ -173,7 +182,7 @@ ai:
     address-pr-feedback:
       enabled: true
       access: branch-write
-      profile: local_proxy
+      profile: codex_cli_high
       tools:
         - read
         - grep
@@ -199,4 +208,4 @@ feature_refinement:
     enabled: false
     reaction: "+1"
     threshold: 10
-    dispatch: summarize-and-validate
+    dispatch: summarize

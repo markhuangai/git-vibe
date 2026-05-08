@@ -29,9 +29,9 @@ jobs:
 
 Core defaults:
 
-- `/git-vibe ...` is the primary public command form.
+- `/git-vibe ...` is the public command form for command-triggered workflows.
 - Bugs are investigated before any implementation approval.
-- Feature requests start in discussions and are materialized into issues only after refinement.
+- Feature requests start in discussions and are materialized into issues only after refinement and protected approval.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
 - AI returns structured results; deterministic GitVibe code performs GitHub writes.
 - App, runner, and shared TypeScript live in one package but separate source boundaries so runner-only changes do not redeploy the app.

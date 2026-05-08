@@ -73,7 +73,11 @@ describe("stage runner review-fix writes", () => {
     expect(fetch.mock.calls[5][0]).toContain(
       "/repos/example/repo/actions/workflows/develop.yml/dispatches",
     );
-    expect(bodyAt(fetch, 5)).toEqual({ inputs: { "issue-number": "13" }, ref: "main" });
+    expect(bodyAt(fetch, 5)).toEqual({
+      inputs: { "issue-number": "13" },
+      ref: "main",
+      return_run_details: true,
+    });
     expect(bodyAt(fetch, 6).body).toContain("GitVibe Workflow Queued");
   });
 
@@ -94,7 +98,11 @@ describe("stage runner review-fix writes", () => {
     expect(fetch.mock.calls[2][0]).toContain(
       "/repos/example/repo/actions/workflows/develop.yml/dispatches",
     );
-    expect(bodyAt(fetch, 2).inputs).toEqual({ "issue-number": "13" });
+    expect(bodyAt(fetch, 2)).toEqual({
+      inputs: { "issue-number": "13" },
+      ref: "main",
+      return_run_details: true,
+    });
     expect(bodyAt(fetch, 3).body).toContain("GitVibe Workflow Queued");
   });
 });
@@ -197,6 +205,44 @@ describe("review-fix deterministic paths", () => {
     expect(requestBody(client, 0).title).toBe("Review fixes for #12: GitVibe implementation");
     expect(requestBody(client, 0).body).toContain("- None provided.");
     expect(client.request.mock.calls[2][0].path).toContain("/sub_issues");
+  });
+
+  it("falls back when review-fix workflow dispatch cannot return run details", async () => {
+    const client = requestClient([
+      { html_url: "https://github.com/example/repo/issues/13", id: 99, number: 13 },
+      {},
+      {},
+      new Error("return_run_details is not a permitted key"),
+      {},
+      {},
+    ]);
+    const logger = fakeLogger();
+
+    await expect(
+      handleReviewFixRequired({
+        client,
+        config: {},
+        context: contextWithIssue(),
+        logger,
+        result: stageResult({ next_state: "changes-required" }),
+        runner: runnerOptions(),
+      }),
+    ).resolves.toMatchObject({ status: "completed" });
+
+    expect(requestBody(client, 3)).toEqual({
+      inputs: { "issue-number": "13" },
+      ref: "main",
+      return_run_details: true,
+    });
+    expect(requestBody(client, 4)).toEqual({
+      inputs: { "issue-number": "13" },
+      ref: "main",
+    });
+    expect(requestBody(client, 5).body).not.toContain("Workflow run:");
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.workflow.dispatch.run_details_unavailable",
+      expect.objectContaining({ workflow: "develop.yml" }),
+    );
   });
 
   it("renders traceability without a leading blank body", () => {

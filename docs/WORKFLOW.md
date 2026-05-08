@@ -12,15 +12,15 @@ stateDiagram-v2
   Intake --> ConvertedDiscussion: feature submitted as issue
   ConvertedDiscussion --> StoryDiscussion: create discussion, link issue, close issue
 
-  StoryDiscussion --> Refinement: /git-vibe summarize or /git-vibe validate
+  StoryDiscussion --> Refinement: /git-vibe summarize or git-vibe:validate
   Refinement --> NeedsAnswers: open questions found
-  NeedsAnswers --> Refinement: replies plus /git-vibe validate
-  Refinement --> ImplementationIssue: no blockers plus /git-vibe materialize
+  NeedsAnswers --> Refinement: replies plus git-vibe:validate
+  Refinement --> ImplementationIssue: no blockers plus git-vibe:approved
 
   BugIssue --> WaitingForBugInvestigation: default state, no AI work
   WaitingForBugInvestigation --> BugInvestigation: maintainer command or configured reaction threshold
   BugInvestigation --> BugNeedsContext: post findings and expected behavior questions
-  BugNeedsContext --> BugValidation: admin or collaborator adds context
+  BugNeedsContext --> BugValidation: admin or collaborator adds context and validate label
   BugValidation --> BugNeedsContext: feedback does not make sense, reset ready flag
   BugValidation --> ImplementationIssue: validation passes
 
@@ -52,7 +52,7 @@ stateDiagram-v2
 - Admins and collaborators move work forward with public `/git-vibe ...`
   commands and protected labels.
 - Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
-- Command, protected-label, and trusted-review dispatches post a queued comment after dispatch succeeds. Runner stages post a separate running comment with the workflow run URL when the job actually starts.
+- Command, protected-label, and trusted-review dispatches post a queued comment after dispatch succeeds. Queued comments include the exact workflow run URL when GitHub returns it; runner stages post a separate running comment when the job actually starts.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation and summary generation; it must never start code changes.
 - GitVibe never auto-merges and never approves its own pull requests.
@@ -71,8 +71,6 @@ Initial commands:
 ```text
 /git-vibe summarize
 /git-vibe investigate
-/git-vibe validate
-/git-vibe materialize
 /git-vibe address-feedback
 ```
 
@@ -91,6 +89,7 @@ git-vibe:needs-expected-behavior
 git-vibe:approval-requested
 git-vibe:ready-for-approval
 git-vibe:approved
+git-vibe:validate
 git-vibe:in-progress
 git-vibe:blocked
 git-vibe:pr-opened
@@ -121,9 +120,10 @@ GitHub labels are not natively protected per label. GitVibe must treat public
 automation labels and internal `gvi:` labels as protected by policy: only
 configured admin/collaborator roles may add or remove them, and the server must
 verify the webhook sender on every relevant label event before dispatching
-automation. If an unauthorized actor adds `git-vibe:approved`, GitVibe removes
-the label, posts an audit comment, and does not start the pipeline. If anyone
-adds `gvi:review-fix` without a valid GitVibe hidden marker, GitVibe removes it.
+automation. If an unauthorized actor adds a protected `git-vibe:*` label,
+GitVibe removes the label, posts an audit comment, and does not start the
+pipeline. If anyone adds `gvi:review-fix` without a valid GitVibe hidden marker,
+GitVibe removes it.
 
 ## Pipeline
 
@@ -218,7 +218,7 @@ sequenceDiagram
   AI->>Issue: Post findings, likely root cause, and expected behavior questions
 
   Maint->>Issue: Provide expected behavior and context
-  Maint->>Issue: /git-vibe validate
+  Maint->>Issue: Apply git-vibe:validate label
   App->>AI: Dispatch validation pass
   AI->>Issue: Confirm actionable plan or explain contradictions
 
@@ -271,19 +271,22 @@ sequenceDiagram
     Community->>Disc: Discussion reaches configured +1 threshold
   end
 
-  App->>AI: Dispatch summarize + validate workflow
+  App->>AI: Dispatch summarize workflow
   AI->>Disc: Post summary, proposed behavior, open questions, and risks
 
   Maint->>Disc: Provide clarifications
-  Maint->>Disc: /git-vibe validate
+  Maint->>Disc: Apply git-vibe:validate label
+  App->>AI: Dispatch validation workflow
   AI->>Disc: Confirm actionable state or request more answers
 
-  Maint->>Disc: /git-vibe materialize
+  Maint->>Disc: Apply git-vibe:approved label
+  App->>AI: Dispatch materialize workflow
   App->>Issue: Create implementation issue with backlinks and accepted summary
   App->>Disc: Link implementation issue
+  App->>Disc: Close resolved Discussion
 ```
 
-Community-triggered feature refinement is optional and configurable. It may automatically start `summarize + validate` for high-signal discussions, but it must not create implementation issues or start coding without admin/collaborator approval.
+Community-triggered feature refinement is optional and configurable. It may automatically start summarization for high-signal discussions, but it must not validate, create implementation issues, or start coding without admin/collaborator approval.
 
 Example config shape:
 
@@ -293,7 +296,7 @@ feature_refinement:
     enabled: true
     reaction: "+1"
     threshold: 10
-    dispatch: summarize-and-validate
+    dispatch: summarize
 ```
 
 ## PR Feedback Loop
@@ -335,7 +338,7 @@ GitVibe must make every generated artifact discoverable from the others.
 - When a feature issue is converted to a discussion, the closed issue gets a comment linking the discussion, and the discussion body or first bot comment links the original issue.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
 - Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering surface. Discussions use threaded replies; issue, pull request conversation, and submitted-review triggers use flat comments with an explicit source link. Pull request review-comment replies remain supported for existing metadata.
-- When the app dispatches automation from a command, protected label, or trusted review, it posts a queued comment with a hidden metadata marker. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact.
+- When the app dispatches automation from a command, protected label, or trusted review, it posts a queued comment with a hidden metadata marker and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
 - The source issue gets a comment linking the PR and latest workflow run.

@@ -27,6 +27,7 @@ labels:
   in_progress: git-vibe:in-progress
   blocked: git-vibe:blocked
   pr_opened: git-vibe:pr-opened
+  validate: git-vibe:validate
 
 commands:
   prefix: /git-vibe
@@ -217,7 +218,7 @@ feature_refinement:
     enabled: false
     reaction: "+1"
     threshold: 10
-    dispatch: summarize-and-validate
+    dispatch: summarize
 
 analysis:
   author_weight_order:

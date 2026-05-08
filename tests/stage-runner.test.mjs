@@ -283,6 +283,7 @@ describe("stage runner materialize writes", () => {
       discussionResponse(),
       response(200, { html_url: "https://github.com/example/repo/issues/13", number: 13 }),
       graphqlResponse({ addDiscussionComment: { comment: { id: "comment", url: "url" } } }),
+      graphqlResponse({ closeDiscussion: { discussion: { id: "discussion-id" } } }),
     ]);
     globalThis.fetch = fetch;
 
@@ -311,6 +312,8 @@ describe("stage runner materialize writes", () => {
     expect(JSON.parse(fetch.mock.calls[2][1].body).variables.replyToId).toBe(
       "discussion-parent-comment",
     );
+    expect(JSON.parse(fetch.mock.calls[3][1].body).query).toContain("GitVibeCloseDiscussion");
+    expect(JSON.parse(fetch.mock.calls[3][1].body).variables.discussionId).toBe("discussion-id");
   });
 });
 

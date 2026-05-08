@@ -112,6 +112,7 @@ describe("GitVibe labels", () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain("git-vibe:approved");
     expect(names).toContain("git-vibe:story");
+    expect(names).toContain("git-vibe:validate");
     expect(names).toContain(gitVibeInternalLabels.reviewFix.name);
     expect(isGitVibeLabel("git-vibe:custom")).toBe(true);
     expect(isGitVibeLabel("gvi:runtime")).toBe(true);
