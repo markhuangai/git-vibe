@@ -68,6 +68,8 @@ ai:
     local_proxy:
       enabled: true
       adapter: ai-sdk-agentool
+      # Optional: set to the selected model's context window to log context_used_pct.
+      # context_window_tokens: 128000
       provider:
         # openai, anthropic, or openai-compatible.
         type: openai-compatible
@@ -124,8 +126,8 @@ ai:
     implementation_max_turns: 120
     feedback_max_turns: 120
     review_max_iterations: 5
-    validation_repair_attempts: 2
-    validation_repair_max_turns: 90
+    validation_repair_attempts: 3
+    validation_repair_max_turns: 45
     request_retry_attempts: 3
     request_retry_delay_seconds: 60
     max_context_items: 200

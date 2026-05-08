@@ -67,6 +67,8 @@ describe("GitVibe action launcher", () => {
         },
         stage: "investigate",
         stageTimeoutMinutes: 34,
+        validationRepairAttempts: 3,
+        validationRepairMaxTurns: 45,
         workflowRunUrl: "https://github.enterprise.test/example/repo/actions/runs/99",
       }),
     );

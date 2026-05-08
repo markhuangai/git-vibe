@@ -135,13 +135,13 @@ describe("validation repair helpers", () => {
     expect(
       validationRepairAttemptsFor({ ai: { budgets: { validation_repair_attempts: 4 } } }, runner),
     ).toBe(4);
-    expect(validationRepairAttemptsFor({}, runner)).toBe(2);
+    expect(validationRepairAttemptsFor({}, runner)).toBe(3);
 
     expect(validationRepairMaxTurnsFor({}, { ...runner, validationRepairMaxTurns: 9 })).toBe(9);
     expect(
       validationRepairMaxTurnsFor({ ai: { budgets: { validation_repair_max_turns: 7 } } }, runner),
     ).toBe(7);
-    expect(validationRepairMaxTurnsFor({}, runner)).toBe(90);
+    expect(validationRepairMaxTurnsFor({}, runner)).toBe(45);
   });
 
   it("builds bounded redacted repair prompts when git metadata is unavailable", () => {

@@ -127,6 +127,8 @@ ai:
   profiles:
     local_proxy:
       adapter: ai-sdk-agentool
+      # Optional: set to the selected model's context window to log context_used_pct.
+      # context_window_tokens: 128000
       provider:
         type: openai-compatible
         model_variable: GITVIBE_AI_MODEL
@@ -165,6 +167,7 @@ Normalized reasoning config:
 
 - `reasoning.effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. Adapters should reject unsupported values for the selected provider/model with a clear config error.
 - `reasoning.summary`: `auto`, `concise`, `detailed`, or `none` where the adapter supports summaries.
+- `context_window_tokens`: optional positive integer on an AI profile. When set, `ai-sdk-agentool` logs per-step `context_used_pct` from reported input tokens.
 - `provider_options`: adapter-specific passthrough for settings GitVibe does not normalize yet.
 
 Adapter mappings:
@@ -187,8 +190,8 @@ Default AI budgets:
 
 - default max turns: `90`.
 - implementation and PR feedback max turns: `120`.
-- validation repair max turns: `90` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
-- validation repair attempts: `2` per implementation run.
+- validation repair max turns: `45` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
+- validation repair attempts: `3` per implementation run.
 - review-fix continuation depth limit: `5` review-fix issues before GitVibe blocks and asks for human intervention.
 - provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
 - investigation/refinement/validation/review timeout: `60` minutes.

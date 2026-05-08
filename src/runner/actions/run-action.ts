@@ -44,8 +44,8 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
       token,
-      validationRepairAttempts: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_ATTEMPTS", 2),
-      validationRepairMaxTurns: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_MAX_TURNS", 90),
+      validationRepairAttempts: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_ATTEMPTS", 3),
+      validationRepairMaxTurns: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_MAX_TURNS", 45),
       workflowRunUrl: workflowRunUrl(env),
     });
 

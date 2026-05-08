@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 /**
- * @typedef {{ env?: Record<string, string>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: unknown } }} Workflow
+ * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
+ * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } } }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
@@ -204,6 +205,18 @@ describe("GitVibe workflow numeric inputs", () => {
         );
       }
     }
+  });
+
+  it("keeps implementation validation repair defaults aligned", () => {
+    const workflow = readWorkflow(".github/workflows/develop.yml");
+    const action = readWorkflow("implement/action.yml");
+
+    expect(workflow.on?.workflow_dispatch?.inputs?.validation_repair_attempts?.default).toBe(3);
+    expect(workflow.on?.workflow_dispatch?.inputs?.validation_repair_max_turns?.default).toBe(45);
+    expect(workflow.on?.workflow_call?.inputs?.validation_repair_attempts?.default).toBe(3);
+    expect(workflow.on?.workflow_call?.inputs?.validation_repair_max_turns?.default).toBe(45);
+    expect(action.inputs?.["validation-repair-attempts"]?.default).toBe("3");
+    expect(action.inputs?.["validation-repair-max-turns"]?.default).toBe("45");
   });
 });
 

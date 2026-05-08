@@ -45,7 +45,7 @@ export function validationRepairAttemptsFor(config: GitVibeConfig, options: Runn
     options.validationRepairAttempts,
     configNumber(config.tests, "validation_repair_attempts"),
     configNumber(config.ai?.budgets, "validation_repair_attempts"),
-    2,
+    3,
   );
 }
 
@@ -53,7 +53,7 @@ export function validationRepairMaxTurnsFor(config: GitVibeConfig, options: Runn
   return positiveInteger(
     options.validationRepairMaxTurns,
     configNumber(config.ai?.budgets, "validation_repair_max_turns"),
-    90,
+    45,
   );
 }
 

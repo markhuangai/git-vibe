@@ -38,6 +38,8 @@ interface AiStep {
 interface AiResult {
   steps?: AiStep[];
   text: string;
+  totalUsage?: unknown;
+  usage?: unknown;
 }
 
 export interface RunAiStageOptions {
@@ -115,8 +117,11 @@ async function runAiSdkStageWithProfile(
 ): Promise<string> {
   const logger = options.logger;
   const tools = createTools(options);
+  const contextWindowTokens = contextWindowTokensForProfile(profileName, profile);
+  let maxContextUsedPct: number | undefined;
   let stepCount = 0;
   logger?.event("ai.request.start", {
+    context_window_tokens: contextWindowTokens,
     max_turns: options.maxTurns,
     model: modelName(profile),
     profile: profileName,
@@ -138,11 +143,15 @@ async function runAiSdkStageWithProfile(
     model: createModel(options, profileName, profile),
     onStepFinish: (event: unknown) => {
       stepCount += 1;
+      const contextUsedPct = contextUsedPctForUsage(usageRecord(event), contextWindowTokens);
+      maxContextUsedPct = maxNumber(maxContextUsedPct, contextUsedPct);
       logger?.event("ai.step.done", {
         finish_reason: stringField(event, "finishReason"),
         step: stepCount,
         tool_calls: arrayField(event, "toolCalls").length,
         tools: toolNames(arrayField(event, "toolCalls")).join(",") || "none",
+        ...usageLogFields(usageRecord(event)),
+        ...optionalNumberField("context_used_pct", contextUsedPct),
       });
     },
     prompt: options.prompt,
@@ -158,8 +167,81 @@ async function runAiSdkStageWithProfile(
     tool_calls: result.steps?.flatMap((step) => step.toolCalls || []).length || 0,
     tools_used:
       toolNames(result.steps?.flatMap((step) => step.toolCalls || []) || []).join(",") || "none",
+    ...usageLogFields(requestUsageRecord(result)),
+    ...optionalNumberField("max_context_used_pct", maxContextUsedPct),
   });
   return extractValidatedOutput(result);
+}
+
+function usageLogFields(usage: Record<string, unknown> | undefined): Record<string, unknown> {
+  const inputDetails = recordField(usage, "inputTokenDetails");
+  const outputDetails = recordField(usage, "outputTokenDetails");
+  const fields: Record<string, unknown> = {};
+
+  addNumberField(fields, "input_tokens", numberField(usage, "inputTokens"));
+  addNumberField(fields, "input_no_cache_tokens", numberField(inputDetails, "noCacheTokens"));
+  addNumberField(
+    fields,
+    "input_cache_read_tokens",
+    numberField(inputDetails, "cacheReadTokens") ?? numberField(usage, "cachedInputTokens"),
+  );
+  addNumberField(fields, "input_cache_write_tokens", numberField(inputDetails, "cacheWriteTokens"));
+  addNumberField(fields, "output_tokens", numberField(usage, "outputTokens"));
+  addNumberField(fields, "output_text_tokens", numberField(outputDetails, "textTokens"));
+  addNumberField(
+    fields,
+    "output_reasoning_tokens",
+    numberField(outputDetails, "reasoningTokens") ?? numberField(usage, "reasoningTokens"),
+  );
+  addNumberField(fields, "total_tokens", numberField(usage, "totalTokens"));
+
+  return fields;
+}
+
+function requestUsageRecord(result: AiResult): Record<string, unknown> | undefined {
+  return recordValue(result.totalUsage) || recordValue(result.usage);
+}
+
+function usageRecord(event: unknown): Record<string, unknown> | undefined {
+  return recordField(recordValue(event), "usage");
+}
+
+function contextWindowTokensForProfile(
+  profileName: string,
+  profile: Record<string, unknown>,
+): number | undefined {
+  const value = profile.context_window_tokens;
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  throw new Error(`AI profile ${profileName} context_window_tokens must be a positive integer.`);
+}
+
+function contextUsedPctForUsage(
+  usage: Record<string, unknown> | undefined,
+  contextWindowTokens: number | undefined,
+): number | undefined {
+  if (contextWindowTokens === undefined) return undefined;
+  const inputTokens = numberField(usage, "inputTokens");
+  if (inputTokens === undefined) return undefined;
+  return Math.round((inputTokens / contextWindowTokens) * 1000) / 10;
+}
+
+function maxNumber(left: number | undefined, right: number | undefined): number | undefined {
+  if (right === undefined) return left;
+  if (left === undefined) return right;
+  return Math.max(left, right);
+}
+
+function optionalNumberField(key: string, value: number | undefined): Record<string, unknown> {
+  return value === undefined ? {} : { [key]: value };
+}
+
+function addNumberField(
+  fields: Record<string, unknown>,
+  key: string,
+  value: number | undefined,
+): void {
+  if (value !== undefined) fields[key] = value;
 }
 
 function createModel(
@@ -682,6 +764,19 @@ function numberField(value: unknown, key: string): number | undefined {
   if (!value || typeof value !== "object") return undefined;
   const field = (value as Record<string, unknown>)[key];
   return typeof field === "number" ? field : undefined;
+}
+
+function recordField(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): Record<string, unknown> | undefined {
+  return recordValue(value?.[key]);
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function booleanField(value: unknown, key: string): boolean | undefined {

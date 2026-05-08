@@ -46,12 +46,12 @@ on:
         description: Maximum validation repair attempts inside each implementation run.
         required: false
         type: number
-        default: 2
+        default: 3
       validation_repair_max_turns:
         description: Maximum AI turns for each validation repair attempt.
         required: false
         type: number
-        default: 90
+        default: 45
       dry-run:
         description: Validate and describe actions without writing to GitHub.
         required: false
@@ -117,12 +117,12 @@ on:
         description: Maximum validation repair attempts inside each implementation run.
         required: false
         type: number
-        default: 2
+        default: 3
       validation_repair_max_turns:
         description: Maximum AI turns for each validation repair attempt.
         required: false
         type: number
-        default: 90
+        default: 45
       dry-run:
         description: Validate and describe actions without writing to GitHub.
         required: false
