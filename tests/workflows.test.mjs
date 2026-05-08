@@ -13,7 +13,6 @@ import { parse } from "yaml";
 const aiEnv = {
   GITVIBE_AI_API_KEY: "${{ secrets.GITVIBE_AI_API_KEY }}",
   GITVIBE_AI_BASE_URL: "${{ vars.GITVIBE_AI_BASE_URL }}",
-  GITVIBE_AI_MODEL: "${{ vars.GITVIBE_AI_MODEL }}",
 };
 
 const cliSecretEnv = {

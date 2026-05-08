@@ -279,6 +279,7 @@ function aiSdkOptions({ logger }) {
         profiles: {
           local_proxy: {
             provider: {
+              model: "glm-5",
               type: "openai-compatible",
             },
           },

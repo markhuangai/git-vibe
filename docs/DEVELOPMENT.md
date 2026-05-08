@@ -41,13 +41,13 @@ Required local proxy repository variables and secrets:
 
 ```text
 vars.GITVIBE_AI_BASE_URL
-vars.GITVIBE_AI_MODEL
 secrets.GITVIBE_AI_API_KEY
 ```
 
 `GITVIBE_AI_BASE_URL` should point to an OpenAI-compatible `/v1` API root. The
-local proxy job uses AI SDK plus `agentool` and, by default, requires the model to
-call the read-only `agentool` file reader.
+local proxy job uses AI SDK plus `agentool`, defaults to `glm-5`, and requires
+the model to call the read-only `agentool` file reader. Set
+`vars.GITVIBE_AI_MODEL` only when overriding the smoke-test model.
 
 Codex CLI smoke testing is optional. The workflow installs `@openai/codex`
 when the `codex` command is missing, then uses:

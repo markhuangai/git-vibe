@@ -253,7 +253,7 @@ function createModel(
 ): LanguageModel {
   const provider = profile.provider as Record<string, unknown> | undefined;
   const providerType = String(provider?.type || "openai-compatible");
-  const model = envValue(provider?.model_variable, "GITVIBE_AI_MODEL");
+  const model = aiSdkModelName(profile);
   const apiKey = envValue(provider?.api_key_secret, "GITVIBE_AI_API_KEY");
   const fetch = createRetryingFetch(options);
 
@@ -405,8 +405,14 @@ function createTools(options: RunAiStageOptions): ToolSet {
 }
 
 function modelName(profile: Record<string, unknown>): string {
+  return aiSdkModelName(profile);
+}
+
+function aiSdkModelName(profile: Record<string, unknown>): string {
   const provider = profile.provider as Record<string, unknown> | undefined;
-  return envValue(provider?.model_variable, "GITVIBE_AI_MODEL");
+  const model = stringValue(provider?.model);
+  if (!model) throw new Error("AI SDK profile provider.model must be configured.");
+  return model;
 }
 
 function providerType(profile: Record<string, unknown>): string {

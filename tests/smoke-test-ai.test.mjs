@@ -35,6 +35,15 @@ describe("smoke-test-ai config", () => {
       model: "test-model",
       requireTool: true,
     });
+    expect(
+      readConfig({
+        cwd: "/repo",
+        env: {
+          GITVIBE_AI_API_KEY: "secret-key",
+          GITVIBE_AI_BASE_URL: "http://proxy.local/v1",
+        },
+      }).model,
+    ).toBe("glm-5");
   });
 
   it("parses optional numeric and boolean environment values", () => {

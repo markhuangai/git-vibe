@@ -318,9 +318,54 @@ function toolSummaryCalls() {
 }
 
 describe("AI stage runner provider failures", () => {
+  it("uses direct AI SDK profile model names without a model variable", async () => {
+    delete process.env.GITVIBE_AI_MODEL;
+    const logger = { event: vi.fn() };
+    generateText.mockResolvedValueOnce({
+      steps: [],
+      text: '{"stage":"investigate","status":"completed"}',
+    });
+
+    await expect(
+      runAiStage({
+        config: localProxyConfig(),
+        cwd: process.cwd(),
+        logger,
+        maxTurns: 1,
+        prompt: "Prompt",
+        schema: {},
+        schemaId: "schema",
+        stage: "investigate",
+        stageDefinition: stageDefinitions.investigate,
+        system: "System",
+      }),
+    ).resolves.toBe('{"stage":"investigate","status":"completed"}');
+
+    expect(createOpenAI.mock.results.at(-1).value.chat).toHaveBeenCalledWith("glm-5");
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.request.start",
+      expect.objectContaining({ model: "glm-5" }),
+    );
+  });
+
+  it("requires direct AI SDK profile model names", async () => {
+    await expect(
+      runAiStage({
+        config: localProxyConfig({ model: "" }),
+        cwd: process.cwd(),
+        maxTurns: 1,
+        prompt: "Prompt",
+        schema: {},
+        schemaId: "schema",
+        stage: "investigate",
+        stageDefinition: stageDefinitions.investigate,
+        system: "System",
+      }),
+    ).rejects.toThrow("AI SDK profile provider.model must be configured.");
+  });
+
   it("supports anthropic profiles and reports malformed AI responses", async () => {
     process.env.ANTHROPIC_KEY = "anthropic-key";
-    process.env.ANTHROPIC_MODEL = "claude-test";
     generateText.mockResolvedValueOnce({ steps: [], text: "not json" });
 
     await expect(
@@ -343,7 +388,7 @@ describe("AI stage runner provider failures", () => {
   });
 
   it("requires configured AI environment variables", async () => {
-    delete process.env.GITVIBE_AI_MODEL;
+    delete process.env.GITVIBE_AI_BASE_URL;
 
     await expect(
       runAiStage({
@@ -357,7 +402,7 @@ describe("AI stage runner provider failures", () => {
         stageDefinition: stageDefinitions.investigate,
         system: "System",
       }),
-    ).rejects.toThrow("GITVIBE_AI_MODEL is required");
+    ).rejects.toThrow("GITVIBE_AI_BASE_URL is required");
   });
 });
 
@@ -573,22 +618,19 @@ describe("AI stage runner telemetry edge cases", () => {
   });
 });
 
-function localProxyConfig({ budgets, stage = "investigate" } = {}) {
+function localProxyConfig({ budgets, model = "glm-5", stage = "investigate" } = {}) {
   return {
     ai: {
       ...(budgets ? { budgets } : {}),
       profiles: {
         local_proxy: {
           provider: {
+            ...(model ? { model } : {}),
             type: "openai-compatible",
           },
         },
       },
-      stages: {
-        [stage]: {
-          profile: "local_proxy",
-        },
-      },
+      stages: { [stage]: { profile: "local_proxy" } },
     },
   };
 }
@@ -602,17 +644,13 @@ function openAiCompatibleConfig({ stage = "investigate" } = {}) {
           provider: {
             api_key_secret: "OPENAI_KEY",
             base_url_variable: "OPENAI_BASE_URL",
-            model_variable: "OPENAI_MODEL",
+            model: "gpt-test",
             type: "openai-compatible",
           },
           provider_options: { custom: true },
         },
       },
-      stages: {
-        [stage]: {
-          profile: "test",
-        },
-      },
+      stages: { [stage]: { profile: "test" } },
     },
   };
 }
@@ -624,16 +662,12 @@ function anthropicConfig() {
         claude: {
           provider: {
             api_key_secret: "ANTHROPIC_KEY",
-            model_variable: "ANTHROPIC_MODEL",
+            model: "claude-test",
             type: "anthropic",
           },
         },
       },
-      stages: {
-        summarize: {
-          profile: "claude",
-        },
-      },
+      stages: { summarize: { profile: "claude" } },
     },
   };
 }
@@ -644,15 +678,12 @@ function nativeOpenAiConfig() {
       profiles: {
         openai: {
           provider: {
+            model: "gpt-test",
             type: "openai",
           },
         },
       },
-      stages: {
-        investigate: {
-          profile: "openai",
-        },
-      },
+      stages: { investigate: { profile: "openai" } },
     },
   };
 }

@@ -73,8 +73,8 @@ ai:
       provider:
         # openai, anthropic, or openai-compatible.
         type: openai-compatible
-        # GitHub Actions Variable name. Model names are configuration, not credentials.
-        model_variable: GITVIBE_AI_MODEL
+        # Model names are configuration, not credentials.
+        model: glm-5
         # GitHub Actions Variable name. Use a secret only if the endpoint itself is sensitive.
         base_url_variable: GITVIBE_AI_BASE_URL
         # GitHub Actions Secret name. Stores the AI provider or local proxy API key.

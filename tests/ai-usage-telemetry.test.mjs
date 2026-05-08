@@ -177,7 +177,7 @@ function configWithProfile(profileFields = {}) {
           provider: {
             api_key_secret: "GITVIBE_AI_API_KEY",
             base_url_variable: "GITVIBE_AI_BASE_URL",
-            model_variable: "GITVIBE_AI_MODEL",
+            model: "glm-5",
             type: "openai-compatible",
           },
         },

@@ -131,7 +131,8 @@ ai:
       # context_window_tokens: 128000
       provider:
         type: openai-compatible
-        model_variable: GITVIBE_AI_MODEL
+        # Prefer direct model names when each profile should choose its own model.
+        model: glm-5
         base_url_variable: GITVIBE_AI_BASE_URL
         api_key_secret: GITVIBE_AI_API_KEY
       reasoning:

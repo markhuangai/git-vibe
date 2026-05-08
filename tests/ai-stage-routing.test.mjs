@@ -372,6 +372,7 @@ describe("AI stage runner profile arrays", () => {
             profiles: {
               local_proxy: {
                 provider: {
+                  model: "test-model",
                   type: "openai-compatible",
                 },
               },
@@ -393,7 +394,6 @@ describe("AI stage runner profile arrays", () => {
 describe("AI stage runner fallback profiles", () => {
   it("retries the configured fallback profile when the primary profile fails", async () => {
     process.env.FALLBACK_KEY = "fallback-key";
-    process.env.FALLBACK_MODEL = "fallback-model";
     process.env.FALLBACK_BASE_URL = "https://fallback.test/v1";
     const logger = { event: vi.fn() };
     generateText.mockResolvedValueOnce({
@@ -417,11 +417,11 @@ describe("AI stage runner fallback profiles", () => {
     ).resolves.toBe('{"stage":"investigate","status":"completed"}');
 
     expect(logger.event).toHaveBeenCalledWith("ai.request.failed", {
-      error: "PRIMARY_MODEL is required for ai-sdk-agentool profile",
+      error: "PRIMARY_KEY is required for ai-sdk-agentool profile",
       profile: "primary",
     });
     expect(logger.event).toHaveBeenCalledWith("ai.request.retry", {
-      previous_error: "PRIMARY_MODEL is required for ai-sdk-agentool profile",
+      previous_error: "PRIMARY_KEY is required for ai-sdk-agentool profile",
       profile: "fallback",
     });
     expect(createOpenAI).toHaveBeenCalledWith(
@@ -571,7 +571,7 @@ function stageRoutingConfig() {
           provider: {
             api_key_secret: "STAGE_KEY",
             base_url_variable: "STAGE_BASE_URL",
-            model_variable: "STAGE_MODEL",
+            model: "stage-model",
             type: "openai-compatible",
           },
         },
@@ -594,13 +594,14 @@ function fallbackRoutingConfig() {
           provider: {
             api_key_secret: "FALLBACK_KEY",
             base_url_variable: "FALLBACK_BASE_URL",
-            model_variable: "FALLBACK_MODEL",
+            model: "fallback-model",
             type: "openai-compatible",
           },
         },
         primary: {
           provider: {
-            model_variable: "PRIMARY_MODEL",
+            api_key_secret: "PRIMARY_KEY",
+            model: "primary-model",
             type: "openai-compatible",
           },
         },
