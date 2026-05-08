@@ -1,0 +1,6 @@
+self-hosted-runner:
+  labels:
+    - pipeline
+    - app
+
+config-variables: null

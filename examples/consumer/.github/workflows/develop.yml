@@ -26,12 +26,10 @@ jobs:
       runner: ubuntu-latest
       investigation_timeout_minutes: 60
       implementation_timeout_minutes: 120
-      develop_timeout_minutes: 240
       review_timeout_minutes: 60
       publish_timeout_minutes: 15
       max_turns: 90
       implementation_max_turns: 120
-      review_max_iterations: 5
       validation_repair_attempts: 2
       validation_repair_max_turns: 90
       dry-run: ${{ inputs.dry-run }}

@@ -281,7 +281,7 @@ describe("stage runner materialize writes", () => {
     });
     const fetch = fetchMock([
       discussionResponse(),
-      createIssueResponse(),
+      response(200, { html_url: "https://github.com/example/repo/issues/13", number: 13 }),
       graphqlResponse({ addDiscussionComment: { comment: { id: "comment", url: "url" } } }),
     ]);
     globalThis.fetch = fetch;
@@ -344,7 +344,7 @@ describe("stage runner materialize fallbacks", () => {
       ],
       text: "{}",
     });
-    const fetch = fetchMock([discussionWithoutIdResponse(), createIssueWithoutUrlResponse()]);
+    const fetch = fetchMock([discussionWithoutIdResponse(), response(200, { number: 13 })]);
     globalThis.fetch = fetch;
 
     await expect(
@@ -433,7 +433,7 @@ describe("stage runner pull request writes", () => {
 
     const body = JSON.parse(fetch.mock.calls[3][1].body);
     expect(body).toMatchObject({
-      body: "Fallback summary.\n\nRefs #12",
+      body: "Fallback summary.\n\n## GitVibe Traceability\n\nCloses #12",
       head: "git-vibe/12",
       title: "GitVibe: Issue title",
     });
@@ -609,7 +609,7 @@ function fetchMock(responses) {
   });
 }
 
-function issueResponse(body) {
+function issueResponse(body, overrides = {}) {
   return response(200, {
     body,
     created_at: "2026-01-02T00:00:00Z",
@@ -617,6 +617,7 @@ function issueResponse(body) {
     number: 12,
     title: "Issue title",
     user: { login: "octocat" },
+    ...overrides,
   });
 }
 
@@ -676,14 +677,6 @@ function discussionWithoutIdResponse() {
       },
     },
   });
-}
-
-function createIssueResponse() {
-  return response(200, { html_url: "https://github.com/example/repo/issues/13", number: 13 });
-}
-
-function createIssueWithoutUrlResponse() {
-  return response(200, { number: 13 });
 }
 
 function graphqlResponse(data) {

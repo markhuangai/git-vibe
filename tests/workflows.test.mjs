@@ -41,7 +41,6 @@ const consumerWorkflows = [
 const actionFiles = [
   "address-pr-feedback/action.yml",
   "create-pr/action.yml",
-  "develop/action.yml",
   "implement/action.yml",
   "investigate/action.yml",
   "materialize/action.yml",
@@ -144,9 +143,7 @@ describe("GitVibe action runtime setup", () => {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
       const setupStep = content.indexOf("dist/actions/setup-ai-cli.js");
-      const runActionStep = content.indexOf("dist/actions/run-action.js");
-      const runDevelopStep = content.indexOf("dist/actions/run-develop.js");
-      const runStep = Math.max(runActionStep, runDevelopStep);
+      const runStep = content.indexOf("dist/actions/run-action.js");
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
       expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
@@ -232,10 +229,13 @@ describe("GitVibe workflow write permissions", () => {
 });
 
 describe("GitVibe develop workflow handoff", () => {
-  it("gates the develop loop on completed investigation and passes the handoff artifact", () => {
+  it("keeps develop stages independent and gates them on stage outputs", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
     const investigate = workflow.jobs?.investigate;
-    const develop = workflow.jobs?.develop;
+    const implement = workflow.jobs?.implement;
+    const reviewMatrix = workflow.jobs?.["review-matrix"];
+    const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
+    const createPr = workflow.jobs?.["create-pr"];
 
     expect(investigate?.outputs).toMatchObject({
       status: "${{ steps.investigate.outputs.status }}",
@@ -252,22 +252,42 @@ describe("GitVibe develop workflow handoff", () => {
         path: "${{ runner.temp }}/git-vibe-investigate-result.json",
       }),
     });
-    expect(develop).toMatchObject({
+    expect(implement).toMatchObject({
       if: "needs.investigate.outputs.status == 'completed'",
       needs: "investigate",
     });
     expect(
-      develop?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
+      implement?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
     ).toMatchObject({
       with: expect.objectContaining({ path: ".git-vibe/handoffs" }),
     });
     expect(
-      develop?.steps?.find((step) => step.uses === "./.git-vibe/actions/develop"),
+      implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement"),
     ).toMatchObject({
       with: expect.objectContaining({
         "handoff-dir": ".git-vibe/handoffs",
-        "review-max-iterations": "${{ inputs.review_max_iterations }}",
+        "validation-repair-attempts": "${{ inputs.validation_repair_attempts }}",
       }),
+    });
+    expect(reviewMatrix).toMatchObject({
+      needs: "implement",
+      outputs: expect.objectContaining({
+        "next-state": "${{ steps.review.outputs.next-state }}",
+      }),
+    });
+    expect(
+      reviewMatrix?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),
+    ).toMatchObject({
+      id: "review",
+      with: expect.objectContaining({ "fail-on-blocked": "true" }),
+    });
+    expect(reviewChangesRequired).toMatchObject({
+      if: "needs.review-matrix.outputs.next-state == 'changes-required'",
+      needs: "review-matrix",
+    });
+    expect(createPr).toMatchObject({
+      if: "needs.review-matrix.outputs.next-state == 'review-passed'",
+      needs: "review-matrix",
     });
   });
 });

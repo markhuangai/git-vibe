@@ -120,6 +120,8 @@ function writeOutputs(
   writeOutput(env.GITHUB_OUTPUT, "summary", result.summary, appendFile);
   writeOutput(env.GITHUB_OUTPUT, "status", result.status, appendFile);
   writeOutput(env.GITHUB_OUTPUT, "comment-body", result.commentBody, appendFile);
+  const nextState = stringOutput(result.parsedOutput.next_state);
+  if (nextState) writeOutput(env.GITHUB_OUTPUT, "next-state", nextState, appendFile);
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
 }
@@ -147,6 +149,10 @@ function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
 
 function envValue(env: NodeJS.ProcessEnv, name: string): string {
   return env[name] || "";
+}
+
+function stringOutput(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 if (isDirectRun("", process.argv[1])) {

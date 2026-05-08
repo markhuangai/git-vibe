@@ -1,4 +1,5 @@
 export interface GitHubRequest {
+  apiVersion?: string;
   body?: unknown;
   method: string;
   path: string;
@@ -21,6 +22,7 @@ export class GitHubClient {
   }
 
   async request<T extends Record<string, unknown> | unknown[] = Record<string, unknown>>({
+    apiVersion,
     body,
     method,
     path,
@@ -37,7 +39,7 @@ export class GitHubClient {
           accept: "application/vnd.github+json",
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
-          "x-github-api-version": "2022-11-28",
+          "x-github-api-version": apiVersion || "2022-11-28",
         },
         method,
       });

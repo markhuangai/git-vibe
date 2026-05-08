@@ -4,7 +4,7 @@ version: 1
 
 branches:
   # Empty means "use the repository default branch" for pull requests.
-  # GitVibe implementation branches are deterministic: git-vibe/{issue-number}.
+  # GitVibe implementation branches are deterministic: git-vibe/{root-issue}.
   base: ""
 
 permissions:

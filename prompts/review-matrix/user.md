@@ -25,5 +25,5 @@ Review the proposed change before PR creation or merge preparation. Report only 
 
 - `tests`: Review-relevant checks observed or recommended.
 - `findings`: Blocking issues only, ordered by severity.
-- `next_state`: Use `review-passed` when the branch can proceed to PR creation, `changes-required` when implementation should loop again, or `blocked` when automation must stop.
+- `next_state`: Use `review-passed` when the branch can proceed to PR creation, `changes-required` when implementation must address evidence-backed findings before PR creation, or `blocked` when automation must stop.
   </required_fields_guidance>

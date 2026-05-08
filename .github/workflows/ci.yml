@@ -8,7 +8,7 @@ on:
 
 jobs:
   quality:
-    runs-on: self-hosted
+    runs-on: pipeline
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

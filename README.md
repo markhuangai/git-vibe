@@ -57,13 +57,20 @@ AI output, and writes routine GitHub state changes with deterministic code.
 
 ```mermaid
 flowchart LR
-  A[Issue or Discussion] --> B["/git-vibe command"]
-  B --> C[Webhook server validates actor]
+  A[Issue, Discussion, or PR] --> B["/git-vibe command or protected label"]
+  B --> C[Webhook server validates actor and marker]
   C --> D[Reusable GitHub workflow]
   D --> E[Stage-specific AI worker]
   E --> F[Schema validation]
-  F --> G[Labels, comments, branch, or PR]
-  G --> H[Human review and merge]
+  F --> G{Deterministic GitVibe write}
+  G --> H[Comment or label]
+  G --> I[Commit and push root branch]
+  G --> J[Review-fix issue]
+  G --> K[Create or update PR]
+  H --> L[Human review and merge]
+  I --> L
+  J --> L
+  K --> L
 ```
 
 GitVibe does not auto-merge, approve its own pull requests, or treat AI output as
@@ -71,27 +78,32 @@ authority. Maintainers stay in control of approval and release decisions.
 
 ## Workflows
 
-| Workflow               | Use it for                                                  | Writes code?                      |
-| ---------------------- | ----------------------------------------------------------- | --------------------------------- |
-| `investigate.yml`      | Bug investigation and likely-root-cause analysis            | No                                |
-| `summarize.yml`        | Feature discussion summary and open-question extraction     | No                                |
-| `validate.yml`         | Check whether maintainer context is coherent and actionable | No                                |
-| `materialize.yml`      | Convert a validated Discussion into an implementation issue | No                                |
-| `develop.yml`          | Investigate, implement, review, and create or update a PR   | Yes, on `git-vibe/{issue-number}` |
-| `address-feedback.yml` | Apply requested PR feedback to the existing GitVibe branch  | Yes, on the existing PR branch    |
-| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                   |
+| Workflow               | Use it for                                                  | Writes code?                    |
+| ---------------------- | ----------------------------------------------------------- | ------------------------------- |
+| `investigate.yml`      | Bug investigation and likely-root-cause analysis            | No                              |
+| `summarize.yml`        | Feature discussion summary and open-question extraction     | No                              |
+| `validate.yml`         | Check whether maintainer context is coherent and actionable | No                              |
+| `materialize.yml`      | Convert a validated Discussion into an implementation issue | No                              |
+| `develop.yml`          | Investigate, implement, review, and create or update a PR   | Yes, on `git-vibe/{root-issue}` |
+| `address-feedback.yml` | Apply requested PR feedback to the existing GitVibe branch  | Yes, on the existing PR branch  |
+| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                 |
 
 The reusable workflows install Node `22` and pnpm `10.33.3` before building the
 source-backed composite actions. Each composite action then reads
 `.github/git-vibe.yml` for its stage and installs Codex CLI or Claude Code only
 when the selected profile uses `cli-codex` or `cli-claude-code`.
 
-`develop.yml` runs investigation first, then a bounded implementation loop. Each
-implementation run validates with the repository's configured `tests.commands`;
-failed validation output is fed back into a repair attempt before GitVibe
-commits. After validation passes, `review-matrix` can send evidence-backed
-required fixes back to implementation up to `review_max_iterations`, which
-defaults to five loopbacks. A passing review proceeds to PR creation.
+`develop.yml` runs investigation, implementation, review, and PR creation as
+separate GitHub Actions jobs. Implementation validates with the repository's
+configured `tests.commands`; failed validation output is fed back into a repair
+attempt before GitVibe commits. PR creation only runs after `review-matrix`
+returns `review-passed`. When review returns `changes-required`, GitVibe posts a
+short parent comment, creates an internal `gvi:review-fix` follow-up issue with
+the detailed findings, links it as a sub-issue, and dispatches another
+development run on the same root branch. The internal label webhook is validated
+for marker integrity but does not dispatch a second run. The current workflow
+run fails before PR creation; the follow-up run creates or updates the PR only
+after its own review passes.
 
 ## Quick Start
 
@@ -292,15 +304,15 @@ See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
 
 ## Security Model
 
-| Boundary      | Rule                                                                               |
-| ------------- | ---------------------------------------------------------------------------------- |
-| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events              |
-| Commands      | The server checks repository permission before protected actions                   |
-| Labels        | Protected approval labels are policy-gated and unauthorized changes are removed    |
-| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config               |
-| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state  |
-| Branch writes | Implementation uses deterministic issue-scoped branches: `git-vibe/{issue-number}` |
-| Pull requests | GitVibe can open or update PRs, but humans review and merge                        |
+| Boundary      | Rule                                                                                |
+| ------------- | ----------------------------------------------------------------------------------- |
+| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events               |
+| Commands      | The server checks repository permission before protected actions                    |
+| Labels        | Public `git-vibe:` labels are policy-gated; internal `gvi:` labels are GitVibe-only |
+| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config                |
+| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state   |
+| Branch writes | Implementation uses deterministic root issue branches: `git-vibe/{root-issue}`      |
+| Pull requests | GitVibe can open or update PRs, but humans review and merge                         |
 
 The PAT is long-lived. Scope it narrowly to the managed repository and never log
 or render it.

@@ -5,9 +5,10 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../shared/discussions.js";
-import { GitHubClient } from "../shared/github.js";
-import { gitVibeLabels } from "../shared/labels.js";
+import { GitHubClient, splitRepository } from "../shared/github.js";
+import { gitVibeInternalLabels, gitVibeLabels, isInternalGitVibeLabel } from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
+import { reviewFixTraceFromBody } from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import {
   buildDiscussionBody,
@@ -166,9 +167,18 @@ async function runStartupPreflight(state: AppState): Promise<void> {
   const repository = state.config.configuredRepository;
   if (!repository) {
     state.log(
-      "startup preflight skipped: GITHUB_REPOSITORY is unavailable; Discussions will be checked when repository webhooks arrive",
+      "startup preflight skipped: GITHUB_REPOSITORY is unavailable; labels and Discussions will be checked when repository webhooks arrive",
     );
     return;
+  }
+
+  try {
+    const { owner, repo } = splitRepository(repository);
+    await bootstrapRepositoryLabels(state, owner, repo, state.config.githubToken);
+  } catch (error) {
+    state.errorLog(
+      `startup label bootstrap failed for ${repository}: ${summarizeError(error)}. Ensure GITVIBE_GITHUB_TOKEN has Issues write permission.`,
+    );
   }
 
   try {
@@ -378,8 +388,49 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (label !== gitVibeLabels.approved.name) return;
-  await dispatchWorkflow(options, "develop.yml", { "issue-number": issueNumber });
+  if (label === gitVibeLabels.approved.name) {
+    await dispatchWorkflow(options, "develop.yml", { "issue-number": issueNumber });
+    return;
+  }
+
+  if (label === gitVibeInternalLabels.reviewFix.name) {
+    await handleReviewFixLabel(options, issueNumber);
+    return;
+  }
+
+  if (isInternalGitVibeLabel(label)) {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber,
+      label,
+      owner: options.owner,
+      repo: options.repo,
+      token: options.token,
+    });
+    await createIssueComment(options, issueNumber, internalLabelRejectionBody(label));
+  }
+}
+
+async function handleReviewFixLabel(options: WebhookContext, issueNumber: string): Promise<void> {
+  const trace = reviewFixTraceFromBody(options.payload.issue?.body || "");
+  if (!trace) {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber,
+      label: gitVibeInternalLabels.reviewFix.name,
+      owner: options.owner,
+      repo: options.repo,
+      token: options.token,
+    });
+    await createIssueComment(
+      options,
+      issueNumber,
+      internalLabelRejectionBody(gitVibeInternalLabels.reviewFix.name),
+    );
+    return;
+  }
+
+  options.log(`accepted managed internal review-fix label on issue #${issueNumber}`);
 }
 
 async function requireTrustedActor(options: WebhookContext): Promise<void> {
@@ -579,6 +630,10 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 function protectedLabelRejectionBody(options: WebhookContext, label: string): string {
   return `GitVibe removed \`${label}\` because @${options.payload.sender?.login || "<missing>"} is not allowed to control GitVibe automation labels for this repository.`;
+}
+
+function internalLabelRejectionBody(label: string): string {
+  return `GitVibe removed \`${label}\` because \`gvi:\` labels are internal runtime labels and must only be applied by GitVibe with a valid hidden marker.`;
 }
 
 function sendJson(res: ServerResponse, statusCode: number, value: unknown): void {

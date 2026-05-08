@@ -57,15 +57,15 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                   | Access                               | Output                                                                       | May advance state                            |
-| ----------------------- | ------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| Triage classification   | Read issue/discussion only           | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
-| Bug investigation       | Read repo and issue timeline         | Findings, suspected areas, reproduction gaps, expected behavior questions    | No code changes                              |
-| Feature refinement      | Read repo and discussion timeline    | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without maintainer command |
-| Validation              | Read repo and accepted context       | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
-| Implementation          | Write `git-vibe/{issue-number}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
-| Review matrix           | Read branch and diff                 | Findings by reviewer role, pass/fail, required fixes                         | May send back to implementation              |
-| PR feedback remediation | Write existing branch only           | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
+| Stage                   | Access                             | Output                                                                       | May advance state                            |
+| ----------------------- | ---------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+| Triage classification   | Read issue/discussion only         | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
+| Bug investigation       | Read repo and issue timeline       | Findings, suspected areas, reproduction gaps, expected behavior questions    | No code changes                              |
+| Feature refinement      | Read repo and discussion timeline  | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without maintainer command |
+| Validation              | Read repo and accepted context     | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
+| Implementation          | Write `git-vibe/{root-issue}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
+| Review matrix           | Read branch and diff               | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` follow-up issues |
+| PR feedback remediation | Write existing branch only         | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
 
 AI result envelope:
 
@@ -187,7 +187,7 @@ Default AI budgets:
 - implementation and PR feedback max turns: `120`.
 - validation repair max turns: `90` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
 - validation repair attempts: `2` per implementation run.
-- review-to-implementation loopbacks: `5`.
+- review-fix continuation depth limit: `5` review-fix issues before GitVibe blocks and asks for human intervention.
 - provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
 - investigation/refinement/validation/review timeout: `60` minutes.
 - implementation and PR feedback timeout: `120` minutes.

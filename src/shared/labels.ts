@@ -72,10 +72,24 @@ export const gitVibeLabels = {
   },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
-export const gitVibeLabelList = Object.values(gitVibeLabels);
+export const gitVibeInternalLabels = {
+  reviewFix: {
+    color: "6F42C1",
+    description: "Internal GitVibe review-fix continuation issue.",
+    name: "gvi:review-fix",
+  },
+} as const satisfies Record<string, GitVibeLabelDefinition>;
+
+export const gitVibePublicLabelList = Object.values(gitVibeLabels);
+export const gitVibeInternalLabelList = Object.values(gitVibeInternalLabels);
+export const gitVibeLabelList = [...gitVibePublicLabelList, ...gitVibeInternalLabelList];
 
 const gitVibeLabelNames: Set<string> = new Set(gitVibeLabelList.map((label) => label.name));
 
 export function isGitVibeLabel(name: string): boolean {
-  return gitVibeLabelNames.has(name) || name.startsWith("git-vibe:");
+  return gitVibeLabelNames.has(name) || name.startsWith("git-vibe:") || name.startsWith("gvi:");
+}
+
+export function isInternalGitVibeLabel(name: string): boolean {
+  return name.startsWith("gvi:");
 }

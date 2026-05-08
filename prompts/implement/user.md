@@ -18,6 +18,6 @@ Implement the approved issue in the working tree with focused code and test chan
 
 - `tests`: Exact commands run and their result. If a command was not run, state the reason.
 - `findings`: Important implementation notes, tradeoffs, or risks discovered while coding.
-- `branch`: Use the exact deterministic branch from the stage contract, `git-vibe/{issue-number}`.
+- `branch`: Use the exact deterministic branch from the stage contract.
 - `next_state`: Use `changes-ready-for-commit` when completed or `blocked` when no commit should be made.
   </required_fields_guidance>

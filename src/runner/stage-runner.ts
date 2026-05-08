@@ -12,6 +12,14 @@ import { withStageHandoffs, writeStageResultFile } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
+import {
+  appendIssueTraceability,
+  handleReviewFixRequired,
+  issueBranch,
+  type IssueBranchState,
+  issueChain,
+  prepareIssueBranch,
+} from "./review-fix.js";
 import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
 import { applyStageLabelTransition, publishStageResultComment } from "./stage-publishing.js";
@@ -23,7 +31,7 @@ import {
   type ValidationCommandFailure,
 } from "./validation.js";
 import { stageDefinitions } from "../shared/stages.js";
-import { implementationIssueBody } from "../shared/traceability.js";
+import { implementationIssueBody, reviewFixTraceFromBody } from "../shared/traceability.js";
 import type {
   ContextPacket,
   GitVibeConfig,
@@ -53,13 +61,22 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     handoffs: context.handoffs?.length || 0,
     timeline_items: context.timeline.length,
   });
+  const branch = issueBranchForStage(options.stage, context);
+  let branchState: IssueBranchState | undefined;
+  if (branch && !options.dryRun)
+    branchState = await prepareIssueBranch({
+      branch,
+      cwd: options.cwd,
+      logger,
+      token: options.token,
+    });
 
   const schema = loadStageSchema(definition.schemaFile);
   const prompts = renderPrompts({
     context,
     outputSchema: schema,
     promptDir: definition.promptDir,
-    repositoryContext: repositoryContext(options.cwd),
+    repositoryContext: repositoryContext(options.cwd, branchState),
     stageContract: stageContract(options.stage, definition.access, context),
   });
   logger.event("prompt.ready", {
@@ -275,6 +292,20 @@ async function applyDeterministicWrites(options: {
     return options.result;
   }
 
+  if (
+    options.options.stage === "review-matrix" &&
+    isReviewChangesRequired(options.result.parsedOutput)
+  ) {
+    return handleReviewFixRequired({
+      client: options.client,
+      config: options.config,
+      context: options.context,
+      logger: options.logger,
+      result: options.result,
+      runner: options.options,
+    });
+  }
+
   if (stageDefinitions[options.options.stage].access === "read-only") {
     await publishStageResultComment({
       ...options,
@@ -353,9 +384,7 @@ async function commitImplementation({
   ) => Promise<StageRunResult>;
   result: StageRunResult;
 }): Promise<StageRunResult> {
-  const branch = branchName(context.artifact.number);
-  logger.event("git.branch.checkout", { branch });
-  execFileSync("git", ["checkout", "-B", branch], { cwd: options.cwd, stdio: "inherit" });
+  const branch = issueBranch(context);
   const finalResult = await runValidationWithRepair({ config, logger, options, repair, result });
   if (finalResult.status !== "completed") {
     await publishStageResultComment({
@@ -535,10 +564,12 @@ async function createPullRequest({
     access: "publish-write",
   });
   const { owner, repo } = splitRepository(options.repository);
-  const head = branchName(context.artifact.number);
+  const head = issueBranch(context);
   const title = String(parsedOutput.pr_title || `GitVibe: ${context.artifact.title}`);
-  const body = String(
-    parsedOutput.pr_body || `${parsedOutput.summary || ""}\n\nRefs #${context.artifact.number}`,
+  const body = appendIssueTraceability(
+    String(parsedOutput.pr_body || parsedOutput.summary || ""),
+    await issueChain({ client, context, runner: options }),
+    { closingKeywords: !config.branches?.base },
   );
   logger.event("github.pr.lookup", { head });
   const existing = await client.request<Array<{ number?: number }>>({
@@ -599,8 +630,29 @@ function setGitConfigIfMissing(cwd: string, key: string, value: string): void {
   execFileSync("git", ["config", key, value], { cwd, stdio: "inherit" });
 }
 
-function repositoryContext(cwd: string): string {
-  return execFileSync("git", ["status", "--short", "--branch"], { cwd }).toString();
+function repositoryContext(cwd: string, branchState?: IssueBranchState): string {
+  const status = execFileSync("git", ["status", "--short", "--branch"], { cwd }).toString();
+  if (!branchState) return status;
+  return [
+    `GitVibe branch: ${branchState.branch}`,
+    `GitVibe branch remote found: ${branchState.remoteFound ? "yes" : "no"}`,
+    "",
+    status,
+    "",
+    "Recent commits:",
+    recentCommits(cwd),
+  ].join("\n");
+}
+
+function recentCommits(cwd: string): string {
+  try {
+    return execFileSync("git", ["log", "--oneline", "--decorate", "-5"], {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).toString();
+  } catch {
+    return "<no commits>";
+  }
 }
 
 function summarizeGitStatus(status: string): string {
@@ -619,11 +671,12 @@ function stageContract(stage: string, access: string, context: ContextPacket): s
 }
 
 function issueBranchForStage(stage: string, context: ContextPacket): string | undefined {
-  if (
-    context.artifact.type === "issue" &&
-    ["implement", "review-matrix", "create-pr"].includes(stage)
-  ) {
-    return branchName(context.artifact.number);
+  if (context.artifact.type !== "issue") return undefined;
+  if (["implement", "review-matrix", "create-pr"].includes(stage)) {
+    return issueBranch(context);
+  }
+  if (stage === "investigate" && reviewFixTraceFromBody(context.artifact.body)) {
+    return issueBranch(context);
   }
 
   return undefined;
@@ -644,7 +697,7 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
   if (stage === "create-pr") {
     return {
       ...base,
-      branch: branchName(context.artifact.number),
+      branch: issueBranch(context),
       pr_body: `Dry-run pull request for ${context.artifact.url}`,
       pr_title: `GitVibe dry run: ${context.artifact.title}`,
     };
@@ -681,11 +734,11 @@ function dryRunContent(stage: string, context: ContextPacket, logger: StageLogge
   return JSON.stringify(dryRunOutput(stage, context));
 }
 
-function branchName(number: string): string {
-  const issueNumber = number.trim();
-  if (!/^[1-9]\d*$/.test(issueNumber)) {
-    throw new Error(`GitVibe branch requires a numeric issue number, got ${number || "<missing>"}`);
-  }
-
-  return `git-vibe/${issueNumber}`;
+function isReviewChangesRequired(output: JsonObject): boolean {
+  return (
+    String(output.next_state || "")
+      .trim()
+      .toLowerCase()
+      .replaceAll("_", "-") === "changes-required"
+  );
 }

@@ -11,7 +11,7 @@ on:
         description: Runner label for all jobs.
         required: false
         type: string
-        default: self-hosted
+        default: pipeline
       timeout_minutes:
         description: Maximum minutes for the feedback remediation job.
         required: false
@@ -52,7 +52,7 @@ on:
         description: Runner label for all jobs.
         required: false
         type: string
-        default: self-hosted
+        default: pipeline
       timeout_minutes:
         description: Maximum minutes for the feedback remediation job.
         required: false

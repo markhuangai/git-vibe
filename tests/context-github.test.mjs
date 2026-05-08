@@ -298,6 +298,7 @@ describe("GitVibe config and labels", () => {
     );
     expect(requests.at(-1).path).toBe("/repos/example/repo/issues/3/labels/git-vibe%3Aapproved");
     expect(isProtectedGitVibeLabel("git-vibe:anything")).toBe(true);
+    expect(isProtectedGitVibeLabel("gvi:review-fix")).toBe(true);
   });
 
   it("rethrows unexpected label creation failures", async () => {

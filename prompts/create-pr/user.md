@@ -4,7 +4,7 @@ Draft pull request metadata for the implemented branch. GitVibe will create or u
 
 <pr_metadata_rules>
 
-- Use the exact deterministic branch from the stage contract, `git-vibe/{issue-number}`. If that branch cannot be inspected or appears missing, block.
+- Use the exact deterministic branch from the stage contract. For review-fix chains, this is the root issue branch, not the current follow-up issue number.
 - `pr_title` should be short, imperative or descriptive, and tied to the issue.
 - `pr_body` should include a concise summary, notable implementation details, tests run, risks, and a reference to the source issue.
 - Do not claim test success, CI success, approvals, or review status unless present in the context.

@@ -24,7 +24,7 @@ env:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: pipeline
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
@@ -41,7 +41,7 @@ jobs:
             ghcr.io/z-m-huang/git-vibe:latest
 
   deploy:
-    runs-on: self-hosted
+    runs-on: app
     needs: build
     steps:
       - uses: actions/checkout@v4

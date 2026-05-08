@@ -14,7 +14,7 @@ describe("GitVibe action launcher", () => {
     const log = vi.fn();
     const runStage = vi.fn().mockResolvedValue({
       commentBody: "Long body",
-      parsedOutput: {},
+      parsedOutput: { next_state: "ready-for-implementation" },
       resultFile: "/tmp/git-vibe-investigate-result.json",
       schemaId: "investigate.v1",
       status: "completed",
@@ -71,6 +71,7 @@ describe("GitVibe action launcher", () => {
       "summary<<GITVIBE_OUTPUT\nDone\nGITVIBE_OUTPUT\n",
       "status<<GITVIBE_OUTPUT\ncompleted\nGITVIBE_OUTPUT\n",
       "comment-body<<GITVIBE_OUTPUT\nLong body\nGITVIBE_OUTPUT\n",
+      "next-state<<GITVIBE_OUTPUT\nready-for-implementation\nGITVIBE_OUTPUT\n",
       "result-file<<GITVIBE_OUTPUT\n/tmp/git-vibe-investigate-result.json\nGITVIBE_OUTPUT\n",
     ]);
   });

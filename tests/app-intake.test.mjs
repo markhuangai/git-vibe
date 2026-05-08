@@ -3,7 +3,12 @@ import {
   checkRepositoryDiscussions,
   createRepositoryDiscussion,
 } from "../src/shared/discussions.ts";
-import { gitVibeLabels, gitVibeLabelList, isGitVibeLabel } from "../src/shared/labels.ts";
+import {
+  gitVibeInternalLabels,
+  gitVibeLabelList,
+  gitVibeLabels,
+  isGitVibeLabel,
+} from "../src/shared/labels.ts";
 import { implementationIssueBody } from "../src/shared/traceability.ts";
 import {
   buildDiscussionBody,
@@ -107,7 +112,9 @@ describe("GitVibe labels", () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain("git-vibe:approved");
     expect(names).toContain("git-vibe:story");
+    expect(names).toContain(gitVibeInternalLabels.reviewFix.name);
     expect(isGitVibeLabel("git-vibe:custom")).toBe(true);
+    expect(isGitVibeLabel("gvi:runtime")).toBe(true);
     expect(isGitVibeLabel("bug")).toBe(false);
   });
 });

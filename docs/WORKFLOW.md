@@ -25,10 +25,13 @@ stateDiagram-v2
   BugValidation --> ImplementationIssue: validation passes
 
   ImplementationIssue --> Development: protected approved label
+  ReviewFixIssue --> Development: internal review-fix marker
 
-  Development --> PullRequest: branch, commits, tests, PR
+  Development --> ReviewMatrix: branch, commits, validation passes
+  ReviewMatrix --> ReviewFixIssue: changes required, create internal sub-issue
+  ReviewMatrix --> PullRequest: review passed, create or update PR
   PullRequest --> Feedback: review comments or requested changes
-  Feedback --> Development: /git-vibe address-feedback
+  Feedback --> PullRequest: /git-vibe address-feedback pushes fixes
   PullRequest --> HumanMerge: admin or collaborator merges
 
   HumanMerge --> [*]
@@ -42,7 +45,8 @@ stateDiagram-v2
 - If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
-- Admins and collaborators move work forward with commands plus labels.
+- Admins and collaborators move work forward with public `/git-vibe ...`
+  commands and protected labels.
 - Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation and summary generation; it must never start code changes.
@@ -87,6 +91,16 @@ git-vibe:blocked
 git-vibe:pr-opened
 ```
 
+Internal runtime labels:
+
+```text
+gvi:review-fix
+```
+
+`gvi:` labels are private GitVibe runtime labels. Maintainers should not add them
+manually; GitVibe creates missing managed labels on app startup and on the first
+webhook seen for a repository.
+
 Required fine-grained PAT repository permissions:
 
 ```text
@@ -98,27 +112,48 @@ Contents: read/write
 Actions: read/write
 ```
 
-GitHub labels are not natively protected per label. GitVibe must treat approval labels as protected by policy: only configured admin/collaborator roles may add or remove approval labels, and the server must verify the webhook sender on every relevant label event before dispatching automation. If an unauthorized actor adds `git-vibe:approved`, GitVibe removes the label, posts an audit comment, and does not start the pipeline.
+GitHub labels are not natively protected per label. GitVibe must treat public
+automation labels and internal `gvi:` labels as protected by policy: only
+configured admin/collaborator roles may add or remove them, and the server must
+verify the webhook sender on every relevant label event before dispatching
+automation. If an unauthorized actor adds `git-vibe:approved`, GitVibe removes
+the label, posts an audit comment, and does not start the pipeline. If anyone
+adds `gvi:review-fix` without a valid GitVibe hidden marker, GitVibe removes it.
 
 ## Pipeline
 
 ```mermaid
 flowchart TD
-  A[Approved implementation issue] --> B[Validation]
-  B --> C{Admin context coherent?}
-  C -->|no| D[Abort, post feedback, reset ready flag]
-  C -->|yes| E[Investigate]
-  E --> F{Critical questions answered?}
-  F -->|no| D
-  F -->|yes| G[Implement with investigation handoff]
-  G --> H[Run configured validation]
-  H --> I{Validation passes?}
-  I -->|no| G
-  I -->|yes| J[Review matrix]
-  J --> K{Review passed?}
-  K -->|changes required| G
-  K -->|yes| L[Create or update PR]
-  L --> M[Wait for human review]
+  subgraph ParentRun[Develop run for current issue]
+    A[Approved or review-fix issue] --> B[Investigate job]
+    B --> C{Investigation completed?}
+    C -->|blocked| D[Post findings and fail run]
+    C -->|completed| E[Implement job with investigation handoff]
+    E --> F[Run configured validation]
+    F --> G{Validation passes?}
+    G -->|no| H[Repair implementation attempt]
+    H --> F
+    G -->|yes| I[Commit and push root branch]
+    I --> J[Review matrix job]
+    J --> K{Review result}
+    K -->|changes required| L[Create internal review-fix issue with details]
+    L --> M[Comment on parent and link sub-issue]
+    M --> N[Dispatch new develop run]
+    N --> O[Fail current run before PR creation]
+    K -->|review passed| P[Create or update PR]
+    P --> Q[Wait for human review]
+  end
+
+  subgraph FollowUpRun[Next develop run for review-fix issue]
+    R[Review-fix issue] --> S[Investigate existing root branch]
+    S --> T[Implement fixes on existing root branch]
+    T --> U[Review matrix job]
+    U --> V{Review result}
+    V -->|changes required| W[Create next review-fix issue and fail run]
+    V -->|review passed| X[Create or update PR for issue chain]
+  end
+
+  N -. starts .-> R
 ```
 
 Review matrix defaults:
@@ -136,12 +171,16 @@ attempt before any commit is created. `validation_repair_attempts` is scoped to
 one implementation run, and each repair attempt gets
 `validation_repair_max_turns` turns for adapters that support turn limits.
 
-The review matrix forms a second loop. Review findings must be evidence-backed
-required fixes; speculative or over-engineering suggestions are non-blocking.
-When review returns `changes-required`, GitVibe persists the review result as a
-handoff and runs implementation again. `review_max_iterations` counts these
-review-to-implementation loopbacks and defaults to five. When review returns
-`review-passed`, GitVibe creates or updates the pull request.
+The review matrix is a separate gate after implementation. Review findings must
+be evidence-backed required fixes; speculative or over-engineering suggestions
+are non-blocking. When review returns `changes-required`, GitVibe posts a brief
+comment on the current issue, creates a `gvi:review-fix` issue containing the
+detailed review findings, links it as a native sub-issue, and dispatches another
+development run, then the current run fails before PR creation. Review-fix runs
+start from investigation again, checkout the existing root implementation branch
+when its hidden marker names one, and implement only the required review fixes.
+When a review-fix run eventually returns `review-passed`, that later run creates
+or updates the pull request for the full issue chain.
 
 ## Bug Investigation Flow
 
@@ -247,6 +286,12 @@ feature_refinement:
 
 ## PR Feedback Loop
 
+Pull request feedback remediation is a separate single-stage workflow, not the
+full `develop.yml` investigation, review-matrix, and PR creation sequence. It
+adds PR conversation and review-thread context, checks out the existing PR
+branch, applies actionable feedback, pushes fix commits, and posts a completion
+summary back to the triggering surface.
+
 ```mermaid
 sequenceDiagram
   participant M as Admin or Collaborator
@@ -273,8 +318,8 @@ GitVibe must make every generated artifact discoverable from the others.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
 - Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering comment. Discussions and pull request review comments use threaded replies; issue and pull request conversation comments use flat comments with an explicit source link.
 - When an investigation or development workflow starts, GitVibe posts a short issue/discussion comment containing the workflow run URL and a hidden metadata marker for the run id, stage, and source artifact.
-- Implementation branches use the deterministic format `git-vibe/{issue-number}`. When a branch is created, GitVibe comments with the branch name and workflow run URL.
-- When a pull request is created, the PR body references the source issue and discussion. If the PR targets the repository default branch, use a closing keyword such as `Fixes #123` or `Closes #123`; if it targets a non-default branch, still include explicit issue/discussion links because GitHub closing keywords only create linked issues for default-branch PRs.
+- Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
+- When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
 - The source issue gets a comment linking the PR and latest workflow run.
 - PR feedback runs add comments linking the feedback workflow run, changed commits, and any review comments that were skipped with rationale.
 - Prefer GitHub-native references (`#123`, full issue/discussion/PR URLs, and workflow run URLs) so GitHub creates backlinks and rich references where supported; use explicit bot comments where GitHub does not create a first-class link automatically.

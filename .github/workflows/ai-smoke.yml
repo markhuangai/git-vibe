@@ -14,12 +14,12 @@ on:
         type: boolean
         default: true
       run-codex:
-        description: Run Codex CLI smoke test with auth.json on the self-hosted runner.
+        description: Run Codex CLI smoke test with auth.json on the pipeline runner.
         required: false
         type: boolean
         default: false
       run-claude-code:
-        description: Install and verify Claude Code on the self-hosted runner.
+        description: Install and verify Claude Code on the pipeline runner.
         required: false
         type: boolean
         default: false
@@ -27,7 +27,7 @@ on:
 jobs:
   local-proxy:
     if: ${{ inputs.run-local-proxy }}
-    runs-on: self-hosted
+    runs-on: pipeline
     timeout-minutes: 10
     permissions:
       contents: read
@@ -52,7 +52,7 @@ jobs:
 
   codex:
     if: ${{ inputs.run-codex }}
-    runs-on: self-hosted
+    runs-on: pipeline
     timeout-minutes: 10
     permissions:
       contents: read
@@ -103,7 +103,7 @@ jobs:
 
   claude-code:
     if: ${{ inputs.run-claude-code }}
-    runs-on: self-hosted
+    runs-on: pipeline
     timeout-minutes: 10
     permissions:
       contents: read

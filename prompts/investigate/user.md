@@ -7,6 +7,7 @@ Investigate the reported bug and produce a triage-quality result. The result sho
 - Restate the reported behavior and expected behavior only when supported by the issue or comments.
 - Identify reproduction steps, environment details, affected commands, workflows, or files when present.
 - Inspect likely code paths or tests if the report names them or if repository context makes them discoverable.
+- If the issue is a GitVibe review-fix issue, treat it as continuation work on the linked root issue. First check the repository context for the root branch name, whether GitVibe found the remote branch, and the current branch state, then focus the plan on the required review fixes.
 - Call out contradictions, missing expected behavior, missing reproduction data, or claims that could not be verified.
 - Do not propose a patch unless the evidence clearly supports the likely fix area; even then, describe it as direction, not implementation.
   </investigation_focus>
