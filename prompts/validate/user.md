@@ -8,7 +8,8 @@ Validate whether the issue is ready for implementation. This is a gate: weak or 
 - Check that expected behavior, acceptance criteria, scope, and affected surface are clear enough to implement.
 - Identify contradictions between the issue body, comments, linked discussion, and repository reality.
 - Surface security, permissions, CI, migration, or data-loss risks that would change implementation strategy.
-- For GitVibe product-capability validation, inspect source files and produce capability status sections in `comment_body`: `Already working`, `Not working yet`, `Partial or unclear`, and `Next steps`.
+- For GitVibe product-capability validation, inspect source files and populate `working_capabilities`, `missing_capabilities`, and `partial_capabilities` with proven capability status.
+- Keep `comment_body` supplemental. Do not repeat capability-array content or render `Already working`, `Not working yet`, `Partial or unclear`, or `Next steps` headings there; GitVibe renders structured sections from the arrays.
 - Do not edit files or create branches.
   </validation_focus>
 

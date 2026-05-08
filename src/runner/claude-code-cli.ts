@@ -73,6 +73,7 @@ function claudeModeArgs(profile: Record<string, unknown>): string[] {
 
 function claudeEnv(profile: Record<string, unknown>): NodeJS.ProcessEnv {
   const env = { ...process.env };
+  delete env.CLAUDE_CODE_OAUTH_TOKEN;
   const tokenSecret = stringValue(profile.oauth_token_secret);
   const token = tokenSecret ? process.env[tokenSecret] : undefined;
   if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;

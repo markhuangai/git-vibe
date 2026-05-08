@@ -89,6 +89,25 @@ describe("stage contracts", () => {
     expect(prompts.prompt).toContain("do not invent a branch name");
   });
 
+  it("keeps validate capability sections in structured fields", () => {
+    const schema = loadStageSchema(stageDefinitions.validate.schemaFile);
+    const prompts = renderPrompts({
+      context: baseContext,
+      outputSchema: schema,
+      promptDir: stageDefinitions.validate.promptDir,
+      repositoryContext: "## main",
+      stageContract: "Validate repository capabilities.",
+    });
+
+    expect(prompts.prompt).toContain("populate `working_capabilities`");
+    expect(prompts.prompt).toContain("missing_capabilities");
+    expect(prompts.prompt).toContain("partial_capabilities");
+    expect(prompts.prompt).toContain("Keep `comment_body` supplemental");
+    expect(prompts.prompt).not.toContain("produce capability status sections in `comment_body`");
+  });
+});
+
+describe("stage prompt assets", () => {
   it("keeps every stage prompt substantive and XML structured", () => {
     const promptDirs = new Set(Object.values(stageDefinitions).map((stage) => stage.promptDir));
 
@@ -229,6 +248,7 @@ describe("bundled action runtime", () => {
     const bundle = readFileSync("dist/actions/run-action.js", "utf8");
     const result = spawnSync(process.execPath, ["dist/actions/run-action.js", "investigate"], {
       encoding: "utf8",
+      env: withoutEnv("GITVIBE_GITHUB_TOKEN"),
     });
 
     expect(bundle.startsWith("#!/usr/bin/env node\n")).toBe(true);
@@ -242,3 +262,12 @@ describe("bundled action runtime", () => {
     expect(result.stderr).toContain("GITVIBE_GITHUB_TOKEN is required.");
   }, 15000);
 });
+
+/**
+ * @param {...string} keys
+ */
+function withoutEnv(...keys) {
+  const env = { ...process.env };
+  for (const key of keys) delete env[key];
+  return env;
+}
