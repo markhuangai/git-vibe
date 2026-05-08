@@ -14,6 +14,7 @@ export type SourceCommentKind =
   | "discussion-comment"
   | "issue-comment"
   | "pull-request-comment"
+  | "pull-request-review"
   | "pull-request-review-comment";
 
 export interface StageDefinition {
@@ -28,6 +29,7 @@ export interface StageDefinition {
 export interface RunnerOptions {
   cwd: string;
   dryRun: boolean;
+  failOnNotReady?: boolean;
   handoffDir?: string;
   issueNumber: string;
   maxTurns: number;

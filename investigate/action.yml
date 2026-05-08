@@ -28,6 +28,10 @@ inputs:
     description: Return a non-zero action status when the stage result is not completed.
     required: false
     default: "false"
+  fail-on-not-ready:
+    description: Return a non-zero action status when investigation is not ready for implementation.
+    required: false
+    default: "false"
 
 outputs:
   summary:
@@ -39,6 +43,12 @@ outputs:
   comment-body:
     description: Rendered stage result comment body.
     value: ${{ steps.run.outputs.comment-body }}
+  next-state:
+    description: Investigation next state.
+    value: ${{ steps.run.outputs.next-state }}
+  ready-for-implementation:
+    description: Whether the investigation can safely proceed to implementation.
+    value: ${{ steps.run.outputs.ready-for-implementation }}
   result-file:
     description: Path to the persisted stage result JSON file.
     value: ${{ steps.run.outputs.result-file }}
@@ -74,4 +84,5 @@ runs:
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
+        GITVIBE_FAIL_ON_NOT_READY: ${{ inputs.fail-on-not-ready }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" investigate

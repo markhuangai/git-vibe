@@ -3,7 +3,11 @@ import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import type { StageLogger } from "./logging.js";
-import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
+import {
+  renderStageResultComment,
+  renderStageStartComment,
+  type StageResultLink,
+} from "./result-comments.js";
 import type {
   ContextPacket,
   JsonObject,
@@ -21,6 +25,8 @@ export interface StagePublishingOptions {
   runner: RunnerOptions;
 }
 
+type ArtifactCommentOptions = Omit<StagePublishingOptions, "parsedOutput"> & { body: string };
+
 export async function publishStageResultComment(options: StagePublishingOptions): Promise<void> {
   const body = renderStageResultComment({
     context: options.context,
@@ -32,8 +38,38 @@ export async function publishStageResultComment(options: StagePublishingOptions)
   await publishArtifactComment({ ...options, body });
 }
 
+export async function publishStageStartComment(
+  options: Omit<StagePublishingOptions, "parsedOutput">,
+): Promise<void> {
+  const body = renderStageStartComment({
+    context: options.context,
+    stage: options.runner.stage,
+    workflowRunUrl: options.runner.workflowRunUrl,
+  });
+  await publishArtifactComment({ ...options, body });
+}
+
 export async function applyStageLabelTransition(options: StagePublishingOptions): Promise<void> {
   if (options.context.artifact.type === "discussion") return;
+  if (shouldBlockInvestigation(options)) {
+    await addIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.blocked.name,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.approved.name,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    return;
+  }
+
   const label = labelForStage(options.runner.stage, options.parsedOutput);
   if (!label) return;
 
@@ -54,7 +90,7 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
   });
 }
 
-async function publishArtifactComment(options: StagePublishingOptions & { body: string }) {
+async function publishArtifactComment(options: ArtifactCommentOptions) {
   const artifact = options.context.artifact;
   if (artifact.type === "discussion") {
     await publishDiscussionComment(options);
@@ -82,7 +118,7 @@ async function publishArtifactComment(options: StagePublishingOptions & { body: 
   });
 }
 
-async function publishDiscussionComment(options: StagePublishingOptions & { body: string }) {
+async function publishDiscussionComment(options: ArtifactCommentOptions) {
   const artifact = options.context.artifact;
   if (!artifact.id) {
     options.logger.event("github.discussion.comment.skip", {
@@ -106,9 +142,7 @@ async function publishDiscussionComment(options: StagePublishingOptions & { body
   options.logger.event("github.discussion.comment.done", { discussion: artifact.number });
 }
 
-async function publishPullRequestReviewReply(
-  options: StagePublishingOptions & { body: string },
-): Promise<void> {
+async function publishPullRequestReviewReply(options: ArtifactCommentOptions): Promise<void> {
   const commentId = options.runner.sourceComment?.id || "";
   const artifact = options.context.artifact;
   const { owner, repo } = splitRepository(options.runner.repository);
@@ -161,6 +195,32 @@ async function addIssueLabel(options: {
   });
 }
 
+async function removeIssueLabel(options: {
+  client: GitHubClient;
+  issueNumber: string;
+  label: string;
+  logger: StageLogger;
+  repository: string;
+  token: string;
+}): Promise<void> {
+  const { owner, repo } = splitRepository(options.repository);
+  try {
+    await options.client.request({
+      method: "DELETE",
+      path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/labels/${encodeURIComponent(options.label)}`,
+      token: options.token,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return;
+    options.logger.event("github.issue.label.remove.failed", {
+      error: error instanceof Error ? error.message : String(error),
+      issue: options.issueNumber,
+      label: options.label,
+    });
+    throw error;
+  }
+}
+
 function labelForStage(stage: Stage, output: JsonObject): string | undefined {
   if (String(output.status || "completed") !== "completed") return gitVibeLabels.blocked.name;
   if (stage === "validate" && isReadyForApproval(output.next_state)) {
@@ -169,6 +229,36 @@ function labelForStage(stage: Stage, output: JsonObject): string | undefined {
   if (stage === "implement") return gitVibeLabels.inProgress.name;
   if (stage === "create-pr") return gitVibeLabels.prOpened.name;
   return undefined;
+}
+
+function shouldBlockInvestigation(options: StagePublishingOptions): boolean {
+  return (
+    options.runner.stage === "investigate" &&
+    options.runner.failOnNotReady === true &&
+    !isInvestigationReady(options.parsedOutput)
+  );
+}
+
+export function isInvestigationReady(output: JsonObject): boolean {
+  return (
+    normalizedState(output.status || "completed") === "completed" &&
+    normalizedState(output.next_state) === "ready-for-implementation" &&
+    arrayField(output.blocking_questions).length === 0 &&
+    arrayField(output.implementation_plan).length > 0
+  );
+}
+
+function normalizedState(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replaceAll("_", "-")
+    .replace(/\s+/g, "-");
+}
+
+function arrayField(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
 function flatReplyBody(body: string, source: SourceComment | undefined): string {

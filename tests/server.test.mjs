@@ -158,7 +158,7 @@ describe("GitVibe app server command dispatch", () => {
     await app.handleWebhook("discussion_comment", {
       action: "created",
       comment: { body: "/git-vibe materialize", node_id: "discussion-materialize-comment" },
-      discussion: { number: 5 },
+      discussion: { node_id: "discussion-node", number: 5 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
@@ -178,8 +178,17 @@ describe("GitVibe app server command dispatch", () => {
       { content: "ROCKET", subjectId: "pr-feedback-comment" },
       { content: "ROCKET", subjectId: "discussion-materialize-comment" },
     ]);
+    expect(requestBodies(client, "POST", "/issues/2/comments").at(-1).body).toContain(
+      "investigate.yml",
+    );
+    expect(requestBodies(client, "POST", "/issues/3/comments").at(-1).body).toContain(
+      "address-feedback.yml",
+    );
+    expect(JSON.stringify(client.graphql.mock.calls)).toContain("materialize.yml");
   });
+});
 
+describe("GitVibe app server command edge cases", () => {
   it("continues dispatching when command acknowledgement fails", async () => {
     const log = vi.fn();
     const client = createClient({ reactionError: new Error("reaction unavailable") });
@@ -382,21 +391,22 @@ describe("GitVibe app server dispatch edge cases", () => {
   });
 });
 
-describe("GitVibe app server PR review command dispatch", () => {
-  it("dispatches PR review comment commands with threaded reply metadata", async () => {
+describe("GitVibe app server PR review dispatch", () => {
+  it("dispatches trusted changes-requested review submissions with review metadata", async () => {
     const client = createClient();
     const app = createApp({ client });
 
-    await app.handleWebhook("pull_request_review_comment", {
-      action: "created",
-      comment: {
-        body: "/git-vibe address-feedback",
-        html_url: "https://github.com/example/repo/pull/12#discussion_r55",
-        id: 55,
-        node_id: "review-comment-node",
-      },
+    await app.handleWebhook("pull_request_review", {
+      action: "submitted",
       pull_request: { number: 12 },
       repository: repositoryPayload(),
+      review: {
+        body: "Please address these review comments.",
+        html_url: "https://github.com/example/repo/pull/12#pullrequestreview-99",
+        id: 99,
+        node_id: "review-node",
+        state: "changes_requested",
+      },
       sender: { login: "maintainer" },
     });
 
@@ -404,28 +414,44 @@ describe("GitVibe app server PR review command dispatch", () => {
       { inputs: expect.objectContaining({ "pr-number": "12" }), ref: "main" },
     ]);
     expect(sourceComments(client)[0]).toMatchObject({
-      id: "55",
-      kind: "pull-request-review-comment",
-      nodeId: "review-comment-node",
-      url: "https://github.com/example/repo/pull/12#discussion_r55",
+      id: "99",
+      kind: "pull-request-review",
+      nodeId: "review-node",
+      url: "https://github.com/example/repo/pull/12#pullrequestreview-99",
     });
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "GitVibe Workflow Queued",
+    );
   });
 
-  it("logs unsupported PR review comment commands", async () => {
+  it("ignores non-change and untrusted PR review submissions", async () => {
     const log = vi.fn();
     const client = createClient();
     const app = createApp({ client, log });
 
-    await app.handleWebhook("pull_request_review_comment", {
-      action: "created",
-      comment: { body: "/git-vibe validate", node_id: "review-comment-node" },
+    await app.handleWebhook("pull_request_review", {
+      action: "submitted",
       pull_request: { number: 12 },
       repository: repositoryPayload(),
+      review: { state: "approved" },
       sender: { login: "maintainer" },
+    });
+    await createApp({
+      client: createClient({ permission: new Error("GitHub API GET permission failed: 404") }),
+      log,
+    }).handleWebhook("pull_request_review", {
+      action: "submitted",
+      pull_request: { number: 12 },
+      repository: repositoryPayload(),
+      review: { state: "changes_requested" },
+      sender: { login: "guest" },
     });
 
     expect(workflowDispatches(client)).toEqual([]);
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("recognized command"));
+    expect(log).toHaveBeenCalledWith("ignored pull_request_review.approved for PR #12");
+    expect(log).toHaveBeenCalledWith(
+      "ignored changes_requested review from untrusted actor @guest on PR #12",
+    );
   });
 });
 
@@ -603,30 +629,25 @@ function featureIssue() {
   };
 }
 
-function repositoryPayload() {
-  return { name: "repo", owner: { login: "example" } };
-}
+const repositoryPayload = () => ({ name: "repo", owner: { login: "example" } });
+
+const requests = (client) => client.request.mock.calls.map(([request]) => request);
 
 function requestBodies(client, method, pathPart) {
-  return client.request.mock.calls
-    .map(([request]) => request)
+  return requests(client)
     .filter((request) => request.method === method && request.path.includes(pathPart))
     .map((request) => request.body);
 }
 
-function requestPaths(client, method) {
-  return client.request.mock.calls
-    .map(([request]) => request)
+const requestPaths = (client, method) =>
+  requests(client)
     .filter((request) => request.method === method)
     .map((request) => request.path);
-}
 
-function workflowDispatches(client) {
-  return client.request.mock.calls
-    .map(([request]) => request)
+const workflowDispatches = (client) =>
+  requests(client)
     .filter((request) => request.path.includes("/actions/workflows/"))
     .map((request) => request.body);
-}
 
 function sourceComments(client) {
   return workflowDispatches(client)
@@ -635,9 +656,7 @@ function sourceComments(client) {
     .map((value) => JSON.parse(value));
 }
 
-function sourceCommentKinds(client) {
-  return sourceComments(client).map((comment) => comment.kind);
-}
+const sourceCommentKinds = (client) => sourceComments(client).map((comment) => comment.kind);
 
 function reactionVariables(client) {
   return client.graphql.mock.calls
@@ -645,10 +664,7 @@ function reactionVariables(client) {
     .map(([, variables]) => variables);
 }
 
-function signature(body) {
-  const digest = createHmac("sha256", "secret").update(body).digest("hex");
-  return `sha256=${digest}`;
-}
+const signature = (body) => `sha256=${createHmac("sha256", "secret").update(body).digest("hex")}`;
 
 async function withHttpServer(handler, run) {
   const server = createServer(handler);

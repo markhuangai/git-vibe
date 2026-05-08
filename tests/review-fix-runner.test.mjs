@@ -52,6 +52,7 @@ describe("stage runner review-fix writes", () => {
       response(200, {}),
       response(200, {}),
       response(204, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
@@ -73,6 +74,7 @@ describe("stage runner review-fix writes", () => {
       "/repos/example/repo/actions/workflows/develop.yml/dispatches",
     );
     expect(bodyAt(fetch, 5)).toEqual({ inputs: { "issue-number": "13" }, ref: "main" });
+    expect(bodyAt(fetch, 6).body).toContain("GitVibe Workflow Queued");
   });
 
   it("reuses an existing review-fix link on retry", async () => {
@@ -82,16 +84,18 @@ describe("stage runner review-fix writes", () => {
       issueResponse("Issue body"),
       commentsResponse([existingReviewFixLink()]),
       response(204, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
     await runStageFor("review-matrix", cwd, "12");
 
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
     expect(fetch.mock.calls[2][0]).toContain(
       "/repos/example/repo/actions/workflows/develop.yml/dispatches",
     );
     expect(bodyAt(fetch, 2).inputs).toEqual({ "issue-number": "13" });
+    expect(bodyAt(fetch, 3).body).toContain("GitVibe Workflow Queued");
   });
 });
 
@@ -241,6 +245,7 @@ function mockInvestigateOutput() {
   generateText.mockResolvedValueOnce(
     aiOutput({
       assumptions: [],
+      blocking_questions: [],
       comment_body: "Investigated review-fix branch state.",
       findings: ["git-vibe/7 is checked out for review-fix continuation."],
       implementation_plan: ["Apply the required review fixes on git-vibe/7."],

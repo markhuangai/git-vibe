@@ -60,7 +60,7 @@ Initial stage contracts:
 | Stage                   | Access                             | Output                                                                       | May advance state                            |
 | ----------------------- | ---------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
 | Triage classification   | Read issue/discussion only         | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
-| Bug investigation       | Read repo and issue timeline       | Findings, suspected areas, reproduction gaps, expected behavior questions    | No code changes                              |
+| Bug investigation       | Read repo and issue timeline       | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                              |
 | Feature refinement      | Read repo and discussion timeline  | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without maintainer command |
 | Validation              | Read repo and accepted context     | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
 | Implementation          | Write `git-vibe/{root-issue}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
@@ -76,6 +76,7 @@ AI result envelope:
   "confidence": 0.74,
   "summary": "...",
   "findings": [],
+  "blocking_questions": [],
   "questions": [],
   "assumptions": [],
   "proposed_labels": [],
@@ -92,6 +93,7 @@ AI result envelope:
 - Implementation and feedback stages run on isolated branches and may use the configured repository PAT only for deterministic GitHub writes performed by GitVibe code.
 - GitHub writes are deterministic code operations. AI returns a structured result envelope; GitVibe validates it, renders comments, updates labels, links artifacts, and dispatches workflows.
 - Every AI comment should include a concise summary, concrete evidence/references, unresolved questions, and the next expected human action.
+- Investigation can hand off to implementation only when `next_state` is `ready-for-implementation`, `blocking_questions` is empty, and `implementation_plan` is non-empty. Blocking maintainer decisions must not be hidden in general `questions`.
 - If the AI is uncertain, finds contradictory maintainer guidance, or cannot map the request to the repository, it must stop and ask for context instead of inventing behavior.
 - AI outputs must be parsed as structured data first; the human-facing comment is rendered from the validated result.
 - Prompt templates and result schemas should be versioned so old workflow runs remain understandable.

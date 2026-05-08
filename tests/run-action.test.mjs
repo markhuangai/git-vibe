@@ -14,7 +14,11 @@ describe("GitVibe action launcher", () => {
     const log = vi.fn();
     const runStage = vi.fn().mockResolvedValue({
       commentBody: "Long body",
-      parsedOutput: { next_state: "ready-for-implementation" },
+      parsedOutput: {
+        blocking_questions: [],
+        implementation_plan: ["Implement the verified change."],
+        next_state: "ready-for-implementation",
+      },
       resultFile: "/tmp/git-vibe-investigate-result.json",
       schemaId: "investigate.v1",
       status: "completed",
@@ -72,8 +76,43 @@ describe("GitVibe action launcher", () => {
       "status<<GITVIBE_OUTPUT\ncompleted\nGITVIBE_OUTPUT\n",
       "comment-body<<GITVIBE_OUTPUT\nLong body\nGITVIBE_OUTPUT\n",
       "next-state<<GITVIBE_OUTPUT\nready-for-implementation\nGITVIBE_OUTPUT\n",
+      "ready-for-implementation<<GITVIBE_OUTPUT\ntrue\nGITVIBE_OUTPUT\n",
       "result-file<<GITVIBE_OUTPUT\n/tmp/git-vibe-investigate-result.json\nGITVIBE_OUTPUT\n",
     ]);
+  });
+});
+
+describe("GitVibe action launcher investigation readiness", () => {
+  it("fails an investigation action when not-ready gating is enabled", async () => {
+    const error = vi.fn();
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "Long body",
+      parsedOutput: {
+        blocking_questions: ["Choose a config key."],
+        implementation_plan: [],
+        next_state: "needs-info",
+      },
+      schemaId: "investigate.v1",
+      status: "completed",
+      summary: "Needs info",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: {
+          ...baseEnv,
+          GITVIBE_FAIL_ON_NOT_READY: "true",
+        },
+        error,
+        runStage,
+      }),
+    ).resolves.toBe(1);
+
+    expect(error).toHaveBeenCalledWith(
+      "investigate is not ready for implementation; stopping workflow.",
+    );
   });
 });
 

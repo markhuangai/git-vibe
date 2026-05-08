@@ -24,6 +24,23 @@ const stageTitles: Record<Stage, string> = {
   validate: "Validation",
 };
 
+export function renderStageStartComment(options: {
+  context: ContextPacket;
+  stage: Stage;
+  workflowRunUrl?: string;
+}): string {
+  const artifact = options.context.artifact;
+  const lines = [
+    `<!-- git-vibe:stage-start stage=${options.stage} artifact=${artifact.type} number=${artifact.number} -->`,
+    `## GitVibe ${stageTitles[options.stage]} Running`,
+    "",
+    `GitVibe is running the ${inlineCode(options.stage)} stage for ${artifact.type} #${artifact.number}.`,
+    "",
+    options.workflowRunUrl ? `Workflow run: ${options.workflowRunUrl}` : "",
+  ];
+  return cleanLines(lines).join("\n");
+}
+
 export function renderStageResultComment(options: StageResultCommentOptions): string {
   const output = options.parsedOutput;
   const lines = [
@@ -39,6 +56,8 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
     ...listSection("Not Working Yet", arrayField(output.missing_capabilities)),
     ...listSection("Partial Or Unclear", arrayField(output.partial_capabilities)),
     ...listSection("Findings", arrayField(output.findings)),
+    ...listSection("Blocking Questions", arrayField(output.blocking_questions)),
+    ...investigationRetrySection(options.stage, output),
     ...listSection("Open Questions", arrayField(output.questions)),
     ...listSection("Implementation Plan", arrayField(output.implementation_plan)),
     ...listSection("Assumptions", arrayField(output.assumptions)),
@@ -103,6 +122,15 @@ function referencesSection(output: JsonObject, options: StageResultCommentOption
 function listSection(title: string, values: string[]): string[] {
   if (!values.length) return [];
   return ["", `### ${title}`, ...values.map((value) => `- ${value}`)];
+}
+
+function investigationRetrySection(stage: Stage, output: JsonObject): string[] {
+  if (stage !== "investigate" || !arrayField(output.blocking_questions).length) return [];
+  return [
+    "",
+    "### Next Human Action",
+    "Answer the blocking questions, then re-add `git-vibe:approved` to rerun investigation before implementation.",
+  ];
 }
 
 function linkReferences(links: StageResultLink[]): string[] {

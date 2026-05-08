@@ -16,12 +16,6 @@ interface CommentResponse extends IssueResponse {
   id?: number;
 }
 
-interface PullRequestReviewCommentResponse extends CommentResponse {
-  diff_hunk?: string;
-  in_reply_to_id?: number;
-  path?: string;
-}
-
 export async function buildIssueContext(options: {
   client: GitHubClient;
   issueNumber: string;
@@ -42,11 +36,11 @@ export async function buildIssueContext(options: {
   });
   const reviewComments =
     options.type === "pull-request"
-      ? await pullRequestReviewComments({
+      ? await openPullRequestReviewComments({
           client: options.client,
+          name: repo,
           owner,
           pullNumber: options.issueNumber,
-          repo,
           token: options.token,
         })
       : [];
@@ -70,18 +64,31 @@ export async function buildIssueContext(options: {
   };
 }
 
-async function pullRequestReviewComments(options: {
+async function openPullRequestReviewComments(options: {
   client: GitHubClient;
+  name: string;
   owner: string;
   pullNumber: string;
-  repo: string;
   token: string;
-}): Promise<PullRequestReviewCommentResponse[]> {
-  return options.client.request<PullRequestReviewCommentResponse[]>({
-    method: "GET",
-    path: `/repos/${options.owner}/${options.repo}/pulls/${options.pullNumber}/comments?per_page=100`,
-    token: options.token,
-  });
+}): Promise<PullRequestReviewCommentNode[]> {
+  const data = await options.client.graphql<PullRequestReviewThreadsQueryResult>(
+    pullRequestReviewThreadsQuery,
+    {
+      name: options.name,
+      number: Number(options.pullNumber),
+      owner: options.owner,
+    },
+    options.token,
+  );
+  const threads = data.repository.pullRequest.reviewThreads.nodes;
+  return threads
+    .filter((thread) => !thread.isResolved && !thread.isOutdated)
+    .flatMap((thread) =>
+      thread.comments.nodes.map((comment) => ({
+        ...comment,
+        path: comment.path || thread.path,
+      })),
+    );
 }
 
 export async function buildDiscussionContext(options: {
@@ -135,15 +142,19 @@ function toTimelineItem(kind: string, id: string, item: IssueResponse): Timeline
   };
 }
 
-function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentResponse): TimelineItem {
+function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): TimelineItem {
   const path = item.path ? `Path: ${item.path}\n` : "";
-  const diff = item.diff_hunk ? `Diff:\n${item.diff_hunk}\n\n` : "";
+  const diff = item.diffHunk ? `Diff:\n${item.diffHunk}\n\n` : "";
   return {
     ...toTimelineItem("pull-request-review-comment", String(item.id || ""), {
       ...item,
       body: `${path}${diff}${item.body || ""}`,
+      created_at: item.createdAt,
+      html_url: item.url,
+      user: item.author,
     }),
-    parentId: item.in_reply_to_id ? String(item.in_reply_to_id) : undefined,
+    authorAssociation: item.authorAssociation,
+    parentId: item.replyTo?.id ? String(item.replyTo.id) : undefined,
   };
 }
 
@@ -187,6 +198,33 @@ interface DiscussionQueryResult {
   };
 }
 
+interface PullRequestReviewCommentNode {
+  author?: { login?: string };
+  authorAssociation?: string;
+  body?: string;
+  createdAt?: string;
+  diffHunk?: string;
+  id: string;
+  path?: string;
+  replyTo?: { id?: string } | null;
+  url?: string;
+}
+
+interface PullRequestReviewThreadNode {
+  comments: { nodes: PullRequestReviewCommentNode[] };
+  isOutdated: boolean;
+  isResolved: boolean;
+  path: string;
+}
+
+interface PullRequestReviewThreadsQueryResult {
+  repository: {
+    pullRequest: {
+      reviewThreads: { nodes: PullRequestReviewThreadNode[] };
+    };
+  };
+}
+
 const discussionQuery = `
   query GitVibeDiscussion($owner: String!, $name: String!, $number: Int!) {
     repository(owner: $owner, name: $name) {
@@ -212,6 +250,35 @@ const discussionQuery = `
                 url
                 author { login }
                 replies(first: 0) { nodes { id } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const pullRequestReviewThreadsQuery = `
+  query GitVibePullRequestReviewThreads($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      pullRequest(number: $number) {
+        reviewThreads(first: 100) {
+          nodes {
+            isOutdated
+            isResolved
+            path
+            comments(first: 100) {
+              nodes {
+                id
+                body
+                createdAt
+                url
+                authorAssociation
+                diffHunk
+                path
+                author { login }
+                replyTo { id }
               }
             }
           }

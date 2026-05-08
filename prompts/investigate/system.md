@@ -13,4 +13,4 @@ Investigate a bug report before implementation. Your job is to convert an issue 
 
 ## Completion Bar
 
-Use `completed` only when the report has enough evidence for a next action such as validation, maintainer triage, or implementation. Use `blocked` when the issue lacks expected behavior, reproduction details, authorization, or enough repository context to investigate safely.
+Use `completed` only when the report has enough evidence for a next action such as validation, maintainer triage, or implementation. Use `blocked` when the issue lacks expected behavior, reproduction details, authorization, or enough repository context to investigate safely. Set `next_state` to `ready-for-implementation` only when there are no blocking maintainer decisions and `implementation_plan` is concrete enough for the next agent to code from.

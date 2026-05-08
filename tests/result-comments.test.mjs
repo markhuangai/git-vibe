@@ -59,4 +59,38 @@ describe("stage result comments", () => {
     expect(body).toContain("- Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(body).not.toContain('"findings"');
   });
+
+  it("renders retry guidance when investigation has blocking questions", () => {
+    const body = renderStageResultComment({
+      context: {
+        artifact: {
+          body: "Issue body",
+          number: "12",
+          title: "Issue title",
+          type: "issue",
+          url: "https://github.com/example/repo/issues/12",
+        },
+        generatedAt: "2026-01-01T00:00:00Z",
+        repository: "example/repo",
+        timeline: [],
+      },
+      parsedOutput: {
+        assumptions: [],
+        blocking_questions: ["Which config key should be used?"],
+        comment_body: "Blocked on maintainer input.",
+        findings: [],
+        implementation_plan: [],
+        next_state: "needs-info",
+        references: [],
+        stage: "investigate",
+        status: "completed",
+        summary: "Investigation needs maintainer input.",
+      },
+      stage: "investigate",
+    });
+
+    expect(body).toContain("### Blocking Questions\n- Which config key should be used?");
+    expect(body).toContain("### Next Human Action");
+    expect(body).toContain("re-add `git-vibe:approved`");
+  });
 });

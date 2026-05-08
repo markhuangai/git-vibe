@@ -9,6 +9,7 @@
     "summary",
     "comment_body",
     "findings",
+    "blocking_questions",
     "assumptions",
     "references",
     "next_state"
@@ -19,6 +20,7 @@
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
+    "blocking_questions": { "type": "array", "items": { "type": "string" } },
     "questions": { "type": "array", "items": { "type": "string" } },
     "implementation_plan": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },

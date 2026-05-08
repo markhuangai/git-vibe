@@ -94,16 +94,18 @@ source-backed composite actions. Each composite action then reads
 when the selected profile uses `cli-codex` or `cli-claude-code`.
 
 `develop.yml` runs investigation, implementation, review, and PR creation as
-separate GitHub Actions jobs. Implementation validates with the repository's
-configured `tests.commands`; failed validation output is fed back into a repair
-attempt before GitVibe commits. PR creation only runs after `review-matrix`
-returns `review-passed`. When review returns `changes-required`, GitVibe posts a
-short parent comment, creates an internal `gvi:review-fix` follow-up issue with
-the detailed findings, links it as a sub-issue, and dispatches another
-development run on the same root branch. The internal label webhook is validated
-for marker integrity but does not dispatch a second run. The current workflow
-run fails before PR creation; the follow-up run creates or updates the PR only
-after its own review passes.
+separate GitHub Actions jobs. Implementation starts only when investigation
+returns `ready-for-implementation`, no blocking questions, and a concrete
+implementation plan. Implementation validates with the repository's configured
+`tests.commands`; failed validation output is fed back into a repair attempt
+before GitVibe commits. PR creation only runs after `review-matrix` returns
+`review-passed`. When review returns `changes-required`, GitVibe posts a short
+parent comment, creates an internal `gvi:review-fix` follow-up issue with the
+detailed findings, links it as a sub-issue, and dispatches another development
+run on the same root branch. The internal label webhook is validated for marker
+integrity but does not dispatch a second run. The current workflow run fails
+before PR creation; the follow-up run creates or updates the PR only after its
+own review passes.
 
 ## Quick Start
 
@@ -216,8 +218,6 @@ Discussions
 Discussion comments
 Pull requests
 Pull request reviews
-Pull request review comments
-Pull request review threads
 ```
 
 Do not use "Send me everything"; GitVibe only needs the curated event set above.
@@ -226,13 +226,13 @@ Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 Use `/git-vibe` in issues, discussions, and pull requests:
 
-| Command                      | Typical surface               | Effect                                                        |
-| ---------------------------- | ----------------------------- | ------------------------------------------------------------- |
-| `/git-vibe investigate`      | Bug issue                     | Runs investigation-only analysis and posts findings/questions |
-| `/git-vibe summarize`        | Feature Discussion            | Summarizes the full conversation and open questions           |
-| `/git-vibe validate`         | Issue or Discussion           | Checks whether the current context is coherent and actionable |
-| `/git-vibe materialize`      | Validated Discussion          | Creates or links an implementation issue                      |
-| `/git-vibe address-feedback` | Pull request or review thread | Applies requested PR feedback on the GitVibe branch           |
+| Command                      | Typical surface           | Effect                                                        |
+| ---------------------------- | ------------------------- | ------------------------------------------------------------- |
+| `/git-vibe investigate`      | Bug issue                 | Runs investigation-only analysis and posts findings/questions |
+| `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
+| `/git-vibe validate`         | Issue or Discussion       | Checks whether the current context is coherent and actionable |
+| `/git-vibe materialize`      | Validated Discussion      | Creates or links an implementation issue                      |
+| `/git-vibe address-feedback` | Pull request conversation | Applies requested PR feedback on the GitVibe branch           |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
@@ -240,9 +240,16 @@ Apply the protected `git-vibe:approved` label to an implementation issue to
 dispatch the development pipeline.
 
 Accepted commands from admins and collaborators receive a `rocket` reaction
-before GitVibe dispatches the workflow. Discussion comments receive threaded
-replies where GitHub supports them. Issue comments and pull request conversation
-comments receive a flat reply with an `In reply to` source link.
+before GitVibe dispatches the workflow, then a queued comment after dispatch
+succeeds. Discussion comments receive threaded replies where GitHub supports
+them. Issue comments and pull request conversation comments receive a flat reply
+with an `In reply to` source link.
+
+Protected label dispatches, such as `git-vibe:approved`, and trusted
+`changes_requested` review dispatches also post queued comments after dispatch
+succeeds. Runner stages post a separate running comment with the workflow run URL
+when the GitHub Actions job actually starts. Approval reviews and untrusted
+reviews do not start automation.
 
 ## Configuration
 

@@ -39,6 +39,23 @@ describe("source comment metadata", () => {
       nodeId: "PRRC_kwDOK",
       url: "https://github.com/example/repo/pull/12#discussion_r88",
     });
+    expect(
+      parseSourceComment(
+        JSON.stringify({
+          body: "Please address these changes.",
+          html_url: "https://github.com/example/repo/pull/12#pullrequestreview-1",
+          id: 99,
+          kind: "pull-request-review",
+          node_id: "PRR_kwDOK",
+        }),
+      ),
+    ).toMatchObject({
+      body: "Please address these changes.",
+      id: "99",
+      kind: "pull-request-review",
+      nodeId: "PRR_kwDOK",
+      url: "https://github.com/example/repo/pull/12#pullrequestreview-1",
+    });
   });
 
   it("rejects malformed source comment metadata", () => {

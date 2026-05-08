@@ -170,6 +170,8 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.investigation_timeout_minutes) }}
     outputs:
       result-file: ${{ steps.investigate.outputs.result-file }}
+      ready-for-implementation: ${{ steps.investigate.outputs.ready-for-implementation }}
+      next-state: ${{ steps.investigate.outputs.next-state }}
       status: ${{ steps.investigate.outputs.status }}
       summary: ${{ steps.investigate.outputs.summary }}
     permissions:
@@ -201,6 +203,7 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
+          fail-on-not-ready: "true"
       - name: Upload investigation handoff
         if: always()
         uses: actions/upload-artifact@v4
@@ -212,7 +215,7 @@ jobs:
   implement:
     runs-on: ${{ inputs.runner }}
     needs: investigate
-    if: needs.investigate.outputs.status == 'completed'
+    if: needs.investigate.outputs.ready-for-implementation == 'true'
     timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
     permissions:
       contents: write

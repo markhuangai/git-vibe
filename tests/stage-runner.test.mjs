@@ -95,7 +95,7 @@ describe("stage runner discussion dry-runs", () => {
     globalThis.fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
-      commentsResponse([]),
+      reviewThreadsResponse(),
     ]);
     await expect(
       runStage({
@@ -635,6 +635,16 @@ function commentsResponse(comments) {
   return response(200, comments);
 }
 
+function reviewThreadsResponse() {
+  return graphqlResponse({
+    repository: {
+      pullRequest: {
+        reviewThreads: { nodes: [] },
+      },
+    },
+  });
+}
+
 function discussionResponse() {
   return graphqlResponse({
     repository: {
@@ -642,18 +652,7 @@ function discussionResponse() {
         author: { login: "octocat" },
         body: "Discussion body",
         comments: {
-          nodes: [
-            {
-              id: "discussion-parent-comment",
-              replies: {
-                nodes: [
-                  {
-                    id: "discussion-command-reply",
-                  },
-                ],
-              },
-            },
-          ],
+          nodes: [{ id: "discussion-parent-comment", replies: { nodes: [commandReply()] } }],
         },
         createdAt: "2026-01-02T00:00:00Z",
         id: "discussion-id",
@@ -662,6 +661,10 @@ function discussionResponse() {
       },
     },
   });
+}
+
+function commandReply() {
+  return { id: "discussion-command-reply" };
 }
 
 function discussionWithoutIdResponse() {

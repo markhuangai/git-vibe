@@ -78,7 +78,7 @@ Use `GITHUB_TOKEN` only for simple read operations. Use the self-hosted server's
 
 The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes and must never log or render the token.
 
-Webhook command dispatch includes a serialized `source-comment` input when the command came from an issue comment, Discussion comment, pull request conversation comment, or pull request review comment. Runner publishing uses that metadata to choose Discussion `replyToId`, pull request review-comment replies, or flat issue/PR comments with a source link.
+Webhook dispatch includes serialized source metadata when automation came from an issue comment, Discussion comment, pull request conversation comment, or submitted pull request review. Runner publishing uses that metadata to choose Discussion `replyToId` or flat issue/PR comments with a source link. Pull request review-comment replies remain supported for existing metadata, but automatic feedback remediation is triggered by trusted `changes_requested` review submissions rather than individual review-comment webhooks.
 
 Supported workflow auth modes:
 

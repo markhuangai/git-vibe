@@ -27,11 +27,15 @@ stateDiagram-v2
   ImplementationIssue --> Development: protected approved label
   ReviewFixIssue --> Development: internal review-fix marker
 
-  Development --> ReviewMatrix: branch, commits, validation passes
+  Development --> InvestigationGate: investigate and plan
+  InvestigationGate --> NeedsAnswers: blocking questions
+  NeedsAnswers --> Development: answers plus re-approve
+  InvestigationGate --> Implementation: ready-for-implementation
+  Implementation --> ReviewMatrix: branch, commits, validation passes
   ReviewMatrix --> ReviewFixIssue: changes required, create internal sub-issue
   ReviewMatrix --> PullRequest: review passed, create or update PR
-  PullRequest --> Feedback: review comments or requested changes
-  Feedback --> PullRequest: /git-vibe address-feedback pushes fixes
+  PullRequest --> Feedback: trusted changes-requested review
+  Feedback --> PullRequest: address-feedback pushes fixes
   PullRequest --> HumanMerge: admin or collaborator merges
 
   HumanMerge --> [*]
@@ -48,6 +52,7 @@ stateDiagram-v2
 - Admins and collaborators move work forward with public `/git-vibe ...`
   commands and protected labels.
 - Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
+- Command, protected-label, and trusted-review dispatches post a queued comment after dispatch succeeds. Runner stages post a separate running comment with the workflow run URL when the job actually starts.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation and summary generation; it must never start code changes.
 - GitVibe never auto-merges and never approves its own pull requests.
@@ -186,11 +191,15 @@ or updates the pull request for the full issue chain.
 
 Bug reports have a separate investigation-only path before implementation. The goal is to let AI help summarize reproduction evidence, likely affected code, suspected root cause, missing information, and expected behavior questions without changing code.
 
-In the `develop` workflow, investigation is a hard gate. A blocked investigation
-posts its findings and questions, then stops implementation. A completed
-investigation is persisted as a handoff artifact so implementation receives the
-investigation summary, findings, and concrete implementation plan directly in
-its stage context.
+In the `develop` workflow, investigation is a hard gate. Implementation runs
+only when investigation returns `ready-for-implementation`, no blocking
+questions, and a concrete implementation plan. A not-ready investigation posts
+its findings and blocking questions, removes `git-vibe:approved`, adds
+`git-vibe:blocked`, and stops implementation. Maintainers answer the questions
+and re-add `git-vibe:approved` to retry the gate. A ready investigation is
+persisted as a handoff artifact so implementation receives the investigation
+summary, findings, and concrete implementation plan directly in its stage
+context.
 
 ```mermaid
 sequenceDiagram
@@ -216,6 +225,9 @@ sequenceDiagram
   alt validation passes
     App->>Issue: Mark ready-for-approval
     Maint->>Issue: Apply git-vibe:approved label
+    App->>Issue: Post workflow queued comment
+    AI->>Issue: Post stage running comment with workflow URL
+    AI->>Issue: Post ready investigation and implementation plan
   else validation fails
     App->>Issue: Remove ready/approved flag and wait for clarification
   end
@@ -300,15 +312,21 @@ sequenceDiagram
   participant WF as Feedback Workflow
   participant Agent as GitVibe Coding Agent
 
-  M->>PR: Add review comments
-  M->>PR: /git-vibe address-feedback in PR conversation or review thread
-  PR->>App: Webhook issue_comment or pull_request_review_comment event
+  M->>PR: Submit changes-requested review
+  PR->>App: Webhook pull_request_review submitted event
   App->>App: Validate actor permission
+  App->>PR: Post workflow queued comment
   App->>WF: Dispatch feedback workflow with source-comment metadata
-  WF->>Agent: Provide PR conversation and review-comment timeline
+  WF->>PR: Post stage running comment with workflow URL
+  WF->>Agent: Provide PR conversation plus unresolved current review threads
   Agent->>PR: Push fixes or explain skipped comments
   Agent->>PR: Post completion summary in the matching surface
 ```
+
+Admins and collaborators can also run `/git-vibe address-feedback` in the pull
+request conversation as a manual retry path. Individual review-comment webhooks
+do not dispatch automation; GitVibe waits for the submitted review state and
+only treats trusted `changes_requested` reviews as the automatic signal.
 
 ## Linking And Traceability
 
@@ -316,8 +334,8 @@ GitVibe must make every generated artifact discoverable from the others.
 
 - When a feature issue is converted to a discussion, the closed issue gets a comment linking the discussion, and the discussion body or first bot comment links the original issue.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
-- Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering comment. Discussions and pull request review comments use threaded replies; issue and pull request conversation comments use flat comments with an explicit source link.
-- When an investigation or development workflow starts, GitVibe posts a short issue/discussion comment containing the workflow run URL and a hidden metadata marker for the run id, stage, and source artifact.
+- Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering surface. Discussions use threaded replies; issue, pull request conversation, and submitted-review triggers use flat comments with an explicit source link. Pull request review-comment replies remain supported for existing metadata.
+- When the app dispatches automation from a command, protected label, or trusted review, it posts a queued comment with a hidden metadata marker. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
 - The source issue gets a comment linking the PR and latest workflow run.

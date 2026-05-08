@@ -46,6 +46,7 @@ describe("stage result publishing", () => {
       commentsResponse([]),
       response(200, {}),
       response(200, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
@@ -62,11 +63,14 @@ describe("stage result publishing", () => {
       workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
 
-    const commentBody = JSON.parse(fetch.mock.calls[2][1].body).body;
+    const startBody = JSON.parse(fetch.mock.calls[2][1].body).body;
+    const commentBody = JSON.parse(fetch.mock.calls[3][1].body).body;
     expect(result.commentBody).toContain("## GitVibe Validation");
+    expect(startBody).toContain("<!-- git-vibe:stage-start stage=validate");
+    expect(startBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(commentBody).toContain("<!-- git-vibe:stage-result stage=validate");
     expect(commentBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
-    expect(JSON.parse(fetch.mock.calls[3][1].body).labels).toEqual(["git-vibe:ready-for-approval"]);
+    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:ready-for-approval"]);
   });
 
   it("publishes summarize results back to the source discussion", async () => {
@@ -110,7 +114,7 @@ describe("stage result PR replies", () => {
     const fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
-      commentsResponse([]),
+      reviewThreadsResponse(),
       response(200, {}),
     ]);
     globalThis.fetch = fetch;
@@ -145,7 +149,7 @@ describe("stage result PR replies", () => {
     const fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
-      commentsResponse([]),
+      reviewThreadsResponse(),
       response(200, {}),
     ]);
     globalThis.fetch = fetch;
@@ -260,6 +264,16 @@ function issueResponse(body) {
 
 function commentsResponse(comments) {
   return response(200, comments);
+}
+
+function reviewThreadsResponse() {
+  return graphqlResponse({
+    repository: {
+      pullRequest: {
+        reviewThreads: { nodes: [] },
+      },
+    },
+  });
 }
 
 function discussionResponse() {

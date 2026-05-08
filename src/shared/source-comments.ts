@@ -4,6 +4,7 @@ const sourceCommentKinds = new Set<SourceCommentKind>([
   "discussion-comment",
   "issue-comment",
   "pull-request-comment",
+  "pull-request-review",
   "pull-request-review-comment",
 ]);
 

@@ -238,11 +238,16 @@ describe("GitVibe develop workflow handoff", () => {
     const createPr = workflow.jobs?.["create-pr"];
 
     expect(investigate?.outputs).toMatchObject({
+      "next-state": "${{ steps.investigate.outputs.next-state }}",
+      "ready-for-implementation": "${{ steps.investigate.outputs.ready-for-implementation }}",
       status: "${{ steps.investigate.outputs.status }}",
     });
     expect(investigate?.steps?.find((step) => step.id === "investigate")).toMatchObject({
       uses: "./.git-vibe/actions/investigate",
-      with: expect.objectContaining({ "fail-on-blocked": "true" }),
+      with: expect.objectContaining({
+        "fail-on-blocked": "true",
+        "fail-on-not-ready": "true",
+      }),
     });
     expect(
       investigate?.steps?.find((step) => step.uses === "actions/upload-artifact@v4"),
@@ -253,7 +258,7 @@ describe("GitVibe develop workflow handoff", () => {
       }),
     });
     expect(implement).toMatchObject({
-      if: "needs.investigate.outputs.status == 'completed'",
+      if: "needs.investigate.outputs.ready-for-implementation == 'true'",
       needs: "investigate",
     });
     expect(

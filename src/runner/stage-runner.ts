@@ -22,7 +22,11 @@ import {
 } from "./review-fix.js";
 import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
-import { applyStageLabelTransition, publishStageResultComment } from "./stage-publishing.js";
+import {
+  applyStageLabelTransition,
+  publishStageResultComment,
+  publishStageStartComment,
+} from "./stage-publishing.js";
 import {
   buildValidationRepairPrompt,
   runValidationCommand,
@@ -61,6 +65,14 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     handoffs: context.handoffs?.length || 0,
     timeline_items: context.timeline.length,
   });
+  if (!options.dryRun && options.workflowRunUrl) {
+    await publishStageStartComment({
+      client,
+      context,
+      logger,
+      runner: options,
+    });
+  }
   const branch = issueBranchForStage(options.stage, context);
   let branchState: IssueBranchState | undefined;
   if (branch && !options.dryRun)
@@ -708,6 +720,15 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
       ...base,
       issue_body: `Dry-run implementation issue for ${context.artifact.url}`,
       issue_title: `GitVibe dry run: ${context.artifact.title}`,
+    };
+  }
+
+  if (stage === "investigate") {
+    return {
+      ...base,
+      blocking_questions: [],
+      implementation_plan: [],
+      questions: [],
     };
   }
 

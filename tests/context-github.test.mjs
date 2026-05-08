@@ -22,46 +22,7 @@ afterEach(() => {
 
 describe("GitHub context builders", () => {
   it("builds issue context from issue body and sorted comments", async () => {
-    const client = {
-      request: vi
-        .fn()
-        .mockResolvedValueOnce({
-          body: "Issue body",
-          created_at: "2026-01-02T00:00:00Z",
-          html_url: "https://github.com/example/repo/issues/4",
-          number: 4,
-          title: "Issue title",
-          user: { login: "author" },
-        })
-        .mockResolvedValueOnce([
-          {
-            body: "Second",
-            created_at: "2026-01-04T00:00:00Z",
-            html_url: "comment-2",
-            id: 2,
-            user: { login: "b" },
-          },
-          {
-            body: "First",
-            created_at: "2026-01-03T00:00:00Z",
-            html_url: "comment-1",
-            id: 1,
-            user: { login: "a" },
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            body: "Review feedback",
-            created_at: "2026-01-05T00:00:00Z",
-            diff_hunk: "@@ -1 +1 @@",
-            html_url: "review-comment",
-            id: 9,
-            in_reply_to_id: 8,
-            path: "src/file.ts",
-            user: { login: "reviewer" },
-          },
-        ]),
-    };
+    const client = pullRequestContextClient();
 
     const context = await buildIssueContext({
       client,
@@ -111,6 +72,120 @@ describe("GitHub context builders", () => {
     expect(context.timeline[0]).toMatchObject({ author: "<unknown>", id: "issue-6" });
   });
 });
+
+function pullRequestContextClient() {
+  return {
+    request: vi.fn().mockResolvedValueOnce(issueFixture()).mockResolvedValueOnce(commentFixtures()),
+    graphql: vi.fn().mockResolvedValueOnce(reviewThreadFixtures()),
+  };
+}
+
+function issueFixture() {
+  return {
+    body: "Issue body",
+    created_at: "2026-01-02T00:00:00Z",
+    html_url: "https://github.com/example/repo/issues/4",
+    number: 4,
+    title: "Issue title",
+    user: { login: "author" },
+  };
+}
+
+function commentFixtures() {
+  return [
+    {
+      body: "Second",
+      created_at: "2026-01-04T00:00:00Z",
+      html_url: "comment-2",
+      id: 2,
+      user: { login: "b" },
+    },
+    {
+      body: "First",
+      created_at: "2026-01-03T00:00:00Z",
+      html_url: "comment-1",
+      id: 1,
+      user: { login: "a" },
+    },
+  ];
+}
+
+function reviewThreadFixtures() {
+  return {
+    repository: {
+      pullRequest: {
+        reviewThreads: {
+          nodes: [
+            reviewThreadFixture(),
+            resolvedReviewThreadFixture(),
+            outdatedReviewThreadFixture(),
+          ],
+        },
+      },
+    },
+  };
+}
+
+function reviewThreadFixture() {
+  return {
+    comments: {
+      nodes: [
+        {
+          author: { login: "reviewer" },
+          authorAssociation: "COLLABORATOR",
+          body: "Review feedback",
+          createdAt: "2026-01-05T00:00:00Z",
+          diffHunk: "@@ -1 +1 @@",
+          id: "9",
+          replyTo: { id: "8" },
+          url: "review-comment",
+        },
+      ],
+    },
+    isOutdated: false,
+    isResolved: false,
+    path: "src/file.ts",
+  };
+}
+
+function resolvedReviewThreadFixture() {
+  return filteredReviewThreadFixture({
+    body: "Resolved feedback",
+    createdAt: "2026-01-06T00:00:00Z",
+    id: "10",
+    isResolved: true,
+    url: "resolved-review-comment",
+  });
+}
+
+function outdatedReviewThreadFixture() {
+  return filteredReviewThreadFixture({
+    body: "Outdated feedback",
+    createdAt: "2026-01-07T00:00:00Z",
+    id: "11",
+    isOutdated: true,
+    url: "outdated-review-comment",
+  });
+}
+
+function filteredReviewThreadFixture(options) {
+  return {
+    comments: {
+      nodes: [
+        {
+          author: { login: "reviewer" },
+          body: options.body,
+          createdAt: options.createdAt,
+          id: options.id,
+          url: options.url,
+        },
+      ],
+    },
+    isOutdated: options.isOutdated || false,
+    isResolved: options.isResolved || false,
+    path: "src/old.ts",
+  };
+}
 
 describe("GitHub discussion context builders", () => {
   it("builds discussion context with replies and parent ids", async () => {

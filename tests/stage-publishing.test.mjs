@@ -190,6 +190,69 @@ describe("stage label publishing helpers", () => {
   });
 });
 
+describe("stage label investigation blocking", () => {
+  it("blocks not-ready investigation by adding blocked and removing approved", async () => {
+    const client = createClient();
+
+    await applyStageLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      parsedOutput: blockedInvestigationOutput(),
+      runner: runner({ failOnNotReady: true, stage: "investigate" }),
+    });
+
+    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+      ["POST", "/repos/example/repo/issues/12/labels"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
+    ]);
+    expect(client.request.mock.calls[0][0].body.labels).toEqual(["git-vibe:blocked"]);
+  });
+
+  it("ignores a missing approved label when blocking not-ready investigation", async () => {
+    const client = createClient();
+    client.request = vi.fn(async (request) => {
+      if (request.method === "DELETE") throw new Error("GitHub API DELETE label failed: 404");
+      return {};
+    });
+
+    await expect(
+      applyStageLabelTransition({
+        client,
+        context: context("issue"),
+        logger: createLogger(),
+        parsedOutput: blockedInvestigationOutput(),
+        runner: runner({ failOnNotReady: true, stage: "investigate" }),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(client.request).toHaveBeenCalledTimes(2);
+  });
+
+  it("logs and rethrows unexpected approved label removal failures", async () => {
+    const client = createClient();
+    const logger = createLogger();
+    client.request = vi.fn(async (request) => {
+      if (request.method === "DELETE") throw new Error("delete unavailable");
+      return {};
+    });
+
+    await expect(
+      applyStageLabelTransition({
+        client,
+        context: context("issue"),
+        logger,
+        parsedOutput: blockedInvestigationOutput(),
+        runner: runner({ failOnNotReady: true, stage: "investigate" }),
+      }),
+    ).rejects.toThrow("delete unavailable");
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.issue.label.remove.failed",
+      expect.objectContaining({ issue: "12", label: "git-vibe:approved" }),
+    );
+  });
+});
+
 function context(type) {
   return {
     artifact: {
@@ -215,6 +278,16 @@ function output() {
     stage: "summarize",
     status: "completed",
     summary: "Result summary.",
+  };
+}
+
+function blockedInvestigationOutput() {
+  return {
+    ...output(),
+    blocking_questions: ["Choose the config key."],
+    implementation_plan: [],
+    next_state: "needs-info",
+    stage: "investigate",
   };
 }
 

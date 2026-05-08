@@ -4,6 +4,7 @@ import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runStage } from "../stage-runner.js";
+import { isInvestigationReady } from "../stage-publishing.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { StageRunResult } from "../../shared/types.js";
@@ -33,6 +34,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     const result = await (runtime.runStage || runStage)({
       cwd: env.GITHUB_WORKSPACE || runtime.cwd || process.cwd(),
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
+      failOnNotReady: envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true",
       handoffDir: envValue(env, "GITVIBE_HANDOFF_DIR") || undefined,
       issueNumber: target.issueNumber,
       maxTurns,
@@ -52,6 +54,10 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     writeOutputs(env, result, runtime.appendFile || appendFileSync);
     if (shouldFailOnStatus(env, result.status)) {
       error(`${stage} returned status ${result.status}; stopping workflow.`);
+      return 1;
+    }
+    if (shouldFailOnInvestigationReadiness(env, stage, result)) {
+      error("investigate is not ready for implementation; stopping workflow.");
       return 1;
     }
     return 0;
@@ -122,6 +128,14 @@ function writeOutputs(
   writeOutput(env.GITHUB_OUTPUT, "comment-body", result.commentBody, appendFile);
   const nextState = stringOutput(result.parsedOutput.next_state);
   if (nextState) writeOutput(env.GITHUB_OUTPUT, "next-state", nextState, appendFile);
+  if (result.schemaId === "investigate.v1") {
+    writeOutput(
+      env.GITHUB_OUTPUT,
+      "ready-for-implementation",
+      isInvestigationReady(result.parsedOutput) ? "true" : "false",
+      appendFile,
+    );
+  }
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
 }
@@ -129,6 +143,18 @@ function writeOutputs(
 function shouldFailOnStatus(env: NodeJS.ProcessEnv, status: string): boolean {
   return (
     envValue(env, "GITVIBE_FAIL_ON_BLOCKED").toLowerCase() === "true" && status !== "completed"
+  );
+}
+
+function shouldFailOnInvestigationReadiness(
+  env: NodeJS.ProcessEnv,
+  stage: ReturnType<typeof parseStage>,
+  result: StageRunResult,
+): boolean {
+  return (
+    stage === "investigate" &&
+    envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true" &&
+    !isInvestigationReady(result.parsedOutput)
   );
 }
 

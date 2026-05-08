@@ -280,6 +280,18 @@ async function dispatchDevelopWorkflow(options: {
     path: `/repos/${owner}/${repo}/actions/workflows/develop.yml/dispatches`,
     token: options.runner.token,
   });
+  await options.client.request({
+    body: {
+      body: queuedReviewFixWorkflowComment({
+        issueNumber: options.issueNumber,
+        ref: process.env.GITVIBE_DISPATCH_REF || process.env.GITHUB_REF_NAME || "main",
+        workflow: "develop.yml",
+      }),
+    },
+    method: "POST",
+    path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/comments`,
+    token: options.runner.token,
+  });
   options.logger.event("github.workflow.dispatch.done", { issue: options.issueNumber });
 }
 
@@ -299,6 +311,20 @@ function existingReviewFixLink(
 
 function issueUrl(owner: string, repo: string, issueNumber: string): string {
   return `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
+}
+
+function queuedReviewFixWorkflowComment(options: {
+  issueNumber: string;
+  ref: string;
+  workflow: string;
+}): string {
+  return [
+    `<!-- git-vibe:workflow-queued workflow=${options.workflow} artifact=issue number=${options.issueNumber} -->`,
+    "## GitVibe Workflow Queued",
+    "",
+    `GitVibe queued \`${options.workflow}\` on \`${options.ref}\` for review-fix issue #${options.issueNumber}.`,
+    "The runner will post again when the stage starts.",
+  ].join("\n");
 }
 
 function arrayField(value: unknown): string[] {
