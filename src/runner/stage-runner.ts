@@ -699,7 +699,7 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
     assumptions: [],
     comment_body: `GitVibe dry run for ${stage} on ${context.artifact.type} #${context.artifact.number}.`,
     findings: [],
-    next_state: "dry-run",
+    next_state: dryRunNextState(stage),
     references: [context.artifact.url].filter(Boolean),
     stage,
     status: "completed",
@@ -753,6 +753,20 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
 function dryRunContent(stage: string, context: ContextPacket, logger: StageLogger): string {
   logger.event("ai.skip", { reason: "dry-run" });
   return JSON.stringify(dryRunOutput(stage, context));
+}
+
+function dryRunNextState(stage: string): string {
+  const nextStates: Record<string, string> = {
+    "address-pr-feedback": "feedback-addressed",
+    "create-pr": "pr-draft-ready",
+    implement: "changes-ready-for-commit",
+    investigate: "needs-info",
+    materialize: "implementation-issue-ready",
+    "review-matrix": "review-passed",
+    summarize: "ready-for-materialization",
+    validate: "ready-for-implementation",
+  };
+  return nextStates[stage] || "blocked";
 }
 
 function isReviewChangesRequired(output: JsonObject): boolean {

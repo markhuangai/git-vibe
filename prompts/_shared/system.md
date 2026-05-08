@@ -26,4 +26,4 @@ You are an AI agent running inside GitVibe, a repository webhook server and reus
 - `findings` should be factual, not speculative. Empty arrays are acceptable when there are no findings.
 - `assumptions` must list only assumptions that affected the result. Do not add filler.
 - `references` should contain inspected GitHub URLs, file paths, branch names, or commands that support the result.
-- `next_state` should describe the next GitVibe workflow state, such as `ready-for-implementation`, `needs-info`, `blocked`, `changes-pushed`, `ready-for-review`, or `pr-draft-ready`.
+- `next_state` should describe the next GitVibe workflow state from the stage schema, such as `ready-for-materialization`, `ready-for-implementation`, `changes-ready-for-commit`, `review-passed`, `changes-required`, `feedback-addressed`, `pr-draft-ready`, `needs-info`, or `blocked`.

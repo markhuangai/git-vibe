@@ -112,6 +112,23 @@ describe("stage contracts", () => {
   });
 });
 
+describe("stage schema constraints", () => {
+  it("constrains closed string fields in every stage schema", () => {
+    for (const [stage, definition] of Object.entries(stageDefinitions)) {
+      const schema = loadStageSchema(definition.schemaFile);
+      const properties = /** @type {Record<string, any>} */ (schema.properties);
+
+      expect(properties.stage, `${stage} stage should be constant`).toMatchObject({ const: stage });
+      expect(properties.status, `${stage} status should be closed`).toMatchObject({
+        enum: ["completed", "blocked"],
+      });
+      expect(properties.next_state.enum, `${stage} next_state should be closed`).toContain(
+        "blocked",
+      );
+    }
+  });
+});
+
 describe("stage output validation", () => {
   it("validates stage output with agentool output-validator", async () => {
     const schema = loadStageSchema(stageDefinitions["create-pr"].schemaFile);
@@ -120,7 +137,7 @@ describe("stage output validation", () => {
       branch: "git-vibe/123",
       comment_body: "Ready for review.",
       findings: [],
-      next_state: "git-vibe:pr-opened",
+      next_state: "pr-draft-ready",
       pr_body: "Refs #123",
       pr_title: "GitVibe: Title",
       references: ["https://github.com/example/repo/issues/123"],
@@ -151,6 +168,25 @@ describe("stage output validation", () => {
     await expect(
       validateOutput({
         content: JSON.stringify({ stage: "create-pr", status: "completed" }),
+        schema,
+        schemaId: stageDefinitions["create-pr"].schemaId,
+      }),
+    ).rejects.toThrow("AI output failed create-pr.v1 validation");
+    await expect(
+      validateOutput({
+        content: JSON.stringify({
+          assumptions: [],
+          branch: "git-vibe/123",
+          comment_body: "Ready for review.",
+          findings: [],
+          next_state: "git-vibe:pr-opened",
+          pr_body: "Refs #123",
+          pr_title: "GitVibe: Title",
+          references: [],
+          stage: "create-pr",
+          status: "completed",
+          summary: "PR draft is ready.",
+        }),
         schema,
         schemaId: stageDefinitions["create-pr"].schemaId,
       }),

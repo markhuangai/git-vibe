@@ -176,7 +176,7 @@ function aiOutput(summary, overrides = {}) {
                 assumptions: [],
                 comment_body: summary,
                 findings: [],
-                next_state: "done",
+                next_state: "changes-ready-for-commit",
                 references: [],
                 stage: "implement",
                 status: "completed",

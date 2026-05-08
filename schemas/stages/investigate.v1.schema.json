@@ -15,8 +15,8 @@
     "next_state"
   ],
   "properties": {
-    "stage": { "type": "string" },
-    "status": { "type": "string" },
+    "stage": { "type": "string", "const": "investigate" },
+    "status": { "type": "string", "enum": ["completed", "blocked"] },
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
@@ -25,7 +25,10 @@
     "implementation_plan": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
-    "next_state": { "type": "string" },
+    "next_state": {
+      "type": "string",
+      "enum": ["needs-info", "ready-for-validation", "ready-for-implementation", "blocked"]
+    },
     "proposed_labels": { "type": "array", "items": { "type": "string" } },
     "branch": { "type": "string" },
     "pr_title": { "type": "string" },

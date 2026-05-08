@@ -230,7 +230,7 @@ function mockCreatePrOutput() {
       branch: "git-vibe/7",
       comment_body: "PR ready.",
       findings: [],
-      next_state: "git-vibe:pr-opened",
+      next_state: "pr-draft-ready",
       pr_body: "Implemented review fixes.",
       pr_title: "GitVibe: title",
       references: [],

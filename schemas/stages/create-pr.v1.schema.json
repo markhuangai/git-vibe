@@ -17,14 +17,14 @@
     "pr_body"
   ],
   "properties": {
-    "stage": { "type": "string" },
-    "status": { "type": "string" },
+    "stage": { "type": "string", "const": "create-pr" },
+    "status": { "type": "string", "enum": ["completed", "blocked"] },
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
-    "next_state": { "type": "string" },
+    "next_state": { "type": "string", "enum": ["pr-draft-ready", "blocked"] },
     "branch": { "type": "string" },
     "pr_title": { "type": "string" },
     "pr_body": { "type": "string" }

@@ -24,7 +24,7 @@ describe("stage result comments", () => {
         findings: ["The request is implementable"],
         implementation_plan: ["src/app/server.ts: add command routing test coverage"],
         missing_capabilities: ["Threaded PR review replies are not implemented"],
-        next_state: "git-vibe:ready-for-approval",
+        next_state: "ready-for-implementation",
         partial_capabilities: ["Issue comments are flat replies with source links"],
         pr_body: "Refs #12",
         pr_title: "GitVibe: implement feature",

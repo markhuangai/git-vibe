@@ -16,14 +16,14 @@
     "skipped_feedback"
   ],
   "properties": {
-    "stage": { "type": "string" },
-    "status": { "type": "string" },
+    "stage": { "type": "string", "const": "address-pr-feedback" },
+    "status": { "type": "string", "enum": ["completed", "blocked"] },
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
-    "next_state": { "type": "string" },
+    "next_state": { "type": "string", "enum": ["feedback-addressed", "blocked"] },
     "tests": { "type": "array", "items": { "type": "string" } },
     "skipped_feedback": { "type": "array", "items": { "type": "string" } }
   }

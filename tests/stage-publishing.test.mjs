@@ -273,7 +273,7 @@ function output() {
     assumptions: [],
     comment_body: "Result body.",
     findings: [],
-    next_state: "done",
+    next_state: "ready-for-materialization",
     references: [],
     stage: "summarize",
     status: "completed",

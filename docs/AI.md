@@ -72,15 +72,15 @@ AI result envelope:
 ```json
 {
   "stage": "investigate",
-  "status": "needs-context",
+  "status": "blocked",
   "confidence": 0.74,
   "summary": "...",
   "findings": [],
-  "blocking_questions": [],
+  "blocking_questions": ["What expected behavior should implementation preserve?"],
   "questions": [],
   "assumptions": [],
   "proposed_labels": [],
-  "next_state": "git-vibe:needs-expected-behavior",
+  "next_state": "needs-info",
   "comment_body": "...",
   "references": []
 }

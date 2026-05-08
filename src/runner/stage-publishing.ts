@@ -281,5 +281,10 @@ function isReadyForApproval(value: unknown): boolean {
     .toLowerCase()
     .replaceAll("_", "-")
     .replace(/\s+/g, "-");
-  return state === "ready" || state.endsWith(":ready") || state.includes("ready-for-approval");
+  return (
+    state === "ready" ||
+    state.endsWith(":ready") ||
+    state === "ready-for-implementation" ||
+    state.includes("ready-for-approval")
+  );
 }
