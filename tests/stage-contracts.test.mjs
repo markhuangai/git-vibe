@@ -144,6 +144,47 @@ describe("stage contract prompt loading", () => {
   });
 });
 
+describe("stage prompt standards guidance", () => {
+  it("requires investigation to report repository standards and validation checks", () => {
+    const schema = loadStageSchema(stageDefinitions.investigate.schemaFile);
+    const prompts = renderPrompts({
+      context: baseContext,
+      outputSchema: schema,
+      promptDir: stageDefinitions.investigate.promptDir,
+      repositoryContext: "## main",
+      stageContract: "Return JSON.",
+    });
+
+    expect(prompts.prompt).toContain("discover repository standards and validation requirements");
+    expect(prompts.prompt).toContain("`.github/git-vibe.yml` `tests.commands`");
+    expect(prompts.prompt).toContain("Include discovered repository coding standards");
+    expect(prompts.prompt).toContain(
+      "Include the applicable repository standards and validation checks",
+    );
+    expect(prompts.prompt).toContain(
+      "Summarize the repo rules and required checks that matter for the implementation",
+    );
+  });
+
+  it("requires implementation to verify repository standards before editing", () => {
+    const schema = loadStageSchema(stageDefinitions.implement.schemaFile);
+    const prompts = renderPrompts({
+      context: baseContext,
+      outputSchema: schema,
+      promptDir: stageDefinitions.implement.promptDir,
+      repositoryContext: "## main",
+      stageContract: "Return JSON.",
+    });
+
+    expect(prompts.prompt).toContain("Before editing, verify current repository standards");
+    expect(prompts.prompt).toContain("`.github/git-vibe.yml` `tests.commands`");
+    expect(prompts.prompt).toContain("required validation context");
+    expect(prompts.prompt).toContain(
+      "repository standards or validation requirements discovered before or while coding",
+    );
+  });
+});
+
 describe("stage prompt assets", () => {
   it("keeps every stage prompt substantive and XML structured", () => {
     const promptDirs = new Set(Object.values(stageDefinitions).map((stage) => stage.promptDir));
