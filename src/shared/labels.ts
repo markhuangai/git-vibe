@@ -60,6 +60,16 @@ export const gitVibeLabels = {
     description: "GitVibe opened or updated a pull request.",
     name: "git-vibe:pr-opened",
   },
+  prApproved: {
+    color: "0E8A16",
+    description: "GitVibe pull request was approved by a trusted reviewer.",
+    name: "git-vibe:pr-approved",
+  },
+  prMerged: {
+    color: "5319E7",
+    description: "GitVibe pull request was merged while the issue awaits default-branch closure.",
+    name: "git-vibe:pr-merged",
+  },
   readyForApproval: {
     color: "FBCA04",
     description: "GitVibe believes the issue is ready for approval.",

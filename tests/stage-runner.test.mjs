@@ -17,7 +17,6 @@ vi.mock("ai", () => ({
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
-
 const { runStage } = await import("../src/runner/stage-runner.ts");
 
 const originalFetch = globalThis.fetch;
@@ -425,6 +424,7 @@ describe("stage runner pull request writes", () => {
       response(200, { number: 22 }),
       response(200, {}),
       response(200, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
@@ -572,6 +572,7 @@ async function runCreatePr(cwd, existingPulls, expected) {
     response(200, { default_branch: "main" }),
     response(200, existingPulls),
     response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
+    response(200, {}),
     response(200, {}),
     response(200, {}),
   ]);

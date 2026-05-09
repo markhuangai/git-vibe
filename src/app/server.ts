@@ -27,7 +27,7 @@ import {
   workflowQueuedMarker,
   workflowRunIdFromUrl,
 } from "../shared/status-comments.js";
-import { reviewFixTraceFromBody } from "../shared/traceability.js";
+import { gitVibeTraceabilityIssueNumbers, reviewFixTraceFromBody } from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import {
   buildDiscussionBody,
@@ -63,7 +63,7 @@ export interface WebhookPayload {
     user?: { login?: string };
   };
   label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
-  pull_request?: { number?: number | string };
+  pull_request?: { body?: string | null; merged?: boolean; number?: number | string };
   review?: {
     body?: string;
     html_url?: string;
@@ -268,6 +268,11 @@ async function handleWebhook(
 
   if (event === "pull_request_review" && payload.action === "submitted" && payload.pull_request) {
     await handlePullRequestReviewSubmitted({ ...state, owner, payload, repo, token });
+    return;
+  }
+
+  if (event === "pull_request" && payload.action === "closed" && payload.pull_request) {
+    await handlePullRequestClosed({ ...state, owner, payload, repo, token });
     return;
   }
 
@@ -529,6 +534,17 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
 async function handlePullRequestReviewSubmitted(options: WebhookContext): Promise<void> {
   const state = String(options.payload.review?.state || "").toLowerCase();
   const prNumber = String(options.payload.pull_request?.number || "");
+  if (state === "approved") {
+    if (!(await isTrustedActor(options))) {
+      options.log(
+        `ignored approved review from untrusted actor @${options.payload.sender?.login || "<missing>"} on PR #${prNumber}`,
+      );
+      return;
+    }
+    await markPullRequestApproved(options, prNumber);
+    return;
+  }
+
   if (state !== "changes_requested") {
     options.log(`ignored pull_request_review.${state || "unknown"} for PR #${prNumber}`);
     return;
@@ -552,6 +568,81 @@ async function handlePullRequestReviewSubmitted(options: WebhookContext): Promis
     ref: dispatch.ref,
     workflowRunUrl: dispatch.html_url,
   });
+}
+
+async function handlePullRequestClosed(options: WebhookContext): Promise<void> {
+  const prNumber = String(options.payload.pull_request?.number || "");
+  if (!options.payload.pull_request?.merged) {
+    options.log(`ignored pull_request.closed unmerged PR #${prNumber}`);
+    return;
+  }
+
+  await markPullRequestMerged(options, prNumber);
+}
+
+async function markPullRequestApproved(options: WebhookContext, prNumber: string): Promise<void> {
+  await updateSourceIssueLabelsForPullRequest(options, prNumber, {
+    add: [gitVibeLabels.prApproved.name],
+    remove: [gitVibeLabels.approved.name, gitVibeLabels.inProgress.name],
+    reason: "approved review",
+  });
+}
+
+async function markPullRequestMerged(options: WebhookContext, prNumber: string): Promise<void> {
+  await updateSourceIssueLabelsForPullRequest(options, prNumber, {
+    add: [gitVibeLabels.prMerged.name],
+    remove: [
+      gitVibeLabels.approved.name,
+      gitVibeLabels.inProgress.name,
+      gitVibeLabels.prOpened.name,
+      gitVibeLabels.prApproved.name,
+    ],
+    reason: "merged PR",
+  });
+}
+
+async function updateSourceIssueLabelsForPullRequest(
+  options: WebhookContext,
+  prNumber: string,
+  change: { add: string[]; reason: string; remove: string[] },
+): Promise<void> {
+  const issues = await sourceIssuesForPullRequest(options, prNumber);
+  if (issues.length === 0) {
+    options.log(
+      `skipped ${change.reason} labels for PR #${prNumber}: missing GitVibe traceability`,
+    );
+    return;
+  }
+
+  for (const issueNumber of issues) {
+    for (const label of change.add) {
+      await addIssueLabel(options, issueNumber, label);
+    }
+    for (const label of change.remove) {
+      await removeIssueLabelIfPresent(options, issueNumber, label);
+    }
+  }
+}
+
+async function sourceIssuesForPullRequest(
+  options: WebhookContext,
+  prNumber: string,
+): Promise<string[]> {
+  const body = await pullRequestBody(options, prNumber);
+  return gitVibeTraceabilityIssueNumbers(body);
+}
+
+async function pullRequestBody(options: WebhookContext, prNumber: string): Promise<string> {
+  if (typeof options.payload.pull_request?.body === "string") {
+    return options.payload.pull_request.body;
+  }
+
+  const pullRequest = await options.client.request<{ body?: string | null }>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.repo}/pulls/${prNumber}`,
+    token: options.token,
+  });
+  return pullRequest.body || "";
 }
 
 async function handleReviewFixLabel(options: WebhookContext, issueNumber: string): Promise<void> {
@@ -973,6 +1064,26 @@ async function addIssueLabel(
     path: `/repos/${options.owner}/${options.repo}/issues/${issueNumber}/labels`,
     token: options.token,
   });
+}
+
+async function removeIssueLabelIfPresent(
+  options: WebhookContext,
+  issueNumber: string,
+  label: string,
+): Promise<void> {
+  try {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber,
+      label,
+      owner: options.owner,
+      repo: options.repo,
+      token: options.token,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return;
+    throw error;
+  }
 }
 
 const trustedPermissions = new Set(["admin", "maintain", "write"]);

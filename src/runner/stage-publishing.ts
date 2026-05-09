@@ -110,6 +110,16 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
     repository: options.runner.repository,
     token: options.runner.token,
   });
+  if (label === gitVibeLabels.prOpened.name) {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.inProgress.name,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+  }
   options.logger.event("github.issue.label.done", {
     issue: options.context.artifact.number,
     label,

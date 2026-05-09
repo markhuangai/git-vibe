@@ -93,6 +93,8 @@ git-vibe:validate
 git-vibe:in-progress
 git-vibe:blocked
 git-vibe:pr-opened
+git-vibe:pr-approved
+git-vibe:pr-merged
 ```
 
 Internal runtime labels:
@@ -354,6 +356,9 @@ GitVibe must make every generated artifact discoverable from the others.
 - When the app dispatches automation from a command, protected label, or trusted review, it posts a queued comment with a hidden metadata marker and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact. These queued/running comments are transient: GitVibe deletes matching prior transient status comments and keeps durable result, traceability, investigation, and validation comments.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
+- When a pull request is opened by GitVibe, the source issue gets `git-vibe:pr-opened` and `git-vibe:in-progress` is removed.
+- When a trusted reviewer approves a GitVibe pull request, the source issue gets `git-vibe:pr-approved` and stale approval/in-progress labels are removed.
+- When a GitVibe pull request is merged before default-branch closure, the source issue gets `git-vibe:pr-merged` and stale workflow state labels are removed.
 - The source issue gets a comment linking the PR and latest workflow run.
 - PR feedback runs add comments linking the feedback workflow run, changed commits, and any review comments that were skipped with rationale.
 - Prefer GitHub-native references (`#123`, full issue/discussion/PR URLs, and workflow run URLs) so GitHub creates backlinks and rich references where supported; use explicit bot comments where GitHub does not create a first-class link automatically.

@@ -22,6 +22,8 @@ labels:
   in_progress: git-vibe:in-progress
   blocked: git-vibe:blocked
   pr_opened: git-vibe:pr-opened
+  pr_approved: git-vibe:pr-approved
+  pr_merged: git-vibe:pr-merged
   validate: git-vibe:validate
 
 commands:

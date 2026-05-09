@@ -413,12 +413,20 @@ describe("stage label publishing helpers", () => {
       runner: runner({ stage: "create-pr" }),
     });
 
-    expect(client.request.mock.calls.map(([request]) => request.body.labels[0])).toEqual([
+    expect(
+      client.request.mock.calls
+        .map(([request]) => request)
+        .filter((request) => request.method === "POST")
+        .map((request) => request.body.labels[0]),
+    ).toEqual([
       "git-vibe:blocked",
       "git-vibe:ready-for-approval",
       "git-vibe:in-progress",
       "git-vibe:pr-opened",
     ]);
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
+    );
   });
 });
 

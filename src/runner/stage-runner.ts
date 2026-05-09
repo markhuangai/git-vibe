@@ -592,10 +592,20 @@ async function commitImplementation({
     logger.event("git.no_staged_changes");
     return finalResult;
   }
-  execFileSync("git", ["commit", "-m", `Implement #${context.artifact.number} with GitVibe`], {
-    cwd: options.cwd,
-    stdio: "inherit",
-  });
+  execFileSync(
+    "git",
+    [
+      "commit",
+      "-m",
+      `Implement #${context.artifact.number} with GitVibe`,
+      "-m",
+      `Closes #${rootIssueNumber(context)}`,
+    ],
+    {
+      cwd: options.cwd,
+      stdio: "inherit",
+    },
+  );
   const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: options.cwd })
     .toString()
     .trim();
@@ -879,6 +889,10 @@ function repositoryContext(cwd: string, branchState?: IssueBranchState): string 
     "Recent commits:",
     recentCommits(cwd),
   ].join("\n");
+}
+
+function rootIssueNumber(context: ContextPacket): string {
+  return reviewFixTraceFromBody(context.artifact.body)?.root || context.artifact.number;
 }
 
 function recentCommits(cwd: string): string {

@@ -138,6 +138,7 @@ describe("stage runner review-fix pull requests", () => {
       response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
       response(200, {}),
       response(200, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
