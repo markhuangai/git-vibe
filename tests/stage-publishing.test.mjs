@@ -169,7 +169,93 @@ describe("stage publishing status cleanup", () => {
       ["POST", "/repos/example/repo/issues/12/comments"],
     ]);
   });
+});
 
+describe("stage publishing stale status cleanup", () => {
+  it("deletes stale transient status comments from other stages before posting a running comment", async () => {
+    const client = createClient();
+    const oldCreatedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    const recentCreatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    await publishStageStartComment({
+      client,
+      context: {
+        ...context("issue"),
+        timeline: [
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "12",
+              run: "97",
+              stage: "review-matrix",
+            }),
+            createdAt: oldCreatedAt,
+            id: "51",
+            kind: "comment",
+          },
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "12",
+              run: "98",
+              stage: "implement",
+            }),
+            createdAt: oldCreatedAt,
+            id: "52",
+            kind: "comment",
+          },
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "12",
+              run: "99",
+              stage: "implement",
+            }),
+            createdAt: recentCreatedAt,
+            id: "53",
+            kind: "comment",
+          },
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "13",
+              run: "98",
+              stage: "implement",
+            }),
+            createdAt: oldCreatedAt,
+            id: "54",
+            kind: "comment",
+          },
+          {
+            body: workflowQueuedMarker({
+              artifact: "issue",
+              number: "12",
+              run: "96",
+              workflow: "review-matrix.yml",
+            }),
+            createdAt: oldCreatedAt,
+            id: "55",
+            kind: "comment",
+          },
+        ],
+      },
+      logger: createLogger(),
+      runner: runner({
+        stage: "investigate",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/100",
+      }),
+    });
+
+    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/comments/51"],
+      ["DELETE", "/repos/example/repo/issues/comments/52"],
+      ["DELETE", "/repos/example/repo/issues/comments/55"],
+      ["POST", "/repos/example/repo/issues/12/comments"],
+    ]);
+  });
+});
+
+describe("stage publishing discussion status cleanup", () => {
   it("deletes discussion running comments before posting results", async () => {
     const client = createClient();
 

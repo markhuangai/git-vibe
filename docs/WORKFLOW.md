@@ -109,19 +109,22 @@ webhook seen for a repository.
 
 Required fine-grained PAT repository permissions:
 
-| Permission    | Access     | Required for                                           |
-| ------------- | ---------- | ------------------------------------------------------ |
-| Metadata      | Read       | Repository lookup, collaborator checks, and metadata   |
-| Variables     | Read       | Reading GitHub Actions repository variables            |
-| Actions       | Read/write | Workflow dispatch, workflow runs, and artifacts        |
-| Contents      | Read/write | Contents, commits, branches, releases, and merges      |
-| Discussions   | Read/write | Discussions, comments, and discussion labels           |
-| Issues        | Read/write | Issues, comments, assignees, labels, and milestones    |
-| Pull requests | Read/write | Pull requests, comments, assignees, labels, and merges |
-| Workflows     | Read/write | Updating GitHub Actions workflow files                 |
+| Permission    | Access     | Required for                                                         |
+| ------------- | ---------- | -------------------------------------------------------------------- |
+| Metadata      | Read       | Repository lookup, collaborator checks, and metadata                 |
+| Variables     | Read       | Reading GitHub Actions repository variables                          |
+| Actions       | Read/write | Workflow dispatch, workflow runs, and artifacts                      |
+| Contents      | Read/write | Contents, commits, branches, releases, and merges                    |
+| Discussions   | Read/write | Discussions, comments, and discussion labels                         |
+| Issues        | Read/write | Issues, comments, assignees, labels, and milestones                  |
+| Pull requests | Read/write | Pull requests, comments, assignees, labels, and merges               |
+| Secrets       | Read/write | Updating `GITVIBE_AI_ENV_JSON` after Codex CLI refreshes `auth.json` |
+| Workflows     | Read/write | Updating GitHub Actions workflow files                               |
 
-Only `Metadata` and `Variables` are read-only. Every other listed permission
-needs read/write access.
+Only `Metadata` and `Variables` are always read-only. `Secrets` needs read/write
+access only when a `cli-codex` profile uses `auth_json.from_bundle`; GitVibe
+then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
+secret. Every other listed permission needs read/write access.
 
 GitHub labels are not natively protected per label. GitVibe must treat public
 automation labels and internal `gvi:` labels as protected by policy: only

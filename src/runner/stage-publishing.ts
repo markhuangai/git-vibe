@@ -39,6 +39,8 @@ export interface PublishedArtifactComment {
   surface: "issue-comment" | "discussion-comment" | "pull-request-review-comment";
 }
 
+const staleTransientStatusCommentAgeMs = 30 * 60 * 1000;
+
 export async function publishStageResultComment(options: StagePublishingOptions): Promise<void> {
   await cleanupStageStatusComments(options);
   const body = renderStageResultComment({
@@ -219,6 +221,7 @@ async function cleanupTransientStatusComments(
   const refs = uniqueCommentRefs([
     ...extraRefs,
     ...transientRefsFromContext(options.context, scopes),
+    ...staleTransientRefsFromContext(options.context),
   ]);
   await Promise.all(refs.map((ref) => deleteTransientStatusComment(options, ref)));
 }
@@ -253,6 +256,28 @@ function transientRefsFromContext(
     );
     return ref ? [ref] : [];
   });
+}
+
+function staleTransientRefsFromContext(context: ContextPacket): PublishedArtifactComment[] {
+  const nowMs = Date.now();
+  return context.timeline.flatMap((item) => {
+    const marker = parseTransientStatusMarker(item.body);
+    if (!marker) return [];
+    if (marker.artifact !== context.artifact.type || marker.number !== context.artifact.number) {
+      return [];
+    }
+    if (!isStaleTimelineItem(item.createdAt, nowMs)) return [];
+    const ref = publishedComment(
+      surfaceForTimelineItem(context.artifact.type, item.kind),
+      refId(item),
+    );
+    return ref ? [ref] : [];
+  });
+}
+
+function isStaleTimelineItem(createdAt: string | undefined, nowMs: number): boolean {
+  const createdAtMs = Date.parse(String(createdAt || ""));
+  return Number.isFinite(createdAtMs) && nowMs - createdAtMs >= staleTransientStatusCommentAgeMs;
 }
 
 async function deleteTransientStatusComment(

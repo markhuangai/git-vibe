@@ -176,13 +176,16 @@ Store AI provider values in `GITVIBE_AI_ENV_JSON`:
 Prepare Codex auth JSON as a compact string before adding it to the bundle:
 
 ```bash
-jq -c . auth.json
+jq -Rs . < ~/.codex/auth.json
 ```
 
 Create `GITVIBE_GITHUB_TOKEN` as a fine-grained PAT scoped to the managed
 repository. See
 [fine-grained PAT repository permissions](docs/WORKFLOW.md#fine-grained-pat-permissions)
-for the required permission set and access levels.
+for the required permission set and access levels. Include repository Actions
+secrets read/write permission only when using `CODEX_AUTH_JSON`, because GitVibe
+then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
+secret.
 
 ### 4. Run the app server
 

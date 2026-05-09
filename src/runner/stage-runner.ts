@@ -128,6 +128,11 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const aiRunOptions = {
     config,
     cwd: options.cwd,
+    github: {
+      client,
+      repository: options.repository,
+      token: options.token,
+    },
     logger,
     maxTurns: options.maxTurns,
     prompt: prompts.prompt,

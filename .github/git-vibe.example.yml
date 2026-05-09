@@ -92,7 +92,8 @@ ai:
       enabled: false
       adapter: cli-codex
       command: codex exec
-      # Key inside GITVIBE_AI_ENV_JSON. Stores compact auth.json contents.
+      # Key inside GITVIBE_AI_ENV_JSON. Stores escaped auth.json text from jq -Rs .
+      # Requires GITVIBE_GITHUB_TOKEN repository Secrets read/write permission for refresh write-back.
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex

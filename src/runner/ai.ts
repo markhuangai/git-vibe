@@ -26,6 +26,7 @@ import {
 } from "./ai-compaction.js";
 import { bundleValueFromSource } from "./cli-adapter-utils.js";
 import { runClaudeCodeCliStage } from "./claude-code-cli.js";
+import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
 import { redactLogText, summarizeError } from "./logging.js";
@@ -57,6 +58,7 @@ export interface RunAiStageOptions {
   stage: Stage;
   stageDefinition: StageDefinition;
   system: string;
+  github?: CodexAuthWritebackGitHub;
   toolOverride?: string[];
   logger?: StageLogger;
 }
