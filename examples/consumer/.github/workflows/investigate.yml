@@ -1,4 +1,5 @@
 name: GitVibe investigate
+run-name: "[git-vibe][investigate]: Issue #${{ inputs.issue-number }}"
 
 on:
   workflow_dispatch:
