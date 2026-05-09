@@ -56,6 +56,7 @@ export interface TimelineItem {
   authorAssociation?: string;
   body: string;
   createdAt: string;
+  databaseId?: number | string;
   id: string;
   kind: string;
   parentId?: string;

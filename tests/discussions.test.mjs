@@ -1,6 +1,12 @@
 // @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
-import { closeDiscussion, removeDiscussionLabel } from "../src/shared/discussions.ts";
+import {
+  addDiscussionComment,
+  closeDiscussion,
+  deleteDiscussionComment,
+  discussionComments,
+  removeDiscussionLabel,
+} from "../src/shared/discussions.ts";
 
 describe("discussion label helpers", () => {
   it("removes labels with the supplied label node ID", async () => {
@@ -76,12 +82,83 @@ describe("discussion label helpers", () => {
   });
 });
 
+describe("discussion comment helpers", () => {
+  it("adds, lists, and deletes discussion comments", async () => {
+    const client = createClient();
+
+    await expect(
+      addDiscussionComment({
+        body: "Queued.",
+        client,
+        discussionId: "discussion-node",
+        token: "token",
+      }),
+    ).resolves.toEqual({ id: "comment-node", url: "comment-url" });
+    await expect(
+      discussionComments({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual([
+      {
+        body: "Top-level",
+        id: "comment-node",
+        replies: { nodes: [{ body: "Reply", id: "reply-node", url: "reply-url" }] },
+        url: "comment-url",
+      },
+      { body: "Reply", id: "reply-node", url: "reply-url" },
+    ]);
+    await deleteDiscussionComment({ client, commentId: "comment-node", token: "token" });
+
+    expect(client.graphql).toHaveBeenCalledWith(
+      expect.stringContaining("GitVibeDeleteDiscussionComment"),
+      { id: "comment-node" },
+      "token",
+    );
+  });
+
+  it("returns an empty list when discussion comments are unavailable", async () => {
+    const client = createClient({ missingDiscussionComments: true });
+
+    await expect(
+      discussionComments({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("lists discussion comments that have no replies", async () => {
+    const client = createClient({ noDiscussionReplies: true });
+
+    await expect(
+      discussionComments({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual([{ body: "Top-level", id: "comment-node", url: "comment-url" }]);
+  });
+});
+
 function createClient(options = {}) {
   return {
     graphql: vi.fn(async (query) => {
       if (query.includes("GitVibeDiscussionLabelId")) {
         return {
           repository: { label: options.missingLabel ? null : { id: "resolved-label-node" } },
+        };
+      }
+      if (query.includes("GitVibeAddDiscussionComment")) {
+        return { addDiscussionComment: { comment: { id: "comment-node", url: "comment-url" } } };
+      }
+      if (query.includes("GitVibeDiscussionComments")) {
+        if (options.missingDiscussionComments) return { node: null };
+        return {
+          node: {
+            comments: {
+              nodes: [
+                {
+                  body: "Top-level",
+                  id: "comment-node",
+                  replies: options.noDiscussionReplies
+                    ? undefined
+                    : { nodes: [{ body: "Reply", id: "reply-node", url: "reply-url" }] },
+                  url: "comment-url",
+                },
+              ],
+            },
+          },
         };
       }
       return {};

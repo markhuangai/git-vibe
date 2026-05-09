@@ -125,3 +125,10 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+      - name: Upload summary result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-vibe-summary-${{ inputs.discussion-number }}
+          path: ${{ runner.temp }}/git-vibe-summarize-result.json
+          if-no-files-found: ignore

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
 import { baseBranchFromEnv } from "../shared/config.js";
 import { gitVibeInternalLabels } from "../shared/labels.js";
+import { workflowQueuedMarker, workflowRunIdFromUrl } from "../shared/status-comments.js";
 import {
   gitVibeBranchName,
   reviewFixIssueBody,
@@ -356,8 +357,14 @@ function queuedReviewFixWorkflowComment(options: {
   workflow: string;
   workflowRunUrl?: string;
 }): string {
+  const run = workflowRunIdFromUrl(options.workflowRunUrl);
   const lines = [
-    `<!-- git-vibe:workflow-queued workflow=${options.workflow} artifact=issue number=${options.issueNumber} -->`,
+    workflowQueuedMarker({
+      artifact: "issue",
+      number: options.issueNumber,
+      run,
+      workflow: options.workflow,
+    }),
     "## GitVibe Workflow Queued",
     "",
     `GitVibe queued \`${options.workflow}\` on \`${options.ref}\` for review-fix issue #${options.issueNumber}.`,

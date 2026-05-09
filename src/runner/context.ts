@@ -154,6 +154,7 @@ function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): Ti
       user: item.author,
     }),
     authorAssociation: item.authorAssociation,
+    databaseId: item.databaseId,
     parentId: item.replyTo?.id ? String(item.replyTo.id) : undefined,
   };
 }
@@ -203,6 +204,7 @@ interface PullRequestReviewCommentNode {
   authorAssociation?: string;
   body?: string;
   createdAt?: string;
+  databaseId?: number;
   diffHunk?: string;
   id: string;
   path?: string;
@@ -245,6 +247,7 @@ const discussionQuery = `
             replies(first: 100) {
               nodes {
                 id
+                databaseId
                 body
                 createdAt
                 url

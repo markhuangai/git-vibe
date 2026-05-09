@@ -1,8 +1,9 @@
+// @ts-nocheck
 import { describe, expect, it } from "vitest";
 import { renderStageResultComment } from "../src/runner/result-comments.ts";
 
 describe("stage result comments", () => {
-  it("renders structured AI output as human-readable Markdown with a stable marker", () => {
+  it("renders non-compact structured AI output as human-readable Markdown", () => {
     const body = renderStageResultComment({
       context: {
         artifact: {
@@ -24,27 +25,27 @@ describe("stage result comments", () => {
         findings: ["The request is implementable"],
         implementation_plan: ["src/app/server.ts: add command routing test coverage"],
         missing_capabilities: ["Threaded PR review replies are not implemented"],
-        next_state: "ready-for-implementation",
+        next_state: "pr-draft-ready",
         partial_capabilities: ["Issue comments are flat replies with source links"],
         pr_body: "Refs #12",
         pr_title: "GitVibe: implement feature",
         proposed_labels: ["git-vibe:ready-for-approval"],
         questions: ["Confirm copy text"],
         references: ["https://github.com/example/repo/issues/12"],
-        stage: "validate",
+        stage: "create-pr",
         status: "completed",
         summary: "Validation finished.",
         tests: ["corepack pnpm test"],
         working_capabilities: ["Discussion comments can be posted"],
       },
-      stage: "validate",
+      stage: "create-pr",
       workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
 
     expect(body).toContain(
-      "<!-- git-vibe:stage-result stage=validate artifact=issue number=12 -->",
+      "<!-- git-vibe:stage-result stage=create-pr artifact=issue number=12 -->",
     );
-    expect(body).toContain("## GitVibe Validation");
+    expect(body).toContain("## GitVibe Pull Request Update");
     expect(body).toContain("**Status:** `completed`");
     expect(body).toContain("### Already Working\n- Discussion comments can be posted");
     expect(body).toContain("### Not Working Yet\n- Threaded PR review replies are not implemented");
@@ -59,21 +60,39 @@ describe("stage result comments", () => {
     expect(body).toContain("- Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(body).not.toContain('"findings"');
   });
+});
+
+describe("compact stage result comments", () => {
+  it("renders validation results in a compact form", () => {
+    const body = renderStageResultComment({
+      context: context("issue"),
+      parsedOutput: {
+        assumptions: ["Existing API remains stable"],
+        findings: ["The request is implementable"],
+        missing_capabilities: ["Threaded PR review replies are not implemented"],
+        next_state: "ready-for-implementation",
+        partial_capabilities: ["Issue comments are flat replies with source links"],
+        references: ["https://github.com/example/repo/issues/12"],
+        stage: "validate",
+        status: "completed",
+        summary: "Validation finished.",
+        working_capabilities: ["Discussion comments can be posted"],
+      },
+      stage: "validate",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+    });
+
+    expect(body).toContain("## GitVibe Validation");
+    expect(body).toContain(
+      "### Capability Status\n- Working: 1\n- Missing: 1\n- Partial or unclear: 1",
+    );
+    expect(body).toContain("### Key Findings\n- The request is implementable");
+    expect(body).not.toContain("Threaded PR review replies are not implemented");
+  });
 
   it("renders retry guidance when investigation has blocking questions", () => {
     const body = renderStageResultComment({
-      context: {
-        artifact: {
-          body: "Issue body",
-          number: "12",
-          title: "Issue title",
-          type: "issue",
-          url: "https://github.com/example/repo/issues/12",
-        },
-        generatedAt: "2026-01-01T00:00:00Z",
-        repository: "example/repo",
-        timeline: [],
-      },
+      context: context("issue"),
       parsedOutput: {
         assumptions: [],
         blocking_questions: ["Which config key should be used?"],
@@ -94,3 +113,18 @@ describe("stage result comments", () => {
     expect(body).toContain("re-add `git-vibe:approved`");
   });
 });
+
+function context(type) {
+  return {
+    artifact: {
+      body: "Issue body",
+      number: "12",
+      title: "Issue title",
+      type,
+      url: `https://github.com/example/repo/${type}s/12`,
+    },
+    generatedAt: "2026-01-01T00:00:00Z",
+    repository: "example/repo",
+    timeline: [],
+  };
+}

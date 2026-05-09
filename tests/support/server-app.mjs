@@ -30,6 +30,12 @@ export function createClient(options = {}) {
       if (query.includes("GitVibeAddDiscussionComment")) {
         return { addDiscussionComment: { comment: { id: "comment-id", url: "comment-url" } } };
       }
+      if (query.includes("GitVibeDiscussionComments")) {
+        return { node: { comments: { nodes: options.discussionComments || [] } } };
+      }
+      if (query.includes("GitVibeDeleteDiscussionComment")) {
+        return { deleteDiscussionComment: { clientMutationId: null } };
+      }
       if (query.includes("GitVibeRemoveDiscussionLabel")) {
         if (options.discussionLabelRemovalError) throw options.discussionLabelRemovalError;
         return { removeLabelsFromLabelable: { clientMutationId: null } };
@@ -54,6 +60,7 @@ export function createClient(options = {}) {
         return permission;
       }
       if (request.method === "GET" && request.path.includes("/comments?")) {
+        if (options.commentsError) throw options.commentsError;
         return options.comments || [];
       }
       if (request.method === "GET" && request.path.includes("/actions/variables/")) {
@@ -91,6 +98,7 @@ export function createClient(options = {}) {
       }
       if (request.method === "PATCH" && request.path.includes("/issues/")) return {};
       if (request.method === "DELETE" && request.path.includes("/labels/")) return {};
+      if (request.method === "DELETE" && request.path.includes("/comments/")) return {};
       throw new Error(`unexpected request ${request.method} ${request.path}`);
     }),
   };

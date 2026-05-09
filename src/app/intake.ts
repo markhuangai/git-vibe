@@ -17,6 +17,7 @@ export interface IntakeIssue {
 
 export interface IntakeComment {
   body?: string | null;
+  id?: number | string;
 }
 
 export function isFeatureRequestIssue(issue: IntakeIssue): boolean {

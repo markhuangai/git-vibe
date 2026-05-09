@@ -126,3 +126,10 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+      - name: Upload investigation result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-vibe-investigation-${{ inputs.issue-number }}
+          path: ${{ runner.temp }}/git-vibe-investigate-result.json
+          if-no-files-found: ignore

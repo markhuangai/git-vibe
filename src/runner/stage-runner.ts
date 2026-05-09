@@ -24,6 +24,8 @@ import { renderStageResultComment, type StageResultLink } from "./result-comment
 import { loadStageSchema, validateOutput } from "./schemas.js";
 import {
   applyStageLabelTransition,
+  cleanupStageStatusComments,
+  type PublishedArtifactComment,
   publishStageResultComment,
   publishStageStartComment,
 } from "./stage-publishing.js";
@@ -71,13 +73,15 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     handoffs: context.handoffs?.length || 0,
     timeline_items: context.timeline.length,
   });
+  const transientComments: PublishedArtifactComment[] = [];
   if (!options.dryRun && options.workflowRunUrl) {
-    await publishStageStartComment({
+    const comment = await publishStageStartComment({
       client,
       context,
       logger,
       runner: options,
     });
+    if (comment) transientComments.push(comment);
   }
   const branch = issueBranchForStage(options.stage, context);
   let branchState: IssueBranchState | undefined;
@@ -152,6 +156,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     repair: validationRepairRunner({ aiRunOptions, config, context, definition, logger, options }),
     result,
     runnerBaseBranch: baseBranch,
+    transientComments,
   });
 
   logger.event("stage.done", {
@@ -300,6 +305,7 @@ async function applyDeterministicWrites(options: {
     maxAttempts: number,
   ) => Promise<StageRunResult>;
   result: StageRunResult;
+  transientComments: PublishedArtifactComment[];
 }): Promise<StageRunResult> {
   if (options.options.dryRun) {
     options.logger.event("writes.skip", { reason: "dry-run" });
@@ -312,11 +318,13 @@ async function applyDeterministicWrites(options: {
       ...options,
       parsedOutput: options.result.parsedOutput,
       runner: options.options,
+      transientComments: options.transientComments,
     });
     await applyStageLabelTransition({
       ...options,
       parsedOutput: options.result.parsedOutput,
       runner: options.options,
+      transientComments: options.transientComments,
     });
     options.logger.event("writes.skip", { reason: "status", status });
     return options.result;
@@ -326,6 +334,13 @@ async function applyDeterministicWrites(options: {
     options.options.stage === "review-matrix" &&
     isReviewChangesRequired(options.result.parsedOutput)
   ) {
+    await cleanupStageStatusComments({
+      client: options.client,
+      context: options.context,
+      logger: options.logger,
+      runner: options.options,
+      transientComments: options.transientComments,
+    });
     return handleReviewFixRequired({
       client: options.client,
       config: options.config,
@@ -341,6 +356,7 @@ async function applyDeterministicWrites(options: {
       ...options,
       parsedOutput: options.result.parsedOutput,
       runner: options.options,
+      transientComments: options.transientComments,
     });
     await applyStageLabelTransition({
       ...options,
@@ -374,6 +390,7 @@ async function applyDeterministicWrites(options: {
       links: pullRequestLinks(pullRequest),
       parsedOutput: options.result.parsedOutput,
       runner: options.options,
+      transientComments: options.transientComments,
     });
     await applyStageLabelTransition({
       ...options,
@@ -388,6 +405,7 @@ async function applyDeterministicWrites(options: {
         ...options,
         parsedOutput: result.parsedOutput,
         runner: options.options,
+        transientComments: options.transientComments,
       });
     return result;
   }
@@ -402,6 +420,7 @@ async function commitImplementation({
   options,
   repair,
   result,
+  transientComments,
 }: {
   client: GitHubClient;
   config: GitVibeConfig;
@@ -414,6 +433,7 @@ async function commitImplementation({
     maxAttempts: number,
   ) => Promise<StageRunResult>;
   result: StageRunResult;
+  transientComments: PublishedArtifactComment[];
 }): Promise<StageRunResult> {
   const branch = issueBranch(context);
   const finalResult = await runValidationWithRepair({ config, logger, options, repair, result });
@@ -424,6 +444,7 @@ async function commitImplementation({
       logger,
       parsedOutput: finalResult.parsedOutput,
       runner: options,
+      transientComments,
     });
     await applyStageLabelTransition({
       client,

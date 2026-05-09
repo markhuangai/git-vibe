@@ -8,6 +8,8 @@ import {
   addDiscussionComment,
   checkRepositoryDiscussions,
   createRepositoryDiscussion,
+  deleteDiscussionComment,
+  discussionComments,
   removeDiscussionLabel,
 } from "../shared/discussions.js";
 import { gitVibeBaseBranchVariable } from "../shared/config.js";
@@ -19,6 +21,12 @@ import {
 } from "../shared/github.js";
 import { gitVibeInternalLabels, gitVibeLabels, isInternalGitVibeLabel } from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
+import {
+  matchesTransientStatusScope,
+  parseTransientStatusMarker,
+  workflowQueuedMarker,
+  workflowRunIdFromUrl,
+} from "../shared/status-comments.js";
 import { reviewFixTraceFromBody } from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import {
@@ -710,6 +718,7 @@ async function createQueuedWorkflowComment(
     workflowRunUrl?: string;
   },
 ): Promise<void> {
+  await cleanupQueuedWorkflowComments(options, comment);
   const body = queuedWorkflowComment({
     artifact: comment.artifact,
     number: comment.number,
@@ -723,6 +732,69 @@ async function createQueuedWorkflowComment(
     return;
   }
   await createIssueComment(options, comment.number, body);
+}
+
+async function cleanupQueuedWorkflowComments(
+  options: WebhookContext,
+  comment: Parameters<typeof createQueuedWorkflowComment>[1],
+): Promise<void> {
+  try {
+    if (comment.artifact === "discussion") {
+      await cleanupQueuedDiscussionComments(options, comment);
+      return;
+    }
+    await cleanupQueuedIssueComments(options, comment);
+  } catch (error) {
+    options.log(`workflow queued comment cleanup failed: ${summarizeError(error)}`);
+  }
+}
+
+async function cleanupQueuedIssueComments(
+  options: WebhookContext,
+  comment: Parameters<typeof createQueuedWorkflowComment>[1],
+): Promise<void> {
+  const comments = await issueComments(options, comment.number);
+  await Promise.all(
+    comments
+      .filter((candidate) => queuedWorkflowCommentMatches(candidate.body, comment))
+      .map((candidate) => deleteIssueComment(options, String(candidate.id || ""))),
+  );
+}
+
+async function cleanupQueuedDiscussionComments(
+  options: WebhookContext,
+  comment: Parameters<typeof createQueuedWorkflowComment>[1],
+): Promise<void> {
+  const discussionId = discussionNodeId(options.payload.discussion);
+  if (!discussionId) return;
+  const comments = await discussionComments({
+    client: options.client,
+    discussionId,
+    token: options.token,
+  });
+  await Promise.all(
+    comments
+      .filter((candidate) => queuedWorkflowCommentMatches(candidate.body, comment))
+      .map((candidate) =>
+        deleteDiscussionComment({
+          client: options.client,
+          commentId: candidate.id,
+          token: options.token,
+        }),
+      ),
+  );
+}
+
+function queuedWorkflowCommentMatches(
+  body: string | null | undefined,
+  comment: Parameters<typeof createQueuedWorkflowComment>[1],
+): boolean {
+  return matchesTransientStatusScope(parseTransientStatusMarker(body), {
+    artifact: comment.artifact,
+    kind: "workflow-queued",
+    number: comment.number,
+    workflow: comment.workflow,
+  });
 }
 
 async function postQueuedWorkflowComment(
@@ -796,8 +868,14 @@ function queuedWorkflowComment(options: {
   workflow: string;
   workflowRunUrl?: string;
 }): string {
+  const run = workflowRunIdFromUrl(options.workflowRunUrl);
   const lines = [
-    `<!-- git-vibe:workflow-queued workflow=${options.workflow} artifact=${options.artifact} number=${options.number} -->`,
+    workflowQueuedMarker({
+      artifact: options.artifact,
+      number: options.number,
+      run,
+      workflow: options.workflow,
+    }),
     "## GitVibe Workflow Queued",
     "",
     `GitVibe queued ${inlineCode(options.workflow)} on ${inlineCode(options.ref)} for ${options.artifact} #${options.number} from ${options.reason}.`,
@@ -851,6 +929,15 @@ async function createIssueComment(
     body: { body },
     method: "POST",
     path: `/repos/${options.owner}/${options.repo}/issues/${issueNumber}/comments`,
+    token: options.token,
+  });
+}
+
+async function deleteIssueComment(options: WebhookContext, commentId: string): Promise<void> {
+  if (!commentId) return;
+  await options.client.request({
+    method: "DELETE",
+    path: `/repos/${options.owner}/${options.repo}/issues/comments/${commentId}`,
     token: options.token,
   });
 }

@@ -269,6 +269,42 @@ describe("GitVibe workflow write permissions", () => {
       issues: "write",
     });
   });
+
+  it("uploads full stage result artifacts for compact standalone comments", () => {
+    expect(
+      readWorkflow(".github/workflows/investigate.yml").jobs?.investigate?.steps?.find(
+        (step) => step.name === "Upload investigation result",
+      ),
+    ).toMatchObject({
+      if: "always()",
+      uses: "actions/upload-artifact@v4",
+      with: expect.objectContaining({
+        path: "${{ runner.temp }}/git-vibe-investigate-result.json",
+      }),
+    });
+    expect(
+      readWorkflow(".github/workflows/validate.yml").jobs?.validate?.steps?.find(
+        (step) => step.name === "Upload validation result",
+      ),
+    ).toMatchObject({
+      if: "always()",
+      uses: "actions/upload-artifact@v4",
+      with: expect.objectContaining({
+        path: "${{ runner.temp }}/git-vibe-validate-result.json",
+      }),
+    });
+    expect(
+      readWorkflow(".github/workflows/summarize.yml").jobs?.summarize?.steps?.find(
+        (step) => step.name === "Upload summary result",
+      ),
+    ).toMatchObject({
+      if: "always()",
+      uses: "actions/upload-artifact@v4",
+      with: expect.objectContaining({
+        path: "${{ runner.temp }}/git-vibe-summarize-result.json",
+      }),
+    });
+  });
 });
 
 describe("GitVibe develop workflow handoff", () => {

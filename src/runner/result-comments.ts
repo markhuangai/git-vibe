@@ -1,4 +1,5 @@
 import type { ContextPacket, JsonObject, Stage } from "../shared/types.js";
+import { stageStartMarker, workflowRunIdFromUrl } from "../shared/status-comments.js";
 
 export interface StageResultLink {
   label: string;
@@ -31,7 +32,12 @@ export function renderStageStartComment(options: {
 }): string {
   const artifact = options.context.artifact;
   const lines = [
-    `<!-- git-vibe:stage-start stage=${options.stage} artifact=${artifact.type} number=${artifact.number} -->`,
+    stageStartMarker({
+      artifact: artifact.type,
+      number: artifact.number,
+      run: workflowRunIdFromUrl(options.workflowRunUrl),
+      stage: options.stage,
+    }),
     `## GitVibe ${stageTitles[options.stage]} Running`,
     "",
     `GitVibe is running the ${inlineCode(options.stage)} stage for ${artifact.type} #${artifact.number}.`,
@@ -42,6 +48,10 @@ export function renderStageStartComment(options: {
 }
 
 export function renderStageResultComment(options: StageResultCommentOptions): string {
+  if (options.stage === "investigate" || options.stage === "validate") {
+    return renderCompactStageResultComment(options);
+  }
+
   const output = options.parsedOutput;
   const lines = [
     resultMarker(options),
@@ -69,6 +79,27 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
     ...referencesSection(output, options),
   ];
 
+  return cleanLines(lines).join("\n");
+}
+
+function renderCompactStageResultComment(options: StageResultCommentOptions): string {
+  const output = options.parsedOutput;
+  const lines = [
+    resultMarker(options),
+    `## GitVibe ${stageTitles[options.stage]}`,
+    "",
+    `**Status:** ${inlineCode(textField(output.status) || "completed")}`,
+    stateLine(output),
+    "",
+    textField(output.summary) || "No summary provided.",
+    ...compactValidationSection(options.stage, output),
+    ...listSection("Blocking Questions", limitList(arrayField(output.blocking_questions), 5)),
+    ...compactNextActionSection(options.stage, output),
+    ...listSection("Key Findings", limitList(arrayField(output.findings), 5)),
+    ...listSection("Implementation Plan", limitList(arrayField(output.implementation_plan), 5)),
+    ...listSection("Open Questions", limitList(arrayField(output.questions), 5)),
+    ...referencesSection(output, options),
+  ];
   return cleanLines(lines).join("\n");
 }
 
@@ -119,9 +150,38 @@ function referencesSection(output: JsonObject, options: StageResultCommentOption
   return listSection("References", uniqueStrings(references));
 }
 
+function compactValidationSection(stage: Stage, output: JsonObject): string[] {
+  if (stage !== "validate") return [];
+  const working = arrayField(output.working_capabilities).length;
+  const missing = arrayField(output.missing_capabilities).length;
+  const partial = arrayField(output.partial_capabilities).length;
+  if (!working && !missing && !partial) return [];
+  return [
+    "",
+    "### Capability Status",
+    `- Working: ${working}`,
+    `- Missing: ${missing}`,
+    `- Partial or unclear: ${partial}`,
+  ];
+}
+
+function compactNextActionSection(stage: Stage, output: JsonObject): string[] {
+  if (stage === "investigate" && arrayField(output.blocking_questions).length) {
+    return investigationRetrySection(stage, output);
+  }
+  const nextState = textField(output.next_state);
+  if (!nextState || nextState === "blocked") return [];
+  return ["", "### Next Action", `Continue with ${inlineCode(nextState)}.`];
+}
+
 function listSection(title: string, values: string[]): string[] {
   if (!values.length) return [];
   return ["", `### ${title}`, ...values.map((value) => `- ${value}`)];
+}
+
+function limitList(values: string[], limit: number): string[] {
+  if (values.length <= limit) return values;
+  return [...values.slice(0, limit), `${values.length - limit} more in the stage result artifact.`];
 }
 
 function investigationRetrySection(stage: Stage, output: JsonObject): string[] {

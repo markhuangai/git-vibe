@@ -6,6 +6,18 @@ export interface CreatedDiscussion {
   url: string;
 }
 
+export interface CreatedDiscussionComment {
+  id: string;
+  url: string;
+}
+
+export interface DiscussionCommentNode {
+  body: string;
+  id: string;
+  replies?: { nodes: DiscussionCommentNode[] };
+  url: string;
+}
+
 export interface DiscussionSetupCheck {
   categoryName: string;
   categorySlug: string;
@@ -57,14 +69,46 @@ export async function addDiscussionComment(options: {
   discussionId: string;
   replyToId?: string;
   token: string;
-}): Promise<void> {
-  await options.client.graphql(
+}): Promise<CreatedDiscussionComment> {
+  const result = await options.client.graphql<AddDiscussionCommentResult>(
     addDiscussionCommentMutation,
     {
       body: options.body,
       discussionId: options.discussionId,
       replyToId: options.replyToId || null,
     },
+    options.token,
+  );
+  const comment = result.addDiscussionComment.comment;
+  return { id: comment.id, url: comment.url };
+}
+
+export async function discussionComments(options: {
+  client: GitHubClient;
+  discussionId: string;
+  token: string;
+}): Promise<DiscussionCommentNode[]> {
+  const result = await options.client.graphql<DiscussionCommentsResult>(
+    discussionCommentsQuery,
+    { discussionId: options.discussionId },
+    options.token,
+  );
+  const discussion = result.node;
+  if (!discussion?.comments?.nodes) return [];
+  return discussion.comments.nodes.flatMap((comment) => [
+    comment,
+    ...(comment.replies?.nodes || []),
+  ]);
+}
+
+export async function deleteDiscussionComment(options: {
+  client: GitHubClient;
+  commentId: string;
+  token: string;
+}): Promise<void> {
+  await options.client.graphql(
+    deleteDiscussionCommentMutation,
+    { id: options.commentId },
     options.token,
   );
 }
@@ -183,6 +227,18 @@ interface CreateDiscussionResult {
   };
 }
 
+interface AddDiscussionCommentResult {
+  addDiscussionComment: {
+    comment: CreatedDiscussionComment;
+  };
+}
+
+interface DiscussionCommentsResult {
+  node?: {
+    comments?: { nodes: DiscussionCommentNode[] };
+  } | null;
+}
+
 interface DiscussionLabelIdResult {
   repository?: {
     label?: {
@@ -237,6 +293,37 @@ const addDiscussionCommentMutation = `
         id
         url
       }
+    }
+  }
+`;
+
+const discussionCommentsQuery = `
+  query GitVibeDiscussionComments($discussionId: ID!) {
+    node(id: $discussionId) {
+      ... on Discussion {
+        comments(first: 100) {
+          nodes {
+            id
+            body
+            url
+            replies(first: 100) {
+              nodes {
+                id
+                body
+                url
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const deleteDiscussionCommentMutation = `
+  mutation GitVibeDeleteDiscussionComment($id: ID!) {
+    deleteDiscussionComment(input: { id: $id }) {
+      clientMutationId
     }
   }
 `;

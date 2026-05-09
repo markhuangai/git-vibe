@@ -68,7 +68,9 @@ describe("stage result publishing", () => {
     const startBody = JSON.parse(fetch.mock.calls[2][1].body).body;
     const commentBody = JSON.parse(fetch.mock.calls[3][1].body).body;
     expect(result.commentBody).toContain("## GitVibe Validation");
-    expect(startBody).toContain("<!-- git-vibe:stage-start stage=validate");
+    expect(startBody).toContain("<!-- git-vibe:stage-start");
+    expect(startBody).toContain("stage=validate");
+    expect(startBody).toContain("run=99");
     expect(startBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(commentBody).toContain("<!-- git-vibe:stage-result stage=validate");
     expect(commentBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");

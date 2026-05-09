@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyStageLabelTransition,
   publishStageResultComment,
+  publishStageStartComment,
 } from "../src/runner/stage-publishing.ts";
+import { stageStartMarker, workflowQueuedMarker } from "../src/shared/status-comments.ts";
 
 describe("stage publishing helpers", () => {
   it("skips discussion comments when the discussion node id is missing", async () => {
@@ -131,6 +133,150 @@ describe("stage publishing discussion replies", () => {
       expect.objectContaining({ discussionId: "D_1", replyToId: "parent-comment" }),
       "token",
     );
+  });
+});
+
+describe("stage publishing status cleanup", () => {
+  it("deletes queued issue status comments before posting a running comment", async () => {
+    const client = createClient();
+
+    await publishStageStartComment({
+      client,
+      context: {
+        ...context("issue"),
+        timeline: [
+          {
+            body: workflowQueuedMarker({
+              artifact: "issue",
+              number: "12",
+              run: "99",
+              workflow: "validate.yml",
+            }),
+            id: "44",
+            kind: "comment",
+          },
+        ],
+      },
+      logger: createLogger(),
+      runner: runner({
+        stage: "validate",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/comments/44"],
+      ["POST", "/repos/example/repo/issues/12/comments"],
+    ]);
+  });
+
+  it("deletes discussion running comments before posting results", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: {
+        ...context("discussion"),
+        artifact: { ...context("discussion").artifact, id: "D_1" },
+        timeline: [
+          {
+            body: stageStartMarker({
+              artifact: "discussion",
+              number: "12",
+              run: "99",
+              stage: "summarize",
+            }),
+            id: "DC_1",
+            kind: "comment",
+          },
+        ],
+      },
+      logger: createLogger(),
+      parsedOutput: output(),
+      runner: runner({
+        stage: "summarize",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(client.graphql.mock.calls[0][0]).toContain("GitVibeDeleteDiscussionComment");
+    expect(client.graphql.mock.calls[0][1]).toMatchObject({ id: "DC_1" });
+    expect(client.graphql.mock.calls[1][0]).toContain("GitVibeAddDiscussionComment");
+  });
+});
+
+describe("stage publishing status cleanup failures", () => {
+  it("ignores already-deleted transient status comments", async () => {
+    const client = createClient();
+    const logger = createLogger();
+    client.request = vi.fn(async (request) => {
+      if (request.method === "DELETE") throw new Error("GitHub API DELETE failed: 404");
+      return {};
+    });
+
+    await publishStageStartComment({
+      client,
+      context: {
+        ...context("issue"),
+        timeline: [
+          {
+            body: workflowQueuedMarker({
+              artifact: "issue",
+              number: "12",
+              workflow: "validate.yml",
+            }),
+            id: "44",
+            kind: "comment",
+          },
+        ],
+      },
+      logger,
+      runner: runner({ stage: "validate" }),
+    });
+
+    expect(logger.event).not.toHaveBeenCalledWith(
+      "github.status_comment.delete.failed",
+      expect.anything(),
+    );
+    expect(client.request.mock.calls.at(-1)[0].method).toBe("POST");
+  });
+});
+
+describe("stage publishing review status cleanup", () => {
+  it("deletes pull request review running replies before posting review results", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: {
+        ...context("pull-request"),
+        timeline: [
+          {
+            body: stageStartMarker({
+              artifact: "pull-request",
+              number: "12",
+              run: "99",
+              stage: "address-pr-feedback",
+            }),
+            databaseId: 77,
+            id: "PRRC_node",
+            kind: "pull-request-review-comment",
+          },
+        ],
+      },
+      logger: createLogger(),
+      parsedOutput: output(),
+      runner: runner({
+        sourceComment: { id: "88", kind: "pull-request-review-comment" },
+        stage: "address-pr-feedback",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/pulls/comments/77"],
+      ["POST", "/repos/example/repo/pulls/12/comments/88/replies"],
+    ]);
   });
 });
 
@@ -308,7 +454,12 @@ function runner(overrides = {}) {
 
 function createClient() {
   return {
-    graphql: vi.fn(),
+    graphql: vi.fn(async (query) => {
+      if (query.includes("GitVibeAddDiscussionComment")) {
+        return { addDiscussionComment: { comment: { id: "comment", url: "url" } } };
+      }
+      return {};
+    }),
     request: vi.fn(async () => ({})),
   };
 }

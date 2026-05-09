@@ -52,7 +52,7 @@ stateDiagram-v2
 - Admins and collaborators move work forward with public `/git-vibe ...`
   commands and protected labels.
 - Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
-- Command, protected-label, and trusted-review dispatches post a queued comment after dispatch succeeds. Queued comments include the exact workflow run URL when GitHub returns it; runner stages post a separate running comment when the job actually starts.
+- Command, protected-label, and trusted-review dispatches post a queued comment after dispatch succeeds. Queued comments include the exact workflow run URL when GitHub returns it. Runner stages remove prior transient queued/running GitVibe status comments for the same artifact before posting the next running or result comment.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation and summary generation; it must never start code changes.
 - GitVibe never auto-merges and never approves its own pull requests.
@@ -207,6 +207,9 @@ and re-add `git-vibe:approved` to retry the gate. A ready investigation is
 persisted as a handoff artifact so implementation receives the investigation
 summary, findings, and concrete implementation plan directly in its stage
 context.
+Human-facing investigation and validation comments stay concise; full structured
+stage output remains available in the workflow result artifact and, for develop
+runs, in handoff artifacts consumed by later stages.
 
 ```mermaid
 sequenceDiagram
@@ -345,7 +348,7 @@ GitVibe must make every generated artifact discoverable from the others.
 - When a feature issue is converted to a discussion, the closed issue gets a comment linking the discussion, and the discussion body or first bot comment links the original issue.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
 - Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering surface. Discussions use threaded replies; issue, pull request conversation, and submitted-review triggers use flat comments with an explicit source link. Pull request review-comment replies remain supported for existing metadata.
-- When the app dispatches automation from a command, protected label, or trusted review, it posts a queued comment with a hidden metadata marker and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact.
+- When the app dispatches automation from a command, protected label, or trusted review, it posts a queued comment with a hidden metadata marker and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact. These queued/running comments are transient: GitVibe deletes matching prior transient status comments and keeps durable result, traceability, investigation, and validation comments.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
 - The source issue gets a comment linking the PR and latest workflow run.
