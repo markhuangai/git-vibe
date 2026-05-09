@@ -77,7 +77,7 @@ export function redactLogText(value: string): string {
 }
 
 function sensitiveName(name: string): boolean {
-  return /(AUTH|CREDENTIAL|KEY|PASSWORD|SECRET|TOKEN)/i.test(name);
+  return /(^|_)(AUTH|AUTHORIZATION|CREDENTIALS?|KEY|PASSWORD|SECRET|TOKEN)(_|$)/i.test(name);
 }
 
 function aiEnvBundleSecrets(): Array<[string, string]> {

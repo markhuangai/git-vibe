@@ -42,6 +42,7 @@ describe("stage logging", () => {
 
   it("redacts known secret values from progress lines", () => {
     process.env.GITVIBE_TEST_SECRET = "super-secret-value";
+    process.env.GIT_AUTHOR_NAME = "git-vibe";
     process.env.GITVIBE_AI_ENV_JSON = "{";
     /** @type {string[]} */
     const messages = [];
@@ -57,6 +58,7 @@ describe("stage logging", () => {
     expect(messages).toEqual([
       '[git-vibe] validate ai.tool.start command="echo <redacted:GITVIBE_TEST_SECRET> <redacted>" tool="bash"',
     ]);
+    expect(redactLogText("[git-vibe] status")).toBe("[git-vibe] status");
     expect(redactLogText("plain text")).toBe("plain text");
 
     process.env.GITVIBE_AI_ENV_JSON = "[]";
