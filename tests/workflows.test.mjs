@@ -343,13 +343,14 @@ describe("GitVibe develop workflow handoff", () => {
     expect(
       implement?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
     ).toMatchObject({
-      with: expect.objectContaining({ path: ".git-vibe/handoffs" }),
+      with: expect.objectContaining({ path: "${{ runner.temp }}/git-vibe-handoffs" }),
     });
     expect(
       implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement"),
     ).toMatchObject({
       with: expect.objectContaining({
-        "handoff-dir": ".git-vibe/handoffs",
+        "fail-on-blocked": "true",
+        "handoff-dir": "${{ runner.temp }}/git-vibe-handoffs",
         "validation-repair-attempts": "${{ inputs.validation_repair_attempts }}",
       }),
     });

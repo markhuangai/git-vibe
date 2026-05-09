@@ -43,49 +43,34 @@ export async function prepareIssueBranch(options: {
 }): Promise<IssueBranchState> {
   const remoteRef = `refs/remotes/origin/${options.branch}`;
   options.logger.event("git.branch.prepare", { branch: options.branch });
-  try {
-    execFileSync(
-      "git",
-      [
-        "-c",
-        `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
-        "fetch",
-        "origin",
-        `refs/heads/${options.branch}:${remoteRef}`,
-      ],
-      { cwd: options.cwd, stdio: "ignore" },
-    );
-    execFileSync("git", ["checkout", "-B", options.branch, remoteRef], {
-      cwd: options.cwd,
-      stdio: "inherit",
-    });
-    return { branch: options.branch, remoteFound: true };
-  } catch {
-    if (options.baseBranch && hasOriginRemote(options.cwd)) {
-      const baseRemoteRef = `refs/remotes/origin/${options.baseBranch}`;
-      execFileSync(
-        "git",
-        [
-          "-c",
-          `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
-          "fetch",
-          "origin",
-          `refs/heads/${options.baseBranch}:${baseRemoteRef}`,
-        ],
-        { cwd: options.cwd, stdio: "ignore" },
-      );
-      execFileSync("git", ["checkout", "-B", options.branch, baseRemoteRef], {
-        cwd: options.cwd,
-        stdio: "inherit",
+  if (fetchRemoteBranch({ ...options, remoteRef })) {
+    try {
+      checkoutBranch(options.cwd, options.branch, remoteRef);
+    } catch (error) {
+      options.logger.event("git.branch.checkout.failed", {
+        branch: options.branch,
+        error: error instanceof Error ? error.message : String(error),
       });
-      return { branch: options.branch, remoteFound: false };
+      throw error;
     }
-    execFileSync("git", ["checkout", "-B", options.branch], {
+    return { branch: options.branch, remoteFound: true };
+  }
+
+  options.logger.event("git.branch.fetch.missing", { branch: options.branch });
+  if (options.baseBranch && hasOriginRemote(options.cwd)) {
+    const baseRemoteRef = `refs/remotes/origin/${options.baseBranch}`;
+    fetchBaseBranch({
+      baseBranch: options.baseBranch,
+      baseRemoteRef,
       cwd: options.cwd,
-      stdio: "inherit",
+      token: options.token,
     });
+    checkoutBranch(options.cwd, options.branch, baseRemoteRef);
     return { branch: options.branch, remoteFound: false };
   }
+
+  checkoutBranch(options.cwd, options.branch);
+  return { branch: options.branch, remoteFound: false };
 }
 
 export function issueBranch(context: ContextPacket): string {
@@ -105,6 +90,58 @@ function hasOriginRemote(cwd: string): boolean {
   } catch {
     return false;
   }
+}
+
+function fetchRemoteBranch(options: {
+  branch: string;
+  cwd: string;
+  remoteRef: string;
+  token: string;
+}): boolean {
+  try {
+    execFileSync(
+      "git",
+      [
+        "-c",
+        `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
+        "fetch",
+        "origin",
+        `+refs/heads/${options.branch}:${options.remoteRef}`,
+      ],
+      { cwd: options.cwd, stdio: "ignore" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function fetchBaseBranch(options: {
+  baseBranch: string;
+  baseRemoteRef: string;
+  cwd: string;
+  token: string;
+}): void {
+  execFileSync(
+    "git",
+    [
+      "-c",
+      `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
+      "fetch",
+      "origin",
+      `+refs/heads/${options.baseBranch}:${options.baseRemoteRef}`,
+    ],
+    { cwd: options.cwd, stdio: "ignore" },
+  );
+}
+
+function checkoutBranch(cwd: string, branch: string, startPoint?: string): void {
+  const args = ["checkout", "-B", branch];
+  if (startPoint) args.push(startPoint);
+  execFileSync("git", args, {
+    cwd,
+    stdio: "inherit",
+  });
 }
 
 export async function handleReviewFixRequired(options: {

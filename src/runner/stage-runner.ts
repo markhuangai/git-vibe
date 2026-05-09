@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runAiStage } from "./ai.js";
+import { runAiStage, type RunAiStageOptions } from "./ai.js";
 import { baseBranchFromEnv, loadConfig, testCommandsFor } from "./config.js";
 import { addDiscussionComment, closeDiscussion } from "../shared/discussions.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
@@ -10,7 +10,7 @@ import { gitVibeLabels } from "../shared/labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import { withStageHandoffs, writeStageResultFile } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
-import { createStageLogger } from "./logging.js";
+import { createStageLogger, summarizeError } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
 import {
   appendIssueTraceability,
@@ -137,11 +137,8 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     stageDefinition: definition,
     system: prompts.system,
   };
-  const content = options.dryRun
-    ? dryRunContent(options.stage, context, logger)
-    : await runAiStage(aiRunOptions);
-  let result = await stageRunResult({
-    content,
+  let result = await runStageAiResult({
+    aiRunOptions,
     context,
     definition,
     logger,
@@ -203,6 +200,112 @@ function validationRepairRunner({
       logger,
       options,
     });
+}
+
+async function runStageAiResult({
+  aiRunOptions,
+  context,
+  definition,
+  logger,
+  options,
+}: {
+  aiRunOptions: RunAiStageOptions;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<StageRunResult> {
+  const buildResult = (content: string): Promise<StageRunResult> =>
+    stageRunResult({
+      content,
+      context,
+      definition,
+      logger,
+      options,
+    });
+
+  if (options.dryRun) return buildResult(dryRunContent(options.stage, context, logger));
+
+  try {
+    return await buildResult(await runAiStage(aiRunOptions));
+  } catch (error) {
+    if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
+    return recoverImplementStructuredOutput({
+      aiRunOptions,
+      context,
+      definition,
+      firstError: error,
+      logger,
+      options,
+    });
+  }
+}
+
+function isStructuredOutputFailure(error: unknown): boolean {
+  const message = summarizeError(error);
+  return (
+    message === "AI response did not contain a JSON object" ||
+    /^AI output failed .+ validation:/.test(message)
+  );
+}
+
+async function recoverImplementStructuredOutput({
+  aiRunOptions,
+  context,
+  definition,
+  firstError,
+  logger,
+  options,
+}: {
+  aiRunOptions: RunAiStageOptions;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  firstError: unknown;
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<StageRunResult> {
+  logger.event("output.finalize.start", { error: summarizeError(firstError) });
+  try {
+    const content = await runAiStage({
+      ...aiRunOptions,
+      maxTurns: structuredOutputFinalizationMaxTurns(options),
+      prompt: buildStructuredOutputFinalizationPrompt({
+        basePrompt: aiRunOptions.prompt,
+        context,
+        cwd: options.cwd,
+        error: firstError,
+      }),
+      toolOverride: ["read", "grep", "glob", "bash-readonly", "diff"],
+    });
+    const result = await stageRunResult({
+      content,
+      context,
+      definition,
+      logger,
+      options,
+    });
+    logger.event("output.finalize.done", { status: result.status });
+    return result;
+  } catch (error) {
+    logger.event("output.finalize.failed", {
+      error: summarizeError(error),
+      previous_error: summarizeError(firstError),
+    });
+    return stageRunResult({
+      content: JSON.stringify(
+        blockedImplementOutput({
+          context,
+          finalError: error,
+          firstError,
+          options,
+        }),
+      ),
+      context,
+      definition,
+      logger,
+      options,
+    });
+  }
 }
 
 async function stageRunResult({
@@ -469,6 +572,21 @@ async function commitImplementation({
   ensureGitIdentity(options.cwd);
   logger.event("git.commit.start");
   execFileSync("git", ["add", "-A"], { cwd: options.cwd, stdio: "inherit" });
+  const unstagedRuntimeArtifacts = unstageRuntimeArtifactChanges(options.cwd);
+  if (unstagedRuntimeArtifacts.length > 0) {
+    logger.event("git.runtime_artifacts.unstaged", {
+      files: summarizePaths(unstagedRuntimeArtifacts),
+    });
+  }
+  const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-status"], {
+    cwd: options.cwd,
+  })
+    .toString()
+    .trim();
+  if (!stagedStatus) {
+    logger.event("git.no_staged_changes");
+    return finalResult;
+  }
   execFileSync("git", ["commit", "-m", `Implement #${context.artifact.number} with GitVibe`], {
     cwd: options.cwd,
     stdio: "inherit",
@@ -769,6 +887,82 @@ function recentCommits(cwd: string): string {
   }
 }
 
+function buildStructuredOutputFinalizationPrompt(options: {
+  basePrompt: string;
+  context: ContextPacket;
+  cwd: string;
+  error: unknown;
+}): string {
+  const branch = issueBranch(options.context);
+  return `${options.basePrompt}
+
+<gitvibe_structured_output_finalization>
+The previous implement attempt may have changed the working tree, but it did not return JSON matching the implement.v1 schema.
+
+Failure: ${summarizeError(options.error)}
+
+Current Git status:
+\`\`\`
+${gitOutput(options.cwd, ["status", "--short", "--branch"]) || "(clean)"}
+\`\`\`
+
+Diff stat against HEAD:
+\`\`\`
+${gitOutput(options.cwd, ["diff", "--stat", "HEAD"]) || "(no diff)"}
+\`\`\`
+
+Do not edit files, change branches, commit, push, fetch, merge, reset, or delete files. Inspect only the current working tree and return one JSON object matching implement.v1. Use status "completed" only when the intended implementation is present and ready for GitVibe validation and commit. Otherwise use status "blocked" and next_state "blocked".
+
+The branch field, if included, must be ${branch}.
+</gitvibe_structured_output_finalization>`;
+}
+
+function blockedImplementOutput(options: {
+  context: ContextPacket;
+  finalError: unknown;
+  firstError: unknown;
+  options: RunnerOptions;
+}): JsonObject {
+  const initial = summarizeError(options.firstError);
+  const final = summarizeError(options.finalError);
+  const summary = "Implementation stopped because the stage did not return schema-valid JSON.";
+  return {
+    assumptions: [],
+    branch: issueBranch(options.context),
+    comment_body: [
+      summary,
+      "",
+      `Initial structured output failure: ${initial}`,
+      `Finalization failure: ${final}`,
+      "",
+      "GitVibe left the working tree uncommitted so the next run can inspect and recover safely.",
+    ].join("\n"),
+    findings: [`Initial structured output failure: ${initial}`, `Finalization failure: ${final}`],
+    next_state: "blocked",
+    references: [options.context.artifact.url, options.options.workflowRunUrl].filter(
+      (value): value is string => Boolean(value),
+    ),
+    stage: "implement",
+    status: "blocked",
+    summary,
+    tests: ["Not run after the implement stage failed to produce schema-valid JSON."],
+  };
+}
+
+function structuredOutputFinalizationMaxTurns(options: RunnerOptions): number {
+  return Math.min(Math.max(options.maxTurns, 3), 10);
+}
+
+function gitOutput(cwd: string, args: string[]): string {
+  try {
+    return execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
 function summarizeGitStatus(status: string): string {
   const lines = status.split("\n").filter(Boolean);
   const visible = lines.slice(0, 12).join("; ");
@@ -776,10 +970,39 @@ function summarizeGitStatus(status: string): string {
   return `${visible}; ... +${lines.length - 12} more`;
 }
 
+function unstageRuntimeArtifactChanges(cwd: string): string[] {
+  const paths = stagedRuntimeArtifactPaths(cwd);
+  if (paths.length > 0) {
+    execFileSync("git", ["restore", "--staged", "--", ...paths], {
+      cwd,
+      stdio: "inherit",
+    });
+  }
+  return paths;
+}
+
+function stagedRuntimeArtifactPaths(cwd: string): string[] {
+  const output = execFileSync(
+    "git",
+    ["diff", "--cached", "--diff-filter=ACMRTUXB", "--name-only", "-z", "--", ".git-vibe"],
+    {
+      cwd,
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  ).toString();
+  return output.split("\0").filter(Boolean);
+}
+
+function summarizePaths(paths: string[]): string {
+  const visible = paths.slice(0, 12).join("; ");
+  if (paths.length <= 12) return visible;
+  return `${visible}; ... +${paths.length - 12} more`;
+}
+
 function stageContract(stage: string, access: string, context: ContextPacket): string {
   const deterministicBranch = issueBranchForStage(stage, context);
   const branchRule = deterministicBranch
-    ? ` GitVibe owns branch selection; use ${deterministicBranch} exactly and do not invent a branch name.`
+    ? ` GitVibe has already prepared branch ${deterministicBranch}; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.`
     : "";
   return `Stage ${stage} has ${access} access.${branchRule} Return only JSON matching the schema. Call output_validator with the exact final JSON before responding.`;
 }

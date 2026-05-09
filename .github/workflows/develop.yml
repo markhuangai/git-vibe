@@ -233,7 +233,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: git-vibe-investigation-${{ inputs.issue-number }}
-          path: .git-vibe/handoffs
+          path: ${{ runner.temp }}/git-vibe-handoffs
       - uses: ./.git-vibe/actions/implement
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
@@ -244,7 +244,8 @@ jobs:
           validation-repair-max-turns: ${{ inputs.validation_repair_max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
-          handoff-dir: .git-vibe/handoffs
+          handoff-dir: ${{ runner.temp }}/git-vibe-handoffs
+          fail-on-blocked: "true"
 
   review-matrix:
     runs-on: ${{ inputs.runner }}
