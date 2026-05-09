@@ -11,13 +11,7 @@ import { parse } from "yaml";
  */
 
 const aiEnv = {
-  GITVIBE_AI_API_KEY: "${{ secrets.GITVIBE_AI_API_KEY }}",
-  GITVIBE_AI_BASE_URL: "${{ vars.GITVIBE_AI_BASE_URL }}",
-};
-
-const cliSecretEnv = {
-  CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
-  CODEX_AUTH_JSON: "${{ secrets.CODEX_AUTH_JSON }}",
+  GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
 };
 
 const reusableWorkflows = [
@@ -61,10 +55,46 @@ describe("GitVibe workflow wiring", () => {
       ).toBeGreaterThan(0);
       for (const step of steps) {
         expect(step.env, `${file} ${step.uses} receives AI env`).toMatchObject(aiEnv);
-        expect(step.env, `${file} ${step.uses} receives CLI secret env`).toMatchObject(
-          cliSecretEnv,
-        );
+        expect(
+          step.env?.GITVIBE_AI_API_KEY,
+          `${file} ${step.uses} omits old AI key`,
+        ).toBeUndefined();
+        expect(
+          step.env?.GITVIBE_AI_BASE_URL,
+          `${file} ${step.uses} omits old AI base URL`,
+        ).toBeUndefined();
+        expect(
+          step.env?.CODEX_AUTH_JSON,
+          `${file} ${step.uses} omits old Codex auth`,
+        ).toBeUndefined();
+        expect(
+          step.env?.CLAUDE_CODE_OAUTH_TOKEN,
+          `${file} ${step.uses} omits old Claude auth`,
+        ).toBeUndefined();
       }
+    }
+  });
+
+  it("removes standalone CLI secret wiring from reusable workflows", () => {
+    for (const file of reusableWorkflows) {
+      const workflow = readWorkflow(file);
+      const workflowCall = workflow.on?.workflow_call;
+
+      expect(
+        workflowCall?.secrets?.CODEX_AUTH_JSON,
+        `${file} omits old Codex auth`,
+      ).toBeUndefined();
+      expect(
+        workflowCall?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
+        `${file} omits old Claude auth`,
+      ).toBeUndefined();
+      expect(workflow.env?.GITVIBE_AI_API_KEY, `${file} omits old AI key env`).toBeUndefined();
+      expect(
+        workflow.env?.GITVIBE_AI_BASE_URL,
+        `${file} omits old AI base URL env`,
+      ).toBeUndefined();
+      expect(workflow.env?.CODEX_AUTH_JSON, `${file} omits old Codex env`).toBeUndefined();
+      expect(workflow.env?.CLAUDE_CODE_OAUTH_TOKEN, `${file} omits old Claude env`).toBeUndefined();
     }
   });
 
@@ -75,18 +105,13 @@ describe("GitVibe workflow wiring", () => {
       const checkoutSteps = gitVibeActionSteps(workflow, (uses) => uses === "actions/checkout@v4");
 
       expect(workflow.on?.workflow_dispatch, `${file} declares workflow_dispatch`).toBeTruthy();
-      expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} declares AI key`).toMatchObject({
+      expect(
+        workflowCall?.secrets?.GITVIBE_AI_ENV_JSON,
+        `${file} declares AI env bundle`,
+      ).toMatchObject({
         required: true,
       });
-      expect(workflowCall?.secrets?.CODEX_AUTH_JSON, `${file} declares Codex auth`).toMatchObject({
-        required: false,
-      });
-      expect(
-        workflowCall?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
-        `${file} declares Claude Code auth`,
-      ).toMatchObject({
-        required: false,
-      });
+      expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
       expect(
         checkoutSteps.some((step) => step.name === "Checkout GitVibe action source"),
         `${file} checks out action source`,
@@ -105,14 +130,20 @@ describe("GitVibe workflow wiring", () => {
       const reusableJob = reusableJobs[0];
       expect(reusableJobs.length, `${file} should call a GitVibe reusable workflow`).toBe(1);
       expect(reusableJob?.secrets).toMatchObject({
-        CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
-        CODEX_AUTH_JSON: "${{ secrets.CODEX_AUTH_JSON }}",
-        GITVIBE_AI_API_KEY: "${{ secrets.GITVIBE_AI_API_KEY }}",
+        GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
         GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
       });
+      expect(reusableJob?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
+      expect(reusableJob?.secrets?.CODEX_AUTH_JSON, `${file} omits old Codex auth`).toBeUndefined();
+      expect(
+        reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
+        `${file} omits old Claude auth`,
+      ).toBeUndefined();
     }
   });
+});
 
+describe("GitVibe workflow repository selection", () => {
   it("keeps repository and branch selection deterministic", () => {
     const files = [...reusableWorkflows, ...consumerWorkflows, ...actionFiles];
 

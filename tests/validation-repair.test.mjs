@@ -29,8 +29,10 @@ beforeEach(() => {
   generateText.mockReset();
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });
@@ -148,6 +150,7 @@ describe("validation repair helpers", () => {
   });
 
   it("builds bounded redacted repair prompts when git metadata is unavailable", () => {
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ MINIMAX_API_KEY: "bundle-secret" });
     const prompt = buildValidationRepairPrompt({
       attempt: 1,
       basePrompt: "base",
@@ -155,8 +158,8 @@ describe("validation repair helpers", () => {
       failure: {
         command: "pnpm check",
         exitCode: 1,
-        stderr: `secret-value ${"x".repeat(5000)}`,
-        stdout: "secret-value stdout",
+        stderr: `secret-value bundle-secret ${"x".repeat(5000)}`,
+        stdout: "secret-value bundle-secret stdout",
       },
       maxAttempts: 2,
       runner: { maxTurns: 5, token: "secret-value" },
@@ -165,6 +168,7 @@ describe("validation repair helpers", () => {
     expect(prompt).toContain("gitvibe_validation_repair");
     expect(prompt).toContain("output truncated");
     expect(prompt).not.toContain("secret-value");
+    expect(prompt).not.toContain("bundle-secret");
   });
 });
 

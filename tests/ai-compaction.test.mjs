@@ -40,9 +40,11 @@ beforeEach(() => {
   vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   process.env = {
     ...originalEnv,
-    CODEX_AUTH_JSON: '{"tokens":[]}',
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_AUTH_JSON: '{"tokens":[]}',
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });
@@ -279,6 +281,8 @@ function aiSdkOptions({ logger }) {
         profiles: {
           local_proxy: {
             provider: {
+              api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+              base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
               model: "glm-5",
               type: "openai-compatible",
             },
@@ -310,7 +314,7 @@ function codexOptions() {
         profiles: {
           codex_cli: {
             adapter: "cli-codex",
-            auth_json_secret: "CODEX_AUTH_JSON",
+            auth_json: { from_bundle: "CODEX_AUTH_JSON" },
             command: "codex exec",
             model: "gpt-5.5",
           },

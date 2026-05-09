@@ -70,10 +70,11 @@ ai:
         type: openai-compatible
         # Model names are configuration, not credentials.
         model: glm-5
-        # GitHub Actions Variable name. Use a secret only if the endpoint itself is sensitive.
-        base_url_variable: GITVIBE_AI_BASE_URL
-        # GitHub Actions Secret name. Stores the AI provider or local proxy API key.
-        api_key_secret: GITVIBE_AI_API_KEY
+        # Keys inside GITVIBE_AI_ENV_JSON. Store provider credentials and endpoints there.
+        base_url:
+          from_bundle: GITVIBE_AI_BASE_URL
+        api_key:
+          from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
       generation:
@@ -91,8 +92,9 @@ ai:
       enabled: false
       adapter: cli-codex
       command: codex exec
-      # GitHub Actions Secret name. Stores auth.json contents for trusted self-hosted runners.
-      auth_json_secret: CODEX_AUTH_JSON
+      # Key inside GITVIBE_AI_ENV_JSON. Stores compact auth.json contents.
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex
       reasoning:
         effort: high
@@ -101,8 +103,10 @@ ai:
       enabled: false
       adapter: cli-claude-code
       command: claude -p
-      # GitHub Actions Secret name. Stores the Claude Code OAuth access token.
-      oauth_token_secret: CLAUDE_CODE_OAUTH_TOKEN
+      # Key inside GITVIBE_AI_ENV_JSON. Stores the Claude Code OAuth access token.
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN:
+          from_bundle: CLAUDE_OAUTH_TOKEN
       model: opus
       reasoning:
         effort: xhigh

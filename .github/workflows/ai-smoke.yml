@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       run-local-proxy:
-        description: Run AI SDK plus agentool against GITVIBE_AI_BASE_URL.
+        description: Run AI SDK plus agentool against bundled provider config.
         required: false
         type: boolean
         default: true
       require-local-proxy-tool:
-        description: Require the local proxy model to call an agentool read tool.
+        description: Require the AI SDK smoke model to call an agentool read tool.
         required: false
         type: boolean
         default: true
@@ -44,8 +44,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Run local proxy smoke test
         env:
-          GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
-          GITVIBE_AI_BASE_URL: ${{ vars.GITVIBE_AI_BASE_URL }}
+          GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
           GITVIBE_AI_MODEL: ${{ vars.GITVIBE_AI_MODEL }}
           GITVIBE_AI_SMOKE_REQUIRE_TOOL: ${{ inputs.require-local-proxy-tool }}
         run: node scripts/smoke-test-ai.mjs
@@ -76,18 +75,21 @@ jobs:
       - name: Configure Codex auth
         shell: bash
         env:
-          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+          GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
         run: |
           export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
           mkdir -p "$CODEX_HOME"
           chmod 700 "$CODEX_HOME"
 
           if [ ! -f "$CODEX_HOME/auth.json" ]; then
-            if [ -z "$CODEX_AUTH_JSON" ]; then
-              echo "Set CODEX_AUTH_JSON or pre-seed CODEX_HOME/auth.json before running Codex."
+            if [ -z "$GITVIBE_AI_ENV_JSON" ]; then
+              echo "Set GITVIBE_AI_ENV_JSON with CODEX_AUTH_JSON or pre-seed CODEX_HOME/auth.json before running Codex."
               exit 1
             fi
 
+            CODEX_AUTH_JSON="$(
+              node -e 'try { const bundle = JSON.parse(process.env.GITVIBE_AI_ENV_JSON || "{}"); const authJson = bundle.CODEX_AUTH_JSON; if (typeof authJson !== "string" || authJson.length === 0) throw new Error("GITVIBE_AI_ENV_JSON.CODEX_AUTH_JSON must be a non-empty string."); process.stdout.write(authJson); } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); }'
+            )"
             printf '%s' "$CODEX_AUTH_JSON" > "$CODEX_HOME/auth.json"
             chmod 600 "$CODEX_HOME/auth.json"
           fi

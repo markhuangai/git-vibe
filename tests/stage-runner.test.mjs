@@ -29,8 +29,10 @@ beforeEach(() => {
   createAnthropic.mockClear();
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });

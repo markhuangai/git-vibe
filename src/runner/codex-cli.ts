@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { StageDefinition } from "../shared/types.js";
 import type { RunAiStageOptions } from "./ai.js";
 import {
+  bundleValueFromSource,
+  cliProfileEnv,
   cliModelName,
   commandParts,
   runStreamingCommand,
@@ -52,7 +54,7 @@ export async function runCodexCliStage({
     args,
     command,
     cwd: options.cwd,
-    env: codexEnv(profile, contextDir),
+    env: codexEnv(profile, profileName, contextDir),
     input: cliPrompt(options),
   });
   options.logger?.event("ai.request.done", {
@@ -75,10 +77,13 @@ function codexReasoningArgs(profile: Record<string, unknown>): string[] {
   return args;
 }
 
-function codexEnv(profile: Record<string, unknown>, contextDir: string): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  const authSecret = stringValue(profile.auth_json_secret);
-  const authJson = authSecret ? process.env[authSecret] : undefined;
+function codexEnv(
+  profile: Record<string, unknown>,
+  profileName: string,
+  contextDir: string,
+): NodeJS.ProcessEnv {
+  const env = cliProfileEnv(profile, `ai.profiles.${profileName}`);
+  const authJson = bundleValueFromSource(profile.auth_json, `ai.profiles.${profileName}.auth_json`);
   if (authJson) {
     const codexHome = join(contextDir, "codex-home");
     env.CODEX_HOME = codexHome;

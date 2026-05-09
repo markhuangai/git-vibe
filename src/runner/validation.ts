@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import type { GitVibeConfig, RunnerOptions } from "../shared/types.js";
+import { optionalAiEnvBundleSecretValues } from "./cli-adapter-utils.js";
 
 export interface ValidationCommandFailure {
   command: string;
@@ -148,8 +149,7 @@ function redactText(value: string, secrets: string[]): string {
 function secretValues(options: RunnerOptions): string[] {
   return [
     options.token,
-    process.env.GITVIBE_AI_API_KEY,
-    process.env.CODEX_AUTH_JSON,
-    process.env.CLAUDE_CODE_OAUTH_TOKEN,
+    process.env.GITVIBE_AI_ENV_JSON,
+    ...optionalAiEnvBundleSecretValues(),
   ].filter((value): value is string => Boolean(value && value.length >= 4));
 }

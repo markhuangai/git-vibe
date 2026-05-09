@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
+  aiEnvBundle,
   booleanEnv,
   buildPrompt,
   countToolCalls,
@@ -13,14 +14,17 @@ import {
   outputValidatorContent,
   parseSmokeOutput,
   readConfig,
+  requiredBundledEnv,
   requiredEnv,
   runSmokeTest,
   validateOutput,
 } from "../scripts/smoke-test-ai.mjs";
 
 const baseEnv = {
-  GITVIBE_AI_API_KEY: "secret-key",
-  GITVIBE_AI_BASE_URL: "http://proxy.local/v1",
+  GITVIBE_AI_ENV_JSON: JSON.stringify({
+    GITVIBE_AI_API_KEY: "secret-key",
+    GITVIBE_AI_BASE_URL: "http://proxy.local/v1",
+  }),
   GITVIBE_AI_MODEL: "test-model",
 };
 
@@ -39,8 +43,10 @@ describe("smoke-test-ai config", () => {
       readConfig({
         cwd: "/repo",
         env: {
-          GITVIBE_AI_API_KEY: "secret-key",
-          GITVIBE_AI_BASE_URL: "http://proxy.local/v1",
+          GITVIBE_AI_ENV_JSON: JSON.stringify({
+            GITVIBE_AI_API_KEY: "secret-key",
+            GITVIBE_AI_BASE_URL: "http://proxy.local/v1",
+          }),
         },
       }).model,
     ).toBe("glm-5");
@@ -62,7 +68,21 @@ describe("smoke-test-ai config", () => {
   });
 
   it("throws clear config errors", () => {
-    expect(() => requiredEnv({}, "GITVIBE_AI_API_KEY")).toThrow("GITVIBE_AI_API_KEY is required.");
+    expect(() => requiredEnv({}, "GITVIBE_AI_ENV_JSON")).toThrow(
+      "GITVIBE_AI_ENV_JSON is required.",
+    );
+    expect(() => aiEnvBundle({ GITVIBE_AI_ENV_JSON: "{" })).toThrow(
+      "GITVIBE_AI_ENV_JSON must be valid JSON",
+    );
+    expect(() => aiEnvBundle({ GITVIBE_AI_ENV_JSON: "[]" })).toThrow(
+      "GITVIBE_AI_ENV_JSON must be a JSON object.",
+    );
+    expect(() => aiEnvBundle({ GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: 1 }) })).toThrow(
+      "GITVIBE_AI_ENV_JSON.KEY must be a string.",
+    );
+    expect(() => requiredBundledEnv({}, "GITVIBE_AI_API_KEY")).toThrow(
+      "GITVIBE_AI_ENV_JSON.GITVIBE_AI_API_KEY is required.",
+    );
     expect(() => numberEnv({ VALUE: "0" }, "VALUE", 1)).toThrow("VALUE must be a positive number.");
     expect(booleanEnv({}, "FLAG", true)).toBe(true);
     expect(booleanEnv({ FLAG: "true" }, "FLAG", false)).toBe(true);
@@ -172,7 +192,7 @@ describe("smoke-test-ai validation", () => {
     expect(logger.log).toHaveBeenCalledWith(
       "[git-vibe] local proxy smoke passed with model=test-model",
     );
-    expect(logger.error).toHaveBeenCalledWith("[git-vibe] GITVIBE_AI_API_KEY is required.");
+    expect(logger.error).toHaveBeenCalledWith("[git-vibe] GITVIBE_AI_ENV_JSON is required.");
   });
 });
 

@@ -6,8 +6,10 @@ export function testAiConfigYaml(extraAi = "") {
       provider:
         type: openai-compatible
         model: glm-5
-        base_url_variable: GITVIBE_AI_BASE_URL
-        api_key_secret: GITVIBE_AI_API_KEY
+        base_url:
+          from_bundle: GITVIBE_AI_BASE_URL
+        api_key:
+          from_bundle: GITVIBE_AI_API_KEY
   stages:
     investigate:
       profile: test

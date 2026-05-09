@@ -1,6 +1,7 @@
 import type { StageDefinition } from "../shared/types.js";
 import type { RunAiStageOptions } from "./ai.js";
 import {
+  cliProfileEnv,
   cliModelName,
   commandParts,
   isRecord,
@@ -48,7 +49,7 @@ export async function runClaudeCodeCliStage({
     args,
     command,
     cwd: options.cwd,
-    env: claudeEnv(profile),
+    env: claudeEnv(profile, profileName),
     input: options.prompt,
   });
   options.logger?.event("ai.request.done", {
@@ -71,13 +72,8 @@ function claudeModeArgs(profile: Record<string, unknown>): string[] {
   return profile.bare === true ? ["--bare"] : [];
 }
 
-function claudeEnv(profile: Record<string, unknown>): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  delete env.CLAUDE_CODE_OAUTH_TOKEN;
-  const tokenSecret = stringValue(profile.oauth_token_secret);
-  const token = tokenSecret ? process.env[tokenSecret] : undefined;
-  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-  return env;
+function claudeEnv(profile: Record<string, unknown>, profileName: string): NodeJS.ProcessEnv {
+  return cliProfileEnv(profile, `ai.profiles.${profileName}`);
 }
 
 function claudePermissionMode(access: StageDefinition["access"]): string {

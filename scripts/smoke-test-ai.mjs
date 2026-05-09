@@ -113,9 +113,10 @@ export async function runSmokeTest({ env, cwd, workspace, dependencies = default
  * @returns {SmokeConfig}
  */
 export function readConfig({ env, cwd, workspace }) {
+  const bundle = aiEnvBundle(env);
   return {
-    apiKey: requiredEnv(env, "GITVIBE_AI_API_KEY"),
-    baseUrl: requiredEnv(env, "GITVIBE_AI_BASE_URL"),
+    apiKey: requiredBundledEnv(bundle, "GITVIBE_AI_API_KEY"),
+    baseUrl: requiredBundledEnv(bundle, "GITVIBE_AI_BASE_URL"),
     model: env.GITVIBE_AI_MODEL || "glm-5",
     cwd: workspace || cwd,
     maxOutputTokens: numberEnv(env, "GITVIBE_AI_MAX_OUTPUT_TOKENS", 1000),
@@ -354,6 +355,48 @@ export function requiredEnv(env, name) {
   const value = env[name];
   if (!value) {
     throw new Error(`${name} is required.`);
+  }
+
+  return value;
+}
+
+/**
+ * @param {Env} env
+ * @returns {Record<string, string>}
+ */
+export function aiEnvBundle(env) {
+  const rawValue = requiredEnv(env, "GITVIBE_AI_ENV_JSON");
+  let parsed;
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch (error) {
+    throw new Error(
+      `GITVIBE_AI_ENV_JSON must be valid JSON: ${error instanceof Error ? error.message : String(error)}.`,
+    );
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("GITVIBE_AI_ENV_JSON must be a JSON object.");
+  }
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      throw new Error(`GITVIBE_AI_ENV_JSON.${key} must be a string.`);
+    }
+  }
+
+  return /** @type {Record<string, string>} */ (parsed);
+}
+
+/**
+ * @param {Record<string, string>} bundle
+ * @param {string} name
+ * @returns {string}
+ */
+export function requiredBundledEnv(bundle, name) {
+  const value = bundle[name];
+  if (!value) {
+    throw new Error(`GITVIBE_AI_ENV_JSON.${name} is required.`);
   }
 
   return value;

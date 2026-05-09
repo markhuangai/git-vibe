@@ -145,22 +145,38 @@ input.
 Secrets belong in GitHub repository or organization secrets, not in
 `.github/git-vibe.yml`.
 
-| Name                      | Required | Purpose                                                                     |
-| ------------------------- | -------- | --------------------------------------------------------------------------- |
-| `GITVIBE_AI_API_KEY`      | Yes      | API key for OpenAI, Anthropic, or an OpenAI-compatible endpoint             |
-| `GITVIBE_GITHUB_TOKEN`    | Yes      | Fine-grained PAT for server-side and workflow GitHub writes                 |
-| `WEBHOOK_SECRET`          | Yes      | GitHub webhook shared secret; deployment maps it to `GITHUB_WEBHOOK_SECRET` |
-| `CODEX_AUTH_JSON`         | Optional | Codex CLI `auth.json` contents for stages using `cli-codex`                 |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Optional | Claude Code OAuth token for stages using `cli-claude-code`                  |
+| Name                   | Required | Purpose                                                                     |
+| ---------------------- | -------- | --------------------------------------------------------------------------- |
+| `GITVIBE_AI_ENV_JSON`  | Yes      | JSON env bundle for AI provider config, CLI auth, and provider variables    |
+| `GITVIBE_GITHUB_TOKEN` | Yes      | Fine-grained PAT for server-side and workflow GitHub writes                 |
+| `WEBHOOK_SECRET`       | Yes      | GitHub webhook shared secret; deployment maps it to `GITHUB_WEBHOOK_SECRET` |
 
 Useful variables:
 
 ```text
-GITVIBE_AI_BASE_URL
 GITVIBE_BASE_BRANCH
 GITVIBE_DISCUSSION_CATEGORY
 GITVIBE_RUNNER
 GITVIBE_LOG_LEVEL
+```
+
+Store AI provider values in `GITVIBE_AI_ENV_JSON`:
+
+```json
+{
+  "CLAUDE_OAUTH_TOKEN": "...",
+  "CODEX_AUTH_JSON": "{\"tokens\":[]}",
+  "GITVIBE_AI_API_KEY": "...",
+  "GITVIBE_AI_BASE_URL": "https://api.provider.example/v1",
+  "MINIMAX_API_KEY": "...",
+  "MINIMAX_ANTHROPIC_BASE_URL": "https://api.minimax.example/anthropic"
+}
+```
+
+Prepare Codex auth JSON as a compact string before adding it to the bundle:
+
+```bash
+jq -c . auth.json
 ```
 
 Create `GITVIBE_GITHUB_TOKEN` as a fine-grained PAT scoped to the managed
@@ -290,8 +306,10 @@ ai:
       provider:
         type: openai-compatible
         model: glm-5
-        base_url_variable: GITVIBE_AI_BASE_URL
-        api_key_secret: GITVIBE_AI_API_KEY
+        base_url:
+          from_bundle: GITVIBE_AI_BASE_URL
+        api_key:
+          from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
   stages:
@@ -398,7 +416,7 @@ jobs:
       runner: self-hosted
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
-      GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 ```
 
 For source-repo testing, dispatch `investigate.yml`, `summarize.yml`,

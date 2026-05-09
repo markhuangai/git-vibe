@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { EventEmitter } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { setImmediate } from "node:timers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -34,8 +35,14 @@ beforeEach(() => {
   vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      FALLBACK_BASE_URL: "https://fallback.test/v1",
+      FALLBACK_KEY: "fallback-key",
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+      STAGE_BASE_URL: "https://stage.test/v1",
+      STAGE_KEY: "stage-key",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });
@@ -47,9 +54,7 @@ afterEach(() => {
 
 describe("AI stage runner stage routing", () => {
   it("uses runtime stage IDs for profile and tool overrides", async () => {
-    process.env.STAGE_KEY = "stage-key";
     process.env.STAGE_MODEL = "stage-model";
-    process.env.STAGE_BASE_URL = "https://stage.test/v1";
     const logger = { event: vi.fn() };
     generateText.mockResolvedValueOnce({
       steps: [],
@@ -250,7 +255,7 @@ describe("AI stage runner stage config validation", () => {
 
 describe("AI stage runner stage fallbacks", () => {
   it("runs configured Codex CLI profiles with runtime stage context", async () => {
-    process.env.CODEX_AUTH_JSON = '{"tokens":[]}\n';
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: '{"tokens":[]}\n' });
     mockCodexOutput('{"stage":"validate","status":"completed"}');
     const schema = {
       additionalProperties: false,
@@ -295,6 +300,10 @@ describe("AI stage runner stage fallbacks", () => {
         required: ["stage", "working_capabilities"],
       }),
     );
+    const childEnv = spawn.mock.calls[0][2].env;
+    expect(readFileSync(join(childEnv.CODEX_HOME, "auth.json"), "utf8")).toBe('{"tokens":[]}\n');
+    expect(childEnv.CODEX_AUTH_JSON).toBeUndefined();
+    expect(childEnv.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(schema.required).toEqual(["stage"]);
     expect(generateText).not.toHaveBeenCalled();
   });
@@ -372,6 +381,8 @@ describe("AI stage runner profile arrays", () => {
             profiles: {
               local_proxy: {
                 provider: {
+                  api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+                  base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
                   model: "test-model",
                   type: "openai-compatible",
                 },
@@ -393,8 +404,6 @@ describe("AI stage runner profile arrays", () => {
 
 describe("AI stage runner fallback profiles", () => {
   it("retries the configured fallback profile when the primary profile fails", async () => {
-    process.env.FALLBACK_KEY = "fallback-key";
-    process.env.FALLBACK_BASE_URL = "https://fallback.test/v1";
     const logger = { event: vi.fn() };
     generateText.mockResolvedValueOnce({
       steps: [],
@@ -417,11 +426,13 @@ describe("AI stage runner fallback profiles", () => {
     ).resolves.toBe('{"stage":"investigate","status":"completed"}');
 
     expect(logger.event).toHaveBeenCalledWith("ai.request.failed", {
-      error: "PRIMARY_KEY is required for ai-sdk-agentool profile",
+      error:
+        "GITVIBE_AI_ENV_JSON key PRIMARY_KEY is required by ai.profiles.primary.provider.api_key.from_bundle.",
       profile: "primary",
     });
     expect(logger.event).toHaveBeenCalledWith("ai.request.retry", {
-      previous_error: "PRIMARY_KEY is required for ai-sdk-agentool profile",
+      previous_error:
+        "GITVIBE_AI_ENV_JSON key PRIMARY_KEY is required by ai.profiles.primary.provider.api_key.from_bundle.",
       profile: "fallback",
     });
     expect(createOpenAI).toHaveBeenCalledWith(
@@ -544,7 +555,7 @@ function codexCliConfig() {
       profiles: {
         codex_cli: {
           adapter: "cli-codex",
-          auth_json_secret: "CODEX_AUTH_JSON",
+          auth_json: { from_bundle: "CODEX_AUTH_JSON" },
           command: "codex exec",
           model: "gpt-5.5",
           reasoning: {
@@ -569,8 +580,8 @@ function stageRoutingConfig() {
         validation_profile: {
           generation: { temperature: 0.1 },
           provider: {
-            api_key_secret: "STAGE_KEY",
-            base_url_variable: "STAGE_BASE_URL",
+            api_key: { from_bundle: "STAGE_KEY" },
+            base_url: { from_bundle: "STAGE_BASE_URL" },
             model: "stage-model",
             type: "openai-compatible",
           },
@@ -592,15 +603,16 @@ function fallbackRoutingConfig() {
       profiles: {
         fallback: {
           provider: {
-            api_key_secret: "FALLBACK_KEY",
-            base_url_variable: "FALLBACK_BASE_URL",
+            api_key: { from_bundle: "FALLBACK_KEY" },
+            base_url: { from_bundle: "FALLBACK_BASE_URL" },
             model: "fallback-model",
             type: "openai-compatible",
           },
         },
         primary: {
           provider: {
-            api_key_secret: "PRIMARY_KEY",
+            api_key: { from_bundle: "PRIMARY_KEY" },
+            base_url: { from_bundle: "PRIMARY_BASE_URL" },
             model: "primary-model",
             type: "openai-compatible",
           },

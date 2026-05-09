@@ -32,8 +32,13 @@ beforeEach(() => {
   vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CLAUDE_TOKEN: "claude-token",
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+      MINIMAX_API_KEY: "minimax-key",
+      MINIMAX_BASE_URL: "https://minimax.test/anthropic",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });
@@ -45,7 +50,6 @@ afterEach(() => {
 
 describe("Claude Code CLI adapter", () => {
   it("runs configured profiles with structured output", async () => {
-    process.env.CLAUDE_TOKEN = "claude-token";
     mockClaudeOutput({
       is_error: false,
       structured_output: { stage: "validate", status: "completed" },
@@ -89,10 +93,15 @@ describe("Claude Code CLI adapter", () => {
     expect(spawn.mock.calls[0][2]).toEqual(
       expect.objectContaining({
         cwd: process.cwd(),
-        env: expect.objectContaining({ CLAUDE_CODE_OAUTH_TOKEN: "claude-token" }),
+        env: expect.objectContaining({
+          ANTHROPIC_API_KEY: "minimax-key",
+          ANTHROPIC_BASE_URL: "https://minimax.test/anthropic",
+          CLAUDE_CODE_OAUTH_TOKEN: "claude-token",
+        }),
         stdio: ["pipe", "pipe", "pipe"],
       }),
     );
+    expect(spawn.mock.calls[0][2].env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
     expect(process.stdout.write).toHaveBeenCalledWith(
       Buffer.from(
@@ -289,8 +298,12 @@ function claudeCodeConfig() {
           adapter: "cli-claude-code",
           bare: true,
           command: "claude -p",
+          env: {
+            ANTHROPIC_API_KEY: { from_bundle: "MINIMAX_API_KEY" },
+            ANTHROPIC_BASE_URL: { from_bundle: "MINIMAX_BASE_URL" },
+            CLAUDE_CODE_OAUTH_TOKEN: { from_bundle: "CLAUDE_TOKEN" },
+          },
           model: "opus",
-          oauth_token_secret: "CLAUDE_TOKEN",
           reasoning: {
             effort: "xhigh",
           },

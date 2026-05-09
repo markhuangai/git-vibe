@@ -24,8 +24,13 @@ beforeEach(() => {
   createAnthropic.mockClear();
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      ANTHROPIC_KEY: "anthropic-key",
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+      OPENAI_BASE_URL: "https://proxy.test/v1",
+      OPENAI_KEY: "openai-key",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });
@@ -37,9 +42,7 @@ afterEach(() => {
 
 describe("AI stage runner OpenAI-compatible profiles", () => {
   it("calls AI SDK with provider config, tools, and tool telemetry", async () => {
-    process.env.OPENAI_KEY = "openai-key";
     process.env.OPENAI_MODEL = "gpt-test";
-    process.env.OPENAI_BASE_URL = "https://proxy.test/v1";
     const logger = { event: vi.fn() };
     mockTelemetryGenerateText();
 
@@ -365,7 +368,6 @@ describe("AI stage runner provider failures", () => {
   });
 
   it("supports anthropic profiles and reports malformed AI responses", async () => {
-    process.env.ANTHROPIC_KEY = "anthropic-key";
     generateText.mockResolvedValueOnce({ steps: [], text: "not json" });
 
     await expect(
@@ -387,8 +389,8 @@ describe("AI stage runner provider failures", () => {
     );
   });
 
-  it("requires configured AI environment variables", async () => {
-    delete process.env.GITVIBE_AI_BASE_URL;
+  it("requires configured AI bundle provider values", async () => {
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ GITVIBE_AI_API_KEY: "test-key" });
 
     await expect(
       runAiStage({
@@ -402,7 +404,9 @@ describe("AI stage runner provider failures", () => {
         stageDefinition: stageDefinitions.investigate,
         system: "System",
       }),
-    ).rejects.toThrow("GITVIBE_AI_BASE_URL is required");
+    ).rejects.toThrow(
+      "GITVIBE_AI_ENV_JSON key GITVIBE_AI_BASE_URL is required by ai.profiles.local_proxy.provider.base_url.from_bundle.",
+    );
   });
 });
 
@@ -572,7 +576,6 @@ describe("AI stage runner provider retry error classification", () => {
 
 describe("AI stage runner telemetry edge cases", () => {
   it("handles OpenAI profiles without a base URL and unknown tool telemetry shapes", async () => {
-    delete process.env.GITVIBE_AI_BASE_URL;
     const logger = { event: vi.fn() };
     generateText.mockImplementationOnce(async (request) => {
       request.experimental_onToolCallStart(undefined);
@@ -626,6 +629,8 @@ function localProxyConfig({ budgets, model = "glm-5", stage = "investigate" } = 
         local_proxy: {
           provider: {
             ...(model ? { model } : {}),
+            api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+            base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
             type: "openai-compatible",
           },
         },
@@ -642,8 +647,8 @@ function openAiCompatibleConfig({ stage = "investigate" } = {}) {
         test: {
           generation: { temperature: 0.5 },
           provider: {
-            api_key_secret: "OPENAI_KEY",
-            base_url_variable: "OPENAI_BASE_URL",
+            api_key: { from_bundle: "OPENAI_KEY" },
+            base_url: { from_bundle: "OPENAI_BASE_URL" },
             model: "gpt-test",
             type: "openai-compatible",
           },
@@ -661,7 +666,7 @@ function anthropicConfig() {
       profiles: {
         claude: {
           provider: {
-            api_key_secret: "ANTHROPIC_KEY",
+            api_key: { from_bundle: "ANTHROPIC_KEY" },
             model: "claude-test",
             type: "anthropic",
           },
@@ -678,6 +683,7 @@ function nativeOpenAiConfig() {
       profiles: {
         openai: {
           provider: {
+            api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
             model: "gpt-test",
             type: "openai",
           },

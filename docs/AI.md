@@ -111,8 +111,9 @@ AI result envelope:
 CLI authentication guidance:
 
 - API-key based OpenAI, Anthropic, OpenAI-compatible proxy, or Codex API style providers should go through `ai-sdk-agentool`.
-- Codex CLI should use `CODEX_AUTH_JSON` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner.
-- Claude Code CLI should use `CLAUDE_CODE_OAUTH_TOKEN`. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned secret name.
+- AI profiles should read provider auth, endpoints, and provider-specific CLI env from the `GITVIBE_AI_ENV_JSON` bundle secret.
+- Codex CLI should use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner.
+- Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 
 ## Profile-Based Routing
@@ -133,14 +134,17 @@ ai:
         type: openai-compatible
         # Prefer direct model names when each profile should choose its own model.
         model: glm-5
-        base_url_variable: GITVIBE_AI_BASE_URL
-        api_key_secret: GITVIBE_AI_API_KEY
+        base_url:
+          from_bundle: GITVIBE_AI_BASE_URL
+        api_key:
+          from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
 
     codex_cli:
       adapter: cli-codex
-      auth_json_secret: CODEX_AUTH_JSON
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex
       reasoning:
         effort: high
@@ -148,7 +152,9 @@ ai:
 
     claude_code:
       adapter: cli-claude-code
-      oauth_token_secret: CLAUDE_CODE_OAUTH_TOKEN
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN:
+          from_bundle: CLAUDE_OAUTH_TOKEN
       model: opus
       # Optional: use Claude Code's minimal mode for API-key or third-party provider setups.
       # Do not use bare mode for OAuth/keychain sessions.
@@ -173,6 +179,10 @@ Normalized reasoning config:
 - `reasoning.effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. Adapters should reject unsupported values for the selected provider/model with a clear config error.
 - `reasoning.summary`: `auto`, `concise`, `detailed`, or `none` where the adapter supports summaries.
 - `context_window_tokens`: optional positive integer on an AI profile. When set, `ai-sdk-agentool` logs per-step `context_used_pct` from reported input tokens.
+- `provider.api_key.from_bundle`: AI SDK provider API key inside `GITVIBE_AI_ENV_JSON`.
+- `provider.base_url.from_bundle`: AI SDK provider base URL inside `GITVIBE_AI_ENV_JSON`; required for OpenAI-compatible endpoints and optional for native OpenAI.
+- `env.<NAME>.from_bundle`: CLI-only mapping from a key inside `GITVIBE_AI_ENV_JSON` to the spawned CLI process env.
+- `auth_json.from_bundle`: `cli-codex` key inside `GITVIBE_AI_ENV_JSON`; GitVibe writes this value to temporary `CODEX_HOME/auth.json`.
 - `provider_options`: adapter-specific passthrough for settings GitVibe does not normalize yet.
 - `ai.budgets.max_context_window_tokens`: positive integer context budget for `ai-sdk-agentool` compaction and context usage logs. Default: `200000`.
 

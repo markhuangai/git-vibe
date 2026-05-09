@@ -87,22 +87,13 @@ on:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.
         required: true
-      GITVIBE_AI_API_KEY:
-        description: AI provider API key for GitVibe stage execution.
+      GITVIBE_AI_ENV_JSON:
+        description: JSON env bundle for AI provider config and CLI profiles.
         required: true
-      CODEX_AUTH_JSON:
-        description: Codex auth.json contents for cli-codex profiles.
-        required: false
-      CLAUDE_CODE_OAUTH_TOKEN:
-        description: Claude Code OAuth token for cli-claude-code profiles.
-        required: false
 
 env:
-  GITVIBE_AI_API_KEY: ${{ secrets.GITVIBE_AI_API_KEY }}
-  GITVIBE_AI_BASE_URL: ${{ vars.GITVIBE_AI_BASE_URL }}
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
-  CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+  GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
   summarize:

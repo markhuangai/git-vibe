@@ -37,35 +37,38 @@
 Use the `AI smoke test` workflow in this repository after setting up the
 self-hosted runner.
 
-Required local proxy repository variables and secrets:
+Required AI SDK smoke-test repository secret:
 
 ```text
-vars.GITVIBE_AI_BASE_URL
-secrets.GITVIBE_AI_API_KEY
+secrets.GITVIBE_AI_ENV_JSON
 ```
 
-`GITVIBE_AI_BASE_URL` should point to an OpenAI-compatible `/v1` API root. The
-local proxy job uses AI SDK plus `agentool`, defaults to `glm-5`, and requires
-the model to call the read-only `agentool` file reader. Set
+Set bundle keys `GITVIBE_AI_BASE_URL` and `GITVIBE_AI_API_KEY` for the smoke
+test. `GITVIBE_AI_BASE_URL` should point to an OpenAI-compatible `/v1` API root.
+The local proxy job uses AI SDK plus `agentool`, defaults to `glm-5`, and
+requires the model to call the read-only `agentool` file reader. Set
 `vars.GITVIBE_AI_MODEL` only when overriding the smoke-test model.
 
 Codex CLI smoke testing is optional. The workflow installs `@openai/codex`
 when the `codex` command is missing, then uses:
 
 ```text
-secrets.CODEX_AUTH_JSON
+secrets.GITVIBE_AI_ENV_JSON
 ```
 
-Or pre-seed a persistent `CODEX_HOME/auth.json` on the runner. GitVibe only seeds
-the file when it is missing, so Codex can refresh it between runs.
+Set bundle key `CODEX_AUTH_JSON` to compact `auth.json` contents from
+`jq -c . auth.json`, or pre-seed a persistent `CODEX_HOME/auth.json` on the
+runner. GitVibe only seeds the file when it is missing, so Codex can refresh it
+between runs.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, then verifies
 `claude --version`. `cli-claude-code` stages run `claude -p` with
 `--output-format json` and `--json-schema`; profile `bare: true` adds Claude
-Code's minimal mode for API-key or third-party provider auth. CLI adapter
-stdout and stderr are streamed to the action log while GitVibe still captures
-the structured result for validation.
+Code's minimal mode for API-key or third-party provider auth. Configure Claude
+OAuth and provider env through profile `env.<NAME>.from_bundle` mappings. CLI
+adapter stdout and stderr are streamed to the action log while GitVibe still
+captures the structured result for validation.
 
 ## Quality Gates
 

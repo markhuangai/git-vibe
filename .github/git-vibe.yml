@@ -58,8 +58,10 @@ ai:
       provider:
         type: openai-compatible
         model: glm-5
-        base_url_variable: GITVIBE_AI_BASE_URL
-        api_key_secret: GITVIBE_AI_API_KEY
+        base_url:
+          from_bundle: GITVIBE_AI_BASE_URL
+        api_key:
+          from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
       generation:
@@ -77,7 +79,8 @@ ai:
       enabled: true
       adapter: cli-codex
       command: codex exec
-      auth_json_secret: CODEX_AUTH_JSON
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
       model: gpt-5.5
       reasoning:
         effort: high
@@ -86,7 +89,8 @@ ai:
       enabled: true
       adapter: cli-codex
       command: codex exec
-      auth_json_secret: CODEX_AUTH_JSON
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
       model: gpt-5.5
       reasoning:
         effort: xhigh
@@ -95,7 +99,9 @@ ai:
       enabled: false
       adapter: cli-claude-code
       command: claude -p
-      oauth_token_secret: CLAUDE_CODE_OAUTH_TOKEN
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN:
+          from_bundle: CLAUDE_OAUTH_TOKEN
       model: opus
       reasoning:
         effort: xhigh

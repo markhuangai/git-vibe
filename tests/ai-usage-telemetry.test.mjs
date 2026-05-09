@@ -21,8 +21,10 @@ beforeEach(() => {
   generateText.mockReset();
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_API_KEY: "test-key",
-    GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      GITVIBE_AI_API_KEY: "test-key",
+      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
+    }),
     GITVIBE_AI_MODEL: "test-model",
   };
 });
@@ -175,8 +177,8 @@ function configWithProfile(profileFields = {}) {
         test: {
           ...profileFields,
           provider: {
-            api_key_secret: "GITVIBE_AI_API_KEY",
-            base_url_variable: "GITVIBE_AI_BASE_URL",
+            api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+            base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
             model: "glm-5",
             type: "openai-compatible",
           },

@@ -24,6 +24,7 @@ import {
   contextWindowTokensForProfile,
   createContextCompactionPrepareStep,
 } from "./ai-compaction.js";
+import { bundleValueFromSource } from "./cli-adapter-utils.js";
 import { runClaudeCodeCliStage } from "./claude-code-cli.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
@@ -254,7 +255,8 @@ function createModel(
   const provider = profile.provider as Record<string, unknown> | undefined;
   const providerType = String(provider?.type || "openai-compatible");
   const model = aiSdkModelName(profile);
-  const apiKey = envValue(provider?.api_key_secret, "GITVIBE_AI_API_KEY");
+  const profilePath = `ai.profiles.${profileName}.provider`;
+  const apiKey = requiredProviderBundleValue(provider?.api_key, `${profilePath}.api_key`);
   const fetch = createRetryingFetch(options);
 
   if (providerType === "anthropic") {
@@ -265,8 +267,8 @@ function createModel(
     apiKey,
     baseURL:
       providerType === "openai"
-        ? optionalEnvValue(provider?.base_url_variable, "GITVIBE_AI_BASE_URL")
-        : envValue(provider?.base_url_variable, "GITVIBE_AI_BASE_URL"),
+        ? optionalProviderBundleValue(provider?.base_url, `${profilePath}.base_url`)
+        : requiredProviderBundleValue(provider?.base_url, `${profilePath}.base_url`),
     fetch,
     name: "git-vibe-ai",
   }).chat(model);
@@ -478,18 +480,19 @@ function validateStageConfig(options: RunAiStageOptions): void {
   }
 }
 
-function envValue(variableName: unknown, fallbackName: string, fallbackValue?: string): string {
-  const name = typeof variableName === "string" ? variableName : fallbackName;
-  const value = process.env[name] || fallbackValue;
-  if (!value) {
-    throw new Error(`${name} is required for ai-sdk-agentool profile`);
+function requiredProviderBundleValue(source: unknown, sourcePath: string): string {
+  if (source === undefined) {
+    throw new Error(`${sourcePath}.from_bundle must be configured for ai-sdk-agentool profile.`);
   }
+  const value = bundleValueFromSource(source, sourcePath);
+  if (!value) throw new Error(`${sourcePath}.from_bundle resolved to an empty value.`);
   return value;
 }
 
-function optionalEnvValue(variableName: unknown, fallbackName: string): string | undefined {
-  const name = typeof variableName === "string" ? variableName : fallbackName;
-  return process.env[name] || undefined;
+function optionalProviderBundleValue(source: unknown, sourcePath: string): string | undefined {
+  if (source === undefined) return undefined;
+  const value = bundleValueFromSource(source, sourcePath);
+  return value || undefined;
 }
 
 export function extractValidatedOutput(result: AiResult): string {
