@@ -156,6 +156,8 @@ async function runAiSdkStageWithProfile(
       const contextUsedPct = contextUsedPctForUsage(usageRecord(event), contextWindowTokens);
       maxContextUsedPct = maxNumber(maxContextUsedPct, contextUsedPct);
       logger?.event("ai.step.done", {
+        assistant_reasoning_chars: stringLength(stringField(event, "reasoningText")),
+        assistant_text_chars: stringLength(stringField(event, "text")),
         finish_reason: stringField(event, "finishReason"),
         step: stepCount,
         tool_calls: arrayField(event, "toolCalls").length,
@@ -163,6 +165,7 @@ async function runAiSdkStageWithProfile(
         ...usageLogFields(usageRecord(event)),
         ...optionalNumberField("context_used_pct", contextUsedPct),
       });
+      logAiSdkAssistantStep({ event, options, profileName, step: stepCount });
     },
     prepareStep: createContextCompactionPrepareStep({
       config: options.config,
@@ -267,9 +270,44 @@ function logAiSdkIoOutput(options: {
   );
 }
 
+function logAiSdkAssistantStep(options: {
+  event: unknown;
+  options: RunAiStageOptions;
+  profileName: string;
+  step: number;
+}): void {
+  const text = stringField(options.event, "text") || "";
+  const reasoningText = stringField(options.event, "reasoningText") || "";
+  if (!text && !reasoningText) return;
+
+  options.options.logger?.raw?.(
+    aiSdkLogGroup({
+      body: [
+        fieldLine("step", String(options.step)),
+        fieldLine("assistant_text_chars", String(text.length)),
+        fieldLine("assistant_reasoning_chars", String(reasoningText.length)),
+        section("assistant_text", text),
+        section("assistant_reasoning", reasoningText),
+      ].join("\n"),
+      label: "assistant",
+      options: options.options,
+      profileName: options.profileName,
+    }),
+  );
+}
+
 function aiIoLogGroup(options: {
   body: string;
   label: "input" | "output";
+  options: RunAiStageOptions;
+  profileName: string;
+}): string {
+  return aiSdkLogGroup(options);
+}
+
+function aiSdkLogGroup(options: {
+  body: string;
+  label: "assistant" | "input" | "output";
   options: RunAiStageOptions;
   profileName: string;
 }): string {
