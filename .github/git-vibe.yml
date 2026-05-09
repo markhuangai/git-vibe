@@ -1,8 +1,5 @@
 version: 1
 
-branches:
-  base: ""
-
 permissions:
   approver_roles:
     - write
@@ -29,7 +26,7 @@ commands:
   allow_external_agent_mentions: false
 
 runner:
-  default: self-hosted
+  default: pipeline
 
 event_delivery:
   mode: webhook

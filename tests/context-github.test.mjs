@@ -11,7 +11,12 @@ import {
 } from "../src/app/labels.ts";
 import { loadConfig, testCommandsFor } from "../src/runner/config.ts";
 import { buildDiscussionContext, buildIssueContext } from "../src/runner/context.ts";
-import { GitHubClient, splitRepository } from "../src/shared/github.ts";
+import {
+  GitHubClient,
+  repositoryActionsVariable,
+  repositoryDefaultBranch,
+  splitRepository,
+} from "../src/shared/github.ts";
 import { gitVibeLabelList } from "../src/shared/labels.ts";
 
 const originalFetch = globalThis.fetch;
@@ -307,6 +312,31 @@ describe("GitHub client", () => {
     await expect(client.graphql("query", {}, "t")).rejects.toThrow("GitHub GraphQL failed");
     expect(splitRepository("owner/repo")).toEqual({ owner: "owner", repo: "repo" });
     expect(() => splitRepository("missing")).toThrow("repository must be owner/repo");
+
+    globalThis.fetch.mockResolvedValueOnce(response(200, {}));
+    await expect(
+      repositoryDefaultBranch({ client, owner: "owner", repo: "repo", token: "t" }),
+    ).rejects.toThrow("did not return default_branch");
+  });
+
+  it("reads repository Actions variables and treats missing values as unset", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response(200, { value: "  develop " }))
+      .mockResolvedValueOnce(response(200, {}))
+      .mockResolvedValueOnce(response(404, { message: "missing" }, false));
+    const client = new GitHubClient({ apiBaseUrl: "https://api.test", retryBaseDelayMs: 0 });
+    const options = {
+      client,
+      name: "GITVIBE_BASE_BRANCH",
+      owner: "owner",
+      repo: "repo",
+      token: "t",
+    };
+
+    await expect(repositoryActionsVariable(options)).resolves.toBe("develop");
+    await expect(repositoryActionsVariable(options)).resolves.toBeUndefined();
+    await expect(repositoryActionsVariable(options)).resolves.toBeUndefined();
   });
 
   it("retries transient safe GitHub reads but not writes", async () => {
@@ -339,11 +369,10 @@ describe("GitVibe config and labels", () => {
     mkdirSync(join(cwd, ".github"));
     writeFileSync(
       join(cwd, ".github", "git-vibe.yml"),
-      "branches:\n  base: develop\ntests:\n  commands:\n    - pnpm test\n    - '  '\n",
+      "tests:\n  commands:\n    - pnpm test\n    - '  '\n",
     );
 
     const config = loadConfig(cwd);
-    expect(config.branches?.base).toBe("develop");
     expect(testCommandsFor(config)).toEqual(["pnpm test"]);
     expect(loadConfig(join(cwd, "missing"))).toEqual({});
 

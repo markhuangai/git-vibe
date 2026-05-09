@@ -46,9 +46,6 @@ export interface RunnerOptions {
 
 export interface GitVibeConfig {
   ai?: JsonObject;
-  branches?: {
-    base?: string;
-  };
   tests?: {
     commands?: string[];
   };

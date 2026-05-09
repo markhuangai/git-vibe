@@ -54,7 +54,6 @@ jobs:
         env:
           GITHUB_WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
           GITVIBE_DISCUSSION_CATEGORY: ${{ vars.GITVIBE_DISCUSSION_CATEGORY }}
-          GITVIBE_DISPATCH_REF: main
           GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
           GITVIBE_IMAGE: ${{ env.GITVIBE_IMAGE }}
         run: |

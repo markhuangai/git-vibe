@@ -10,7 +10,13 @@ import {
   createRepositoryDiscussion,
   removeDiscussionLabel,
 } from "../shared/discussions.js";
-import { GitHubClient, splitRepository } from "../shared/github.js";
+import { gitVibeBaseBranchVariable } from "../shared/config.js";
+import {
+  GitHubClient,
+  repositoryActionsVariable,
+  repositoryDefaultBranch,
+  splitRepository,
+} from "../shared/github.js";
 import { gitVibeInternalLabels, gitVibeLabels, isInternalGitVibeLabel } from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
 import { reviewFixTraceFromBody } from "../shared/traceability.js";
@@ -73,7 +79,6 @@ export interface GitVibeAppOptions {
   client?: GitHubClient;
   configuredRepository?: string;
   discussionCategory?: string;
-  dispatchRef?: string;
   errorLog?: (message: string) => void;
   githubToken: string;
   log?: (message: string) => void;
@@ -86,7 +91,6 @@ interface AppState {
   config: {
     configuredRepository: string;
     discussionCategory: string;
-    dispatchRef: string;
     githubToken: string;
     webhookSecret: string;
   };
@@ -108,7 +112,6 @@ export function createGitVibeApp(options: GitVibeAppOptions): GitVibeApp {
     config: {
       configuredRepository: options.configuredRepository || "",
       discussionCategory: options.discussionCategory || "Ideas",
-      dispatchRef: options.dispatchRef || "main",
       githubToken: options.githubToken,
       webhookSecret: options.webhookSecret,
     },
@@ -128,7 +131,6 @@ export function startServerFromEnv(env: NodeJS.ProcessEnv = process.env): Server
   const app = createGitVibeApp({
     configuredRepository: env.GITHUB_REPOSITORY || "",
     discussionCategory: env.GITVIBE_DISCUSSION_CATEGORY || "Ideas",
-    dispatchRef: env.GITVIBE_DISPATCH_REF || "main",
     githubToken: requiredEnv(env, "GITVIBE_GITHUB_TOKEN"),
     webhookSecret: requiredEnv(env, "GITHUB_WEBHOOK_SECRET"),
   });
@@ -338,6 +340,7 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
       number: issueNumber,
       reason: commandReason(parsed.raw),
       workflow,
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     return;
@@ -356,6 +359,7 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
       number: issueNumber,
       reason: commandReason(parsed.raw),
       workflow,
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     return;
@@ -381,6 +385,7 @@ async function handleDiscussionComment(options: WebhookContext): Promise<void> {
       number: String(options.payload.discussion?.number || ""),
       reason: commandReason(parsed.raw),
       workflow,
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     return;
@@ -417,6 +422,7 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
       number: issueNumber,
       reason: labelReason(label),
       workflow: "develop.yml",
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     return;
@@ -439,6 +445,7 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
       number: issueNumber,
       reason: labelReason(label),
       workflow: "validate.yml",
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     return;
@@ -483,6 +490,7 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       number: discussionNumber,
       reason: labelReason(label),
       workflow: "validate.yml",
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     await removeDiscussionLabelBestEffort(options, label);
@@ -498,6 +506,7 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       number: discussionNumber,
       reason: labelReason(label),
       workflow: "materialize.yml",
+      ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
     return;
@@ -532,6 +541,7 @@ async function handlePullRequestReviewSubmitted(options: WebhookContext): Promis
     number: prNumber,
     reason: "trusted changes-requested review",
     workflow: "address-feedback.yml",
+    ref: dispatch.ref,
     workflowRunUrl: dispatch.html_url,
   });
 }
@@ -596,19 +606,21 @@ async function dispatchWorkflow(
   workflow: string,
   inputs: Record<string, string>,
 ): Promise<WorkflowDispatchResult> {
+  const ref = await workflowDispatchRef(options);
   const body = {
     inputs,
-    ref: options.config.dispatchRef,
+    ref,
     return_run_details: true,
   };
   try {
-    return await options.client.request<WorkflowDispatchResult>({
+    const dispatch = await options.client.request<WorkflowDispatchResult>({
       apiVersion: "2026-03-10",
       body,
       method: "POST",
       path: `/repos/${options.owner}/${options.repo}/actions/workflows/${workflow}/dispatches`,
       token: options.token,
     });
+    return { ...dispatch, ref };
   } catch (error) {
     if (!isDispatchRunDetailsCompatibilityError(error)) throw error;
     options.log(
@@ -619,13 +631,31 @@ async function dispatchWorkflow(
   await options.client.request({
     body: {
       inputs,
-      ref: options.config.dispatchRef,
+      ref,
     },
     method: "POST",
     path: `/repos/${options.owner}/${options.repo}/actions/workflows/${workflow}/dispatches`,
     token: options.token,
   });
-  return {};
+  return { ref };
+}
+
+async function workflowDispatchRef(options: WebhookContext): Promise<string> {
+  const configured = await repositoryActionsVariable({
+    client: options.client,
+    name: gitVibeBaseBranchVariable,
+    owner: options.owner,
+    repo: options.repo,
+    token: options.token,
+  });
+  if (configured) return configured;
+  const defaultBranch = await repositoryDefaultBranch({
+    client: options.client,
+    owner: options.owner,
+    repo: options.repo,
+    token: options.token,
+  });
+  return defaultBranch;
 }
 
 function commandInputs(
@@ -674,6 +704,7 @@ async function createQueuedWorkflowComment(
   comment: {
     artifact: "issue" | "pull-request" | "discussion";
     number: string;
+    ref: string;
     reason: string;
     workflow: string;
     workflowRunUrl?: string;
@@ -683,7 +714,7 @@ async function createQueuedWorkflowComment(
     artifact: comment.artifact,
     number: comment.number,
     reason: comment.reason,
-    ref: options.config.dispatchRef,
+    ref: comment.ref,
     workflow: comment.workflow,
     workflowRunUrl: comment.workflowRunUrl,
   });
@@ -876,6 +907,7 @@ function commandWorkflow(command: string): string | null {
 
 interface WorkflowDispatchResult extends Record<string, unknown> {
   html_url?: string;
+  ref: string;
   run_url?: string;
   workflow_run_id?: number | string;
 }

@@ -52,6 +52,7 @@ describe("implementation validation repair", () => {
     globalThis.fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       response(200, {}),
     ]);
 
@@ -87,6 +88,7 @@ describe("implementation validation repair", () => {
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       response(200, {}),
       response(200, {}),
       response(200, {}),
@@ -109,8 +111,8 @@ describe("implementation validation repair", () => {
       }),
     ).resolves.toMatchObject({ status: "blocked" });
 
-    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:blocked"]);
+    expect(fetch.mock.calls[4][0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(JSON.parse(fetch.mock.calls[5][1].body).labels).toEqual(["git-vibe:blocked"]);
   });
 });
 

@@ -56,6 +56,16 @@ export function createClient(options = {}) {
       if (request.method === "GET" && request.path.includes("/comments?")) {
         return options.comments || [];
       }
+      if (request.method === "GET" && request.path.includes("/actions/variables/")) {
+        if (options.baseBranchVariableError) throw options.baseBranchVariableError;
+        if (options.baseBranchVariable !== undefined) {
+          return { name: "GITVIBE_BASE_BRANCH", value: options.baseBranchVariable };
+        }
+        throw new Error("GitHub API GET actions variable failed: 404");
+      }
+      if (request.method === "GET" && request.path === "/repos/example/repo") {
+        return { default_branch: options.defaultBranch || "main" };
+      }
       if (request.method === "POST" && request.path.endsWith("/labels")) {
         if (options.labelError) throw options.labelError;
         return {};

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { GitHubClient, splitRepository } from "../shared/github.js";
+import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
+import { baseBranchFromEnv } from "../shared/config.js";
 import { gitVibeInternalLabels } from "../shared/labels.js";
 import {
   gitVibeBranchName,
@@ -33,6 +34,7 @@ export interface IssueBranchState {
 }
 
 export async function prepareIssueBranch(options: {
+  baseBranch?: string;
   branch: string;
   cwd: string;
   logger: StageLogger;
@@ -58,6 +60,25 @@ export async function prepareIssueBranch(options: {
     });
     return { branch: options.branch, remoteFound: true };
   } catch {
+    if (options.baseBranch && hasOriginRemote(options.cwd)) {
+      const baseRemoteRef = `refs/remotes/origin/${options.baseBranch}`;
+      execFileSync(
+        "git",
+        [
+          "-c",
+          `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
+          "fetch",
+          "origin",
+          `refs/heads/${options.baseBranch}:${baseRemoteRef}`,
+        ],
+        { cwd: options.cwd, stdio: "ignore" },
+      );
+      execFileSync("git", ["checkout", "-B", options.branch, baseRemoteRef], {
+        cwd: options.cwd,
+        stdio: "inherit",
+      });
+      return { branch: options.branch, remoteFound: false };
+    }
     execFileSync("git", ["checkout", "-B", options.branch], {
       cwd: options.cwd,
       stdio: "inherit",
@@ -71,6 +92,18 @@ export function issueBranch(context: ContextPacket): string {
     reviewFixTraceFromBody(context.artifact.body)?.branch ||
     gitVibeBranchName(context.artifact.number)
   );
+}
+
+function hasOriginRemote(cwd: string): boolean {
+  try {
+    execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function handleReviewFixRequired(options: {
@@ -263,6 +296,7 @@ async function attachSubIssue(options: {
 
 async function dispatchDevelopWorkflow(options: {
   client: GitHubClient;
+  config: GitVibeConfig;
   issueNumber: string;
   logger: StageLogger;
   runner: RunnerOptions;
@@ -271,7 +305,7 @@ async function dispatchDevelopWorkflow(options: {
     throw new Error("Cannot dispatch review-fix workflow without an issue number.");
   const { owner, repo } = splitRepository(options.runner.repository);
   options.logger.event("github.workflow.dispatch.start", { issue: options.issueNumber });
-  const ref = process.env.GITVIBE_DISPATCH_REF || process.env.GITHUB_REF_NAME || "main";
+  const ref = await workflowBaseRef({ ...options, owner, repo });
   const dispatch = await dispatchWorkflowWithRunDetails({
     client: options.client,
     inputs: { "issue-number": options.issueNumber },
@@ -331,6 +365,26 @@ function queuedReviewFixWorkflowComment(options: {
   if (options.workflowRunUrl) lines.push("", `Workflow run: ${options.workflowRunUrl}`);
   lines.push("The runner will post again when the stage starts.");
   return lines.join("\n");
+}
+
+async function workflowBaseRef(options: {
+  client: GitHubClient;
+  logger: StageLogger;
+  owner: string;
+  repo: string;
+  runner: RunnerOptions;
+}): Promise<string> {
+  const configured = baseBranchFromEnv();
+  if (configured) return configured;
+  options.logger.event("github.repository.lookup", { owner: options.owner, repo: options.repo });
+  const defaultBranch = await repositoryDefaultBranch({
+    client: options.client,
+    owner: options.owner,
+    repo: options.repo,
+    token: options.runner.token,
+  });
+  options.logger.event("github.repository.lookup.done", { default_branch: defaultBranch });
+  return defaultBranch;
 }
 
 async function dispatchWorkflowWithRunDetails(options: {

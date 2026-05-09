@@ -37,11 +37,12 @@ Optional runtime values:
 ```text
 GITHUB_API_URL=https://api.github.com
 GITHUB_REPOSITORY=owner/repo
-GITVIBE_DISPATCH_REF=main
 GITVIBE_DISCUSSION_CATEGORY=Ideas
 ```
 
 Use a fine-grained PAT scoped only to the repositories managed by this server.
+Workflow dispatch uses the repository variable `GITVIBE_BASE_BRANCH`; empty or
+missing means the repository default branch.
 When deploying through GitHub Actions, store the webhook secret as repository secret
 `WEBHOOK_SECRET`; the deploy workflow maps it to `GITHUB_WEBHOOK_SECRET`.
 Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub

@@ -114,6 +114,7 @@ Discussions: read/write
 Pull requests: read/write
 Contents: read/write
 Actions: read/write
+Variables: read
 ```
 
 GitHub labels are not natively protected per label. GitVibe must treat public

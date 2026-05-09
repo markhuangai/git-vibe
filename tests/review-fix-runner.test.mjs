@@ -43,8 +43,8 @@ afterEach(() => {
 
 describe("stage runner review-fix writes", () => {
   it("creates a review-fix issue, links it as a sub-issue, and dispatches development", async () => {
-    const cwd = await workspace("ai:\n  budgets:\n    review_max_iterations: 5\n");
-    process.env.GITHUB_REF_NAME = "main";
+    const cwd = await workspace();
+    process.env.GITVIBE_BASE_BRANCH = "develop";
     mockReviewChanges();
     const fetch = fetchMock([
       issueResponse("Issue body"),
@@ -76,7 +76,7 @@ describe("stage runner review-fix writes", () => {
     );
     expect(bodyAt(fetch, 5)).toEqual({
       inputs: { "issue-number": "13" },
-      ref: "main",
+      ref: "develop",
       return_run_details: true,
     });
     expect(bodyAt(fetch, 6).body).toContain("GitVibe Workflow Queued");
@@ -88,6 +88,8 @@ describe("stage runner review-fix writes", () => {
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([existingReviewFixLink()]),
+      response(200, { default_branch: "main" }),
+      response(200, { default_branch: "main" }),
       response(204, {}),
       response(200, {}),
     ]);
@@ -95,16 +97,16 @@ describe("stage runner review-fix writes", () => {
 
     await runStageFor("review-matrix", cwd, "12");
 
-    expect(fetch).toHaveBeenCalledTimes(4);
-    expect(fetch.mock.calls[2][0]).toContain(
+    expect(fetch).toHaveBeenCalledTimes(6);
+    expect(fetch.mock.calls[4][0]).toContain(
       "/repos/example/repo/actions/workflows/develop.yml/dispatches",
     );
-    expect(bodyAt(fetch, 2)).toEqual({
+    expect(bodyAt(fetch, 4)).toEqual({
       inputs: { "issue-number": "13" },
       ref: "main",
       return_run_details: true,
     });
-    expect(bodyAt(fetch, 3).body).toContain("GitVibe Workflow Queued");
+    expect(bodyAt(fetch, 5).body).toContain("GitVibe Workflow Queued");
   });
 });
 
@@ -121,6 +123,7 @@ describe("stage runner review-fix pull requests", () => {
         },
       ),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       issueResponse("Root issue", {
         html_url: "https://github.com/example/repo/issues/7",
         number: 7,
@@ -134,7 +137,7 @@ describe("stage runner review-fix pull requests", () => {
 
     await runStageFor("create-pr", cwd, "8");
 
-    const body = bodyAt(fetch, 4);
+    const body = bodyAt(fetch, 5);
     expect(body.head).toBe("git-vibe/7");
     expect(body.body).toContain("Closes #7");
     expect(body.body).toContain("Closes #8");
@@ -154,6 +157,7 @@ describe("stage runner review-fix investigation", () => {
         },
       ),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       response(200, {}),
     ]);
     globalThis.fetch = fetch;
@@ -213,6 +217,7 @@ describe("review-fix deterministic paths", () => {
       { html_url: "https://github.com/example/repo/issues/13", id: 99, number: 13 },
       {},
       {},
+      { default_branch: "main" },
       new Error("return_run_details is not a permitted key"),
       {},
       {},
@@ -230,16 +235,16 @@ describe("review-fix deterministic paths", () => {
       }),
     ).resolves.toMatchObject({ status: "completed" });
 
-    expect(requestBody(client, 3)).toEqual({
+    expect(requestBody(client, 4)).toEqual({
       inputs: { "issue-number": "13" },
       ref: "main",
       return_run_details: true,
     });
-    expect(requestBody(client, 4)).toEqual({
+    expect(requestBody(client, 5)).toEqual({
       inputs: { "issue-number": "13" },
       ref: "main",
     });
-    expect(requestBody(client, 5).body).not.toContain("Workflow run:");
+    expect(requestBody(client, 6).body).not.toContain("Workflow run:");
     expect(logger.event).toHaveBeenCalledWith(
       "github.workflow.dispatch.run_details_unavailable",
       expect.objectContaining({ workflow: "develop.yml" }),

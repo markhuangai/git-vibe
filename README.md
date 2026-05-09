@@ -157,14 +157,15 @@ Useful variables:
 
 ```text
 GITVIBE_AI_BASE_URL
+GITVIBE_BASE_BRANCH
 GITVIBE_DISCUSSION_CATEGORY
 GITVIBE_RUNNER
 GITVIBE_LOG_LEVEL
 ```
 
-Use the narrowest fine-grained PAT permissions that still allow GitVibe to
-dispatch workflows, create branches, update issues and discussions, and open pull
-requests.
+Use the narrowest fine-grained PAT permissions that still allow GitVibe to read
+repository variables, dispatch workflows, create branches, update issues and
+discussions, and open pull requests.
 
 ### 4. Run the app server
 
@@ -194,7 +195,10 @@ Runtime variables:
 | `GITHUB_API_URL`              | Optional | Defaults to `https://api.github.com`              |
 | `GITHUB_REPOSITORY`           | Optional | `owner/repo` for startup Discussion preflight     |
 | `GITVIBE_DISCUSSION_CATEGORY` | Optional | Defaults to `Ideas`                               |
-| `GITVIBE_DISPATCH_REF`        | Optional | Defaults to `main`                                |
+
+Workflow dispatch, new implementation branch bases, and pull request bases use
+the repository variable `GITVIBE_BASE_BRANCH`. Empty or missing means GitVibe
+uses the repository `default_branch` reported by GitHub.
 
 ### 5. Configure the repository webhook
 

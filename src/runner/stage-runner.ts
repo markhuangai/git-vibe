@@ -2,10 +2,10 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runAiStage } from "./ai.js";
-import { loadConfig, testCommandsFor } from "./config.js";
+import { baseBranchFromEnv, loadConfig, testCommandsFor } from "./config.js";
 import { addDiscussionComment, closeDiscussion } from "../shared/discussions.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
-import { GitHubClient, splitRepository } from "../shared/github.js";
+import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import { withStageHandoffs, writeStageResultFile } from "./handoffs.js";
@@ -44,6 +44,12 @@ import type {
   StageRunResult,
 } from "../shared/types.js";
 
+interface BaseBranchState {
+  base: string;
+  defaultBranch: string;
+  targetsDefault: boolean;
+}
+
 export async function runStage(options: RunnerOptions): Promise<StageRunResult> {
   const logger = createStageLogger(options.stage);
   logger.event("stage.start", {
@@ -75,8 +81,18 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   }
   const branch = issueBranchForStage(options.stage, context);
   let branchState: IssueBranchState | undefined;
+  const baseBranch =
+    branch && !options.dryRun
+      ? await runnerBaseBranch({
+          client,
+          logger,
+          options,
+          requireDefault: options.stage === "create-pr",
+        })
+      : undefined;
   if (branch && !options.dryRun)
     branchState = await prepareIssueBranch({
+      baseBranch: baseBranch?.base,
       branch,
       cwd: options.cwd,
       logger,
@@ -135,6 +151,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     options,
     repair: validationRepairRunner({ aiRunOptions, config, context, definition, logger, options }),
     result,
+    runnerBaseBranch: baseBranch,
   });
 
   logger.event("stage.done", {
@@ -271,6 +288,7 @@ function withSourceComment(context: ContextPacket, options: RunnerOptions): Cont
 }
 
 async function applyDeterministicWrites(options: {
+  runnerBaseBranch?: BaseBranchState;
   client: GitHubClient;
   config: GitVibeConfig;
   context: ContextPacket;
@@ -348,6 +366,7 @@ async function applyDeterministicWrites(options: {
   if (options.options.stage === "create-pr") {
     const pullRequest = await createPullRequest({
       ...options,
+      baseBranch: options.runnerBaseBranch,
       parsedOutput: options.result.parsedOutput,
     });
     await publishStageResultComment({
@@ -588,15 +607,15 @@ async function closeSourceDiscussion(options: {
 }
 
 async function createPullRequest({
+  baseBranch,
   client,
-  config,
   context,
   logger,
   options,
   parsedOutput,
 }: {
+  baseBranch?: BaseBranchState;
   client: GitHubClient;
-  config: GitVibeConfig;
   context: ContextPacket;
   logger: StageLogger;
   options: RunnerOptions;
@@ -608,10 +627,17 @@ async function createPullRequest({
   const { owner, repo } = splitRepository(options.repository);
   const head = issueBranch(context);
   const title = String(parsedOutput.pr_title || `GitVibe: ${context.artifact.title}`);
+  const pullRequestBase =
+    baseBranch ||
+    (await runnerBaseBranch({
+      client,
+      logger,
+      options,
+    }));
   const body = appendIssueTraceability(
     String(parsedOutput.pr_body || parsedOutput.summary || ""),
     await issueChain({ client, context, runner: options }),
-    { closingKeywords: !config.branches?.base },
+    { closingKeywords: pullRequestBase.targetsDefault },
   );
   logger.event("github.pr.lookup", { head });
   const existing = await client.request<Array<{ number?: number }>>({
@@ -633,11 +659,10 @@ async function createPullRequest({
   }
 
   logger.event("github.pr.lookup.done", { found: false });
-  const base = config.branches?.base || undefined;
-  logger.event("github.pr.create.start", { base: base || "repository-default", head });
+  logger.event("github.pr.create.start", { base: pullRequestBase.base, head });
   const pullRequest = await client.request<{ html_url?: string; number?: number }>({
     body: {
-      base,
+      base: pullRequestBase.base,
       body,
       head,
       title,
@@ -648,6 +673,32 @@ async function createPullRequest({
   });
   logger.event("github.pr.create.done", { number: pullRequest.number, url: pullRequest.html_url });
   return pullRequest;
+}
+
+async function runnerBaseBranch(options: {
+  client: GitHubClient;
+  logger: StageLogger;
+  options: RunnerOptions;
+  requireDefault?: boolean;
+}): Promise<BaseBranchState> {
+  const { owner, repo } = splitRepository(options.options.repository);
+  const configured = baseBranchFromEnv();
+  if (configured && !options.requireDefault) {
+    return { base: configured, defaultBranch: "", targetsDefault: false };
+  }
+  options.logger.event("github.repository.lookup", { owner, repo });
+  const defaultBranch = await repositoryDefaultBranch({
+    client: options.client,
+    owner,
+    repo,
+    token: options.options.token,
+  });
+  const base = configured || defaultBranch;
+  options.logger.event("github.repository.lookup.done", {
+    base,
+    default_branch: defaultBranch,
+  });
+  return { base, defaultBranch, targetsDefault: base === defaultBranch };
 }
 
 function pullRequestLinks(pullRequest: { html_url?: string; number?: number }): StageResultLink[] {

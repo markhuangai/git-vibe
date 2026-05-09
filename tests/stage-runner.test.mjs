@@ -231,6 +231,7 @@ describe("stage runner implementation writes", () => {
     globalThis.fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       response(200, {}),
     ]);
 
@@ -372,7 +373,8 @@ describe("stage runner materialize fallbacks", () => {
 
 describe("stage runner pull request writes", () => {
   it("creates and updates pull requests from structured AI output", async () => {
-    const cwd = await workspace("branches:\n  base: develop\n");
+    const cwd = await workspace();
+    process.env.GITVIBE_BASE_BRANCH = "develop";
     await runCreatePr(cwd, [], {
       expectedMethod: "POST",
       expectedPath: "/repos/example/repo/pulls",
@@ -416,8 +418,9 @@ describe("stage runner pull request writes", () => {
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       response(200, []),
-      response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
+      response(200, { number: 22 }),
       response(200, {}),
       response(200, {}),
     ]);
@@ -435,13 +438,13 @@ describe("stage runner pull request writes", () => {
       token: "token",
     });
 
-    const body = JSON.parse(fetch.mock.calls[3][1].body);
+    const body = JSON.parse(fetch.mock.calls[4][1].body);
     expect(body).toMatchObject({
+      base: "main",
       body: "Fallback summary.\n\n## GitVibe Traceability\n\nCloses #12",
       head: "git-vibe/12",
       title: "GitVibe: Issue title",
     });
-    expect(body).not.toHaveProperty("base");
   });
 });
 
@@ -478,6 +481,7 @@ describe("stage runner write skips and branch validation", () => {
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
+      response(200, { default_branch: "main" }),
       response(200, {}),
       response(200, {}),
     ]);
@@ -496,9 +500,9 @@ describe("stage runner write skips and branch validation", () => {
         token: "token",
       }),
     ).resolves.toMatchObject({ status: "blocked" });
-    expect(fetch).toHaveBeenCalledTimes(4);
-    expect(fetch.mock.calls[2][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[3][1].body).labels).toEqual(["git-vibe:blocked"]);
+    expect(fetch).toHaveBeenCalledTimes(5);
+    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:blocked"]);
 
     globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
     await expect(
@@ -563,6 +567,7 @@ async function runCreatePr(cwd, existingPulls, expected) {
   const fetch = fetchMock([
     issueResponse("Issue body"),
     commentsResponse([]),
+    response(200, { default_branch: "main" }),
     response(200, existingPulls),
     response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
     response(200, {}),
@@ -582,11 +587,10 @@ async function runCreatePr(cwd, existingPulls, expected) {
     token: "token",
   });
 
-  expect(fetch.mock.calls[3][0]).toContain(expected.expectedPath);
-  expect(fetch.mock.calls[3][1].method).toBe(expected.expectedMethod);
-  if (expected.expectedBase) {
-    expect(JSON.parse(fetch.mock.calls[3][1].body).base).toBe(expected.expectedBase);
-  }
+  expect(fetch.mock.calls[4][0]).toContain(expected.expectedPath);
+  expect(fetch.mock.calls[4][1].method).toBe(expected.expectedMethod);
+  if (expected.expectedBase)
+    expect(JSON.parse(fetch.mock.calls[4][1].body).base).toBe(expected.expectedBase);
 }
 
 async function workspace(config = "") {
@@ -640,13 +644,7 @@ function commentsResponse(comments) {
 }
 
 function reviewThreadsResponse() {
-  return graphqlResponse({
-    repository: {
-      pullRequest: {
-        reviewThreads: { nodes: [] },
-      },
-    },
-  });
+  return graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
 }
 
 function discussionResponse() {

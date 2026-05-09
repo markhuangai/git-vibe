@@ -109,3 +109,47 @@ export function splitRepository(repository: string): { owner: string; repo: stri
 
   return { owner, repo };
 }
+
+export async function repositoryDefaultBranch(options: {
+  client: GitHubClient;
+  owner: string;
+  repo: string;
+  token: string;
+}): Promise<string> {
+  const repository = await options.client.request<{ default_branch?: string }>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.repo}`,
+    token: options.token,
+  });
+  if (!repository.default_branch) {
+    throw new Error(
+      `GitHub repository ${options.owner}/${options.repo} did not return default_branch`,
+    );
+  }
+  return repository.default_branch;
+}
+
+export async function repositoryActionsVariable(options: {
+  client: GitHubClient;
+  name: string;
+  owner: string;
+  repo: string;
+  token: string;
+}): Promise<string | undefined> {
+  try {
+    const variable = await options.client.request<{ value?: string }>({
+      method: "GET",
+      path: `/repos/${options.owner}/${options.repo}/actions/variables/${encodeURIComponent(options.name)}`,
+      token: options.token,
+    });
+    const value = variable.value?.trim();
+    return value || undefined;
+  } catch (error) {
+    if (isGitHubNotFound(error)) return undefined;
+    throw error;
+  }
+}
+
+function isGitHubNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("404");
+}

@@ -285,6 +285,51 @@ describe("GitVibe app server command edge cases", () => {
 });
 
 describe("GitVibe app server dispatch edge cases", () => {
+  it("uses GITVIBE_BASE_BRANCH from repository variables for workflow dispatch", async () => {
+    const client = createClient({ baseBranchVariable: "develop" });
+    const app = createApp({ client });
+
+    await app.handleWebhook("issue_comment", {
+      action: "created",
+      comment: { body: "/git-vibe investigate" },
+      issue: { number: 2 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)[0]).toMatchObject({ ref: "develop" });
+    expect(requestBodies(client, "POST", "/issues/2/comments").at(-1).body).toContain(
+      "on `develop`",
+    );
+  });
+
+  it("uses the GitHub default branch when GITVIBE_BASE_BRANCH is empty or missing", async () => {
+    const payload = {
+      action: "created",
+      comment: { body: "/git-vibe investigate" },
+      issue: { number: 2 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    };
+    const clients = [
+      createClient({ defaultBranch: "trunk" }),
+      createClient({
+        baseBranchVariable: "",
+        defaultBranch: "trunk",
+      }),
+    ];
+
+    for (const client of clients) {
+      await createApp({ client }).handleWebhook("issue_comment", payload);
+      expect(workflowDispatches(client)[0]).toMatchObject({ ref: "trunk" });
+    }
+    await expect(
+      createApp({
+        client: createClient({ baseBranchVariableError: new Error("variables permission denied") }),
+      }).handleWebhook("issue_comment", payload),
+    ).rejects.toThrow("variables permission denied");
+  });
+
   it("falls back when workflow dispatch run details are unavailable", async () => {
     const log = vi.fn();
     const client = createClient({
