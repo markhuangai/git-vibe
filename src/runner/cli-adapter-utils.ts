@@ -24,9 +24,9 @@ export function commandParts(profile: Record<string, unknown>, fallback: string)
 }
 
 export function cliModelName(profile: Record<string, unknown>, adapter: string): string {
-  return (
-    stringValue(profile.model) || envValue(profile.model_variable, "GITVIBE_AI_MODEL", adapter)
-  );
+  const model = stringValue(profile.model);
+  if (!model) throw new Error(`AI profile model must be configured for ${adapter} profile.`);
+  return model;
 }
 
 export function strictOutputSchema(schema: JsonObject): JsonObject {
@@ -192,13 +192,4 @@ function bundleValue(source: unknown, sourcePath: string, bundle: Record<string,
     throw new Error(`GITVIBE_AI_ENV_JSON key ${key} is required by ${sourcePath}.from_bundle.`);
   }
   return bundle[key];
-}
-
-function envValue(variableName: unknown, fallbackName: string, adapter: string): string {
-  const name = typeof variableName === "string" ? variableName : fallbackName;
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is required for ${adapter} profile`);
-  }
-  return value;
 }

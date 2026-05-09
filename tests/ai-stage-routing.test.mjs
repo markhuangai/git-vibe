@@ -43,7 +43,6 @@ beforeEach(() => {
       STAGE_BASE_URL: "https://stage.test/v1",
       STAGE_KEY: "stage-key",
     }),
-    GITVIBE_AI_MODEL: "test-model",
   };
 });
 
@@ -54,7 +53,6 @@ afterEach(() => {
 
 describe("AI stage runner stage routing", () => {
   it("uses runtime stage IDs for profile and tool overrides", async () => {
-    process.env.STAGE_MODEL = "stage-model";
     const logger = { event: vi.fn() };
     generateText.mockResolvedValueOnce({
       steps: [],
@@ -311,7 +309,6 @@ describe("AI stage runner stage fallbacks", () => {
 
 describe("AI stage runner Codex CLI defaults", () => {
   it("uses command, model, sandbox, and auth defaults for Codex CLI profiles", async () => {
-    process.env.CODEX_MODEL = "codex-env-model";
     mockCodexOutput('{"stage":"implement","status":"completed"}');
 
     await expect(
@@ -321,7 +318,7 @@ describe("AI stage runner Codex CLI defaults", () => {
             profiles: {
               codex_cli: {
                 adapter: "cli-codex",
-                model_variable: "CODEX_MODEL",
+                model: "codex-test-model",
               },
             },
             stages: {
@@ -336,7 +333,7 @@ describe("AI stage runner Codex CLI defaults", () => {
 
     const args = spawn.mock.calls[0][1];
     expect(spawn.mock.calls[0][0]).toBe("codex");
-    expect(args).toEqual(expect.arrayContaining(["exec", "--model", "codex-env-model"]));
+    expect(args).toEqual(expect.arrayContaining(["exec", "--model", "codex-test-model"]));
     expect(args).toEqual(expect.arrayContaining(["--sandbox", "workspace-write"]));
     expect(args).not.toContain("-c");
     expect(spawn.mock.calls[0][2].env.CODEX_HOME).toBeUndefined();
@@ -350,7 +347,6 @@ describe("AI stage runner Codex CLI defaults", () => {
             profiles: {
               codex_cli: {
                 adapter: "cli-codex",
-                model_variable: "MISSING_CODEX_MODEL",
               },
             },
             stages: {
@@ -361,7 +357,7 @@ describe("AI stage runner Codex CLI defaults", () => {
           },
         }),
       ),
-    ).rejects.toThrow("MISSING_CODEX_MODEL is required for cli-codex profile");
+    ).rejects.toThrow("AI profile model must be configured for cli-codex profile.");
 
     expect(spawn).not.toHaveBeenCalled();
   });

@@ -39,7 +39,6 @@ beforeEach(() => {
       MINIMAX_API_KEY: "minimax-key",
       MINIMAX_BASE_URL: "https://minimax.test/anthropic",
     }),
-    GITVIBE_AI_MODEL: "test-model",
   };
 });
 
@@ -118,7 +117,7 @@ describe("Claude Code CLI adapter", () => {
 
   it("requires a model for profiles", async () => {
     await expect(runAiStage(validateStageOptions(missingModelConfig()))).rejects.toThrow(
-      "MISSING_CLAUDE_MODEL is required for cli-claude-code profile",
+      "AI profile model must be configured for cli-claude-code profile.",
     );
 
     expect(spawn).not.toHaveBeenCalled();
@@ -126,8 +125,7 @@ describe("Claude Code CLI adapter", () => {
 });
 
 describe("Claude Code CLI adapter defaults", () => {
-  it("uses branch-write permissions and model env without tool restrictions", async () => {
-    process.env.CLAUDE_MODEL = "claude-env-model";
+  it("uses branch-write permissions and configured model without tool restrictions", async () => {
     mockClaudeOutput({
       is_error: false,
       structured_output: { stage: "implement", status: "completed" },
@@ -139,7 +137,7 @@ describe("Claude Code CLI adapter defaults", () => {
     );
 
     const args = spawn.mock.calls[0][1];
-    expect(args).toEqual(expect.arrayContaining(["--model", "claude-env-model"]));
+    expect(args).toEqual(expect.arrayContaining(["--model", "claude-test-model"]));
     expect(args).toEqual(expect.arrayContaining(["--permission-mode", "acceptEdits"]));
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
@@ -324,7 +322,7 @@ function claudeEnvModelConfig() {
       profiles: {
         claude_code: {
           adapter: "cli-claude-code",
-          model_variable: "CLAUDE_MODEL",
+          model: "claude-test-model",
         },
       },
       stages: {
@@ -342,7 +340,6 @@ function missingModelConfig() {
       profiles: {
         claude_code: {
           adapter: "cli-claude-code",
-          model_variable: "MISSING_CLAUDE_MODEL",
         },
       },
       stages: {

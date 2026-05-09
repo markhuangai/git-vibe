@@ -25,7 +25,6 @@ const baseEnv = {
     GITVIBE_AI_API_KEY: "secret-key",
     GITVIBE_AI_BASE_URL: "http://proxy.local/v1",
   }),
-  GITVIBE_AI_MODEL: "test-model",
 };
 
 describe("smoke-test-ai config", () => {
@@ -36,7 +35,7 @@ describe("smoke-test-ai config", () => {
       cwd: "/workspace",
       maxOutputTokens: 1000,
       maxSteps: 4,
-      model: "test-model",
+      model: "glm-5",
       requireTool: true,
     });
     expect(
@@ -120,7 +119,7 @@ describe("smoke-test-ai runner", () => {
       }),
     );
     expect(report).toMatchObject({
-      model: "test-model",
+      model: "glm-5",
       observedAgentoolSpecifier: "^1.4.0",
       packageName: "git-vibe",
       toolCallCount: 2,
@@ -189,9 +188,7 @@ describe("smoke-test-ai validation", () => {
 
     expect(success).toBe(0);
     expect(failure).toBe(1);
-    expect(logger.log).toHaveBeenCalledWith(
-      "[git-vibe] local proxy smoke passed with model=test-model",
-    );
+    expect(logger.log).toHaveBeenCalledWith("[git-vibe] local proxy smoke passed with model=glm-5");
     expect(logger.error).toHaveBeenCalledWith("[git-vibe] GITVIBE_AI_ENV_JSON is required.");
   });
 });

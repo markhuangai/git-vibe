@@ -31,7 +31,6 @@ beforeEach(() => {
       OPENAI_BASE_URL: "https://proxy.test/v1",
       OPENAI_KEY: "openai-key",
     }),
-    GITVIBE_AI_MODEL: "test-model",
   };
 });
 
@@ -42,7 +41,6 @@ afterEach(() => {
 
 describe("AI stage runner OpenAI-compatible profiles", () => {
   it("calls AI SDK with provider config, tools, and tool telemetry", async () => {
-    process.env.OPENAI_MODEL = "gpt-test";
     const logger = { event: vi.fn() };
     mockTelemetryGenerateText();
 
@@ -322,7 +320,6 @@ function toolSummaryCalls() {
 
 describe("AI stage runner provider failures", () => {
   it("uses direct AI SDK profile model names without a model variable", async () => {
-    delete process.env.GITVIBE_AI_MODEL;
     const logger = { event: vi.fn() };
     generateText.mockResolvedValueOnce({
       steps: [],

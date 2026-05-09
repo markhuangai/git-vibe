@@ -46,8 +46,7 @@ secrets.GITVIBE_AI_ENV_JSON
 Set bundle keys `GITVIBE_AI_BASE_URL` and `GITVIBE_AI_API_KEY` for the smoke
 test. `GITVIBE_AI_BASE_URL` should point to an OpenAI-compatible `/v1` API root.
 The local proxy job uses AI SDK plus `agentool`, defaults to `glm-5`, and
-requires the model to call the read-only `agentool` file reader. Set
-`vars.GITVIBE_AI_MODEL` only when overriding the smoke-test model.
+requires the model to call the read-only `agentool` file reader.
 
 Codex CLI smoke testing is optional. The workflow installs `@openai/codex`
 when the `codex` command is missing, then uses:

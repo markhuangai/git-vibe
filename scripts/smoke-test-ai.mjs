@@ -117,7 +117,7 @@ export function readConfig({ env, cwd, workspace }) {
   return {
     apiKey: requiredBundledEnv(bundle, "GITVIBE_AI_API_KEY"),
     baseUrl: requiredBundledEnv(bundle, "GITVIBE_AI_BASE_URL"),
-    model: env.GITVIBE_AI_MODEL || "glm-5",
+    model: "glm-5",
     cwd: workspace || cwd,
     maxOutputTokens: numberEnv(env, "GITVIBE_AI_MAX_OUTPUT_TOKENS", 1000),
     maxSteps: numberEnv(env, "GITVIBE_AI_SMOKE_MAX_STEPS", 4),
