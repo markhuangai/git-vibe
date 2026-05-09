@@ -163,9 +163,10 @@ GITVIBE_RUNNER
 GITVIBE_LOG_LEVEL
 ```
 
-Use the narrowest fine-grained PAT permissions that still allow GitVibe to read
-repository variables, dispatch workflows, create branches, update issues and
-discussions, and open pull requests.
+Create `GITVIBE_GITHUB_TOKEN` as a fine-grained PAT scoped to the managed
+repository. See
+[fine-grained PAT repository permissions](docs/WORKFLOW.md#fine-grained-pat-permissions)
+for the required permission set and access levels.
 
 ### 4. Run the app server
 

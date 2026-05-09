@@ -105,17 +105,23 @@ gvi:review-fix
 manually; GitVibe creates missing managed labels on app startup and on the first
 webhook seen for a repository.
 
+### Fine-Grained PAT Permissions
+
 Required fine-grained PAT repository permissions:
 
-```text
-Metadata: read
-Issues: read/write
-Discussions: read/write
-Pull requests: read/write
-Contents: read/write
-Actions: read/write
-Variables: read
-```
+| Permission    | Access     | Required for                                           |
+| ------------- | ---------- | ------------------------------------------------------ |
+| Metadata      | Read       | Repository lookup, collaborator checks, and metadata   |
+| Variables     | Read       | Reading GitHub Actions repository variables            |
+| Actions       | Read/write | Workflow dispatch, workflow runs, and artifacts        |
+| Contents      | Read/write | Contents, commits, branches, releases, and merges      |
+| Discussions   | Read/write | Discussions, comments, and discussion labels           |
+| Issues        | Read/write | Issues, comments, assignees, labels, and milestones    |
+| Pull requests | Read/write | Pull requests, comments, assignees, labels, and merges |
+| Workflows     | Read/write | Updating GitHub Actions workflow files                 |
+
+Only `Metadata` and `Variables` are read-only. Every other listed permission
+needs read/write access.
 
 GitHub labels are not natively protected per label. GitVibe must treat public
 automation labels and internal `gvi:` labels as protected by policy: only
