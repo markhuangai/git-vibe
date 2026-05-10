@@ -71,19 +71,19 @@ export async function publishStageStartComment(
 
 export async function applyStageLabelTransition(options: StagePublishingOptions): Promise<void> {
   if (options.context.artifact.type === "discussion") return;
-  if (options.runner.stage === "investigate") {
+  if (options.runner.stage === "investigate" && options.context.artifact.type !== "pull-request") {
     await applyInvestigationLabelTransition(options);
     return;
   }
 
-  const label = labelForStage(options.runner, options.parsedOutput);
+  const label = labelForStage(options.context, options.runner, options.parsedOutput);
   if (!label) return;
 
-  if (label === gitVibeLabels.inProgress.name) {
+  for (const staleLabel of staleLabelsForTransition(options.context, label)) {
     await removeIssueLabel({
       client: options.client,
       issueNumber: options.context.artifact.number,
-      label: gitVibeLabels.investigating.name,
+      label: staleLabel,
       logger: options.logger,
       repository: options.runner.repository,
       token: options.runner.token,
@@ -100,28 +100,41 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
     repository: options.runner.repository,
     token: options.runner.token,
   });
-  if (label === gitVibeLabels.prOpened.name) {
-    await removeIssueLabel({
-      client: options.client,
-      issueNumber: options.context.artifact.number,
-      label: gitVibeLabels.inProgress.name,
-      logger: options.logger,
-      repository: options.runner.repository,
-      token: options.runner.token,
-    });
-    await removeIssueLabel({
-      client: options.client,
-      issueNumber: options.context.artifact.number,
-      label: gitVibeLabels.investigated.name,
-      logger: options.logger,
-      repository: options.runner.repository,
-      token: options.runner.token,
-    });
-  }
   options.logger.event("github.issue.label.done", {
     issue: options.context.artifact.number,
     label,
   });
+}
+
+export async function publishFeedbackInvestigationReplies(
+  options: StagePublishingOptions,
+): Promise<void> {
+  if (options.context.artifact.type !== "pull-request") return;
+  const replies = feedbackInvestigationReplies(options.parsedOutput);
+  if (replies.length === 0) return;
+  const reviewComments = new Map(
+    options.context.timeline
+      .filter((item) => item.kind === "pull-request-review-comment" && item.databaseId)
+      .map((item) => [item.id, item]),
+  );
+  for (const reply of replies) {
+    const comment = reviewComments.get(reply.id);
+    if (!comment?.databaseId) {
+      options.logger.event("github.pr.feedback.reply.skip", {
+        feedback_item: reply.id,
+        reason: "unknown-review-comment",
+      });
+      continue;
+    }
+    await createPullRequestReviewReply({
+      body: reply.body,
+      client: options.client,
+      commentId: String(comment.databaseId),
+      pullNumber: options.context.artifact.number,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+  }
 }
 
 async function applyInvestigationLabelTransition(options: StagePublishingOptions): Promise<void> {
@@ -230,16 +243,16 @@ async function publishPullRequestReviewReply(
 ): Promise<PublishedArtifactComment | undefined> {
   const commentId = options.runner.sourceComment?.id || "";
   const artifact = options.context.artifact;
-  const { owner, repo } = splitRepository(options.runner.repository);
-
   options.logger.event("github.pr.review_comment.reply.start", {
     comment: commentId,
     pull_request: artifact.number,
   });
-  const comment = await options.client.request<{ id?: number | string }>({
-    body: { body: options.body },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/pulls/${artifact.number}/comments/${commentId}/replies`,
+  const comment = await createPullRequestReviewReply({
+    body: options.body,
+    client: options.client,
+    commentId,
+    pullNumber: artifact.number,
+    repository: options.runner.repository,
     token: options.runner.token,
   });
   options.logger.event("github.pr.review_comment.reply.done", {
@@ -247,6 +260,23 @@ async function publishPullRequestReviewReply(
     pull_request: artifact.number,
   });
   return publishedComment("pull-request-review-comment", comment.id);
+}
+
+async function createPullRequestReviewReply(options: {
+  body: string;
+  client: GitHubClient;
+  commentId: string;
+  pullNumber: string;
+  repository: string;
+  token: string;
+}): Promise<{ id?: number | string }> {
+  const { owner, repo } = splitRepository(options.repository);
+  return options.client.request<{ id?: number | string }>({
+    body: { body: options.body },
+    method: "POST",
+    path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/comments/${options.commentId}/replies`,
+    token: options.token,
+  });
 }
 
 async function createIssueComment(options: {
@@ -450,14 +480,77 @@ async function removeIssueLabel(options: {
   }
 }
 
-function labelForStage(runner: RunnerOptions, output: JsonObject): string | undefined {
+function labelForStage(
+  context: ContextPacket,
+  runner: RunnerOptions,
+  output: JsonObject,
+): string | undefined {
   if (String(output.status || "completed") !== "completed") return gitVibeLabels.blocked.name;
+  const state = normalizedState(output.next_state);
   if (runner.stage === "validate" && isReadyForApproval(output.next_state)) {
     return gitVibeLabels.readyForApproval.name;
   }
   if (runner.stage === "implement") return gitVibeLabels.inProgress.name;
+  if (runner.stage === "investigate" && context.artifact.type === "pull-request") {
+    if (state === "fixes-required") return gitVibeLabels.investigated.name;
+    if (state === "no-fixes-needed") return gitVibeLabels.readyForApproval.name;
+    if (state === "blocked") return gitVibeLabels.blocked.name;
+  }
+  if (runner.stage === "address-pr-feedback") return gitVibeLabels.inProgress.name;
+  if (runner.stage === "review-matrix" && context.artifact.type === "pull-request") {
+    if (state === "review-passed") return gitVibeLabels.readyForApproval.name;
+    if (state === "changes-required") return gitVibeLabels.blocked.name;
+  }
   if (runner.stage === "create-pr") return gitVibeLabels.prOpened.name;
   return undefined;
+}
+
+function staleLabelsForTransition(context: ContextPacket, label: string): string[] {
+  const isPullRequest = context.artifact.type === "pull-request";
+  if (label === gitVibeLabels.blocked.name) {
+    return isPullRequest
+      ? [
+          gitVibeLabels.investigating.name,
+          gitVibeLabels.inProgress.name,
+          gitVibeLabels.readyForApproval.name,
+        ]
+      : [];
+  }
+  if (label === gitVibeLabels.inProgress.name) {
+    return isPullRequest
+      ? [
+          gitVibeLabels.blocked.name,
+          gitVibeLabels.investigating.name,
+          gitVibeLabels.readyForApproval.name,
+        ]
+      : [gitVibeLabels.investigating.name];
+  }
+  if (label === gitVibeLabels.investigated.name) {
+    return isPullRequest
+      ? [
+          gitVibeLabels.blocked.name,
+          gitVibeLabels.investigating.name,
+          gitVibeLabels.readyForApproval.name,
+        ]
+      : [];
+  }
+  if (label === gitVibeLabels.readyForApproval.name) {
+    return isPullRequest
+      ? [
+          gitVibeLabels.blocked.name,
+          gitVibeLabels.inProgress.name,
+          gitVibeLabels.investigating.name,
+        ]
+      : [];
+  }
+  if (label === gitVibeLabels.prOpened.name) {
+    return [
+      gitVibeLabels.inProgress.name,
+      gitVibeLabels.investigated.name,
+      gitVibeLabels.readyForApproval.name,
+    ];
+  }
+  return [];
 }
 
 export function isInvestigationReady(output: JsonObject): boolean {
@@ -480,6 +573,22 @@ function normalizedState(value: unknown): string {
 function arrayField(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function feedbackInvestigationReplies(output: JsonObject): Array<{ body: string; id: string }> {
+  if (!Array.isArray(output.feedback_items)) return [];
+  return output.feedback_items.flatMap((item) => {
+    if (!isObject(item)) return [];
+    const status = normalizedState(item.status);
+    if (!["answered", "rejected", "already-addressed"].includes(status)) return [];
+    const id = String(item.id || "").trim();
+    const body = String(item.reply || "").trim();
+    return id && body ? [{ body, id }] : [];
+  });
+}
+
+function isObject(value: unknown): value is JsonObject {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function flatReplyBody(body: string, source: SourceComment | undefined): string {

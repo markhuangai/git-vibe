@@ -441,6 +441,52 @@ describe("GitVibe develop workflow", () => {
   });
 });
 
+describe("GitVibe address feedback workflow", () => {
+  it("investigates before conditionally implementing and reviewing PR feedback", () => {
+    const workflow = readWorkflow(".github/workflows/address-feedback.yml");
+    const investigate = workflow.jobs?.["investigate-feedback"];
+    const address = workflow.jobs?.["address-feedback"];
+    const review = workflow.jobs?.["review-matrix"];
+
+    expect(investigate?.outputs).toMatchObject({
+      "next-state": "${{ steps.investigate.outputs.next-state }}",
+    });
+    expect(
+      investigate?.steps?.find((step) => step.uses === "./.git-vibe/actions/investigate"),
+    ).toMatchObject({
+      id: "investigate",
+      with: expect.objectContaining({
+        "fail-on-blocked": "true",
+        "pr-number": "${{ inputs.pr-number }}",
+      }),
+    });
+    expect(address).toMatchObject({
+      if: "needs.investigate-feedback.outputs.next-state == 'fixes-required'",
+      needs: "investigate-feedback",
+    });
+    expect(
+      address?.steps?.find((step) => step.uses === "./.git-vibe/actions/address-pr-feedback"),
+    ).toMatchObject({
+      id: "address",
+      with: expect.objectContaining({
+        "handoff-dir": "${{ runner.temp }}/git-vibe-feedback-handoff",
+      }),
+    });
+    expect(review).toMatchObject({
+      if: "needs.address-feedback.outputs.next-state == 'feedback-addressed'",
+      needs: "address-feedback",
+    });
+    expect(
+      review?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),
+    ).toMatchObject({
+      with: expect.objectContaining({
+        "fail-on-blocked": "true",
+        "pr-number": "${{ inputs.pr-number }}",
+      }),
+    });
+  });
+});
+
 describe("GitVibe app deployment boundary", () => {
   it("deploys the app only when app, shared, package, or deploy files change", () => {
     const paths = readWorkflow(".github/workflows/app-deploy.yml").on?.push?.paths || [];

@@ -19,6 +19,7 @@ Context assembly rules:
 
 - Include the issue or discussion title and body first.
 - Include all issue comments, discussion comments, discussion replies, pull request comments, and pull request review threads relevant to the current stage.
+- For PR feedback investigation, include unresolved current review threads plus the GitVibe source issue, linked source discussion, parent issues, sub-issues, and their comments.
 - Include `source.comment` metadata when the run was triggered by a command comment. The model should answer that source directly; deterministic GitVibe publishing decides whether the target supports a true threaded reply or needs a flat comment with a source link.
 - Sort every item by creation time ascending. For threaded discussion replies, preserve the parent comment reference while still making the final analysis timeline chronological.
 - Include author, author association, repository permission when available, timestamp, URL, reactions, and whether the comment was authored by GitVibe or another bot.

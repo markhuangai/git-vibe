@@ -30,8 +30,13 @@ stateDiagram-v2
   Implementation --> ReviewMatrix: validation passes
   ReviewMatrix --> ReviewFixIssue: changes required, create internal sub-issue
   ReviewMatrix --> PullRequest: review passed, create or update PR
-  PullRequest --> Feedback: trusted changes-requested review
-  Feedback --> PullRequest: address-feedback pushes fixes
+  PullRequest --> FeedbackInvestigation: trusted changes-requested review or address-feedback command
+  FeedbackInvestigation --> PullRequest: no fixes needed, replies posted, ready-for-approval restored
+  FeedbackInvestigation --> FeedbackImplementation: actionable fixes required
+  FeedbackInvestigation --> FeedbackBlocked: maintainer answer required
+  FeedbackImplementation --> FeedbackReviewMatrix: fixes pushed
+  FeedbackReviewMatrix --> PullRequest: review passed, ready-for-approval restored
+  FeedbackReviewMatrix --> FeedbackBlocked: changes still required
   PullRequest --> HumanMerge: admin or collaborator merges
 
   HumanMerge --> [*]
@@ -48,10 +53,10 @@ stateDiagram-v2
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
 - Admins and collaborators move work forward with public `/git-vibe ...`
   commands and protected labels.
-- Accepted commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow.
+- Accepted comment commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow. If the reaction cannot be added, GitVibe posts a queued workflow comment as the visible fallback.
 - Status updates prefer reactions, then labels, then comments. The issue
   `git-vibe:investigate` dispatch adds `git-vibe:investigating` instead of a
-  queued comment; comment-backed dispatches include the exact workflow run URL
+  queued comment; label-backed and review-backed dispatches include the exact workflow run URL
   when GitHub returns it. Runner stages remove prior transient queued/running
   GitVibe status comments for the same artifact before posting the next running
   or result comment.
@@ -101,9 +106,18 @@ flowchart TD
 
   InProgress -->|create-pr completed| PrOpened["git-vibe:pr-opened"]
   PrOpened -->|remove| InProgressRemoved["git-vibe:in-progress + git-vibe:investigated"]
+  PrOpened -->|add label to PR| PrReady["PR git-vibe:ready-for-approval"]
 
-  PrApprovedEvent["Trusted PR approval submitted"] -->|add| PrApproved["git-vibe:pr-approved"]
-  PrApprovedEvent -->|remove stale label| ApprovalCleanup["git-vibe:approved"]
+  PrFeedback["address-feedback or trusted changes-requested review"] -->|remove ready, add| PrInvestigating["PR git-vibe:investigating"]
+  PrInvestigating -->|no fixes needed, reply to feedback| PrReady
+  PrInvestigating -->|fixes required| PrInvestigated["PR git-vibe:investigated"]
+  PrInvestigating -->|questions or unsafe feedback| PrBlocked["PR git-vibe:blocked"]
+  PrInvestigated -->|feedback implementation starts| PrInProgress["PR git-vibe:in-progress"]
+  PrInProgress -->|review-matrix passed| PrReady
+  PrInProgress -->|review-matrix changes required| PrBlocked
+
+  PrApprovedEvent["Trusted PR approval submitted"] -->|add to PR| PrApproved["PR git-vibe:pr-approved"]
+  PrApprovedEvent -->|remove stale source label| ApprovalCleanup["git-vibe:approved"]
 
   PrMergedEvent["GitVibe PR merged"] -->|add| PrMerged["git-vibe:pr-merged"]
   PrMergedEvent -->|remove stale labels| MergeCleanup["git-vibe:pr-opened + git-vibe:pr-approved"]
@@ -365,21 +379,33 @@ sequenceDiagram
   participant WF as Feedback Workflow
   participant Agent as GitVibe Coding Agent
 
-  M->>PR: Submit changes-requested review
-  PR->>App: Webhook pull_request_review submitted event
+  M->>PR: Submit changes-requested review or /git-vibe address-feedback
+  PR->>App: Webhook review or command event
   App->>App: Validate actor permission
-  App->>PR: Post workflow queued comment
+  App->>PR: Add rocket reaction for command, or queued comment for review/fallback
   App->>WF: Dispatch feedback workflow with source-comment metadata
-  WF->>PR: Post stage running comment with workflow URL
-  WF->>Agent: Provide PR conversation plus unresolved current review threads
-  Agent->>PR: Push fixes or explain skipped comments
-  Agent->>PR: Post completion summary in the matching surface
+  WF->>PR: Remove ready-for-approval and add investigating
+  WF->>Agent: Provide PR, source issue, linked discussion, parent issue, sub-issue, and open review-thread context
+  Agent->>PR: Publish feedback investigation and reply to false-positive or already-addressed review comments
+  alt Fixes required
+    WF->>PR: Add investigated, then in-progress
+    Agent->>PR: Push fixes to the existing PR head branch
+    WF->>Agent: Run review-matrix on the updated PR branch
+    WF->>PR: Add ready-for-approval after review passes
+  else No fixes needed
+    WF->>PR: Restore ready-for-approval without implementation
+  else Blocked
+    WF->>PR: Add blocked and wait for maintainer answers
+  end
 ```
 
 Admins and collaborators can also run `/git-vibe address-feedback` in the pull
 request conversation as a manual retry path. Individual review-comment webhooks
 do not dispatch automation; GitVibe waits for the submitted review state and
 only treats trusted `changes_requested` reviews as the automatic signal.
+The reusable workflow runs `investigate` in PR-feedback mode first, skips coding
+when no fixes are needed, and runs `address-pr-feedback` plus `review-matrix`
+only for actionable feedback.
 
 ## Linking And Traceability
 
@@ -388,11 +414,12 @@ GitVibe must make every generated artifact discoverable from the others.
 - When a feature issue is converted to a discussion, the closed issue gets a comment linking the discussion, and the discussion body or first bot comment links the original issue.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
 - Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering surface. Discussions use threaded replies; issue, pull request conversation, and submitted-review triggers use flat comments with an explicit source link. Pull request review-comment replies remain supported for existing metadata.
-- When the app dispatches automation from a command, protected label, or trusted review, it uses reactions and labels before queued comments where possible. Comment-backed dispatches include a hidden metadata marker and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact. These queued/running comments are transient: GitVibe deletes matching prior transient status comments and keeps durable result, traceability, investigation, and validation comments.
+- When the app dispatches automation from a comment command, a successful `rocket` reaction is the acknowledgement and GitVibe does not also post a queued comment. Protected label dispatches, trusted review dispatches, and failed command reactions still use queued comments with hidden metadata and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact. These queued/running comments are transient: GitVibe deletes matching prior transient status comments and keeps durable result, traceability, investigation, and validation comments.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
-- When a pull request is opened by GitVibe, the source issue gets `git-vibe:pr-opened` and stale `git-vibe:in-progress` and `git-vibe:investigated` labels are removed.
-- When a trusted reviewer approves a GitVibe pull request, the source issue gets `git-vibe:pr-approved` and stale approval/in-progress labels are removed.
+- When a pull request is opened by GitVibe, the source issue gets `git-vibe:pr-opened`, stale source `git-vibe:in-progress`, `git-vibe:investigated`, and `git-vibe:ready-for-approval` labels are removed, and the PR gets `git-vibe:ready-for-approval`.
+- During PR feedback handling, the PR owns `git-vibe:investigating`, `git-vibe:investigated`, `git-vibe:in-progress`, `git-vibe:blocked`, and `git-vibe:ready-for-approval`; the source issue remains at `git-vibe:pr-opened`.
+- When a trusted reviewer approves a GitVibe pull request, the PR gets `git-vibe:pr-approved`, PR `git-vibe:ready-for-approval` is removed, and stale source `git-vibe:approved` is removed.
 - When a GitVibe pull request is merged before default-branch closure, the source issue gets `git-vibe:pr-merged` and stale workflow state labels are removed.
 - The source issue gets a comment linking the PR and latest workflow run.
 - PR feedback runs add comments linking the feedback workflow run, changed commits, and any review comments that were skipped with rationale.

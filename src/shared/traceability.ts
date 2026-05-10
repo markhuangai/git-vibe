@@ -16,6 +16,11 @@ export interface ReviewFixLink {
   root: string;
 }
 
+export interface SourceDiscussionTrace {
+  number: string;
+  url?: string;
+}
+
 export function implementationIssueBody(options: {
   discussionNumber: string;
   discussionUrl: string;
@@ -28,6 +33,12 @@ export function implementationIssueBody(options: {
     "",
     `${sourceDiscussionMarker} number=${options.discussionNumber} url=${options.discussionUrl} -->`,
   ].join("\n");
+}
+
+export function sourceDiscussionTraceFromBody(body: string): SourceDiscussionTrace | undefined {
+  const attributes = markerAttributes(body, sourceDiscussionMarker);
+  if (!attributes?.number || !isPositiveIssueNumber(attributes.number)) return undefined;
+  return { number: attributes.number, url: attributes.url };
 }
 
 export function gitVibeBranchName(number: string): string {

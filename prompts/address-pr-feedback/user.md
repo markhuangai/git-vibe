@@ -5,6 +5,7 @@ Remediate actionable pull request review feedback on the current branch and prod
 <feedback_process>
 
 - Identify unresolved review comments and compare each one against the latest code before acting.
+- Use the PR-feedback `investigate` handoff when present. Only implement feedback items marked `requires-fix`.
 - Fix feedback that is valid, actionable, and in scope for the PR.
 - Skip feedback only with a concrete reason and evidence.
 - Avoid broad rewrites unless the review explicitly requires them and the current code proves they are needed.

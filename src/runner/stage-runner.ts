@@ -1,43 +1,40 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runAiStage, type RunAiStageOptions } from "./ai.js";
-import { baseBranchFromEnv, loadConfig, testCommandsFor } from "./config.js";
-import { addDiscussionComment, closeDiscussion } from "../shared/discussions.js";
+import { loadConfig } from "./config.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
-import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
-import { gitVibeLabels } from "../shared/labels.js";
-import { discussionReplyToId } from "./discussion-replies.js";
+import { GitHubClient } from "../shared/github.js";
 import { withStageHandoffs, writeStageResultFile } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger, summarizeError } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
-import {
-  appendIssueTraceability,
-  handleReviewFixRequired,
-  issueBranch,
-  type IssueBranchState,
-  issueChain,
-  prepareIssueBranch,
-} from "./review-fix.js";
-import { renderStageResultComment, type StageResultLink } from "./result-comments.js";
+import { issueBranch, type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
+import { renderStageResultComment } from "./result-comments.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
 import {
   applyStageLabelTransition,
-  cleanupStageStatusComments,
   type PublishedArtifactComment,
   publishStageResultComment,
   publishStageStartComment,
 } from "./stage-publishing.js";
 import {
+  blockedPullRequestHeadOutput,
+  issueBranchForStage,
+  pullRequestHeadBlockReason,
+  runnerBaseBranch,
+} from "./stage-branches.js";
+import { dryRunContent, stageContract } from "./stage-dry-run.js";
+import { gitOutput, repositoryContext } from "./stage-git.js";
+import {
+  applyDeterministicWrites,
+  markPullRequestFeedbackInvestigationStarted,
+} from "./stage-writes.js";
+import {
   buildValidationRepairPrompt,
-  runValidationCommand,
-  validationRepairAttemptsFor,
   validationRepairMaxTurnsFor,
   type ValidationCommandFailure,
 } from "./validation.js";
 import { stageDefinitions } from "../shared/stages.js";
-import { implementationIssueBody, reviewFixTraceFromBody } from "../shared/traceability.js";
 import type {
   ContextPacket,
   GitVibeConfig,
@@ -45,12 +42,6 @@ import type {
   RunnerOptions,
   StageRunResult,
 } from "../shared/types.js";
-
-interface BaseBranchState {
-  base: string;
-  defaultBranch: string;
-  targetsDefault: boolean;
-}
 
 export async function runStage(options: RunnerOptions): Promise<StageRunResult> {
   const logger = createStageLogger(options.stage);
@@ -63,52 +54,26 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const config = loadConfig(options.cwd);
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
-  logger.event("context.load.start", { target: definition.target });
-  const context = withStageHandoffs(
-    withSourceComment(await contextFor({ client, options }), options),
-    options.handoffDir,
-  );
-  logger.event("context.load.done", {
-    artifact: `${context.artifact.type}#${context.artifact.number}`,
-    handoffs: context.handoffs?.length || 0,
-    timeline_items: context.timeline.length,
+  const context = await loadRunnerContext({ client, definition, logger, options });
+  const transientComments = await publishStageStart({ client, context, logger, options });
+  const blockedResult = await blockUnsafePullRequestHead({
+    client,
+    context,
+    definition,
+    logger,
+    options,
+    transientComments,
   });
-  const transientComments: PublishedArtifactComment[] = [];
-  if (!options.dryRun && options.workflowRunUrl) {
-    const comment = await publishStageStartComment({
-      client,
-      context,
-      logger,
-      runner: options,
-    });
-    if (comment) transientComments.push(comment);
-  }
-  const branch = issueBranchForStage(options.stage, context);
-  let branchState: IssueBranchState | undefined;
-  const baseBranch =
-    branch && !options.dryRun
-      ? await runnerBaseBranch({
-          client,
-          logger,
-          options,
-          requireDefault: options.stage === "create-pr",
-        })
-      : undefined;
-  if (branch && !options.dryRun)
-    branchState = await prepareIssueBranch({
-      baseBranch: baseBranch?.base,
-      branch,
-      cwd: options.cwd,
-      logger,
-      token: options.token,
-    });
+  if (blockedResult) return blockedResult;
+
+  const branchState = await prepareBranchForStage({ client, context, logger, options });
 
   const schema = loadStageSchema(definition.schemaFile);
   const prompts = renderPrompts({
     context,
     outputSchema: schema,
     promptDir: definition.promptDir,
-    repositoryContext: repositoryContext(options.cwd, branchState),
+    repositoryContext: repositoryContext(options.cwd, branchState.branchState),
     stageContract: stageContract(options.stage, definition.access, context),
   });
   logger.event("prompt.ready", {
@@ -157,7 +122,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     options,
     repair: validationRepairRunner({ aiRunOptions, config, context, definition, logger, options }),
     result,
-    runnerBaseBranch: baseBranch,
+    runnerBaseBranch: branchState.baseBranch,
     transientComments,
   });
 
@@ -165,6 +130,134 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     status: result.status,
   });
   return result;
+}
+
+async function loadRunnerContext(options: {
+  client: GitHubClient;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<ContextPacket> {
+  options.logger.event("context.load.start", { target: options.definition.target });
+  const context = withStageHandoffs(
+    withSourceComment(
+      await contextFor({ client: options.client, options: options.options }),
+      options.options,
+    ),
+    options.options.handoffDir,
+  );
+  options.logger.event("context.load.done", {
+    artifact: `${context.artifact.type}#${context.artifact.number}`,
+    handoffs: context.handoffs?.length || 0,
+    timeline_items: context.timeline.length,
+  });
+  return context;
+}
+
+async function publishStageStart(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<PublishedArtifactComment[]> {
+  const transientComments: PublishedArtifactComment[] = [];
+  if (!options.options.dryRun && options.options.workflowRunUrl) {
+    const comment = await publishStageStartComment({
+      client: options.client,
+      context: options.context,
+      logger: options.logger,
+      runner: options.options,
+    });
+    if (comment) transientComments.push(comment);
+  }
+  if (
+    !options.options.dryRun &&
+    options.options.stage === "investigate" &&
+    options.context.artifact.type === "pull-request"
+  ) {
+    await markPullRequestFeedbackInvestigationStarted(options);
+  }
+  return transientComments;
+}
+
+async function blockUnsafePullRequestHead(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+  transientComments: PublishedArtifactComment[];
+}): Promise<StageRunResult | undefined> {
+  const reason = pullRequestHeadBlockReason(options.options, options.context);
+  if (!reason || options.options.dryRun) return undefined;
+  const result = await stageRunResult({
+    content: JSON.stringify(blockedPullRequestHeadOutput(options.options.stage, reason)),
+    context: options.context,
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+  });
+  await publishBlockedPullRequestHead({ ...options, result });
+  options.logger.event("stage.done", { status: result.status });
+  return result;
+}
+
+async function publishBlockedPullRequestHead(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  logger: StageLogger;
+  options: RunnerOptions;
+  result: StageRunResult;
+  transientComments: PublishedArtifactComment[];
+}): Promise<void> {
+  await publishStageResultComment({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    parsedOutput: options.result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+  await applyStageLabelTransition({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    parsedOutput: options.result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+}
+
+async function prepareBranchForStage(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<{
+  baseBranch?: Awaited<ReturnType<typeof runnerBaseBranch>>;
+  branchState?: IssueBranchState;
+}> {
+  const branch = issueBranchForStage(options.options.stage, options.context);
+  const baseBranch =
+    branch && !options.options.dryRun && options.context.artifact.type === "issue"
+      ? await runnerBaseBranch({
+          client: options.client,
+          logger: options.logger,
+          options: options.options,
+          requireDefault: options.options.stage === "create-pr",
+        })
+      : undefined;
+  const branchState =
+    branch && !options.options.dryRun
+      ? await prepareIssueBranch({
+          baseBranch: baseBranch?.base,
+          branch,
+          cwd: options.options.cwd,
+          logger: options.logger,
+          token: options.options.token,
+        })
+      : undefined;
+  return { baseBranch, branchState };
 }
 
 function validationRepairRunner({
@@ -386,6 +479,16 @@ async function contextFor({
     });
   }
 
+  if ((options.stage === "review-matrix" || options.stage === "investigate") && options.prNumber) {
+    return buildIssueContext({
+      client,
+      issueNumber: options.prNumber,
+      repository: options.repository,
+      token: options.token,
+      type: "pull-request",
+    });
+  }
+
   return buildIssueContext({
     client,
     issueNumber: definition.target === "pull-request" ? options.prNumber : options.issueNumber,
@@ -398,512 +501,6 @@ async function contextFor({
 function withSourceComment(context: ContextPacket, options: RunnerOptions): ContextPacket {
   if (!options.sourceComment) return context;
   return { ...context, source: { ...(context.source || {}), comment: options.sourceComment } };
-}
-
-async function applyDeterministicWrites(options: {
-  runnerBaseBranch?: BaseBranchState;
-  client: GitHubClient;
-  config: GitVibeConfig;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-  repair: (
-    failure: ValidationCommandFailure,
-    attempt: number,
-    maxAttempts: number,
-  ) => Promise<StageRunResult>;
-  result: StageRunResult;
-  transientComments: PublishedArtifactComment[];
-}): Promise<StageRunResult> {
-  if (options.options.dryRun) {
-    options.logger.event("writes.skip", { reason: "dry-run" });
-    return options.result;
-  }
-
-  const status = options.result.status;
-  if (status !== "completed") {
-    await publishStageResultComment({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-      transientComments: options.transientComments,
-    });
-    await applyStageLabelTransition({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-      transientComments: options.transientComments,
-    });
-    options.logger.event("writes.skip", { reason: "status", status });
-    return options.result;
-  }
-
-  if (
-    options.options.stage === "review-matrix" &&
-    isReviewChangesRequired(options.result.parsedOutput)
-  ) {
-    await cleanupStageStatusComments({
-      client: options.client,
-      context: options.context,
-      logger: options.logger,
-      runner: options.options,
-      transientComments: options.transientComments,
-    });
-    return handleReviewFixRequired({
-      client: options.client,
-      config: options.config,
-      context: options.context,
-      logger: options.logger,
-      result: options.result,
-      runner: options.options,
-    });
-  }
-
-  if (stageDefinitions[options.options.stage].access === "read-only") {
-    await publishStageResultComment({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-      transientComments: options.transientComments,
-    });
-    await applyStageLabelTransition({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-    });
-    return options.result;
-  }
-
-  if (options.options.stage === "implement") {
-    await applyStageLabelTransition({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-    });
-    return commitImplementation(options);
-  }
-  if (options.options.stage === "materialize")
-    await createImplementationIssue({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-    });
-  if (options.options.stage === "create-pr") {
-    const pullRequest = await createPullRequest({
-      ...options,
-      baseBranch: options.runnerBaseBranch,
-      parsedOutput: options.result.parsedOutput,
-    });
-    await publishStageResultComment({
-      ...options,
-      links: pullRequestLinks(pullRequest),
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-      transientComments: options.transientComments,
-    });
-    await applyStageLabelTransition({
-      ...options,
-      parsedOutput: options.result.parsedOutput,
-      runner: options.options,
-    });
-  }
-  if (options.options.stage === "address-pr-feedback") {
-    const result = await commitImplementation(options);
-    if (result.status === "completed")
-      await publishStageResultComment({
-        ...options,
-        parsedOutput: result.parsedOutput,
-        runner: options.options,
-        transientComments: options.transientComments,
-      });
-    return result;
-  }
-  return options.result;
-}
-
-async function commitImplementation({
-  client,
-  config,
-  context,
-  logger,
-  options,
-  repair,
-  result,
-  transientComments,
-}: {
-  client: GitHubClient;
-  config: GitVibeConfig;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-  repair: (
-    failure: ValidationCommandFailure,
-    attempt: number,
-    maxAttempts: number,
-  ) => Promise<StageRunResult>;
-  result: StageRunResult;
-  transientComments: PublishedArtifactComment[];
-}): Promise<StageRunResult> {
-  const branch = issueBranch(context);
-  const finalResult = await runValidationWithRepair({ config, logger, options, repair, result });
-  if (finalResult.status !== "completed") {
-    await publishStageResultComment({
-      client,
-      context,
-      logger,
-      parsedOutput: finalResult.parsedOutput,
-      runner: options,
-      transientComments,
-    });
-    await applyStageLabelTransition({
-      client,
-      context,
-      logger,
-      parsedOutput: finalResult.parsedOutput,
-      runner: options,
-    });
-    logger.event("writes.skip", { reason: "status", status: finalResult.status });
-    return finalResult;
-  }
-  logger.event("tests.done");
-  const status = execFileSync("git", ["status", "--porcelain"], { cwd: options.cwd })
-    .toString()
-    .trim();
-  if (!status) {
-    logger.event("git.no_changes");
-    return finalResult;
-  }
-  logger.event("git.status.changed", { files: summarizeGitStatus(status) });
-
-  ensureGitIdentity(options.cwd);
-  logger.event("git.commit.start");
-  execFileSync("git", ["add", "-A"], { cwd: options.cwd, stdio: "inherit" });
-  const unstagedRuntimeArtifacts = unstageRuntimeArtifactChanges(options.cwd);
-  if (unstagedRuntimeArtifacts.length > 0) {
-    logger.event("git.runtime_artifacts.unstaged", {
-      files: summarizePaths(unstagedRuntimeArtifacts),
-    });
-  }
-  const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-status"], {
-    cwd: options.cwd,
-  })
-    .toString()
-    .trim();
-  if (!stagedStatus) {
-    logger.event("git.no_staged_changes");
-    return finalResult;
-  }
-  execFileSync(
-    "git",
-    [
-      "commit",
-      "-m",
-      `Implement #${context.artifact.number} with GitVibe`,
-      "-m",
-      `Closes #${rootIssueNumber(context)}`,
-    ],
-    {
-      cwd: options.cwd,
-      stdio: "inherit",
-    },
-  );
-  const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: options.cwd })
-    .toString()
-    .trim();
-  logger.event("git.commit.done", { commit });
-  logger.event("token.use", {
-    access: "branch-write",
-  });
-  logger.event("git.push.start", { branch });
-  execFileSync(
-    "git",
-    [
-      "-c",
-      `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
-      "push",
-      `https://github.com/${options.repository}.git`,
-      branch,
-    ],
-    { cwd: options.cwd, stdio: "inherit" },
-  );
-  logger.event("git.push.done", { branch });
-  return finalResult;
-}
-
-async function runValidationWithRepair({
-  config,
-  logger,
-  options,
-  repair,
-  result,
-}: {
-  config: GitVibeConfig;
-  logger: StageLogger;
-  options: RunnerOptions;
-  repair: (
-    failure: ValidationCommandFailure,
-    attempt: number,
-    maxAttempts: number,
-  ) => Promise<StageRunResult>;
-  result: StageRunResult;
-}): Promise<StageRunResult> {
-  const maxAttempts = validationRepairAttemptsFor(config, options);
-  let current = result;
-
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      runValidationCommands(config, logger, options.cwd);
-      return current;
-    } catch (error) {
-      if (!(error instanceof Error && "failure" in error)) throw error;
-      const failure = (error as { failure: ValidationCommandFailure }).failure;
-      if (attempt >= maxAttempts) {
-        logger.event("tests.repair.exhausted", {
-          attempts: maxAttempts,
-          command: failure.command,
-        });
-        throw error;
-      }
-
-      logger.event("tests.repair.start", {
-        attempt: attempt + 1,
-        command: failure.command,
-        max_attempts: maxAttempts,
-      });
-      current = await repair(failure, attempt + 1, maxAttempts);
-      if (current.status !== "completed") return current;
-      logger.event("tests.repair.done", { attempt: attempt + 1, status: current.status });
-    }
-  }
-}
-
-function runValidationCommands(config: GitVibeConfig, logger: StageLogger, cwd: string): void {
-  for (const command of testCommandsFor(config)) {
-    logger.event("tests.run", { command });
-    runValidationCommand(cwd, command);
-  }
-}
-
-async function createImplementationIssue({
-  client,
-  context,
-  logger,
-  options,
-  parsedOutput,
-}: {
-  client: GitHubClient;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-  parsedOutput: JsonObject;
-}): Promise<void> {
-  logger.event("token.use", {
-    access: "publish-write",
-  });
-  const { owner, repo } = splitRepository(options.repository);
-  logger.event("github.issue.create.start");
-  const issueBody = implementationIssueBody({
-    discussionNumber: context.artifact.number,
-    discussionUrl: context.artifact.url,
-    issueBody: String(parsedOutput.issue_body || ""),
-  });
-  const issue = await client.request<{ html_url?: string; number?: number }>({
-    body: {
-      body: issueBody,
-      labels: [gitVibeLabels.story.name],
-      title: String(parsedOutput.issue_title || `Implement: ${context.artifact.title}`),
-    },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/issues`,
-    token: options.token,
-  });
-  logger.event("github.issue.create.done", { number: issue.number, url: issue.html_url });
-  if (context.artifact.id && issue.html_url) {
-    logger.event("github.discussion.comment.start", { discussion: context.artifact.number });
-    await addDiscussionComment({
-      body: `GitVibe created implementation issue #${issue.number}: ${issue.html_url}`,
-      client,
-      discussionId: context.artifact.id,
-      replyToId: discussionReplyToId(options, context),
-      token: options.token,
-    });
-    logger.event("github.discussion.comment.done", { discussion: context.artifact.number });
-    await closeSourceDiscussion({
-      client,
-      discussionId: context.artifact.id,
-      logger,
-      number: context.artifact.number,
-      runner: options,
-    });
-  }
-}
-
-async function closeSourceDiscussion(options: {
-  client: GitHubClient;
-  discussionId: string;
-  logger: StageLogger;
-  number: string;
-  runner: RunnerOptions;
-}): Promise<void> {
-  options.logger.event("github.discussion.close.start", { discussion: options.number });
-  try {
-    await closeDiscussion({
-      client: options.client,
-      discussionId: options.discussionId,
-      token: options.runner.token,
-    });
-    options.logger.event("github.discussion.close.done", { discussion: options.number });
-  } catch (error) {
-    options.logger.event("github.discussion.close.failed", {
-      discussion: options.number,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-async function createPullRequest({
-  baseBranch,
-  client,
-  context,
-  logger,
-  options,
-  parsedOutput,
-}: {
-  baseBranch?: BaseBranchState;
-  client: GitHubClient;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-  parsedOutput: JsonObject;
-}): Promise<{ html_url?: string; number?: number }> {
-  logger.event("token.use", {
-    access: "publish-write",
-  });
-  const { owner, repo } = splitRepository(options.repository);
-  const head = issueBranch(context);
-  const title = String(parsedOutput.pr_title || `GitVibe: ${context.artifact.title}`);
-  const pullRequestBase =
-    baseBranch ||
-    (await runnerBaseBranch({
-      client,
-      logger,
-      options,
-    }));
-  const body = appendIssueTraceability(
-    String(parsedOutput.pr_body || parsedOutput.summary || ""),
-    await issueChain({ client, context, runner: options }),
-    { closingKeywords: pullRequestBase.targetsDefault },
-  );
-  logger.event("github.pr.lookup", { head });
-  const existing = await client.request<Array<{ number?: number }>>({
-    method: "GET",
-    path: `/repos/${owner}/${repo}/pulls?head=${owner}:${encodeURIComponent(head)}&state=open&per_page=1`,
-    token: options.token,
-  });
-  if (existing[0]?.number) {
-    logger.event("github.pr.lookup.done", { found: true, number: existing[0].number });
-    logger.event("github.pr.update.start", { number: existing[0].number });
-    const updated = await client.request<{ html_url?: string; number?: number }>({
-      body: { body, title },
-      method: "PATCH",
-      path: `/repos/${owner}/${repo}/pulls/${existing[0].number}`,
-      token: options.token,
-    });
-    logger.event("github.pr.update.done", { number: updated.number, url: updated.html_url });
-    return updated;
-  }
-
-  logger.event("github.pr.lookup.done", { found: false });
-  logger.event("github.pr.create.start", { base: pullRequestBase.base, head });
-  const pullRequest = await client.request<{ html_url?: string; number?: number }>({
-    body: {
-      base: pullRequestBase.base,
-      body,
-      head,
-      title,
-    },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/pulls`,
-    token: options.token,
-  });
-  logger.event("github.pr.create.done", { number: pullRequest.number, url: pullRequest.html_url });
-  return pullRequest;
-}
-
-async function runnerBaseBranch(options: {
-  client: GitHubClient;
-  logger: StageLogger;
-  options: RunnerOptions;
-  requireDefault?: boolean;
-}): Promise<BaseBranchState> {
-  const { owner, repo } = splitRepository(options.options.repository);
-  const configured = baseBranchFromEnv();
-  if (configured && !options.requireDefault) {
-    return { base: configured, defaultBranch: "", targetsDefault: false };
-  }
-  options.logger.event("github.repository.lookup", { owner, repo });
-  const defaultBranch = await repositoryDefaultBranch({
-    client: options.client,
-    owner,
-    repo,
-    token: options.options.token,
-  });
-  const base = configured || defaultBranch;
-  options.logger.event("github.repository.lookup.done", {
-    base,
-    default_branch: defaultBranch,
-  });
-  return { base, defaultBranch, targetsDefault: base === defaultBranch };
-}
-
-function pullRequestLinks(pullRequest: { html_url?: string; number?: number }): StageResultLink[] {
-  if (!pullRequest.html_url) return [];
-  const suffix = pullRequest.number ? ` #${pullRequest.number}` : "";
-  return [{ label: `Pull request${suffix}`, url: pullRequest.html_url }];
-}
-
-function ensureGitIdentity(cwd: string): void {
-  setGitConfigIfMissing(cwd, "user.name", "git-vibe");
-  setGitConfigIfMissing(cwd, "user.email", "git-vibe@users.noreply.github.com");
-}
-
-function setGitConfigIfMissing(cwd: string, key: string, value: string): void {
-  try {
-    const existing = execFileSync("git", ["config", "--get", key], { cwd }).toString().trim();
-    if (existing) return;
-  } catch {
-    // Missing config is expected on fresh runners.
-  }
-
-  execFileSync("git", ["config", key, value], { cwd, stdio: "inherit" });
-}
-
-function repositoryContext(cwd: string, branchState?: IssueBranchState): string {
-  const status = execFileSync("git", ["status", "--short", "--branch"], { cwd }).toString();
-  if (!branchState) return status;
-  return [
-    `GitVibe branch: ${branchState.branch}`,
-    `GitVibe branch remote found: ${branchState.remoteFound ? "yes" : "no"}`,
-    "",
-    status,
-    "",
-    "Recent commits:",
-    recentCommits(cwd),
-  ].join("\n");
-}
-
-function rootIssueNumber(context: ContextPacket): string {
-  return reviewFixTraceFromBody(context.artifact.body)?.root || context.artifact.number;
-}
-
-function recentCommits(cwd: string): string {
-  try {
-    return execFileSync("git", ["log", "--oneline", "--decorate", "-5"], {
-      cwd,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).toString();
-  } catch {
-    return "<no commits>";
-  }
 }
 
 function buildStructuredOutputFinalizationPrompt(options: {
@@ -970,154 +567,4 @@ function blockedImplementOutput(options: {
 
 function structuredOutputFinalizationMaxTurns(options: RunnerOptions): number {
   return Math.min(Math.max(options.maxTurns, 3), 10);
-}
-
-function gitOutput(cwd: string, args: string[]): string {
-  try {
-    return execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "ignore"] })
-      .toString()
-      .trim();
-  } catch {
-    return "";
-  }
-}
-
-function summarizeGitStatus(status: string): string {
-  const lines = status.split("\n").filter(Boolean);
-  const visible = lines.slice(0, 12).join("; ");
-  if (lines.length <= 12) return visible;
-  return `${visible}; ... +${lines.length - 12} more`;
-}
-
-function unstageRuntimeArtifactChanges(cwd: string): string[] {
-  const paths = stagedRuntimeArtifactPaths(cwd);
-  if (paths.length > 0) {
-    execFileSync("git", ["restore", "--staged", "--", ...paths], {
-      cwd,
-      stdio: "inherit",
-    });
-  }
-  return paths;
-}
-
-function stagedRuntimeArtifactPaths(cwd: string): string[] {
-  const output = execFileSync(
-    "git",
-    ["diff", "--cached", "--diff-filter=ACMRTUXB", "--name-only", "-z", "--", ".git-vibe"],
-    {
-      cwd,
-      stdio: ["ignore", "pipe", "ignore"],
-    },
-  ).toString();
-  return output.split("\0").filter(Boolean);
-}
-
-function summarizePaths(paths: string[]): string {
-  const visible = paths.slice(0, 12).join("; ");
-  if (paths.length <= 12) return visible;
-  return `${visible}; ... +${paths.length - 12} more`;
-}
-
-function stageContract(stage: string, access: string, context: ContextPacket): string {
-  const deterministicBranch = issueBranchForStage(stage, context);
-  const branchRule = deterministicBranch
-    ? ` GitVibe has already prepared branch ${deterministicBranch}; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.`
-    : "";
-  return `Stage ${stage} has ${access} access.${branchRule} Return only JSON matching the schema. Call output_validator with the exact final JSON before responding.`;
-}
-
-function issueBranchForStage(stage: string, context: ContextPacket): string | undefined {
-  if (context.artifact.type !== "issue") return undefined;
-  if (["implement", "review-matrix", "create-pr"].includes(stage)) {
-    return issueBranch(context);
-  }
-  if (stage === "investigate" && reviewFixTraceFromBody(context.artifact.body)) {
-    return issueBranch(context);
-  }
-
-  return undefined;
-}
-
-function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
-  const base = {
-    assumptions: [],
-    comment_body: `GitVibe dry run for ${stage} on ${context.artifact.type} #${context.artifact.number}.`,
-    findings: [],
-    next_state: dryRunNextState(stage),
-    references: [context.artifact.url].filter(Boolean),
-    stage,
-    status: "completed",
-    summary: `Dry run completed for ${stage}.`,
-  };
-
-  if (stage === "create-pr") {
-    return {
-      ...base,
-      branch: issueBranch(context),
-      pr_body: `Dry-run pull request for ${context.artifact.url}`,
-      pr_title: `GitVibe dry run: ${context.artifact.title}`,
-    };
-  }
-
-  if (stage === "materialize") {
-    return {
-      ...base,
-      issue_body: `Dry-run implementation issue for ${context.artifact.url}`,
-      issue_title: `GitVibe dry run: ${context.artifact.title}`,
-    };
-  }
-
-  if (stage === "investigate") {
-    return {
-      ...base,
-      blocking_questions: [],
-      implementation_plan: [],
-      questions: [],
-    };
-  }
-
-  if (stage === "implement") {
-    return {
-      ...base,
-      tests: [],
-    };
-  }
-
-  if (stage === "address-pr-feedback") {
-    return {
-      ...base,
-      skipped_feedback: [],
-      tests: [],
-    };
-  }
-
-  return base;
-}
-
-function dryRunContent(stage: string, context: ContextPacket, logger: StageLogger): string {
-  logger.event("ai.skip", { reason: "dry-run" });
-  return JSON.stringify(dryRunOutput(stage, context));
-}
-
-function dryRunNextState(stage: string): string {
-  const nextStates: Record<string, string> = {
-    "address-pr-feedback": "feedback-addressed",
-    "create-pr": "pr-draft-ready",
-    implement: "changes-ready-for-commit",
-    investigate: "needs-info",
-    materialize: "implementation-issue-ready",
-    "review-matrix": "review-passed",
-    summarize: "ready-for-materialization",
-    validate: "ready-for-implementation",
-  };
-  return nextStates[stage] || "blocked";
-}
-
-function isReviewChangesRequired(output: JsonObject): boolean {
-  return (
-    String(output.next_state || "")
-      .trim()
-      .toLowerCase()
-      .replaceAll("_", "-") === "changes-required"
-  );
 }

@@ -143,6 +143,7 @@ ai:
         - read
         - grep
         - glob
+        - diff
         - web-fetch
         - web-search
     summarize:

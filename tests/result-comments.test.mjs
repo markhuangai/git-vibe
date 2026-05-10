@@ -1,6 +1,8 @@
-// @ts-nocheck
 import { describe, expect, it } from "vitest";
-import { renderStageResultComment } from "../src/runner/result-comments.ts";
+import {
+  renderStageResultComment,
+  renderStageStartComment,
+} from "../src/runner/result-comments.ts";
 
 describe("stage result comments", () => {
   it("renders non-compact structured AI output as human-readable Markdown", () => {
@@ -24,6 +26,8 @@ describe("stage result comments", () => {
         comment_body: "Detailed notes for reviewers.",
         findings: ["The request is implementable"],
         implementation_plan: ["src/app/server.ts: add command routing test coverage"],
+        issue_body: "Create the implementation tracking issue.",
+        issue_title: "Implement GitVibe command routing",
         missing_capabilities: ["Threaded PR review replies are not implemented"],
         next_state: "pr-draft-ready",
         partial_capabilities: ["Issue comments are flat replies with source links"],
@@ -56,9 +60,73 @@ describe("stage result comments", () => {
     expect(body).toContain(
       "### Implementation Plan\n- src/app/server.ts: add command routing test coverage",
     );
+    expect(body).toContain("### Proposed Implementation Issue");
     expect(body).toContain("### Pull Request");
     expect(body).toContain("- Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(body).not.toContain('"findings"');
+  });
+});
+
+describe("pull request feedback result comments", () => {
+  it("renders investigation feedback items for pull request artifacts", () => {
+    const body = renderStageResultComment({
+      context: context("pull-request"),
+      parsedOutput: {
+        feedback_items: [
+          {
+            id: "review-comment-1",
+            status: "answered",
+            summary: "Resolved the null handling feedback.",
+          },
+          "loose feedback summary",
+        ],
+        next_state: "fixes-required",
+        references: ["https://github.com/example/repo/pull/12#discussion_r1"],
+        skipped_feedback: ["Outdated thread was ignored"],
+        status: "completed",
+        summary: "Open PR feedback requires code changes.",
+      },
+      stage: "investigate",
+    });
+
+    expect(body).toContain("## GitVibe PR Feedback Investigation");
+    expect(body).toContain("### Feedback Items");
+    expect(body).toContain("`review-comment-1` `answered`: Resolved the null handling feedback.");
+    expect(body).toContain("- loose feedback summary");
+    expect(body).toContain("### Skipped Feedback\n- Outdated thread was ignored");
+  });
+
+  it("renders default fields for incomplete structured feedback items", () => {
+    const body = renderStageResultComment({
+      context: context("pull-request"),
+      parsedOutput: {
+        feedback_items: [{}],
+        status: "completed",
+        summary: "Feedback item shape was incomplete.",
+      },
+      stage: "investigate",
+    });
+
+    expect(body).toContain("`unknown` `unknown`: No summary provided.");
+  });
+});
+
+describe("stage start comments", () => {
+  it("renders start markers and optional workflow links", () => {
+    const body = renderStageStartComment({
+      context: context("pull-request"),
+      stage: "address-pr-feedback",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+    });
+
+    expect(body).toContain(
+      "<!-- git-vibe:stage-start artifact=pull-request number=12 run=99 stage=address-pr-feedback -->",
+    );
+    expect(body).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
+
+    expect(renderStageStartComment({ context: context("issue"), stage: "validate" })).not.toContain(
+      "Workflow run:",
+    );
   });
 });
 
@@ -112,8 +180,44 @@ describe("compact stage result comments", () => {
     expect(body).toContain("### Next Human Action");
     expect(body).toContain("add `git-vibe:investigate`");
   });
+
+  it("renders next action and limits long compact sections", () => {
+    const body = renderStageResultComment({
+      context: context("issue"),
+      parsedOutput: {
+        findings: ["one", "two", "three", "four", "five", "six"],
+        next_state: "ready-for-implementation",
+        status: "completed",
+        summary: "Investigation is ready.",
+      },
+      stage: "investigate",
+    });
+
+    expect(body).toContain("### Next Action\nContinue with `ready-for-implementation`.");
+    expect(body).toContain("- 1 more in the stage result artifact.");
+  });
 });
 
+describe("optional result comment sections", () => {
+  it("omits next action when the next state is blocked", () => {
+    const body = renderStageResultComment({
+      context: context("issue"),
+      parsedOutput: {
+        next_state: "blocked",
+        status: "completed",
+        summary: "Investigation is blocked.",
+      },
+      stage: "investigate",
+    });
+
+    expect(body).not.toContain("### Next Action");
+  });
+});
+
+/**
+ * @param {import("../src/shared/types.ts").ContextPacket["artifact"]["type"]} type
+ * @returns {import("../src/shared/types.ts").ContextPacket}
+ */
 function context(type) {
   return {
     artifact: {

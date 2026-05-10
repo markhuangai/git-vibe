@@ -7,7 +7,12 @@ inputs:
     required: true
   issue-number:
     description: Issue number being reviewed.
-    required: true
+    required: false
+    default: ""
+  pr-number:
+    description: Pull request number being reviewed.
+    required: false
+    default: ""
   stage-timeout-minutes:
     description: Maximum minutes allocated to this stage.
     required: false
@@ -72,6 +77,7 @@ runs:
       env:
         GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}

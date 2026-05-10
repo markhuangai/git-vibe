@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
 import { isDirectRun, runAction } from "../src/runner/actions/run-action.ts";
 
@@ -119,7 +118,7 @@ describe("GitVibe action launcher investigation readiness", () => {
 });
 
 describe("GitVibe action launcher validation", () => {
-  it("validates required env and target inputs", async () => {
+  it("validates required env and common inputs", async () => {
     const error = vi.fn();
     await expect(runAction({ argv: ["investigate"], env: {}, error })).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("GITVIBE_GITHUB_TOKEN is required.");
@@ -164,6 +163,12 @@ describe("GitVibe action launcher validation", () => {
       }),
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("Unknown GitVibe action stage: missing-stage");
+  });
+});
+
+describe("GitVibe action launcher target validation", () => {
+  it("validates stage target inputs", async () => {
+    const error = vi.fn();
 
     await expect(
       runAction({
@@ -173,6 +178,17 @@ describe("GitVibe action launcher validation", () => {
       }),
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("GITVIBE_PR_NUMBER is required for address-pr-feedback.");
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for investigate.",
+    );
 
     await expect(
       runAction({
@@ -193,6 +209,10 @@ describe("GitVibe action launcher validation", () => {
       }),
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("GITVIBE_ISSUE_NUMBER is required for this stage.");
+  });
+
+  it("validates JSON target metadata", async () => {
+    const error = vi.fn();
 
     await expect(
       runAction({
@@ -243,11 +263,26 @@ describe("GitVibe action launcher targets and defaults", () => {
         runStage,
       }),
     ).resolves.toBe(0);
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: {
+          GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_PR_NUMBER: "8",
+        },
+        runStage,
+      }),
+    ).resolves.toBe(0);
 
     expect(runStage.mock.calls[0][0]).toMatchObject({ issueNumber: "", stage: "validate" });
     expect(runStage.mock.calls[1][0]).toMatchObject({
       prNumber: "8",
       stage: "address-pr-feedback",
+    });
+    expect(runStage.mock.calls[2][0]).toMatchObject({
+      prNumber: "8",
+      stage: "investigate",
     });
     expect(
       isDirectRun(new URL("../src/runner/actions/run-action.ts", import.meta.url).href, undefined),

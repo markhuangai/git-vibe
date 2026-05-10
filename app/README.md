@@ -14,11 +14,11 @@ It currently handles:
 - `/git-vibe summarize` on discussion comments.
 - `/git-vibe address-feedback` on pull request comments.
 - `/git-vibe ...` as the only supported public command prefix.
-- Accepted admin/collaborator commands get a `rocket` reaction before workflow dispatch.
+- Accepted admin/collaborator comment commands get a `rocket` reaction before workflow dispatch.
 - Protected `git-vibe:*` issue and discussion labels, including `git-vibe:validate` and `git-vibe:approved`.
 - Fine-grained PAT-backed GitHub API writes.
 - Repository permission checks before dispatching workflows.
-- Workflow dispatch to reusable GitVibe workflows, with queued comments linking exact workflow runs when GitHub returns them.
+- Workflow dispatch to reusable GitVibe workflows. Comment commands use queued comments only when reaction acknowledgement fails; protected labels and trusted reviews still use queued comments with exact workflow links when GitHub returns them.
 
 GitVibe uses repository webhooks plus a fine-grained PAT. The PAT owner appears as
 the actor for GitHub writes performed by the server and workflows.

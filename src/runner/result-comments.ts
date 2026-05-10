@@ -38,7 +38,7 @@ export function renderStageStartComment(options: {
       run: workflowRunIdFromUrl(options.workflowRunUrl),
       stage: options.stage,
     }),
-    `## GitVibe ${stageTitles[options.stage]} Running`,
+    `## GitVibe ${stageTitle(options)} Running`,
     "",
     `GitVibe is running the ${inlineCode(options.stage)} stage for ${artifact.type} #${artifact.number}.`,
     "",
@@ -48,14 +48,17 @@ export function renderStageStartComment(options: {
 }
 
 export function renderStageResultComment(options: StageResultCommentOptions): string {
-  if (options.stage === "investigate" || options.stage === "validate") {
+  if (
+    (options.stage === "investigate" && options.context.artifact.type !== "pull-request") ||
+    options.stage === "validate"
+  ) {
     return renderCompactStageResultComment(options);
   }
 
   const output = options.parsedOutput;
   const lines = [
     resultMarker(options),
-    `## GitVibe ${stageTitles[options.stage]}`,
+    `## GitVibe ${stageTitle(options)}`,
     "",
     `**Status:** ${inlineCode(textField(output.status) || "completed")}`,
     stateLine(output),
@@ -69,6 +72,7 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
     ...listSection("Blocking Questions", arrayField(output.blocking_questions)),
     ...investigationRetrySection(options.stage, output),
     ...listSection("Open Questions", arrayField(output.questions)),
+    ...feedbackItemsSection(output),
     ...listSection("Implementation Plan", arrayField(output.implementation_plan)),
     ...listSection("Assumptions", arrayField(output.assumptions)),
     ...listSection("Proposed Labels", arrayField(output.proposed_labels)),
@@ -86,7 +90,7 @@ function renderCompactStageResultComment(options: StageResultCommentOptions): st
   const output = options.parsedOutput;
   const lines = [
     resultMarker(options),
-    `## GitVibe ${stageTitles[options.stage]}`,
+    `## GitVibe ${stageTitle(options)}`,
     "",
     `**Status:** ${inlineCode(textField(output.status) || "completed")}`,
     stateLine(output),
@@ -106,6 +110,13 @@ function renderCompactStageResultComment(options: StageResultCommentOptions): st
 function resultMarker(options: StageResultCommentOptions): string {
   const artifact = options.context.artifact;
   return `<!-- git-vibe:stage-result stage=${options.stage} artifact=${artifact.type} number=${artifact.number} -->`;
+}
+
+function stageTitle(options: Pick<StageResultCommentOptions, "context" | "stage">): string {
+  if (options.stage === "investigate" && options.context.artifact.type === "pull-request") {
+    return "PR Feedback Investigation";
+  }
+  return stageTitles[options.stage];
 }
 
 function stateLine(output: JsonObject): string {
@@ -138,6 +149,22 @@ function pullRequestSection(output: JsonObject): string[] {
     branch ? `**Branch:** ${inlineCode(branch)}` : "",
     title ? `**Title:** ${title}` : "",
     body,
+  ];
+}
+
+function feedbackItemsSection(output: JsonObject): string[] {
+  if (!Array.isArray(output.feedback_items) || output.feedback_items.length === 0) return [];
+  return [
+    "",
+    "### Feedback Items",
+    ...output.feedback_items.map((item) => {
+      if (!item || typeof item !== "object") return `- ${String(item)}`;
+      const fields = item as Record<string, unknown>;
+      const id = textField(fields.id) || "unknown";
+      const status = textField(fields.status) || "unknown";
+      const summary = textField(fields.summary) || "No summary provided.";
+      return `- ${inlineCode(id)} ${inlineCode(status)}: ${summary}`;
+    }),
   ];
 }
 

@@ -78,15 +78,15 @@ authority. Maintainers stay in control of approval and release decisions.
 
 ## Workflows
 
-| Workflow               | Use it for                                                  | Writes code?                    |
-| ---------------------- | ----------------------------------------------------------- | ------------------------------- |
-| `investigate.yml`      | Bug investigation and likely-root-cause analysis            | No                              |
-| `summarize.yml`        | Feature discussion summary and open-question extraction     | No                              |
-| `validate.yml`         | Check whether maintainer context is coherent and actionable | No                              |
-| `materialize.yml`      | Convert a validated Discussion into an implementation issue | No                              |
-| `develop.yml`          | Investigate, implement, review, and create or update a PR   | Yes, on `git-vibe/{root-issue}` |
-| `address-feedback.yml` | Apply requested PR feedback to the existing GitVibe branch  | Yes, on the existing PR branch  |
-| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                 |
+| Workflow               | Use it for                                                  | Writes code?                           |
+| ---------------------- | ----------------------------------------------------------- | -------------------------------------- |
+| `investigate.yml`      | Bug investigation and likely-root-cause analysis            | No                                     |
+| `summarize.yml`        | Feature discussion summary and open-question extraction     | No                                     |
+| `validate.yml`         | Check whether maintainer context is coherent and actionable | No                                     |
+| `materialize.yml`      | Convert a validated Discussion into an implementation issue | No                                     |
+| `develop.yml`          | Investigate, implement, review, and create or update a PR   | Yes, on `git-vibe/{root-issue}`        |
+| `address-feedback.yml` | Investigate PR feedback, apply required fixes, then review  | Conditional, on the existing PR branch |
+| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                        |
 
 The reusable workflows install Node `22` and pnpm `10.33.3` before building the
 source-backed composite actions. Each composite action then reads
@@ -106,6 +106,12 @@ run on the same root branch. The internal label webhook is validated for marker
 integrity but does not dispatch a second run. The current workflow run fails
 before PR creation; the follow-up run creates or updates the PR only after its
 own review passes.
+
+`address-feedback.yml` runs PR feedback investigation first. GitVibe replies to
+false-positive, obsolete, or already-addressed review comments without coding. If
+the investigation finds required fixes, GitVibe updates the existing PR branch,
+runs `review-matrix` on the updated PR, and restores `git-vibe:ready-for-approval`
+only after review passes.
 
 ## Quick Start
 
@@ -253,7 +259,7 @@ Use `/git-vibe` for the remaining comment-triggered workflows:
 | ---------------------------- | ------------------------- | ------------------------------------------------------------- |
 | `/git-vibe investigate`      | Bug issue                 | Runs investigation-only analysis and posts findings/questions |
 | `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
-| `/git-vibe address-feedback` | Pull request conversation | Applies requested PR feedback on the GitVibe branch           |
+| `/git-vibe address-feedback` | Pull request conversation | Investigates open PR feedback and fixes only actionable items |
 
 Use protected labels for validation and approval transitions:
 
@@ -266,11 +272,10 @@ Use protected labels for validation and approval transitions:
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
 
-Accepted commands from admins and collaborators receive a `rocket` reaction
-before GitVibe dispatches the workflow, then a queued comment after dispatch
-succeeds. Discussion comments receive threaded replies where GitHub supports
-them. Issue comments and pull request conversation comments receive a flat reply
-with an `In reply to` source link.
+Accepted comment commands from admins and collaborators receive a `rocket`
+reaction before GitVibe dispatches the workflow. When the reaction succeeds,
+GitVibe does not also post a queued comment. If the reaction cannot be added,
+GitVibe posts the queued workflow comment as a visible fallback.
 
 Protected label dispatches and trusted `changes_requested` review dispatches
 also post queued comments after dispatch succeeds. The queued comment includes

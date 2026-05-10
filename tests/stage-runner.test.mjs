@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
@@ -97,6 +96,7 @@ describe("stage runner discussion dry-runs", () => {
     globalThis.fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
+      pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
     ]);
     await expect(
@@ -450,94 +450,11 @@ describe("stage runner pull request writes", () => {
   });
 });
 
-describe("stage runner write skips and branch validation", () => {
-  it("skips deterministic writes for non-completed statuses and rejects invalid branch numbers", async () => {
-    const cwd = await workspace();
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  branch: "git-vibe/12",
-                  comment_body: "Blocked.",
-                  findings: [],
-                  next_state: "blocked",
-                  pr_body: "Refs #12",
-                  pr_title: "GitVibe: blocked",
-                  references: [],
-                  stage: "create-pr",
-                  status: "blocked",
-                  summary: "Blocked.",
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
-    });
-    const fetch = fetchMock([
-      issueResponse("Issue body"),
-      commentsResponse([]),
-      response(200, { default_branch: "main" }),
-      response(200, {}),
-      response(200, {}),
-    ]);
-    globalThis.fetch = fetch;
-
-    await expect(
-      runStage({
-        cwd,
-        dryRun: false,
-        issueNumber: "12",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "create-pr",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).resolves.toMatchObject({ status: "blocked" });
-    expect(fetch).toHaveBeenCalledTimes(5);
-    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:blocked"]);
-
-    globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "abc",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "create-pr",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).rejects.toThrow("GitVibe branch requires a numeric issue number");
-
-    globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "create-pr",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).rejects.toThrow("GitVibe branch requires a numeric issue number, got <missing>");
-  });
-});
-
+/**
+ * @param {string} cwd
+ * @param {unknown[]} existingPulls
+ * @param {{ expectedBase?: string; expectedMethod: string; expectedPath: string }} expected
+ */
 async function runCreatePr(cwd, existingPulls, expected) {
   generateText.mockResolvedValueOnce({
     steps: [
@@ -596,6 +513,10 @@ async function runCreatePr(cwd, existingPulls, expected) {
     expect(JSON.parse(fetch.mock.calls[4][1].body).base).toBe(expected.expectedBase);
 }
 
+/**
+ * @param {string} [config]
+ * @returns {Promise<string>}
+ */
 async function workspace(config = "") {
   const cwd = await mkdtemp(join(tmpdir(), "git-vibe-stage-"));
   process.env.RUNNER_TEMP = mkdtempSync(join(tmpdir(), "git-vibe-runner-"));
@@ -605,6 +526,9 @@ async function workspace(config = "") {
   return cwd;
 }
 
+/**
+ * @param {string} cwd
+ */
 function commitAll(cwd) {
   execFileSync("git", ["config", "user.name", "tester"], { cwd });
   execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd });
@@ -612,15 +536,28 @@ function commitAll(cwd) {
   execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" });
 }
 
+/**
+ * @param {any[]} responses
+ */
 function fetchMock(responses) {
-  return vi.fn(async (url, init = {}) => {
-    if (isLabelRequest(url, init)) return response(200, {});
-    const next = responses.shift();
-    if (!next) throw new Error("unexpected fetch");
-    return next;
-  });
+  return vi.fn(
+    /**
+     * @param {any} url
+     * @param {any} [init]
+     */
+    async (url, init = {}) => {
+      if (isLabelRequest(url, init)) return response(200, {});
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected fetch");
+      return next;
+    },
+  );
 }
 
+/**
+ * @param {any} url
+ * @param {any} init
+ */
 function isLabelRequest(url, init) {
   const method = String(init.method || "GET").toUpperCase();
   return method === "POST"
@@ -628,6 +565,10 @@ function isLabelRequest(url, init) {
     : method === "DELETE" && String(url).includes("/labels/");
 }
 
+/**
+ * @param {string} body
+ * @param {Record<string, unknown>} [overrides]
+ */
 function issueResponse(body, overrides = {}) {
   return response(200, {
     body,
@@ -640,18 +581,13 @@ function issueResponse(body, overrides = {}) {
   });
 }
 
-function issueWithoutNumberResponse(body) {
-  return issueResponse(body, {
-    html_url: "https://github.com/example/repo/issues/abc",
-    number: undefined,
-  });
-}
-
+/** @param {unknown[]} comments */
 const commentsResponse = (comments) => response(200, comments);
-
 const reviewThreadsResponse = () =>
   graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
-
+/** @param {string} branch */
+const pullRequestResponse = (branch) =>
+  response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });
 function discussionResponse() {
   return graphqlResponse({
     repository: {
@@ -690,8 +626,14 @@ function discussionWithoutIdResponse() {
   });
 }
 
+/** @param {Record<string, unknown>} data */
 const graphqlResponse = (data) => response(200, { data });
 
+/**
+ * @param {number} status
+ * @param {unknown} value
+ * @returns {any}
+ */
 const response = (status, value) => ({
   ok: status >= 200 && status < 300,
   status,

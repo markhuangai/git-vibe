@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
-import { createGitVibeApp, isDirectRun, startServerFromEnv } from "../src/app/server.ts";
+import { createGitVibeApp } from "../src/app/server.ts";
 import {
   createApp,
   createClient,
@@ -24,31 +23,37 @@ describe("GitVibe app server", () => {
     const client = createClient();
     const app = createApp({ client });
 
-    await withHttpServer(app.handleRequest, async (url) => {
-      await expect(requestJson(url, "GET", "/health")).resolves.toMatchObject({
-        body: { ok: true },
-        status: 200,
-      });
-      await expect(requestJson(url, "GET", "/missing")).resolves.toMatchObject({
-        body: { error: "not_found" },
-        status: 404,
-      });
-      await expect(requestJson(url, "POST", "/webhooks", "{}")).resolves.toMatchObject({
-        body: { error: "missing GitHub signature" },
-        status: 401,
-      });
+    await withHttpServer(
+      app.handleRequest,
+      /**
+       * @param {string} url
+       */
+      async (url) => {
+        await expect(requestJson(url, "GET", "/health")).resolves.toMatchObject({
+          body: { ok: true },
+          status: 200,
+        });
+        await expect(requestJson(url, "GET", "/missing")).resolves.toMatchObject({
+          body: { error: "not_found" },
+          status: 404,
+        });
+        await expect(requestJson(url, "POST", "/webhooks", "{}")).resolves.toMatchObject({
+          body: { error: "missing GitHub signature" },
+          status: 401,
+        });
 
-      const body = JSON.stringify({ action: "ignored", repository: repositoryPayload() });
-      await expect(
-        requestJson(url, "POST", "/webhooks", body, {
-          "x-github-event": "ping",
-          "x-hub-signature-256": signature(body),
-        }),
-      ).resolves.toMatchObject({
-        body: { accepted: true, event: "ping" },
-        status: 202,
-      });
-    });
+        const body = JSON.stringify({ action: "ignored", repository: repositoryPayload() });
+        await expect(
+          requestJson(url, "POST", "/webhooks", body, {
+            "x-github-event": "ping",
+            "x-hub-signature-256": signature(body),
+          }),
+        ).resolves.toMatchObject({
+          body: { accepted: true, event: "ping" },
+          status: 202,
+        });
+      },
+    );
   });
 
   it("checks discussion setup during startup preflight", async () => {
@@ -88,7 +93,9 @@ describe("GitVibe app server", () => {
   it("logs startup label bootstrap failures with the default error logger", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const app = createGitVibeApp({
-      client: createClient({ labelError: new Error("label write failed") }),
+      client: /** @type {import("../src/shared/github.ts").GitHubClient} */ (
+        /** @type {unknown} */ (createClient({ labelError: new Error("label write failed") }))
+      ),
       configuredRepository: "example/repo",
       githubToken: "token",
       log: vi.fn(),
@@ -210,16 +217,9 @@ describe("GitVibe app server command dispatch", () => {
       { content: "ROCKET", subjectId: "pr-feedback-comment" },
       { content: "ROCKET", subjectId: "discussion-summarize-comment" },
     ]);
-    expect(requestBodies(client, "POST", "/issues/2/comments").at(-1).body).toContain(
-      "investigate.yml",
-    );
-    expect(requestBodies(client, "POST", "/issues/3/comments").at(-1).body).toContain(
-      "address-feedback.yml",
-    );
-    expect(discussionCommentBodies(client).at(-1)).toContain("summarize.yml");
-    expect(discussionCommentBodies(client).at(-1)).toContain(
-      "Workflow run: https://github.com/example/repo/actions/runs/1",
-    );
+    expect(requestBodies(client, "POST", "/issues/2/comments")).toEqual([]);
+    expect(requestBodies(client, "POST", "/issues/3/comments")).toEqual([]);
+    expect(discussionCommentBodies(client)).toEqual([]);
   });
 });
 
@@ -232,7 +232,7 @@ describe("GitVibe app server command edge cases", () => {
     await app.handleWebhook("discussion_comment", {
       action: "created",
       comment: { body: "/git-vibe summarize", node_id: "discussion-summarize-comment" },
-      discussion: { number: 6 },
+      discussion: { node_id: "discussion-node", number: 6 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
@@ -246,6 +246,10 @@ describe("GitVibe app server command edge cases", () => {
     ]);
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("command acknowledgement failed: reaction unavailable"),
+    );
+    expect(discussionCommentBodies(client).at(-1)).toContain("summarize.yml");
+    expect(discussionCommentBodies(client).at(-1)).toContain(
+      "Workflow run: https://github.com/example/repo/actions/runs/1",
     );
   });
 
@@ -586,14 +590,20 @@ describe("GitVibe app server PR review dispatch", () => {
 describe("GitVibe app server rejection paths", () => {
   it("rejects invalid signatures, missing actors, and non-404 permission failures", async () => {
     const app = createApp();
-    await withHttpServer(app.handleRequest, async (url) => {
-      await expect(
-        requestJson(url, "POST", "/webhooks", "{}", {
-          "x-github-event": "ping",
-          "x-hub-signature-256": "sha256=bad",
-        }),
-      ).resolves.toMatchObject({ body: { error: "invalid GitHub signature" }, status: 401 });
-    });
+    await withHttpServer(
+      app.handleRequest,
+      /**
+       * @param {string} url
+       */
+      async (url) => {
+        await expect(
+          requestJson(url, "POST", "/webhooks", "{}", {
+            "x-github-event": "ping",
+            "x-hub-signature-256": "sha256=bad",
+          }),
+        ).resolves.toMatchObject({ body: { error: "invalid GitHub signature" }, status: 401 });
+      },
+    );
 
     await expect(
       requestSignedWebhook(
@@ -651,10 +661,12 @@ describe("GitVibe app server runtime edge cases", () => {
 
   it("converts non-error webhook failures into HTTP 500 responses", async () => {
     const client = {
+      apiBaseUrl: "https://api.github.test",
       graphql: vi.fn(),
       request: vi.fn(async () => {
         throw "plain bootstrap failure";
       }),
+      retryBaseDelayMs: 0,
     };
 
     await expect(
@@ -667,30 +679,5 @@ describe("GitVibe app server runtime edge cases", () => {
       body: { error: "plain bootstrap failure" },
       status: 500,
     });
-  });
-
-  it("starts from environment configuration and validates required server secrets", async () => {
-    expect(() => startServerFromEnv({ GITVIBE_GITHUB_TOKEN: "token" })).toThrow(
-      "GITHUB_WEBHOOK_SECRET is required",
-    );
-
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const server = startServerFromEnv({
-      GITHUB_WEBHOOK_SECRET: "secret",
-      GITVIBE_GITHUB_TOKEN: "token",
-      PORT: "0",
-    });
-    await new Promise((resolve) => server.on("listening", resolve));
-    await new Promise((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
-    consoleLog.mockRestore();
-  });
-
-  it("detects direct execution by module URL", () => {
-    expect(isDirectRun(new URL("../src/app/server.ts", import.meta.url).href, undefined)).toBe(
-      false,
-    );
-    expect(isDirectRun("", "/tmp/server.js")).toBe(true);
   });
 });
