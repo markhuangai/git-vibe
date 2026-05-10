@@ -1,5 +1,5 @@
-import { readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import type { ContextPacket, JsonObject } from "../shared/types.js";
 
 export interface RenderPromptOptions {
@@ -63,7 +63,7 @@ function readRepoPromptAddition(
   if (!cwd) return null;
   const filePath = join(cwd, ".git-vibe", "prompts", promptDir, filename);
   try {
-    statSync(filePath);
+    assertRepoPromptPath(cwd, filePath);
     const content = readFileSync(filePath, "utf8").trim();
     if (!content) return null;
     return `<repository_prompt_addition>
@@ -73,4 +73,22 @@ ${content}
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
+}
+
+function assertRepoPromptPath(cwd: string, filePath: string): void {
+  const fileInfo = lstatSync(filePath);
+  if (fileInfo.isSymbolicLink() || !fileInfo.isFile()) {
+    throw new Error(`Repository prompt addition must be a regular file: ${filePath}`);
+  }
+
+  const realCwd = realpathSync(cwd);
+  const realFilePath = realpathSync(filePath);
+  if (!isPathInside(realFilePath, realCwd)) {
+    throw new Error(`Repository prompt addition must stay inside the workspace: ${filePath}`);
+  }
+}
+
+function isPathInside(filePath: string, rootPath: string): boolean {
+  const relativePath = relative(rootPath, filePath);
+  return relativePath !== "" && !relativePath.startsWith("..") && !isAbsolute(relativePath);
 }

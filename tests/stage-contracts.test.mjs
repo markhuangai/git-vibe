@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -505,5 +505,45 @@ describe("repository prompt additions across stages", () => {
     expect(prompts.prompt).not.toContain("<repository_prompt_addition>");
 
     cleanupWorkspace(cwd);
+  });
+});
+
+describe("repository prompt addition path safety", () => {
+  it("rejects symlinked repository prompt files", () => {
+    const promptDir = stageDefinitions.investigate.promptDir;
+    const cwd = createRepoPromptWorkspace(promptDir, {});
+    const outsideDir = mkdtempSync(join(tmpdir(), "git-vibe-repo-prompt-outside-"));
+    writeFileSync(join(outsideDir, "system.md"), "external host content");
+    symlinkSync(
+      join(outsideDir, "system.md"),
+      join(cwd, ".git-vibe", "prompts", promptDir, "system.md"),
+    );
+
+    try {
+      expect(() => renderStagePrompts("investigate", cwd)).toThrow(
+        "Repository prompt addition must be a regular file",
+      );
+    } finally {
+      cleanupWorkspace(cwd);
+      cleanupWorkspace(outsideDir);
+    }
+  });
+
+  it("rejects prompt paths that resolve outside the workspace", () => {
+    const promptDir = stageDefinitions.investigate.promptDir;
+    const cwd = mkdtempSync(join(tmpdir(), "git-vibe-repo-prompt-"));
+    const outsideDir = mkdtempSync(join(tmpdir(), "git-vibe-repo-prompt-outside-"));
+    mkdirSync(join(cwd, ".git-vibe", "prompts"), { recursive: true });
+    writeFileSync(join(outsideDir, "system.md"), "external host content");
+    symlinkSync(outsideDir, join(cwd, ".git-vibe", "prompts", promptDir), "dir");
+
+    try {
+      expect(() => renderStagePrompts("investigate", cwd)).toThrow(
+        "Repository prompt addition must stay inside the workspace",
+      );
+    } finally {
+      cleanupWorkspace(cwd);
+      cleanupWorkspace(outsideDir);
+    }
   });
 });
