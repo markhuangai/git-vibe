@@ -2,8 +2,8 @@ import { execFileSync } from "node:child_process";
 import type { IssueBranchState } from "./review-fix.js";
 
 export function ensureGitIdentity(cwd: string): void {
-  setGitConfigIfMissing(cwd, "user.name", "git-vibe");
-  setGitConfigIfMissing(cwd, "user.email", "git-vibe@users.noreply.github.com");
+  setGitConfigIfMissing(cwd, "user.name", "markhuang.ai GitVibe Bot");
+  setGitConfigIfMissing(cwd, "user.email", "contact@markhuang.ai");
 }
 
 export function repositoryContext(cwd: string, branchState?: IssueBranchState): string {
