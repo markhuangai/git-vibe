@@ -55,10 +55,14 @@ when the `codex` command is missing, then uses:
 secrets.GITVIBE_AI_ENV_JSON
 ```
 
-Set bundle key `CODEX_AUTH_JSON` to compact `auth.json` contents from
-`jq -c . auth.json`, or pre-seed a persistent `CODEX_HOME/auth.json` on the
-runner. GitVibe only seeds the file when it is missing, so Codex can refresh it
-between runs.
+Set bundle key `CODEX_AUTH_JSON` to an escaped string containing `auth.json`.
+Generate the value with `jq -Rs . < ~/.codex/auth.json`; do not use raw
+`jq -c . auth.json` as the bundle value because every `GITVIBE_AI_ENV_JSON`
+entry must be a string. Alternatively, pre-seed a persistent
+`CODEX_HOME/auth.json` on the runner. When `auth_json.from_bundle` is used,
+GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
+secret after successful CLI execution; the token in `GITVIBE_GITHUB_TOKEN` must
+include repository Actions secrets read/write permission for that path.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, then verifies

@@ -1,5 +1,6 @@
 export interface StageLogger {
   event(name: string, fields?: Record<string, unknown>): void;
+  raw?(message: string): void;
 }
 
 export interface StageLoggerOptions {
@@ -22,6 +23,10 @@ export function createStageLogger(stage: string, options: StageLoggerOptions = {
     event(name, fields = {}) {
       if (!enabled) return;
       write(`[git-vibe] ${stage} ${name}${formatFields(fields)}`);
+    },
+    raw(message) {
+      if (!enabled) return;
+      write(redactLogText(message));
     },
   };
 }
@@ -48,12 +53,12 @@ function formatValue(value: unknown): string {
 }
 
 function sanitizeValue(value: string): string {
-  const compact = redactSecrets(value).replace(/\s+/g, " ").trim();
+  const compact = redactLogText(value).replace(/\s+/g, " ").trim();
   if (compact.length <= maxFieldLength) return compact;
   return `${compact.slice(0, maxFieldLength - 1)}...`;
 }
 
-function redactSecrets(value: string): string {
+export function redactLogText(value: string): string {
   let redacted = value;
   for (const pattern of tokenPatterns) {
     redacted = redacted.replace(pattern, "<redacted>");
@@ -64,9 +69,28 @@ function redactSecrets(value: string): string {
     redacted = redacted.split(secret).join(`<redacted:${name}>`);
   }
 
+  for (const [name, secret] of aiEnvBundleSecrets()) {
+    redacted = redacted.split(secret).join(`<redacted:GITVIBE_AI_ENV_JSON.${name}>`);
+  }
+
   return redacted;
 }
 
 function sensitiveName(name: string): boolean {
-  return /(AUTH|CREDENTIAL|KEY|PASSWORD|SECRET|TOKEN)/i.test(name);
+  return /(^|_)(AUTH|AUTHORIZATION|CREDENTIALS?|KEY|PASSWORD|SECRET|TOKEN)(_|$)/i.test(name);
+}
+
+function aiEnvBundleSecrets(): Array<[string, string]> {
+  const raw = process.env.GITVIBE_AI_ENV_JSON;
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+    return Object.entries(parsed as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length >= 6,
+    );
+  } catch {
+    return [];
+  }
 }

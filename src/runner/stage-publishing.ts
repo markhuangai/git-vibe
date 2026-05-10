@@ -14,13 +14,7 @@ import {
   renderStageStartComment,
   type StageResultLink,
 } from "./result-comments.js";
-import type {
-  ContextPacket,
-  JsonObject,
-  RunnerOptions,
-  SourceComment,
-  Stage,
-} from "../shared/types.js";
+import type { ContextPacket, JsonObject, RunnerOptions, SourceComment } from "../shared/types.js";
 
 export interface StagePublishingOptions {
   client: GitHubClient;
@@ -38,6 +32,8 @@ export interface PublishedArtifactComment {
   id: string;
   surface: "issue-comment" | "discussion-comment" | "pull-request-review-comment";
 }
+
+const staleTransientStatusCommentAgeMs = 30 * 60 * 1000;
 
 export async function publishStageResultComment(options: StagePublishingOptions): Promise<void> {
   await cleanupStageStatusComments(options);
@@ -75,28 +71,24 @@ export async function publishStageStartComment(
 
 export async function applyStageLabelTransition(options: StagePublishingOptions): Promise<void> {
   if (options.context.artifact.type === "discussion") return;
-  if (shouldBlockInvestigation(options)) {
-    await addIssueLabel({
-      client: options.client,
-      issueNumber: options.context.artifact.number,
-      label: gitVibeLabels.blocked.name,
-      repository: options.runner.repository,
-      token: options.runner.token,
-    });
+  if (options.runner.stage === "investigate") {
+    await applyInvestigationLabelTransition(options);
+    return;
+  }
+
+  const label = labelForStage(options.runner, options.parsedOutput);
+  if (!label) return;
+
+  if (label === gitVibeLabels.inProgress.name) {
     await removeIssueLabel({
       client: options.client,
       issueNumber: options.context.artifact.number,
-      label: gitVibeLabels.approved.name,
+      label: gitVibeLabels.investigating.name,
       logger: options.logger,
       repository: options.runner.repository,
       token: options.runner.token,
     });
-    return;
   }
-
-  const label = labelForStage(options.runner.stage, options.parsedOutput);
-  if (!label) return;
-
   options.logger.event("github.issue.label.start", {
     issue: options.context.artifact.number,
     label,
@@ -108,9 +100,72 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
     repository: options.runner.repository,
     token: options.runner.token,
   });
+  if (label === gitVibeLabels.prOpened.name) {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.inProgress.name,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.investigated.name,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+  }
   options.logger.event("github.issue.label.done", {
     issue: options.context.artifact.number,
     label,
+  });
+}
+
+async function applyInvestigationLabelTransition(options: StagePublishingOptions): Promise<void> {
+  if (isInvestigationReady(options.parsedOutput)) {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.investigating.name,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    await addIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.investigated.name,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: gitVibeLabels.blocked.name,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    return;
+  }
+
+  await addIssueLabel({
+    client: options.client,
+    issueNumber: options.context.artifact.number,
+    label: gitVibeLabels.blocked.name,
+    repository: options.runner.repository,
+    token: options.runner.token,
+  });
+  await removeIssueLabel({
+    client: options.client,
+    issueNumber: options.context.artifact.number,
+    label: gitVibeLabels.investigating.name,
+    logger: options.logger,
+    repository: options.runner.repository,
+    token: options.runner.token,
   });
 }
 
@@ -219,6 +274,7 @@ async function cleanupTransientStatusComments(
   const refs = uniqueCommentRefs([
     ...extraRefs,
     ...transientRefsFromContext(options.context, scopes),
+    ...staleTransientRefsFromContext(options.context),
   ]);
   await Promise.all(refs.map((ref) => deleteTransientStatusComment(options, ref)));
 }
@@ -253,6 +309,28 @@ function transientRefsFromContext(
     );
     return ref ? [ref] : [];
   });
+}
+
+function staleTransientRefsFromContext(context: ContextPacket): PublishedArtifactComment[] {
+  const nowMs = Date.now();
+  return context.timeline.flatMap((item) => {
+    const marker = parseTransientStatusMarker(item.body);
+    if (!marker) return [];
+    if (marker.artifact !== context.artifact.type || marker.number !== context.artifact.number) {
+      return [];
+    }
+    if (!isStaleTimelineItem(item.createdAt, nowMs)) return [];
+    const ref = publishedComment(
+      surfaceForTimelineItem(context.artifact.type, item.kind),
+      refId(item),
+    );
+    return ref ? [ref] : [];
+  });
+}
+
+function isStaleTimelineItem(createdAt: string | undefined, nowMs: number): boolean {
+  const createdAtMs = Date.parse(String(createdAt || ""));
+  return Number.isFinite(createdAtMs) && nowMs - createdAtMs >= staleTransientStatusCommentAgeMs;
 }
 
 async function deleteTransientStatusComment(
@@ -372,22 +450,14 @@ async function removeIssueLabel(options: {
   }
 }
 
-function labelForStage(stage: Stage, output: JsonObject): string | undefined {
+function labelForStage(runner: RunnerOptions, output: JsonObject): string | undefined {
   if (String(output.status || "completed") !== "completed") return gitVibeLabels.blocked.name;
-  if (stage === "validate" && isReadyForApproval(output.next_state)) {
+  if (runner.stage === "validate" && isReadyForApproval(output.next_state)) {
     return gitVibeLabels.readyForApproval.name;
   }
-  if (stage === "implement") return gitVibeLabels.inProgress.name;
-  if (stage === "create-pr") return gitVibeLabels.prOpened.name;
+  if (runner.stage === "implement") return gitVibeLabels.inProgress.name;
+  if (runner.stage === "create-pr") return gitVibeLabels.prOpened.name;
   return undefined;
-}
-
-function shouldBlockInvestigation(options: StagePublishingOptions): boolean {
-  return (
-    options.runner.stage === "investigate" &&
-    options.runner.failOnNotReady === true &&
-    !isInvestigationReady(options.parsedOutput)
-  );
 }
 
 export function isInvestigationReady(output: JsonObject): boolean {

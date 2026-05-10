@@ -561,7 +561,7 @@ describe("GitVibe app server PR review dispatch", () => {
       action: "submitted",
       pull_request: { number: 12 },
       repository: repositoryPayload(),
-      review: { state: "approved" },
+      review: { state: "commented" },
       sender: { login: "maintainer" },
     });
     await createApp({
@@ -576,7 +576,7 @@ describe("GitVibe app server PR review dispatch", () => {
     });
 
     expect(workflowDispatches(client)).toEqual([]);
-    expect(log).toHaveBeenCalledWith("ignored pull_request_review.approved for PR #12");
+    expect(log).toHaveBeenCalledWith("ignored pull_request_review.commented for PR #12");
     expect(log).toHaveBeenCalledWith(
       "ignored changes_requested review from untrusted actor @guest on PR #12",
     );

@@ -1,11 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { basename } from "node:path";
 import { join } from "node:path";
 import type { StageDefinition } from "../shared/types.js";
 import type { RunAiStageOptions } from "./ai.js";
+import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
 import {
-  bundleValueFromSource,
-  cliProfileEnv,
   cliModelName,
   commandParts,
   runStreamingCommand,
@@ -50,11 +50,20 @@ export async function runCodexCliStage({
     provider: "cli-codex",
   });
 
+  const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });
+  await refreshCodexAuthBeforeRun({
+    auth: codexEnv.auth,
+    command,
+    cwd: options.cwd,
+    env: codexEnv.env,
+    github: options.github,
+    logger: options.logger,
+  });
   const output = await runStreamingCommand({
     args,
     command,
     cwd: options.cwd,
-    env: codexEnv(profile, profileName, contextDir),
+    env: codexEnv.env,
     input: cliPrompt(options),
   });
   options.logger?.event("ai.request.done", {
@@ -62,6 +71,11 @@ export async function runCodexCliStage({
     stderr_chars: output.stderr.length,
     stdout_chars: output.stdout.length,
     profile: profileName,
+  });
+  await writeBackCodexAuth({
+    auth: codexEnv.auth,
+    github: options.github,
+    logger: options.logger,
   });
 
   return readFileSync(outputFile, "utf8").trim();
@@ -77,20 +91,35 @@ function codexReasoningArgs(profile: Record<string, unknown>): string[] {
   return args;
 }
 
-function codexEnv(
-  profile: Record<string, unknown>,
-  profileName: string,
-  contextDir: string,
-): NodeJS.ProcessEnv {
-  const env = cliProfileEnv(profile, `ai.profiles.${profileName}`);
-  const authJson = bundleValueFromSource(profile.auth_json, `ai.profiles.${profileName}.auth_json`);
-  if (authJson) {
-    const codexHome = join(contextDir, "codex-home");
-    env.CODEX_HOME = codexHome;
-    mkdirSync(codexHome, { recursive: true });
-    writeFileSync(join(codexHome, "auth.json"), authJson);
-  }
-  return env;
+async function refreshCodexAuthBeforeRun(options: {
+  auth: ReturnType<typeof prepareCodexEnv>["auth"];
+  command: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  github: RunAiStageOptions["github"];
+  logger: RunAiStageOptions["logger"];
+}): Promise<void> {
+  if (!options.auth || !options.github || !isCodexCommand(options.command)) return;
+
+  options.logger?.event("codex.auth_json.preflight.start", {});
+  await runStreamingCommand({
+    args: ["login", "status"],
+    command: options.command,
+    cwd: options.cwd,
+    env: options.env,
+    input: "",
+  });
+  await writeBackCodexAuth({
+    auth: options.auth,
+    github: options.github,
+    logger: options.logger,
+  });
+  options.logger?.event("codex.auth_json.preflight.done", {});
+}
+
+function isCodexCommand(command: string): boolean {
+  const name = basename(command).toLowerCase();
+  return name === "codex" || name === "codex.exe";
 }
 
 function codexSandbox(access: StageDefinition["access"]): string {

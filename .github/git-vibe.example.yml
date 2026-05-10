@@ -11,17 +11,17 @@ permissions:
 
 labels:
   story: git-vibe:story
-  bug: git-vibe:bug
   needs_discussion: git-vibe:needs-discussion
-  needs_investigation: git-vibe:needs-investigation
+  investigate: git-vibe:investigate
   investigating: git-vibe:investigating
-  investigation_complete: git-vibe:investigation-complete
-  needs_expected_behavior: git-vibe:needs-expected-behavior
+  investigated: git-vibe:investigated
   ready_for_approval: git-vibe:ready-for-approval
   approved: git-vibe:approved
   in_progress: git-vibe:in-progress
   blocked: git-vibe:blocked
   pr_opened: git-vibe:pr-opened
+  pr_approved: git-vibe:pr-approved
+  pr_merged: git-vibe:pr-merged
   validate: git-vibe:validate
 
 commands:
@@ -92,7 +92,8 @@ ai:
       enabled: false
       adapter: cli-codex
       command: codex exec
-      # Key inside GITVIBE_AI_ENV_JSON. Stores compact auth.json contents.
+      # Key inside GITVIBE_AI_ENV_JSON. Stores escaped auth.json text from jq -Rs .
+      # Requires GITVIBE_GITHUB_TOKEN repository Secrets read/write permission for refresh write-back.
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex
@@ -224,8 +225,6 @@ bug_investigation:
     enabled: false
     reaction: "+1"
     threshold: 6
-    eligible_labels:
-      - git-vibe:bug
     dispatch: investigation-only
 
 feature_refinement:

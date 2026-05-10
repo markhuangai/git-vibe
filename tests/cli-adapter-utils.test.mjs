@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { describe, expect, it } from "vitest";
 import {
+  bundleKeyFromSource,
   bundleValueFromSource,
   cliProfileEnv,
   optionalAiEnvBundleSecretValues,
@@ -69,6 +70,13 @@ describe("CLI profile environment bundle", () => {
     ).toBe('{"tokens":[]}');
     expect(bundleValueFromSource(undefined, "ai.profiles.codex.auth_json", {})).toBeUndefined();
   });
+
+  it("resolves Codex auth bundle keys without reading the bundle", () => {
+    expect(bundleKeyFromSource(undefined, "ai.profiles.codex.auth_json")).toBeUndefined();
+    expect(
+      bundleKeyFromSource({ from_bundle: "CODEX_AUTH_JSON" }, "ai.profiles.codex.auth_json"),
+    ).toBe("CODEX_AUTH_JSON");
+  });
 });
 
 describe("CLI profile environment bundle validation", () => {
@@ -122,6 +130,15 @@ describe("CLI profile environment bundle validation", () => {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
       }),
     ).toThrow("ai.profiles.bad.env.TARGET must be an object with from_bundle.");
+  });
+
+  it("rejects invalid Codex auth bundle key sources", () => {
+    expect(() => bundleKeyFromSource([], "ai.profiles.codex.auth_json")).toThrow(
+      "ai.profiles.codex.auth_json must be an object with from_bundle.",
+    );
+    expect(() => bundleKeyFromSource({}, "ai.profiles.codex.auth_json")).toThrow(
+      "ai.profiles.codex.auth_json.from_bundle must be a non-empty string.",
+    );
   });
 });
 

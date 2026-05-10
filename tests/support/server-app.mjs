@@ -73,6 +73,9 @@ export function createClient(options = {}) {
       if (request.method === "GET" && request.path === "/repos/example/repo") {
         return { default_branch: options.defaultBranch || "main" };
       }
+      if (request.method === "GET" && request.path.includes("/pulls/")) {
+        return { body: options.pullRequestBody || "" };
+      }
       if (request.method === "POST" && request.path.endsWith("/labels")) {
         if (options.labelError) throw options.labelError;
         return {};
@@ -97,7 +100,10 @@ export function createClient(options = {}) {
         return {};
       }
       if (request.method === "PATCH" && request.path.includes("/issues/")) return {};
-      if (request.method === "DELETE" && request.path.includes("/labels/")) return {};
+      if (request.method === "DELETE" && request.path.includes("/labels/")) {
+        if (options.labelRemovalError) throw options.labelRemovalError;
+        return {};
+      }
       if (request.method === "DELETE" && request.path.includes("/comments/")) return {};
       throw new Error(`unexpected request ${request.method} ${request.path}`);
     }),

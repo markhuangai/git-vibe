@@ -1,4 +1,5 @@
 name: GitVibe develop
+run-name: "[git-vibe][develop]: Issue #${{ inputs.issue-number }}"
 
 on:
   workflow_dispatch:
@@ -24,7 +25,6 @@ jobs:
     with:
       issue-number: ${{ inputs.issue-number }}
       runner: ubuntu-latest
-      investigation_timeout_minutes: 60
       implementation_timeout_minutes: 120
       review_timeout_minutes: 60
       publish_timeout_minutes: 15

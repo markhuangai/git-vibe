@@ -5,7 +5,11 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appendIssueTraceability, handleReviewFixRequired } from "../src/runner/review-fix.ts";
+import {
+  appendIssueTraceability,
+  handleReviewFixRequired,
+  prepareIssueBranch,
+} from "../src/runner/review-fix.ts";
 import { reviewFixIssueMarker, reviewFixLinkComment } from "../src/shared/traceability.ts";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
@@ -134,6 +138,7 @@ describe("stage runner review-fix pull requests", () => {
       response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
       response(200, {}),
       response(200, {}),
+      response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
@@ -171,6 +176,63 @@ describe("stage runner review-fix investigation", () => {
     expect(currentBranch(cwd)).toBe("git-vibe/7");
     expect(generateText.mock.calls[0][0].prompt).toContain("GitVibe branch: git-vibe/7");
     expect(generateText.mock.calls[0][0].prompt).toContain("GitVibe branch remote found: no");
+  });
+});
+
+describe("issue branch preparation", () => {
+  it("checks out an existing remote issue branch", async () => {
+    const cwd = await workspaceWithRemoteIssueBranch();
+
+    await expect(
+      prepareIssueBranch({
+        baseBranch: "main",
+        branch: "git-vibe/12",
+        cwd,
+        logger: fakeLogger(),
+        token: "token",
+      }),
+    ).resolves.toEqual({ branch: "git-vibe/12", remoteFound: true });
+
+    expect(currentBranch(cwd)).toBe("git-vibe/12");
+  });
+
+  it("falls back to the base branch only when the remote issue branch is missing", async () => {
+    const cwd = await workspaceWithRemoteIssueBranch();
+
+    await expect(
+      prepareIssueBranch({
+        baseBranch: "main",
+        branch: "git-vibe/99",
+        cwd,
+        logger: fakeLogger(),
+        token: "token",
+      }),
+    ).resolves.toEqual({ branch: "git-vibe/99", remoteFound: false });
+
+    expect(currentBranch(cwd)).toBe("git-vibe/99");
+  });
+
+  it("does not fall back to the base branch when remote branch checkout is blocked", async () => {
+    const cwd = await workspaceWithRemoteIssueBranch();
+    mkdirSync(join(cwd, ".git-vibe", "handoffs"), { recursive: true });
+    writeFileSync(join(cwd, ".git-vibe/handoffs/git-vibe-investigate-result.json"), "local");
+    const logger = fakeLogger();
+
+    await expect(
+      prepareIssueBranch({
+        baseBranch: "main",
+        branch: "git-vibe/12",
+        cwd,
+        logger,
+        token: "token",
+      }),
+    ).rejects.toThrow();
+
+    expect(currentBranch(cwd)).toBe("main");
+    expect(logger.event).toHaveBeenCalledWith(
+      "git.branch.checkout.failed",
+      expect.objectContaining({ branch: "git-vibe/12" }),
+    );
   });
 });
 
@@ -347,6 +409,32 @@ async function workspace(config = "") {
   return cwd;
 }
 
+async function workspaceWithRemoteIssueBranch() {
+  const origin = await mkdtemp(join(tmpdir(), "git-vibe-origin-"));
+  const source = await mkdtemp(join(tmpdir(), "git-vibe-source-"));
+  const cwd = await mkdtemp(join(tmpdir(), "git-vibe-clone-"));
+  execFileSync("git", ["init", "--bare"], { cwd: origin, stdio: "ignore" });
+  execFileSync("git", ["symbolic-ref", "HEAD", "refs/heads/main"], { cwd: origin });
+  execFileSync("git", ["init"], { cwd: source, stdio: "ignore" });
+  execFileSync("git", ["checkout", "-b", "main"], { cwd: source, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "tester"], { cwd: source });
+  execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd: source });
+  writeFileSync(join(source, "README.md"), "base\n");
+  execFileSync("git", ["add", "-A"], { cwd: source });
+  execFileSync("git", ["commit", "-m", "base"], { cwd: source, stdio: "ignore" });
+  execFileSync("git", ["remote", "add", "origin", origin], { cwd: source });
+  execFileSync("git", ["push", "origin", "main"], { cwd: source, stdio: "ignore" });
+  execFileSync("git", ["checkout", "-b", "git-vibe/12"], { cwd: source, stdio: "ignore" });
+  mkdirSync(join(source, ".git-vibe", "handoffs"), { recursive: true });
+  writeFileSync(join(source, ".git-vibe/handoffs/git-vibe-investigate-result.json"), "remote\n");
+  execFileSync("git", ["add", "-A"], { cwd: source });
+  execFileSync("git", ["commit", "-m", "tracked handoff"], { cwd: source, stdio: "ignore" });
+  execFileSync("git", ["push", "origin", "git-vibe/12"], { cwd: source, stdio: "ignore" });
+  execFileSync("git", ["clone", origin, cwd], { stdio: "ignore" });
+  execFileSync("git", ["checkout", "main"], { cwd, stdio: "ignore" });
+  return cwd;
+}
+
 function existingReviewFixLink() {
   return {
     body: reviewFixLinkComment({
@@ -365,11 +453,21 @@ function currentBranch(cwd) {
 }
 
 function fetchMock(responses) {
-  return vi.fn(async () => {
+  return vi.fn(async (url, init = {}) => {
+    if (isLabelRequest(url, init)) return response(200, {});
     const next = responses.shift();
     if (!next) throw new Error("unexpected fetch");
     return next;
   });
+}
+
+function isLabelRequest(url, init) {
+  const method = String(init.method || "GET").toUpperCase();
+  const path = String(url);
+  return (
+    (method === "POST" && /\/issues\/\d+\/labels$/.test(path)) ||
+    (method === "DELETE" && path.includes("/labels/"))
+  );
 }
 
 function bodyAt(fetch, index) {

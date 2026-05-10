@@ -110,7 +110,7 @@ describe("compact stage result comments", () => {
 
     expect(body).toContain("### Blocking Questions\n- Which config key should be used?");
     expect(body).toContain("### Next Human Action");
-    expect(body).toContain("re-add `git-vibe:approved`");
+    expect(body).toContain("add `git-vibe:investigate`");
   });
 });
 

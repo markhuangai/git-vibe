@@ -144,6 +144,29 @@ export function reviewFixIssueBody(options: {
   ].join("\n");
 }
 
+export function gitVibeTraceabilityIssueNumbers(body: string): string[] {
+  const section = gitVibeTraceabilitySection(body);
+  if (!section) return [];
+
+  return [
+    ...new Set(
+      [...section.matchAll(/^\s*(?:refs|closes|fixes|resolves):?\s+#([1-9]\d*)\b/gim)].map(
+        (match) => match[1],
+      ),
+    ),
+  ];
+}
+
+function gitVibeTraceabilitySection(body: string): string {
+  const heading = body.match(/^##\s+GitVibe Traceability\s*$/im);
+  if (!heading || heading.index === undefined) return "";
+
+  const start = heading.index + heading[0].length;
+  const rest = body.slice(start);
+  const nextHeading = rest.search(/^##\s+/m);
+  return nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+}
+
 function markerAttributes(body: string, marker: string): Record<string, string> | undefined {
   const start = body.indexOf(marker);
   if (start === -1) return undefined;

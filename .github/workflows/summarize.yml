@@ -1,4 +1,5 @@
 name: GitVibe summarize
+run-name: "[git-vibe][summarize]: Discussion #${{ inputs.discussion-number }}"
 
 on:
   workflow_dispatch:

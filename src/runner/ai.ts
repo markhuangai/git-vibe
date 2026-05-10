@@ -26,9 +26,10 @@ import {
 } from "./ai-compaction.js";
 import { bundleValueFromSource } from "./cli-adapter-utils.js";
 import { runClaudeCodeCliStage } from "./claude-code-cli.js";
+import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import type { StageLogger } from "./logging.js";
-import { summarizeError } from "./logging.js";
+import { redactLogText, summarizeError } from "./logging.js";
 import type { GitVibeConfig, JsonObject, Stage, StageDefinition } from "../shared/types.js";
 
 interface AiToolCall {
@@ -57,6 +58,8 @@ export interface RunAiStageOptions {
   stage: Stage;
   stageDefinition: StageDefinition;
   system: string;
+  github?: CodexAuthWritebackGitHub;
+  toolOverride?: string[];
   logger?: StageLogger;
 }
 
@@ -134,6 +137,7 @@ async function runAiSdkStageWithProfile(
     provider: providerType(profile),
     tools: Object.keys(tools).join(","),
   });
+  logAiSdkIoInput({ options, profile, profileName, tools });
 
   const result = await generateText({
     experimental_onToolCallFinish: (event: unknown) => {
@@ -152,6 +156,8 @@ async function runAiSdkStageWithProfile(
       const contextUsedPct = contextUsedPctForUsage(usageRecord(event), contextWindowTokens);
       maxContextUsedPct = maxNumber(maxContextUsedPct, contextUsedPct);
       logger?.event("ai.step.done", {
+        assistant_reasoning_chars: stringLength(stringField(event, "reasoningText")),
+        assistant_text_chars: stringLength(stringField(event, "text")),
         finish_reason: stringField(event, "finishReason"),
         step: stepCount,
         tool_calls: arrayField(event, "toolCalls").length,
@@ -159,6 +165,7 @@ async function runAiSdkStageWithProfile(
         ...usageLogFields(usageRecord(event)),
         ...optionalNumberField("context_used_pct", contextUsedPct),
       });
+      logAiSdkAssistantStep({ event, options, profileName, step: stepCount });
     },
     prepareStep: createContextCompactionPrepareStep({
       config: options.config,
@@ -168,7 +175,7 @@ async function runAiSdkStageWithProfile(
       profileName,
     }),
     prompt: options.prompt,
-    providerOptions: providerOptions(profile) as never,
+    providerOptions: providerOptionsForRequest({ options, profile, profileName }) as never,
     stopWhen: stepCountIs(options.maxTurns),
     system: options.system,
     temperature: generationNumber(profile, "temperature", 0.2),
@@ -183,7 +190,9 @@ async function runAiSdkStageWithProfile(
     ...usageLogFields(requestUsageRecord(result)),
     ...optionalNumberField("max_context_used_pct", maxContextUsedPct),
   });
-  return extractValidatedOutput(result);
+  const output = extractValidatedOutput(result);
+  logAiSdkIoOutput({ options, output, profileName, result });
+  return output;
 }
 
 function usageLogFields(usage: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -213,6 +222,111 @@ function usageLogFields(usage: Record<string, unknown> | undefined): Record<stri
 
 function requestUsageRecord(result: AiResult): Record<string, unknown> | undefined {
   return recordValue(result.totalUsage) || recordValue(result.usage);
+}
+
+function logAiSdkIoInput(options: {
+  options: RunAiStageOptions;
+  profile: Record<string, unknown>;
+  profileName: string;
+  tools: ToolSet;
+}): void {
+  options.options.logger?.raw?.(
+    aiIoLogGroup({
+      body: [
+        fieldLine("adapter", "ai-sdk-agentool"),
+        fieldLine("profile", options.profileName),
+        fieldLine("model", modelName(options.profile)),
+        fieldLine("schema_id", options.options.schemaId),
+        fieldLine("max_turns", String(options.options.maxTurns)),
+        fieldLine("tools", Object.keys(options.tools).join(",")),
+        section("system", options.options.system),
+        section("prompt", options.options.prompt),
+      ].join("\n"),
+      label: "input",
+      options: options.options,
+      profileName: options.profileName,
+    }),
+  );
+}
+
+function logAiSdkIoOutput(options: {
+  options: RunAiStageOptions;
+  output: string;
+  profileName: string;
+  result: AiResult;
+}): void {
+  options.options.logger?.raw?.(
+    aiIoLogGroup({
+      body: [
+        fieldLine("raw_text_chars", String(options.result.text.length)),
+        fieldLine("extracted_json_chars", String(options.output.length)),
+        section("raw_text", options.result.text),
+        section("extracted_json", options.output),
+      ].join("\n"),
+      label: "output",
+      options: options.options,
+      profileName: options.profileName,
+    }),
+  );
+}
+
+function logAiSdkAssistantStep(options: {
+  event: unknown;
+  options: RunAiStageOptions;
+  profileName: string;
+  step: number;
+}): void {
+  const text = stringField(options.event, "text") || "";
+  const reasoningText = stringField(options.event, "reasoningText") || "";
+  if (!text && !reasoningText) return;
+
+  options.options.logger?.raw?.(
+    aiSdkLogGroup({
+      body: [
+        fieldLine("step", String(options.step)),
+        fieldLine("assistant_text_chars", String(text.length)),
+        fieldLine("assistant_reasoning_chars", String(reasoningText.length)),
+        section("assistant_text", text),
+        section("assistant_reasoning", reasoningText),
+      ].join("\n"),
+      label: "assistant",
+      options: options.options,
+      profileName: options.profileName,
+    }),
+  );
+}
+
+function aiIoLogGroup(options: {
+  body: string;
+  label: "input" | "output";
+  options: RunAiStageOptions;
+  profileName: string;
+}): string {
+  return aiSdkLogGroup(options);
+}
+
+function aiSdkLogGroup(options: {
+  body: string;
+  label: "assistant" | "input" | "output";
+  options: RunAiStageOptions;
+  profileName: string;
+}): string {
+  const title = `[git-vibe] ${options.options.stage} ai-sdk-agentool ${options.label} profile=${options.profileName} schema=${options.options.schemaId}`;
+  return `::group::${title}\n${options.body}\n::endgroup::`;
+}
+
+function fieldLine(name: string, value: string): string {
+  return `${name}: ${value}`;
+}
+
+function section(name: string, value: string): string {
+  return `--- ${name} ---\n${boundedAiIoText(value)}`;
+}
+
+function boundedAiIoText(value: string): string {
+  const redacted = redactLogText(value);
+  if (redacted.length <= 200) return redacted;
+  return `${redacted.slice(0, 200)}\n... git-vibe ai-sdk-agentool IO section truncated at 200 chars ...`;
 }
 
 function usageRecord(event: unknown): Record<string, unknown> | undefined {
@@ -422,8 +536,69 @@ function providerType(profile: Record<string, unknown>): string {
   return String(provider?.type || "openai-compatible");
 }
 
-function providerOptions(profile: Record<string, unknown>): Record<string, unknown> | undefined {
-  return profile.provider_options as Record<string, unknown> | undefined;
+function providerOptionsForRequest(options: {
+  options: RunAiStageOptions;
+  profile: Record<string, unknown>;
+  profileName: string;
+}): Record<string, unknown> | undefined {
+  const base = cloneRecord(recordValue(options.profile.provider_options));
+  const type = providerType(options.profile);
+  if (type === "anthropic") {
+    return withProviderDefaults({
+      defaults: { cacheControl: { type: "ephemeral" } },
+      profileName: options.profileName,
+      provider: "anthropic",
+      providerOptions: base,
+    });
+  }
+  if (type === "openai") {
+    return withProviderDefaults({
+      defaults: { promptCacheKey: promptCacheKeyFor(options) },
+      profileName: options.profileName,
+      provider: "openai",
+      providerOptions: base,
+    });
+  }
+  return Object.keys(base).length > 0 ? base : undefined;
+}
+
+function withProviderDefaults(options: {
+  defaults: Record<string, unknown>;
+  profileName: string;
+  provider: string;
+  providerOptions: Record<string, unknown>;
+}): Record<string, unknown> {
+  const current = providerNamespaceOptions({
+    profileName: options.profileName,
+    provider: options.provider,
+    providerOptions: options.providerOptions,
+  });
+  options.providerOptions[options.provider] = { ...options.defaults, ...current };
+  return options.providerOptions;
+}
+
+function providerNamespaceOptions(options: {
+  profileName: string;
+  provider: string;
+  providerOptions: Record<string, unknown>;
+}): Record<string, unknown> {
+  const value = options.providerOptions[options.provider];
+  if (value === undefined) return {};
+  const current = recordValue(value);
+  if (!current) {
+    throw new Error(
+      `ai.profiles.${options.profileName}.provider_options.${options.provider} must be an object.`,
+    );
+  }
+  return cloneRecord(current);
+}
+
+function promptCacheKeyFor(options: { options: RunAiStageOptions; profileName: string }): string {
+  return `git-vibe:${options.options.stage}:${options.options.schemaId}:${options.profileName}`;
+}
+
+function cloneRecord(value: Record<string, unknown> | undefined): Record<string, unknown> {
+  return value ? { ...value } : {};
 }
 
 function generationNumber(profile: Record<string, unknown>, key: string, fallback: number): number {
@@ -443,6 +618,16 @@ function nonNegativeInteger(value: number | undefined, fallback: number): number
 }
 
 function toolsForStage(options: RunAiStageOptions): string[] {
+  if (options.toolOverride) {
+    const disallowed = options.toolOverride.filter((tool) => !toolAllowedForStage(tool, options));
+    if (disallowed.length > 0) {
+      throw new Error(
+        `AI tool override for ${options.stage} includes disallowed tools: ${disallowed.join(", ")}.`,
+      );
+    }
+    return options.toolOverride;
+  }
+
   const configuredTools = stageConfigFor(options.config, options.stage).tools;
   if (configuredTools === undefined) return options.stageDefinition.tools;
   if (!Array.isArray(configuredTools) || configuredTools.some((tool) => !stringValue(tool))) {
@@ -458,6 +643,11 @@ function toolsForStage(options: RunAiStageOptions): string[] {
   }
 
   return tools;
+}
+
+function toolAllowedForStage(tool: string, options: RunAiStageOptions): boolean {
+  if (options.stageDefinition.tools.includes(tool)) return true;
+  return tool === "bash-readonly" && options.stageDefinition.tools.includes("bash");
 }
 
 function validateStageConfig(options: RunAiStageOptions): void {

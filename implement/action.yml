@@ -28,6 +28,10 @@ inputs:
     description: Directory containing previous GitVibe stage result JSON files.
     required: false
     default: ""
+  fail-on-blocked:
+    description: Return a non-zero action status when the stage result is not completed.
+    required: false
+    default: "false"
   validation-repair-attempts:
     description: Maximum validation repair attempts before implementation fails.
     required: false
@@ -73,6 +77,7 @@ runs:
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
+        GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
         GITVIBE_VALIDATION_REPAIR_ATTEMPTS: ${{ inputs.validation-repair-attempts }}
         GITVIBE_VALIDATION_REPAIR_MAX_TURNS: ${{ inputs.validation-repair-max-turns }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" implement

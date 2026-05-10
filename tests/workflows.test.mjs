@@ -4,7 +4,7 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } } }} Workflow
+ * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, ["run-name"]?: string }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
@@ -42,6 +42,90 @@ const actionFiles = [
   "summarize/action.yml",
   "validate/action.yml",
 ];
+
+const workflowRunNameSpecs = [
+  { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
+  { file: ".github/workflows/summarize.yml", stage: "summarize", artifact: "Discussion" },
+  { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
+  { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
+  { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
+  { file: ".github/workflows/address-feedback.yml", stage: "address-feedback", artifact: "PR" },
+  {
+    file: "examples/consumer/.github/workflows/validate.yml",
+    stage: "validate",
+    multiArtifact: true,
+  },
+  {
+    file: "examples/consumer/.github/workflows/summarize.yml",
+    stage: "summarize",
+    artifact: "Discussion",
+  },
+  {
+    file: "examples/consumer/.github/workflows/materialize.yml",
+    stage: "materialize",
+    artifact: "Discussion",
+  },
+  {
+    file: "examples/consumer/.github/workflows/investigate.yml",
+    stage: "investigate",
+    artifact: "Issue",
+  },
+  { file: "examples/consumer/.github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
+  {
+    file: "examples/consumer/.github/workflows/address-feedback.yml",
+    stage: "address-feedback",
+    artifact: "PR",
+  },
+];
+
+const workflowStaticNames = {
+  ".github/workflows/validate.yml": "GitVibe validate",
+  ".github/workflows/summarize.yml": "GitVibe summarize",
+  ".github/workflows/materialize.yml": "GitVibe materialize",
+  ".github/workflows/investigate.yml": "GitVibe investigate",
+  ".github/workflows/develop.yml": "GitVibe develop",
+  ".github/workflows/address-feedback.yml": "GitVibe address feedback",
+  "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
+  "examples/consumer/.github/workflows/summarize.yml": "GitVibe summarize",
+  "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
+  "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
+  "examples/consumer/.github/workflows/develop.yml": "GitVibe develop",
+  "examples/consumer/.github/workflows/address-feedback.yml": "GitVibe address feedback",
+};
+
+describe("GitVibe workflow run names", () => {
+  it("defines run-name in all workflows with [git-vibe] prefix and stage identifier", () => {
+    for (const spec of workflowRunNameSpecs) {
+      const workflow = readWorkflow(spec.file);
+      const runName = workflow["run-name"];
+      expect(runName, `${spec.file} should define run-name`).toBeDefined();
+      expect(runName, `${spec.file} run-name should contain [git-vibe]`).toContain("[git-vibe]");
+      expect(runName, `${spec.file} run-name should contain stage [${spec.stage}]`).toContain(
+        `[${spec.stage}]`,
+      );
+      if (spec.artifact) {
+        expect(runName, `${spec.file} run-name should reference ${spec.artifact}`).toContain(
+          spec.artifact,
+        );
+      }
+      if (spec.multiArtifact) {
+        expect(runName, `${spec.file} run-name should handle multiple artifact types`).toContain(
+          "inputs.discussion-number",
+        );
+        expect(runName, `${spec.file} run-name should handle multiple artifact types`).toContain(
+          "inputs.issue-number",
+        );
+      }
+    }
+  });
+
+  it("preserves static name field in all workflows", () => {
+    for (const [file, expectedName] of Object.entries(workflowStaticNames)) {
+      const workflow = readWorkflow(file);
+      expect(workflow.name, `${file} should preserve static name`).toBe(expectedName);
+    }
+  });
+});
 
 describe("GitVibe workflow wiring", () => {
   it("passes AI environment into reusable action source runs", () => {
@@ -264,7 +348,7 @@ describe("GitVibe workflow write permissions", () => {
       issues: "write",
     });
     expect(
-      readWorkflow(".github/workflows/develop.yml").jobs?.investigate?.permissions,
+      readWorkflow(".github/workflows/develop.yml").jobs?.implement?.permissions,
     ).toMatchObject({
       issues: "write",
     });
@@ -307,52 +391,33 @@ describe("GitVibe workflow write permissions", () => {
   });
 });
 
-describe("GitVibe develop workflow handoff", () => {
-  it("keeps develop stages independent and gates them on stage outputs", () => {
+describe("GitVibe develop workflow", () => {
+  it("starts at implementation after issue-label investigation approval", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
-    const investigate = workflow.jobs?.investigate;
     const implement = workflow.jobs?.implement;
     const reviewMatrix = workflow.jobs?.["review-matrix"];
     const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
     const createPr = workflow.jobs?.["create-pr"];
 
-    expect(investigate?.outputs).toMatchObject({
-      "next-state": "${{ steps.investigate.outputs.next-state }}",
-      "ready-for-implementation": "${{ steps.investigate.outputs.ready-for-implementation }}",
-      status: "${{ steps.investigate.outputs.status }}",
-    });
-    expect(investigate?.steps?.find((step) => step.id === "investigate")).toMatchObject({
-      uses: "./.git-vibe/actions/investigate",
-      with: expect.objectContaining({
-        "fail-on-blocked": "true",
-        "fail-on-not-ready": "true",
-      }),
-    });
-    expect(
-      investigate?.steps?.find((step) => step.uses === "actions/upload-artifact@v4"),
-    ).toMatchObject({
-      if: "always()",
-      with: expect.objectContaining({
-        path: "${{ runner.temp }}/git-vibe-investigate-result.json",
-      }),
-    });
-    expect(implement).toMatchObject({
-      if: "needs.investigate.outputs.ready-for-implementation == 'true'",
-      needs: "investigate",
-    });
+    expect(workflow.on?.workflow_dispatch?.inputs?.investigation_timeout_minutes).toBeUndefined();
+    expect(workflow.on?.workflow_call?.inputs?.investigation_timeout_minutes).toBeUndefined();
+    expect(workflow.jobs?.investigate).toBeUndefined();
+    expect(implement?.needs).toBeUndefined();
+    expect(implement?.if).toBeUndefined();
     expect(
       implement?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
-    ).toMatchObject({
-      with: expect.objectContaining({ path: ".git-vibe/handoffs" }),
-    });
+    ).toBeUndefined();
     expect(
       implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement"),
     ).toMatchObject({
       with: expect.objectContaining({
-        "handoff-dir": ".git-vibe/handoffs",
+        "fail-on-blocked": "true",
         "validation-repair-attempts": "${{ inputs.validation_repair_attempts }}",
       }),
     });
+    expect(
+      implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement")?.with,
+    ).not.toHaveProperty("handoff-dir");
     expect(reviewMatrix).toMatchObject({
       needs: "implement",
       outputs: expect.objectContaining({

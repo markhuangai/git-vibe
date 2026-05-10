@@ -112,7 +112,7 @@ CLI authentication guidance:
 
 - API-key based OpenAI, Anthropic, OpenAI-compatible proxy, or Codex API style providers should go through `ai-sdk-agentool`.
 - AI profiles should read provider auth, endpoints, and provider-specific CLI env from the `GITVIBE_AI_ENV_JSON` bundle secret.
-- Codex CLI should use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner.
+- Codex CLI can use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner. When `auth_json.from_bundle` is configured, GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret, so `GITVIBE_GITHUB_TOKEN` needs repository Actions secrets read/write permission.
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 
@@ -182,7 +182,7 @@ Normalized reasoning config:
 - `provider.api_key.from_bundle`: AI SDK provider API key inside `GITVIBE_AI_ENV_JSON`.
 - `provider.base_url.from_bundle`: AI SDK provider base URL inside `GITVIBE_AI_ENV_JSON`; required for OpenAI-compatible endpoints and optional for native OpenAI.
 - `env.<NAME>.from_bundle`: CLI-only mapping from a key inside `GITVIBE_AI_ENV_JSON` to the spawned CLI process env.
-- `auth_json.from_bundle`: `cli-codex` key inside `GITVIBE_AI_ENV_JSON`; GitVibe writes this value to temporary `CODEX_HOME/auth.json`.
+- `auth_json.from_bundle`: `cli-codex` key inside `GITVIBE_AI_ENV_JSON`; the bundle value must be an escaped `auth.json` string, such as `jq -Rs . < ~/.codex/auth.json`. GitVibe writes that string to `CODEX_HOME/auth.json`, then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret after successful Codex CLI execution.
 - `provider_options`: adapter-specific passthrough for settings GitVibe does not normalize yet.
 - `ai.budgets.max_context_window_tokens`: positive integer context budget for `ai-sdk-agentool` compaction and context usage logs. Default: `200000`.
 
@@ -191,8 +191,9 @@ Adapter mappings:
 - `cli-codex`: map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
 - `cli-claude-code`: pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`; set `bare: true` to add Claude Code's `--bare` minimal mode when the runner uses API-key or third-party provider auth instead of OAuth/keychain auth.
 - CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native tool loop and run without per-tool permission prompts in this workflow.
-- `ai-sdk-agentool` with OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable.
-- `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use.
+- `ai-sdk-agentool` with native OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable; set a stable `providerOptions.openai.promptCacheKey` by default.
+- `ai-sdk-agentool` with OpenAI-compatible endpoints: do not add OpenAI prompt cache request fields by default because non-OpenAI endpoints may reject unknown fields.
+- `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use; set `providerOptions.anthropic.cacheControl: { type: "ephemeral" }` by default.
 
 Tool policy by stage:
 

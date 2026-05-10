@@ -189,7 +189,7 @@ function investigationRetrySection(stage: Stage, output: JsonObject): string[] {
   return [
     "",
     "### Next Human Action",
-    "Answer the blocking questions, then re-add `git-vibe:approved` to rerun investigation before implementation.",
+    "Answer the blocking questions, then add `git-vibe:investigate` to rerun investigation before implementation approval.",
   ];
 }
 

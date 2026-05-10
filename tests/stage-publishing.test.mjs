@@ -169,7 +169,93 @@ describe("stage publishing status cleanup", () => {
       ["POST", "/repos/example/repo/issues/12/comments"],
     ]);
   });
+});
 
+describe("stage publishing stale status cleanup", () => {
+  it("deletes stale transient status comments from other stages before posting a running comment", async () => {
+    const client = createClient();
+    const oldCreatedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    const recentCreatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    await publishStageStartComment({
+      client,
+      context: {
+        ...context("issue"),
+        timeline: [
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "12",
+              run: "97",
+              stage: "review-matrix",
+            }),
+            createdAt: oldCreatedAt,
+            id: "51",
+            kind: "comment",
+          },
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "12",
+              run: "98",
+              stage: "implement",
+            }),
+            createdAt: oldCreatedAt,
+            id: "52",
+            kind: "comment",
+          },
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "12",
+              run: "99",
+              stage: "implement",
+            }),
+            createdAt: recentCreatedAt,
+            id: "53",
+            kind: "comment",
+          },
+          {
+            body: stageStartMarker({
+              artifact: "issue",
+              number: "13",
+              run: "98",
+              stage: "implement",
+            }),
+            createdAt: oldCreatedAt,
+            id: "54",
+            kind: "comment",
+          },
+          {
+            body: workflowQueuedMarker({
+              artifact: "issue",
+              number: "12",
+              run: "96",
+              workflow: "review-matrix.yml",
+            }),
+            createdAt: oldCreatedAt,
+            id: "55",
+            kind: "comment",
+          },
+        ],
+      },
+      logger: createLogger(),
+      runner: runner({
+        stage: "investigate",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/100",
+      }),
+    });
+
+    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/comments/51"],
+      ["DELETE", "/repos/example/repo/issues/comments/52"],
+      ["DELETE", "/repos/example/repo/issues/comments/55"],
+      ["POST", "/repos/example/repo/issues/12/comments"],
+    ]);
+  });
+});
+
+describe("stage publishing discussion status cleanup", () => {
   it("deletes discussion running comments before posting results", async () => {
     const client = createClient();
 
@@ -316,6 +402,13 @@ describe("stage label publishing helpers", () => {
       client,
       context: context("issue"),
       logger: createLogger(),
+      parsedOutput: readyInvestigationOutput(),
+      runner: runner({ stage: "investigate" }),
+    });
+    await applyStageLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
       parsedOutput: output(),
       runner: runner({ stage: "implement" }),
     });
@@ -327,17 +420,35 @@ describe("stage label publishing helpers", () => {
       runner: runner({ stage: "create-pr" }),
     });
 
-    expect(client.request.mock.calls.map(([request]) => request.body.labels[0])).toEqual([
+    expect(
+      client.request.mock.calls
+        .map(([request]) => request)
+        .filter((request) => request.method === "POST")
+        .map((request) => request.body.labels[0]),
+    ).toEqual([
       "git-vibe:blocked",
       "git-vibe:ready-for-approval",
+      "git-vibe:investigated",
       "git-vibe:in-progress",
       "git-vibe:pr-opened",
     ]);
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
+    );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
+    );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
+    );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",
+    );
   });
 });
 
 describe("stage label investigation blocking", () => {
-  it("blocks not-ready investigation by adding blocked and removing approved", async () => {
+  it("blocks not-ready investigation by adding blocked and removing investigating", async () => {
     const client = createClient();
 
     await applyStageLabelTransition({
@@ -350,12 +461,12 @@ describe("stage label investigation blocking", () => {
 
     expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
       ["POST", "/repos/example/repo/issues/12/labels"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
     ]);
     expect(client.request.mock.calls[0][0].body.labels).toEqual(["git-vibe:blocked"]);
   });
 
-  it("ignores a missing approved label when blocking not-ready investigation", async () => {
+  it("ignores a missing investigating label when blocking not-ready investigation", async () => {
     const client = createClient();
     client.request = vi.fn(async (request) => {
       if (request.method === "DELETE") throw new Error("GitHub API DELETE label failed: 404");
@@ -375,7 +486,7 @@ describe("stage label investigation blocking", () => {
     expect(client.request).toHaveBeenCalledTimes(2);
   });
 
-  it("logs and rethrows unexpected approved label removal failures", async () => {
+  it("logs and rethrows unexpected investigating label removal failures", async () => {
     const client = createClient();
     const logger = createLogger();
     client.request = vi.fn(async (request) => {
@@ -394,7 +505,7 @@ describe("stage label investigation blocking", () => {
     ).rejects.toThrow("delete unavailable");
     expect(logger.event).toHaveBeenCalledWith(
       "github.issue.label.remove.failed",
-      expect.objectContaining({ issue: "12", label: "git-vibe:approved" }),
+      expect.objectContaining({ issue: "12", label: "git-vibe:investigating" }),
     );
   });
 });
@@ -433,6 +544,16 @@ function blockedInvestigationOutput() {
     blocking_questions: ["Choose the config key."],
     implementation_plan: [],
     next_state: "needs-info",
+    stage: "investigate",
+  };
+}
+
+function readyInvestigationOutput() {
+  return {
+    ...output(),
+    blocking_questions: [],
+    implementation_plan: ["Implement the accepted behavior."],
+    next_state: "ready-for-implementation",
     stage: "investigate",
   };
 }

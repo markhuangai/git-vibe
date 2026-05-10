@@ -14,7 +14,7 @@ interface CliCommandResult {
   stdout: string;
 }
 
-const aiEnvBundleVariable = "GITVIBE_AI_ENV_JSON";
+export const aiEnvBundleVariable = "GITVIBE_AI_ENV_JSON";
 
 export function commandParts(profile: Record<string, unknown>, fallback: string): string[] {
   const command = stringValue(profile.command) || fallback;
@@ -74,6 +74,14 @@ export function bundleValueFromSource(
   if (source === undefined) return undefined;
   const bundle = parseRequiredAiEnvBundle(baseEnv, sourcePath);
   return bundleValue(source, sourcePath, bundle);
+}
+
+export function bundleKeyFromSource(source: unknown, sourcePath: string): string | undefined {
+  if (source === undefined) return undefined;
+  if (!isRecord(source)) throw new Error(`${sourcePath} must be an object with from_bundle.`);
+  const key = stringValue(source.from_bundle);
+  if (!key) throw new Error(`${sourcePath}.from_bundle must be a non-empty string.`);
+  return key;
 }
 
 export function optionalAiEnvBundleSecretValues(
@@ -161,7 +169,7 @@ function exitStatus(code: number | null, signal: NodeJS.Signals | null): string 
   return signal ? `signal ${signal}` : "unknown exit status";
 }
 
-function parseRequiredAiEnvBundle(
+export function parseRequiredAiEnvBundle(
   baseEnv: NodeJS.ProcessEnv,
   requiredBy: string,
 ): Record<string, string> {

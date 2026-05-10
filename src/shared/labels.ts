@@ -5,11 +5,6 @@ export interface GitVibeLabelDefinition {
 }
 
 export const gitVibeLabels = {
-  approvalRequested: {
-    color: "BFD4F2",
-    description: "GitVibe is waiting for a trusted approval decision.",
-    name: "git-vibe:approval-requested",
-  },
   approved: {
     color: "0E8A16",
     description: "Trusted actor approved GitVibe implementation automation.",
@@ -20,45 +15,45 @@ export const gitVibeLabels = {
     description: "GitVibe is blocked by missing or contradictory information.",
     name: "git-vibe:blocked",
   },
-  bug: {
-    color: "D73A4A",
-    description: "Bug report tracked by GitVibe.",
-    name: "git-vibe:bug",
-  },
   inProgress: {
     color: "FBCA04",
     description: "GitVibe implementation is in progress.",
     name: "git-vibe:in-progress",
+  },
+  investigate: {
+    color: "C5DEF5",
+    description: "Trusted actor requested GitVibe investigation automation.",
+    name: "git-vibe:investigate",
+  },
+  investigated: {
+    color: "0E8A16",
+    description: "GitVibe investigation completed and implementation approval is allowed.",
+    name: "git-vibe:investigated",
   },
   investigating: {
     color: "1D76DB",
     description: "GitVibe is investigating a bug or request.",
     name: "git-vibe:investigating",
   },
-  investigationComplete: {
-    color: "0E8A16",
-    description: "GitVibe investigation has completed.",
-    name: "git-vibe:investigation-complete",
-  },
   needsDiscussion: {
     color: "5319E7",
     description: "Feature request should be discussed before implementation.",
     name: "git-vibe:needs-discussion",
   },
-  needsExpectedBehavior: {
-    color: "D876E3",
-    description: "GitVibe needs trusted expected-behavior clarification.",
-    name: "git-vibe:needs-expected-behavior",
-  },
-  needsInvestigation: {
-    color: "C5DEF5",
-    description: "Bug report needs investigation before implementation.",
-    name: "git-vibe:needs-investigation",
-  },
   prOpened: {
     color: "0E8A16",
     description: "GitVibe opened or updated a pull request.",
     name: "git-vibe:pr-opened",
+  },
+  prApproved: {
+    color: "0E8A16",
+    description: "GitVibe pull request was approved by a trusted reviewer.",
+    name: "git-vibe:pr-approved",
+  },
+  prMerged: {
+    color: "5319E7",
+    description: "GitVibe pull request was merged while the issue awaits default-branch closure.",
+    name: "git-vibe:pr-merged",
   },
   readyForApproval: {
     color: "FBCA04",
