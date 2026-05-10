@@ -75,7 +75,6 @@ ai:
     codex_cli_high:
       enabled: true
       adapter: cli-codex
-      command: codex exec
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.5
@@ -85,7 +84,6 @@ ai:
     codex_cli_xhigh:
       enabled: true
       adapter: cli-codex
-      command: codex exec
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.5
@@ -95,7 +93,6 @@ ai:
     claude_code:
       enabled: false
       adapter: cli-claude-code
-      command: claude -p
       env:
         CLAUDE_CODE_OAUTH_TOKEN:
           from_bundle: CLAUDE_OAUTH_TOKEN

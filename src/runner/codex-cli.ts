@@ -6,7 +6,6 @@ import type { RunAiStageOptions } from "./ai.js";
 import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
 import {
   cliModelName,
-  commandParts,
   runStreamingCommand,
   strictOutputSchema,
   stringValue,
@@ -26,10 +25,11 @@ export async function runCodexCliStage({
   const outputFile = join(contextDir, `${options.stage}.output.json`);
   writeFileSync(schemaFile, JSON.stringify(strictOutputSchema(options.schema), null, 2));
 
-  const [command, ...configuredArgs] = commandParts(profile, "codex exec");
+  const command = "codex";
   const model = cliModelName(profile, "cli-codex");
   const args = [
-    ...configuredArgs,
+    "exec",
+    "--dangerously-bypass-approvals-and-sandbox",
     "--cd",
     options.cwd,
     "--model",

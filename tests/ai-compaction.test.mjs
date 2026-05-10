@@ -314,7 +314,6 @@ function codexOptions() {
           codex_cli: {
             adapter: "cli-codex",
             auth_json: { from_bundle: "CODEX_AUTH_JSON" },
-            command: "codex exec",
             model: "gpt-5.5",
           },
         },

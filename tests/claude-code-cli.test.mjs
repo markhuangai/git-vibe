@@ -75,6 +75,7 @@ describe("Claude Code CLI adapter", () => {
       expect.arrayContaining([
         "-p",
         "--bare",
+        "--dangerously-skip-permissions",
         "--model",
         "opus",
         "--output-format",
@@ -137,6 +138,7 @@ describe("Claude Code CLI adapter defaults", () => {
 
     const args = spawn.mock.calls[0][1];
     expect(args).toEqual(expect.arrayContaining(["--model", "claude-test-model"]));
+    expect(args).toContain("--dangerously-skip-permissions");
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
@@ -294,7 +296,6 @@ function claudeCodeConfig() {
         claude_code: {
           adapter: "cli-claude-code",
           bare: true,
-          command: "claude -p",
           env: {
             ANTHROPIC_API_KEY: { from_bundle: "MINIMAX_API_KEY" },
             ANTHROPIC_BASE_URL: { from_bundle: "MINIMAX_BASE_URL" },

@@ -75,7 +75,6 @@ describe("Codex CLI auth preflight", () => {
         profile: {
           adapter: "cli-codex",
           auth_json: { from_bundle: "CODEX_AUTH_JSON" },
-          command: "codex exec",
           model: "gpt-5.5",
         },
         profileName: "codex_cli",
@@ -84,7 +83,7 @@ describe("Codex CLI auth preflight", () => {
 
     expect(spawn.mock.calls.map(([command, args]) => [command, args.slice(0, 2)])).toEqual([
       ["codex", ["login", "status"]],
-      ["codex", ["exec", "--cd"]],
+      ["codex", ["exec", "--dangerously-bypass-approvals-and-sandbox"]],
     ]);
     expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON)).toEqual({
       CODEX_AUTH_JSON: '{"tokens":["preflight"]}\n',

@@ -87,7 +87,6 @@ ai:
     codex_cli:
       enabled: false
       adapter: cli-codex
-      command: codex exec
       # Key inside GITVIBE_AI_ENV_JSON. Stores escaped auth.json text from jq -Rs .
       # Requires GITVIBE_GITHUB_TOKEN repository Secrets read/write permission for refresh write-back.
       auth_json:
@@ -99,7 +98,6 @@ ai:
     claude_code:
       enabled: false
       adapter: cli-claude-code
-      command: claude -p
       # Key inside GITVIBE_AI_ENV_JSON. Stores the Claude Code OAuth access token.
       env:
         CLAUDE_CODE_OAUTH_TOKEN:

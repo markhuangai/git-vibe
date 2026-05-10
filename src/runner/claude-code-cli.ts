@@ -2,7 +2,6 @@ import type { RunAiStageOptions } from "./ai.js";
 import {
   cliProfileEnv,
   cliModelName,
-  commandParts,
   isRecord,
   runStreamingCommand,
   strictOutputSchema,
@@ -18,11 +17,12 @@ export async function runClaudeCodeCliStage({
   profile: Record<string, unknown>;
   profileName: string;
 }): Promise<string> {
-  const [command, ...configuredArgs] = commandParts(profile, "claude -p");
+  const command = "claude";
   const model = cliModelName(profile, "cli-claude-code");
   const args = [
-    ...configuredArgs,
+    "-p",
     ...claudeModeArgs(profile),
+    "--dangerously-skip-permissions",
     "--model",
     model,
     "--output-format",

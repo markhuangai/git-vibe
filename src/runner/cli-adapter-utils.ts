@@ -16,13 +16,6 @@ interface CliCommandResult {
 
 export const aiEnvBundleVariable = "GITVIBE_AI_ENV_JSON";
 
-export function commandParts(profile: Record<string, unknown>, fallback: string): string[] {
-  const command = stringValue(profile.command) || fallback;
-  const parts = command.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) throw new Error("AI profile command must not be empty.");
-  return parts;
-}
-
 export function cliModelName(profile: Record<string, unknown>, adapter: string): string {
   const model = stringValue(profile.model);
   if (!model) throw new Error(`AI profile model must be configured for ${adapter} profile.`);
