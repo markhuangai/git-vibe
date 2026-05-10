@@ -12,7 +12,7 @@ on:
         description: Runner label for all jobs.
         required: false
         type: string
-        default: pipeline
+        default: rootless-docker
       implementation_timeout_minutes:
         description: Maximum minutes for the implementation job.
         required: false
@@ -78,7 +78,7 @@ on:
         description: Runner label for all jobs.
         required: false
         type: string
-        default: pipeline
+        default: rootless-docker
       implementation_timeout_minutes:
         description: Maximum minutes for the implementation job.
         required: false

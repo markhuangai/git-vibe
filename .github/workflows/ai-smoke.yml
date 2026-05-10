@@ -27,7 +27,7 @@ on:
 jobs:
   local-proxy:
     if: ${{ inputs.run-local-proxy }}
-    runs-on: pipeline
+    runs-on: rootless-docker
     timeout-minutes: 10
     permissions:
       contents: read
@@ -51,7 +51,7 @@ jobs:
 
   codex:
     if: ${{ inputs.run-codex }}
-    runs-on: pipeline
+    runs-on: rootless-docker
     timeout-minutes: 10
     permissions:
       contents: read
@@ -105,7 +105,7 @@ jobs:
 
   claude-code:
     if: ${{ inputs.run-claude-code }}
-    runs-on: pipeline
+    runs-on: rootless-docker
     timeout-minutes: 10
     permissions:
       contents: read

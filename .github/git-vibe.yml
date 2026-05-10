@@ -26,7 +26,7 @@ commands:
   allow_external_agent_mentions: false
 
 runner:
-  default: pipeline
+  default: rootless-docker
 
 event_delivery:
   mode: webhook

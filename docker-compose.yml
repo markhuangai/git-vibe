@@ -1,6 +1,6 @@
 services:
   git-vibe-app:
-    image: ${GITVIBE_IMAGE:-ghcr.io/z-m-huang/git-vibe:latest}
+    image: ${GITVIBE_IMAGE:-ghcr.io/markhuangai/git-vibe:latest}
     build:
       context: .
       dockerfile: Dockerfile

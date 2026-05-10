@@ -20,11 +20,11 @@ permissions:
   packages: write
 
 env:
-  GITVIBE_IMAGE: ghcr.io/z-m-huang/git-vibe:${{ github.sha }}
+  GITVIBE_IMAGE: ghcr.io/markhuangai/git-vibe:${{ github.sha }}
 
 jobs:
   build:
-    runs-on: pipeline
+    runs-on: rootless-docker
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
@@ -38,7 +38,7 @@ jobs:
           push: true
           tags: |
             ${{ env.GITVIBE_IMAGE }}
-            ghcr.io/z-m-huang/git-vibe:latest
+            ghcr.io/markhuangai/git-vibe:latest
 
   deploy:
     runs-on: app
