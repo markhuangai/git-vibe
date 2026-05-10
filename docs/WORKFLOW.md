@@ -12,16 +12,16 @@ stateDiagram-v2
   Intake --> ConvertedDiscussion: feature submitted as issue
   ConvertedDiscussion --> StoryDiscussion: create discussion, link issue, close issue
 
-  StoryDiscussion --> Refinement: /git-vibe summarize or git-vibe:validate
+  StoryDiscussion --> Refinement: summarize command or validate label
   Refinement --> NeedsAnswers: open questions found
-  NeedsAnswers --> Refinement: replies plus git-vibe:validate
-  Refinement --> ImplementationIssue: no blockers plus git-vibe:approved
+  NeedsAnswers --> Refinement: replies plus validate label
+  Refinement --> ImplementationIssue: no blockers plus approved label
 
   BugIssue --> WaitingForBugInvestigation: default state, no AI work
-  WaitingForBugInvestigation --> BugInvestigation: /git-vibe investigate, git-vibe:investigate, or configured reaction threshold
-  BugInvestigation --> BugNeedsContext: not ready, post findings, add git-vibe:blocked
-  BugNeedsContext --> BugInvestigation: answers plus git-vibe:investigate
-  BugInvestigation --> ImplementationIssue: ready, add git-vibe:investigated
+  WaitingForBugInvestigation --> BugInvestigation: investigate command, investigate label, or reaction threshold
+  BugInvestigation --> BugNeedsContext: not ready, post findings, add blocked label
+  BugNeedsContext --> BugInvestigation: answers plus investigate label
+  BugInvestigation --> ImplementationIssue: ready, add investigated label
 
   ImplementationIssue --> Development: protected approved label after investigated
   ReviewFixIssue --> Development: internal review-fix marker
