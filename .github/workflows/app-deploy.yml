@@ -24,7 +24,7 @@ env:
 
 jobs:
   build:
-    runs-on: rootless-docker
+    runs-on: docker-runner
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3

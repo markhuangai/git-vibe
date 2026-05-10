@@ -28,13 +28,13 @@ import {
 import { branchForWriteStage, runnerBaseBranch, type BaseBranchState } from "./stage-branches.js";
 import { runValidationCommand, validationRepairAttemptsFor } from "./validation.js";
 import type { ValidationCommandFailure } from "./validation.js";
-import { stageDefinitions } from "../shared/stages.js";
 import { implementationIssueBody, reviewFixTraceFromBody } from "../shared/traceability.js";
 import type {
   ContextPacket,
   GitVibeConfig,
   JsonObject,
   RunnerOptions,
+  Stage,
   StageRunResult,
 } from "../shared/types.js";
 
@@ -66,11 +66,15 @@ export async function applyDeterministicWrites(
   const reviewFixResult = await maybeHandleReviewFixRequired(options);
   if (reviewFixResult) return reviewFixResult;
 
-  if (stageDefinitions[options.options.stage].access === "read-only") {
+  if (!isWriteStage(options.options.stage)) {
     return publishReadOnlyResult(options);
   }
 
   return applyWriteStage(options);
+}
+
+function isWriteStage(stage: Stage): boolean {
+  return ["materialize", "implement", "create-pr", "address-pr-feedback"].includes(stage);
 }
 
 async function publishBlockedResult(options: DeterministicWriteOptions): Promise<StageRunResult> {
@@ -342,7 +346,7 @@ function pushGitBranch(branch: string, logger: StageLogger, options: RunnerOptio
     .toString()
     .trim();
   logger.event("git.commit.done", { commit });
-  logger.event("token.use", { access: "branch-write" });
+  logger.event("token.use");
   logger.event("git.push.start", { branch });
   execFileSync(
     "git",
@@ -425,9 +429,7 @@ async function createImplementationIssue({
   options: RunnerOptions;
   parsedOutput: JsonObject;
 }): Promise<void> {
-  logger.event("token.use", {
-    access: "publish-write",
-  });
+  logger.event("token.use");
   const { owner, repo } = splitRepository(options.repository);
   logger.event("github.issue.create.start");
   const issueBody = implementationIssueBody({
@@ -504,9 +506,7 @@ async function createPullRequest({
   options: RunnerOptions;
   parsedOutput: JsonObject;
 }): Promise<{ html_url?: string; number?: number }> {
-  logger.event("token.use", {
-    access: "publish-write",
-  });
+  logger.event("token.use");
   const { owner, repo } = splitRepository(options.repository);
   const head = issueBranch(context);
   const title = String(parsedOutput.pr_title || `GitVibe: ${context.artifact.title}`);

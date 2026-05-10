@@ -18,7 +18,7 @@ on:
         description: Runner label for this job.
         required: false
         type: string
-        default: rootless-docker
+        default: docker-runner
       timeout_minutes:
         description: Maximum minutes for this job.
         required: false
@@ -65,7 +65,7 @@ on:
         description: Runner label for this job.
         required: false
         type: string
-        default: rootless-docker
+        default: docker-runner
       timeout_minutes:
         description: Maximum minutes for this job.
         required: false

@@ -1,4 +1,3 @@
-import type { StageDefinition } from "../shared/types.js";
 import type { RunAiStageOptions } from "./ai.js";
 import {
   cliProfileEnv,
@@ -32,8 +31,6 @@ export async function runClaudeCodeCliStage({
     JSON.stringify(strictOutputSchema(options.schema)),
     "--system-prompt",
     options.system,
-    "--permission-mode",
-    claudePermissionMode(options.stageDefinition.access),
     "--no-session-persistence",
     ...claudeReasoningArgs(profile),
   ];
@@ -74,10 +71,6 @@ function claudeModeArgs(profile: Record<string, unknown>): string[] {
 
 function claudeEnv(profile: Record<string, unknown>, profileName: string): NodeJS.ProcessEnv {
   return cliProfileEnv(profile, `ai.profiles.${profileName}`);
-}
-
-function claudePermissionMode(access: StageDefinition["access"]): string {
-  return access === "branch-write" ? "acceptEdits" : "dontAsk";
 }
 
 function claudeOutput(stdout: string): string {

@@ -558,16 +558,6 @@ function validateStageConfig(options: RunAiStageOptions): void {
   if (stageConfig.enabled !== undefined && typeof stageConfig.enabled !== "boolean") {
     throw new Error(`ai.stages.${options.stage}.enabled must be a boolean.`);
   }
-
-  const access = stringValue(stageConfig.access);
-  if (stageConfig.access !== undefined && !access) {
-    throw new Error(`ai.stages.${options.stage}.access must be a string.`);
-  }
-  if (access && access !== options.stageDefinition.access) {
-    throw new Error(
-      `ai.stages.${options.stage}.access must match canonical access ${options.stageDefinition.access}.`,
-    );
-  }
 }
 
 function requiredProviderBundleValue(source: unknown, sourcePath: string): string {

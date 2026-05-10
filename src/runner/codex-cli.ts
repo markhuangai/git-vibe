@@ -2,7 +2,6 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename } from "node:path";
 import { join } from "node:path";
-import type { StageDefinition } from "../shared/types.js";
 import type { RunAiStageOptions } from "./ai.js";
 import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
 import {
@@ -39,8 +38,6 @@ export async function runCodexCliStage({
     schemaFile,
     "--output-last-message",
     outputFile,
-    "--sandbox",
-    codexSandbox(options.stageDefinition.access),
     ...codexReasoningArgs(profile),
   ];
   options.logger?.event("ai.request.start", {
@@ -120,10 +117,6 @@ async function refreshCodexAuthBeforeRun(options: {
 function isCodexCommand(command: string): boolean {
   const name = basename(command).toLowerCase();
   return name === "codex" || name === "codex.exe";
-}
-
-function codexSandbox(access: StageDefinition["access"]): string {
-  return access === "branch-write" ? "workspace-write" : "read-only";
 }
 
 function cliPrompt(options: RunAiStageOptions): string {

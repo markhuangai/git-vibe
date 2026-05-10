@@ -25,9 +25,6 @@ commands:
   prefix: /git-vibe
   allow_external_agent_mentions: false
 
-runner:
-  default: rootless-docker
-
 event_delivery:
   mode: webhook
   relay:
@@ -105,12 +102,6 @@ ai:
       model: opus
       reasoning:
         effort: xhigh
-  safety:
-    require_structured_output: true
-    deny_write_tokens_for_read_only_stages: true
-    stop_on_contradictory_maintainer_context: true
-    post_raw_model_output: false
-    github_writes: deterministic-code-only
   budgets:
     default_timeout_minutes: 60
     implementation_timeout_minutes: 120
@@ -130,7 +121,6 @@ ai:
   stages:
     investigate:
       enabled: true
-      access: read-only
       profile: codex_cli_high
       tools:
         - read
@@ -141,7 +131,6 @@ ai:
         - web-search
     summarize:
       enabled: true
-      access: read-only
       profile: codex_cli_high
       tools:
         - read
@@ -151,7 +140,6 @@ ai:
         - web-search
     validate:
       enabled: true
-      access: read-only
       profile: codex_cli_high
       tools:
         - read
@@ -161,7 +149,6 @@ ai:
         - web-search
     materialize:
       enabled: true
-      access: publish-write
       profile: codex_cli_high
       tools:
         - read
@@ -169,7 +156,6 @@ ai:
         - glob
     implement:
       enabled: true
-      access: branch-write
       profile: local_proxy
       tools:
         - read
@@ -182,7 +168,6 @@ ai:
         - diff
     review-matrix:
       enabled: true
-      access: read-only
       profiles:
         - codex_cli_xhigh
       tools:
@@ -192,7 +177,6 @@ ai:
         - diff
     create-pr:
       enabled: true
-      access: publish-write
       profile: codex_cli_high
       tools:
         - read
@@ -201,7 +185,6 @@ ai:
         - diff
     address-pr-feedback:
       enabled: true
-      access: branch-write
       profile: codex_cli_high
       tools:
         - read

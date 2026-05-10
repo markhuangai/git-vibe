@@ -14,7 +14,7 @@
 
 <required_process>
 
-1. Identify the GitHub artifact, requested outcome, stage access mode, and any labels or comments that affect authorization.
+1. Identify the GitHub artifact, requested outcome, and any labels or comments that affect authorization.
 2. Read or inspect only the context needed for this stage. Use tools when the supplied context is not enough to support the conclusion.
 3. Separate facts, assumptions, questions, and risks. Do not merge them into vague prose.
 4. Decide whether the stage is `completed` or `blocked`. If blocked, explain the blocking condition and do not trigger downstream work through a completed status.

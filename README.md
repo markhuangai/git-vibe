@@ -299,9 +299,6 @@ version: 1
 commands:
   prefix: /git-vibe
 
-runner:
-  default: ubuntu-latest
-
 github_auth:
   mode: webhook-pat
   token_secret: GITVIBE_GITHUB_TOKEN

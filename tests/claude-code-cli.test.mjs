@@ -79,12 +79,11 @@ describe("Claude Code CLI adapter", () => {
         "opus",
         "--output-format",
         "json",
-        "--permission-mode",
-        "dontAsk",
         "--effort",
         "xhigh",
       ]),
     );
+    expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--tools");
     expect(JSON.parse(jsonSchemaFrom(args))).toEqual(
       expect.objectContaining({ required: ["stage", "status", "questions"] }),
@@ -125,7 +124,7 @@ describe("Claude Code CLI adapter", () => {
 });
 
 describe("Claude Code CLI adapter defaults", () => {
-  it("uses branch-write permissions and configured model without tool restrictions", async () => {
+  it("uses configured model without permission mode or tool restrictions", async () => {
     mockClaudeOutput({
       is_error: false,
       structured_output: { stage: "implement", status: "completed" },
@@ -138,7 +137,7 @@ describe("Claude Code CLI adapter defaults", () => {
 
     const args = spawn.mock.calls[0][1];
     expect(args).toEqual(expect.arrayContaining(["--model", "claude-test-model"]));
-    expect(args).toEqual(expect.arrayContaining(["--permission-mode", "acceptEdits"]));
+    expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
     expect(args).not.toContain("--tools");

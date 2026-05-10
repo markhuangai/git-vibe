@@ -3,12 +3,12 @@ import { issueBranch } from "./review-fix.js";
 import { issueBranchForStage } from "./stage-branches.js";
 import type { ContextPacket, JsonObject } from "../shared/types.js";
 
-export function stageContract(stage: string, access: string, context: ContextPacket): string {
+export function stageContract(stage: string, context: ContextPacket): string {
   const deterministicBranch = issueBranchForStage(stage, context);
   const branchRule = deterministicBranch
     ? ` GitVibe has already prepared branch ${deterministicBranch}; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.`
     : "";
-  return `Stage ${stage} has ${access} access.${branchRule} Return only JSON matching the schema. Call output_validator with the exact final JSON before responding.`;
+  return `Stage ${stage} is running.${branchRule} Return only JSON matching the schema. Call output_validator with the exact final JSON before responding.`;
 }
 
 export function dryRunContent(stage: string, context: ContextPacket, logger: StageLogger): string {

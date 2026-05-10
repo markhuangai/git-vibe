@@ -74,10 +74,9 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     outputSchema: schema,
     promptDir: definition.promptDir,
     repositoryContext: repositoryContext(options.cwd, branchState.branchState),
-    stageContract: stageContract(options.stage, definition.access, context),
+    stageContract: stageContract(options.stage, context),
   });
   logger.event("prompt.ready", {
-    access: definition.access,
     schema_id: definition.schemaId,
     tools: definition.tools.join(","),
   });

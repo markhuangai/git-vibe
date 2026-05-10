@@ -119,7 +119,7 @@ describe("stage contract prompt loading", () => {
       promptDir: stageDefinitions.implement.promptDir,
       repositoryContext: "## main",
       stageContract:
-        "Stage implement has branch-write access. GitVibe has already prepared branch git-vibe/123; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.",
+        "Stage implement is running. GitVibe has already prepared branch git-vibe/123; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.",
     });
 
     expect(prompts.prompt).toContain("git-vibe/123");
