@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Z-M-Huang/git-vibe"><img src="https://img.shields.io/github/stars/Z-M-Huang/git-vibe?style=flat-square&logo=github" alt="GitHub stars" /></a>
-  <a href="https://github.com/Z-M-Huang/git-vibe/issues"><img src="https://img.shields.io/github/issues/Z-M-Huang/git-vibe?style=flat-square&logo=github" alt="GitHub issues" /></a>
-  <a href="https://github.com/Z-M-Huang/git-vibe/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Z-M-Huang/git-vibe?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/markhuangai/git-vibe"><img src="https://img.shields.io/github/stars/markhuangai/git-vibe?style=flat-square&logo=github" alt="GitHub stars" /></a>
+  <a href="https://github.com/markhuangai/git-vibe/issues"><img src="https://img.shields.io/github/issues/markhuangai/git-vibe?style=flat-square&logo=github" alt="GitHub issues" /></a>
+  <a href="https://github.com/markhuangai/git-vibe/blob/main/LICENSE"><img src="https://img.shields.io/github/license/markhuangai/git-vibe?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-22-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22" />
   <img src="https://img.shields.io/badge/pnpm-10.33.3-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 10.33.3" />
 </p>
@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/coverage-%3E%3D90%25-brightgreen?style=flat-square" alt="Coverage threshold" />
   <img src="https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker image on GHCR" />
   <img src="https://img.shields.io/badge/AI_SDK-agentool-111827?style=flat-square" alt="AI SDK and agentool" />
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=Z-M-Huang.git-vibe&style=flat-square" alt="Visitors" />
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=markhuangai.git-vibe&style=flat-square" alt="Visitors" />
 </p>
 
 <p align="center">

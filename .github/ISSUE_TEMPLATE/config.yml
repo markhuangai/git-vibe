@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Feature discussions
-    url: https://github.com/Z-M-Huang/git-vibe/discussions
+    url: https://github.com/markhuangai/git-vibe/discussions
     about: Prefer a discussion for feature ideas when GitHub Discussions are enabled.

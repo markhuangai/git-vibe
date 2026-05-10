@@ -65,7 +65,7 @@ docker compose -f docker-compose.yml up -d
 ```
 
 The compose deployment expects runtime values from the host environment. In CI/CD,
-the `GitVibe app deploy` workflow builds `ghcr.io/z-m-huang/git-vibe`, then runs
+the `GitVibe app deploy` workflow builds `ghcr.io/markhuangai/git-vibe`, then runs
 the compose deployment on the self-hosted runner.
 The container listens on port `3000`; change the host-side mapping in Compose or
 an override file instead of setting a `PORT` variable.
