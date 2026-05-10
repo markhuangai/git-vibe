@@ -1,4 +1,5 @@
 name: GitVibe materialize
+run-name: "[git-vibe][materialize]: Discussion #${{ inputs.discussion-number }}"
 
 on:
   workflow_dispatch:

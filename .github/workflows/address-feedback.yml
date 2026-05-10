@@ -1,4 +1,5 @@
 name: GitVibe address feedback
+run-name: "[git-vibe][address-feedback]: PR #${{ inputs.pr-number }}"
 
 on:
   workflow_dispatch:
