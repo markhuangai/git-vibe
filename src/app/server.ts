@@ -426,17 +426,38 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (label === gitVibeLabels.approved.name) {
-    const dispatch = await dispatchWorkflow(options, "develop.yml", {
+  if (label === gitVibeLabels.investigate.name) {
+    await dispatchWorkflow(options, "investigate.yml", {
       "issue-number": issueNumber,
     });
-    await postQueuedWorkflowComment(options, {
-      artifact: "issue",
-      number: issueNumber,
-      reason: labelReason(label),
-      workflow: "develop.yml",
-      ref: dispatch.ref,
-      workflowRunUrl: dispatch.html_url,
+    await addIssueLabel(options, issueNumber, gitVibeLabels.investigating.name);
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber,
+      label,
+      owner: options.owner,
+      repo: options.repo,
+      token: options.token,
+    });
+    return;
+  }
+
+  if (label === gitVibeLabels.approved.name) {
+    if (!issueHasLabel(options.payload.issue, gitVibeLabels.investigated.name)) {
+      await removeIssueLabel({
+        client: options.client,
+        issueNumber,
+        label,
+        owner: options.owner,
+        repo: options.repo,
+        token: options.token,
+      });
+      await createIssueComment(options, issueNumber, approvalRequiresInvestigationBody(label));
+      return;
+    }
+
+    await dispatchWorkflow(options, "develop.yml", {
+      "issue-number": issueNumber,
     });
     return;
   }
@@ -583,7 +604,7 @@ async function handlePullRequestClosed(options: WebhookContext): Promise<void> {
 async function markPullRequestApproved(options: WebhookContext, prNumber: string): Promise<void> {
   await updateSourceIssueLabelsForPullRequest(options, prNumber, {
     add: [gitVibeLabels.prApproved.name],
-    remove: [gitVibeLabels.approved.name, gitVibeLabels.inProgress.name],
+    remove: [gitVibeLabels.approved.name],
     reason: "approved review",
   });
 }
@@ -591,12 +612,7 @@ async function markPullRequestApproved(options: WebhookContext, prNumber: string
 async function markPullRequestMerged(options: WebhookContext, prNumber: string): Promise<void> {
   await updateSourceIssueLabelsForPullRequest(options, prNumber, {
     add: [gitVibeLabels.prMerged.name],
-    remove: [
-      gitVibeLabels.approved.name,
-      gitVibeLabels.inProgress.name,
-      gitVibeLabels.prOpened.name,
-      gitVibeLabels.prApproved.name,
-    ],
+    remove: [gitVibeLabels.prOpened.name, gitVibeLabels.prApproved.name],
     reason: "merged PR",
   });
 }
@@ -988,6 +1004,10 @@ function labelReason(label: string): string {
   return `${inlineCode(label)} label`;
 }
 
+function issueHasLabel(issue: WebhookPayload["issue"], label: string): boolean {
+  return Boolean(issue?.labels?.some((item) => item.name === label));
+}
+
 async function acknowledgeCommand(options: WebhookContext): Promise<void> {
   const subjectId = commandCommentNodeId(options.payload.comment);
   if (!subjectId) {
@@ -1151,6 +1171,10 @@ function protectedLabelRejectionBody(options: WebhookContext, label: string): st
 
 function internalLabelRejectionBody(label: string): string {
   return `GitVibe removed \`${label}\` because \`gvi:\` labels are internal runtime labels and must only be applied by GitVibe with a valid hidden marker.`;
+}
+
+function approvalRequiresInvestigationBody(label: string): string {
+  return `GitVibe removed \`${label}\` because this issue has not completed investigation yet. Add \`${gitVibeLabels.investigate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.investigating.name}\` and then \`${gitVibeLabels.investigated.name}\` when the investigation is ready for implementation.`;
 }
 
 function sendJson(res: ServerResponse, statusCode: number, value: unknown): void {

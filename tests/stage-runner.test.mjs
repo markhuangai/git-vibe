@@ -613,11 +613,19 @@ function commitAll(cwd) {
 }
 
 function fetchMock(responses) {
-  return vi.fn(async () => {
+  return vi.fn(async (url, init = {}) => {
+    if (isLabelRequest(url, init)) return response(200, {});
     const next = responses.shift();
     if (!next) throw new Error("unexpected fetch");
     return next;
   });
+}
+
+function isLabelRequest(url, init) {
+  const method = String(init.method || "GET").toUpperCase();
+  return method === "POST"
+    ? /\/issues\/\d+\/labels$/.test(String(url))
+    : method === "DELETE" && String(url).includes("/labels/");
 }
 
 function issueResponse(body, overrides = {}) {
@@ -633,22 +641,16 @@ function issueResponse(body, overrides = {}) {
 }
 
 function issueWithoutNumberResponse(body) {
-  return response(200, {
-    body,
-    created_at: "2026-01-02T00:00:00Z",
+  return issueResponse(body, {
     html_url: "https://github.com/example/repo/issues/abc",
-    title: "Issue title",
-    user: { login: "octocat" },
+    number: undefined,
   });
 }
 
-function commentsResponse(comments) {
-  return response(200, comments);
-}
+const commentsResponse = (comments) => response(200, comments);
 
-function reviewThreadsResponse() {
-  return graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
-}
+const reviewThreadsResponse = () =>
+  graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
 
 function discussionResponse() {
   return graphqlResponse({
@@ -657,7 +659,12 @@ function discussionResponse() {
         author: { login: "octocat" },
         body: "Discussion body",
         comments: {
-          nodes: [{ id: "discussion-parent-comment", replies: { nodes: [commandReply()] } }],
+          nodes: [
+            {
+              id: "discussion-parent-comment",
+              replies: { nodes: [{ id: "discussion-command-reply" }] },
+            },
+          ],
         },
         createdAt: "2026-01-02T00:00:00Z",
         id: "discussion-id",
@@ -666,10 +673,6 @@ function discussionResponse() {
       },
     },
   });
-}
-
-function commandReply() {
-  return { id: "discussion-command-reply" };
 }
 
 function discussionWithoutIdResponse() {
@@ -687,14 +690,10 @@ function discussionWithoutIdResponse() {
   });
 }
 
-function graphqlResponse(data) {
-  return response(200, { data });
-}
+const graphqlResponse = (data) => response(200, { data });
 
-function response(status, value) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    text: async () => JSON.stringify(value),
-  };
-}
+const response = (status, value) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  text: async () => JSON.stringify(value),
+});

@@ -113,8 +113,10 @@ describe("implementation validation repair", () => {
       }),
     ).resolves.toMatchObject({ status: "blocked" });
 
-    expect(fetch.mock.calls[4][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[5][1].body).labels).toEqual(["git-vibe:blocked"]);
+    expect(fetch.mock.calls.some(([url]) => String(url).includes("/issues/12/comments"))).toBe(
+      true,
+    );
+    expect(labelBodies(fetch)).toContainEqual(["git-vibe:blocked"]);
   });
 });
 
@@ -218,11 +220,29 @@ function commitAll(cwd) {
 }
 
 function fetchMock(responses) {
-  return vi.fn(async () => {
+  return vi.fn(async (url, init = {}) => {
+    if (isLabelRequest(url, init)) return response(200, {});
     const next = responses.shift();
     if (!next) throw new Error("unexpected fetch");
     return next;
   });
+}
+
+function isLabelRequest(url, init) {
+  const method = String(init.method || "GET").toUpperCase();
+  const path = String(url);
+  return (
+    (method === "POST" && /\/issues\/\d+\/labels$/.test(path)) ||
+    (method === "DELETE" && path.includes("/labels/"))
+  );
+}
+
+function labelBodies(fetch) {
+  return fetch.mock.calls
+    .filter(
+      ([url, init]) => isLabelRequest(url, init) && String(init.method).toUpperCase() === "POST",
+    )
+    .map(([, init]) => JSON.parse(init.body).labels);
 }
 
 function issueResponse(body) {

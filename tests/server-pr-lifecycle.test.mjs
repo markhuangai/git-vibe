@@ -29,10 +29,7 @@ describe("GitVibe app server PR approval labels", () => {
       labels: ["git-vibe:pr-approved"],
     });
     expect(requestPaths(client, "DELETE")).toEqual(
-      expect.arrayContaining([
-        "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
-      ]),
+      expect.arrayContaining(["/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"]),
     );
     expect(workflowDispatches(client)).toEqual([]);
   });
@@ -102,8 +99,6 @@ describe("GitVibe app server PR merge labels", () => {
     });
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
-        "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
         "/repos/example/repo/issues/12/labels/git-vibe%3Apr-opened",
         "/repos/example/repo/issues/12/labels/git-vibe%3Apr-approved",
       ]),

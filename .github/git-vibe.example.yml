@@ -11,12 +11,10 @@ permissions:
 
 labels:
   story: git-vibe:story
-  bug: git-vibe:bug
   needs_discussion: git-vibe:needs-discussion
-  needs_investigation: git-vibe:needs-investigation
+  investigate: git-vibe:investigate
   investigating: git-vibe:investigating
-  investigation_complete: git-vibe:investigation-complete
-  needs_expected_behavior: git-vibe:needs-expected-behavior
+  investigated: git-vibe:investigated
   ready_for_approval: git-vibe:ready-for-approval
   approved: git-vibe:approved
   in_progress: git-vibe:in-progress
@@ -227,8 +225,6 @@ bug_investigation:
     enabled: false
     reaction: "+1"
     threshold: 6
-    eligible_labels:
-      - git-vibe:bug
     dispatch: investigation-only
 
 feature_refinement:

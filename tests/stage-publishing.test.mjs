@@ -402,6 +402,13 @@ describe("stage label publishing helpers", () => {
       client,
       context: context("issue"),
       logger: createLogger(),
+      parsedOutput: readyInvestigationOutput(),
+      runner: runner({ stage: "investigate" }),
+    });
+    await applyStageLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
       parsedOutput: output(),
       runner: runner({ stage: "implement" }),
     });
@@ -421,17 +428,27 @@ describe("stage label publishing helpers", () => {
     ).toEqual([
       "git-vibe:blocked",
       "git-vibe:ready-for-approval",
+      "git-vibe:investigated",
       "git-vibe:in-progress",
       "git-vibe:pr-opened",
     ]);
     expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
+    );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
+    );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
+    );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",
     );
   });
 });
 
 describe("stage label investigation blocking", () => {
-  it("blocks not-ready investigation by adding blocked and removing approved", async () => {
+  it("blocks not-ready investigation by adding blocked and removing investigating", async () => {
     const client = createClient();
 
     await applyStageLabelTransition({
@@ -444,12 +461,12 @@ describe("stage label investigation blocking", () => {
 
     expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
       ["POST", "/repos/example/repo/issues/12/labels"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
     ]);
     expect(client.request.mock.calls[0][0].body.labels).toEqual(["git-vibe:blocked"]);
   });
 
-  it("ignores a missing approved label when blocking not-ready investigation", async () => {
+  it("ignores a missing investigating label when blocking not-ready investigation", async () => {
     const client = createClient();
     client.request = vi.fn(async (request) => {
       if (request.method === "DELETE") throw new Error("GitHub API DELETE label failed: 404");
@@ -469,7 +486,7 @@ describe("stage label investigation blocking", () => {
     expect(client.request).toHaveBeenCalledTimes(2);
   });
 
-  it("logs and rethrows unexpected approved label removal failures", async () => {
+  it("logs and rethrows unexpected investigating label removal failures", async () => {
     const client = createClient();
     const logger = createLogger();
     client.request = vi.fn(async (request) => {
@@ -488,7 +505,7 @@ describe("stage label investigation blocking", () => {
     ).rejects.toThrow("delete unavailable");
     expect(logger.event).toHaveBeenCalledWith(
       "github.issue.label.remove.failed",
-      expect.objectContaining({ issue: "12", label: "git-vibe:approved" }),
+      expect.objectContaining({ issue: "12", label: "git-vibe:investigating" }),
     );
   });
 });
@@ -527,6 +544,16 @@ function blockedInvestigationOutput() {
     blocking_questions: ["Choose the config key."],
     implementation_plan: [],
     next_state: "needs-info",
+    stage: "investigate",
+  };
+}
+
+function readyInvestigationOutput() {
+  return {
+    ...output(),
+    blocking_questions: [],
+    implementation_plan: ["Implement the accepted behavior."],
+    next_state: "ready-for-implementation",
     stage: "investigate",
   };
 }

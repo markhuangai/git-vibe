@@ -13,7 +13,7 @@ import {
 } from "./support/server-app.mjs";
 
 describe("GitVibe app server issue labels", () => {
-  it("rejects untrusted protected labels and dispatches trusted approved labels", async () => {
+  it("rejects untrusted protected labels", async () => {
     const client = createClient({ permission: new Error("GitHub API GET permission failed: 404") });
     const app = createApp({ client });
 
@@ -29,27 +29,78 @@ describe("GitVibe app server issue labels", () => {
       "/repos/example/repo/issues/2/labels/git-vibe%3Aapproved",
     );
     expect(requestBodies(client, "POST", "/issues/2/comments")[0].body).toContain("removed");
+  });
 
-    const trustedClient = createClient({ permission: { role_name: "maintain" } });
-    await createApp({ client: trustedClient }).handleWebhook("issues", {
+  it("dispatches trusted investigate labels and replaces the trigger label", async () => {
+    const client = createClient({ permission: { role_name: "maintain" } });
+    await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
       issue: { number: 9 },
-      label: { name: gitVibeLabels.approved.name },
+      label: { name: gitVibeLabels.investigate.name },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
-    expect(workflowDispatches(trustedClient)).toEqual([
+
+    expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
         inputs: { "issue-number": "9" },
         ref: "main",
         return_run_details: true,
       }),
     ]);
-    expect(requestBodies(trustedClient, "POST", "/issues/9/comments").at(-1).body).toContain(
-      "Workflow run: https://github.com/example/repo/actions/runs/1",
+    expect(requestBodies(client, "POST", "/issues/9/labels")).toContainEqual({
+      labels: ["git-vibe:investigating"],
+    });
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Ainvestigate",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
+  });
+
+  it("rejects approved issue labels until investigation has completed", async () => {
+    const client = createClient({ permission: { role_name: "maintain" } });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { labels: [{ name: gitVibeLabels.approved.name }], number: 9 },
+      label: { name: gitVibeLabels.approved.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aapproved",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "has not completed investigation yet",
     );
   });
 
+  it("dispatches trusted approved labels after investigation has completed", async () => {
+    const client = createClient({ permission: { role_name: "maintain" } });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [{ name: gitVibeLabels.approved.name }, { name: gitVibeLabels.investigated.name }],
+        number: 9,
+      },
+      label: { name: gitVibeLabels.approved.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: { "issue-number": "9" },
+        ref: "main",
+        return_run_details: true,
+      }),
+    ]);
+    expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
+  });
+});
+
+describe("GitVibe app server issue validation labels", () => {
   it("dispatches trusted validate labels on issues and removes the trigger label", async () => {
     const client = createClient({ permission: { role_name: "maintain" } });
     const app = createApp({ client });

@@ -264,7 +264,7 @@ describe("GitVibe workflow write permissions", () => {
       issues: "write",
     });
     expect(
-      readWorkflow(".github/workflows/develop.yml").jobs?.investigate?.permissions,
+      readWorkflow(".github/workflows/develop.yml").jobs?.implement?.permissions,
     ).toMatchObject({
       issues: "write",
     });
@@ -307,53 +307,33 @@ describe("GitVibe workflow write permissions", () => {
   });
 });
 
-describe("GitVibe develop workflow handoff", () => {
-  it("keeps develop stages independent and gates them on stage outputs", () => {
+describe("GitVibe develop workflow", () => {
+  it("starts at implementation after issue-label investigation approval", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
-    const investigate = workflow.jobs?.investigate;
     const implement = workflow.jobs?.implement;
     const reviewMatrix = workflow.jobs?.["review-matrix"];
     const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
     const createPr = workflow.jobs?.["create-pr"];
 
-    expect(investigate?.outputs).toMatchObject({
-      "next-state": "${{ steps.investigate.outputs.next-state }}",
-      "ready-for-implementation": "${{ steps.investigate.outputs.ready-for-implementation }}",
-      status: "${{ steps.investigate.outputs.status }}",
-    });
-    expect(investigate?.steps?.find((step) => step.id === "investigate")).toMatchObject({
-      uses: "./.git-vibe/actions/investigate",
-      with: expect.objectContaining({
-        "fail-on-blocked": "true",
-        "fail-on-not-ready": "true",
-      }),
-    });
-    expect(
-      investigate?.steps?.find((step) => step.uses === "actions/upload-artifact@v4"),
-    ).toMatchObject({
-      if: "always()",
-      with: expect.objectContaining({
-        path: "${{ runner.temp }}/git-vibe-investigate-result.json",
-      }),
-    });
-    expect(implement).toMatchObject({
-      if: "needs.investigate.outputs.ready-for-implementation == 'true'",
-      needs: "investigate",
-    });
+    expect(workflow.on?.workflow_dispatch?.inputs?.investigation_timeout_minutes).toBeUndefined();
+    expect(workflow.on?.workflow_call?.inputs?.investigation_timeout_minutes).toBeUndefined();
+    expect(workflow.jobs?.investigate).toBeUndefined();
+    expect(implement?.needs).toBeUndefined();
+    expect(implement?.if).toBeUndefined();
     expect(
       implement?.steps?.find((step) => step.uses === "actions/download-artifact@v4"),
-    ).toMatchObject({
-      with: expect.objectContaining({ path: "${{ runner.temp }}/git-vibe-handoffs" }),
-    });
+    ).toBeUndefined();
     expect(
       implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement"),
     ).toMatchObject({
       with: expect.objectContaining({
         "fail-on-blocked": "true",
-        "handoff-dir": "${{ runner.temp }}/git-vibe-handoffs",
         "validation-repair-attempts": "${{ inputs.validation_repair_attempts }}",
       }),
     });
+    expect(
+      implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement")?.with,
+    ).not.toHaveProperty("handoff-dir");
     expect(reviewMatrix).toMatchObject({
       needs: "implement",
       outputs: expect.objectContaining({

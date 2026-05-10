@@ -196,11 +196,21 @@ function implementAiOutput(summary, overrides = {}) {
 }
 
 function fetchMock(responses) {
-  return vi.fn(async () => {
+  return vi.fn(async (url, init = {}) => {
+    if (isLabelRequest(url, init)) return response(200, {});
     const next = responses.shift();
     if (!next) throw new Error("unexpected fetch");
     return next;
   });
+}
+
+function isLabelRequest(url, init) {
+  const method = String(init.method || "GET").toUpperCase();
+  const path = String(url);
+  return (
+    (method === "POST" && /\/issues\/\d+\/labels$/.test(path)) ||
+    (method === "DELETE" && path.includes("/labels/"))
+  );
 }
 
 function issueResponse(body) {
