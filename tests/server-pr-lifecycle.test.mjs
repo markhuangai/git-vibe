@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
 import {
   createApp,
@@ -10,7 +9,7 @@ import {
 } from "./support/server-app.mjs";
 
 describe("GitVibe app server PR approval labels", () => {
-  it("labels source issues when trusted reviews approve GitVibe pull requests", async () => {
+  it("labels pull requests when trusted reviews approve GitVibe pull requests", async () => {
     const client = createClient();
     const app = createApp({ client });
 
@@ -25,11 +24,14 @@ describe("GitVibe app server PR approval labels", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
+    expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
       labels: ["git-vibe:pr-approved"],
     });
     expect(requestPaths(client, "DELETE")).toEqual(
-      expect.arrayContaining(["/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"]),
+      expect.arrayContaining([
+        "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
+      ]),
     );
     expect(workflowDispatches(client)).toEqual([]);
   });
@@ -47,7 +49,7 @@ describe("GitVibe app server PR approval labels", () => {
     });
 
     expect(requestPaths(client, "GET")).toContain("/repos/example/repo/pulls/22");
-    expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
+    expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
       labels: ["git-vibe:pr-approved"],
     });
   });

@@ -1,4 +1,8 @@
 import { GitHubClient, splitRepository } from "../shared/github.js";
+import {
+  gitVibeTraceabilityIssueNumbers,
+  sourceDiscussionTraceFromBody,
+} from "../shared/traceability.js";
 import type { ContextPacket, JsonObject, TimelineItem } from "../shared/types.js";
 
 interface IssueResponse extends JsonObject {
@@ -14,6 +18,17 @@ interface IssueResponse extends JsonObject {
 
 interface CommentResponse extends IssueResponse {
   id?: number;
+}
+
+interface PullRequestResponse extends JsonObject {
+  head?: {
+    ref?: string;
+    repo?: {
+      full_name?: string;
+      name?: string;
+      owner?: { login?: string };
+    } | null;
+  };
 }
 
 export async function buildIssueContext(options: {
@@ -34,6 +49,16 @@ export async function buildIssueContext(options: {
     path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/comments?per_page=100`,
     token: options.token,
   });
+  const pullRequest =
+    options.type === "pull-request"
+      ? await pullRequestDetails({
+          client: options.client,
+          issueNumber: options.issueNumber,
+          name: repo,
+          owner,
+          token: options.token,
+        })
+      : undefined;
   const reviewComments =
     options.type === "pull-request"
       ? await openPullRequestReviewComments({
@@ -44,10 +69,23 @@ export async function buildIssueContext(options: {
           token: options.token,
         })
       : [];
+  const relatedTimeline =
+    options.type === "pull-request"
+      ? await pullRequestRelatedTimeline({
+          client: options.client,
+          issue,
+          name: repo,
+          owner,
+          prNumber: options.issueNumber,
+          repository: options.repository,
+          token: options.token,
+        })
+      : [];
   const timeline = [
     toTimelineItem("body", `issue-${options.issueNumber}`, issue),
     ...comments.map((comment) => toTimelineItem("comment", String(comment.id || ""), comment)),
     ...reviewComments.map(toPullRequestReviewTimelineItem),
+    ...relatedTimeline,
   ].sort(compareTimelineItems);
 
   return {
@@ -57,11 +95,165 @@ export async function buildIssueContext(options: {
       title: issue.title || "",
       type: options.type || "issue",
       url: issue.html_url || "",
+      pullRequestHead: pullRequestHead(pullRequest),
     },
     generatedAt: new Date().toISOString(),
     repository: options.repository,
     timeline,
   };
+}
+
+async function pullRequestDetails(options: {
+  client: GitHubClient;
+  issueNumber: string;
+  name: string;
+  owner: string;
+  token: string;
+}): Promise<PullRequestResponse> {
+  return options.client.request<PullRequestResponse>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.name}/pulls/${options.issueNumber}`,
+    token: options.token,
+  });
+}
+
+function pullRequestHead(
+  pullRequest: PullRequestResponse | undefined,
+): ContextPacket["artifact"]["pullRequestHead"] {
+  const branch = pullRequest?.head?.ref || "";
+  const repository =
+    pullRequest?.head?.repo?.full_name ||
+    (pullRequest?.head?.repo?.owner?.login && pullRequest.head.repo.name
+      ? `${pullRequest.head.repo.owner.login}/${pullRequest.head.repo.name}`
+      : "");
+  if (!branch || !repository) return undefined;
+  return { branch, repository };
+}
+
+async function pullRequestRelatedTimeline(options: {
+  client: GitHubClient;
+  issue: IssueResponse;
+  name: string;
+  owner: string;
+  prNumber: string;
+  repository: string;
+  token: string;
+}): Promise<TimelineItem[]> {
+  const issueNumbers = gitVibeTraceabilityIssueNumbers(options.issue.body || "");
+  const seen = new Set<string>([options.prNumber]);
+  const timeline: TimelineItem[] = [];
+
+  for (const issueNumber of issueNumbers) {
+    if (seen.has(issueNumber)) continue;
+    seen.add(issueNumber);
+    const source = await issueTimeline({
+      ...options,
+      issueNumber,
+      role: "source-issue",
+    });
+    timeline.push(...source.timeline);
+
+    const discussion = sourceDiscussionTraceFromBody(source.issue.body || "");
+    if (discussion) {
+      const discussionContext = await buildDiscussionContext({
+        client: options.client,
+        discussionNumber: discussion.number,
+        repository: options.repository,
+        token: options.token,
+      });
+      timeline.push(...relatedContextTimeline("source-discussion", discussionContext.timeline));
+    }
+
+    const relatedIssues = await relatedIssueNumbers({
+      client: options.client,
+      issueNumber,
+      name: options.name,
+      owner: options.owner,
+      token: options.token,
+    });
+    for (const related of relatedIssues) {
+      if (seen.has(related.number)) continue;
+      seen.add(related.number);
+      const relatedIssue = await issueTimeline({
+        ...options,
+        issueNumber: related.number,
+        role: related.role,
+      });
+      timeline.push(...relatedIssue.timeline);
+    }
+  }
+
+  return timeline;
+}
+
+async function issueTimeline(options: {
+  client: GitHubClient;
+  issueNumber: string;
+  name: string;
+  owner: string;
+  role: "parent-issue" | "source-issue" | "sub-issue";
+  token: string;
+}): Promise<{ issue: IssueResponse; timeline: TimelineItem[] }> {
+  const issue = await options.client.request<IssueResponse>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.name}/issues/${options.issueNumber}`,
+    token: options.token,
+  });
+  const comments = await options.client.request<CommentResponse[]>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.name}/issues/${options.issueNumber}/comments?per_page=100`,
+    token: options.token,
+  });
+  return {
+    issue,
+    timeline: [
+      relatedTimelineItem(
+        options.role,
+        toTimelineItem("body", `issue-${options.issueNumber}`, issue),
+      ),
+      ...comments.map((comment) =>
+        relatedTimelineItem(
+          options.role,
+          toTimelineItem("comment", String(comment.id || ""), comment),
+        ),
+      ),
+    ],
+  };
+}
+
+async function relatedIssueNumbers(options: {
+  client: GitHubClient;
+  issueNumber: string;
+  name: string;
+  owner: string;
+  token: string;
+}): Promise<Array<{ number: string; role: "parent-issue" | "sub-issue" }>> {
+  const data = await options.client.graphql<RelatedIssuesQueryResult>(
+    relatedIssuesQuery,
+    {
+      name: options.name,
+      number: Number(options.issueNumber),
+      owner: options.owner,
+    },
+    options.token,
+  );
+  const issue = data.repository.issue;
+  const related: Array<{ number: string; role: "parent-issue" | "sub-issue" }> = [];
+  if (issue.parent?.number) {
+    related.push({ number: String(issue.parent.number), role: "parent-issue" });
+  }
+  for (const node of issue.subIssues.nodes) {
+    if (node.number) related.push({ number: String(node.number), role: "sub-issue" });
+  }
+  return related;
+}
+
+function relatedContextTimeline(role: string, timeline: TimelineItem[]): TimelineItem[] {
+  return timeline.map((item) => relatedTimelineItem(role, item));
+}
+
+function relatedTimelineItem(role: string, item: TimelineItem): TimelineItem {
+  return { ...item, id: `${role}-${item.id}`, kind: `${role}-${item.kind}` };
 }
 
 async function openPullRequestReviewComments(options: {
@@ -227,6 +419,19 @@ interface PullRequestReviewThreadsQueryResult {
   };
 }
 
+interface RelatedIssueNode {
+  number?: number;
+}
+
+interface RelatedIssuesQueryResult {
+  repository: {
+    issue: {
+      parent?: RelatedIssueNode | null;
+      subIssues: { nodes: RelatedIssueNode[] };
+    };
+  };
+}
+
 const discussionQuery = `
   query GitVibeDiscussion($owner: String!, $name: String!, $number: Int!) {
     repository(owner: $owner, name: $name) {
@@ -284,6 +489,23 @@ const pullRequestReviewThreadsQuery = `
                 replyTo { id }
               }
             }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const relatedIssuesQuery = `
+  query GitVibeRelatedIssues($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      issue(number: $number) {
+        parent {
+          number
+        }
+        subIssues(first: 20) {
+          nodes {
+            number
           }
         }
       }

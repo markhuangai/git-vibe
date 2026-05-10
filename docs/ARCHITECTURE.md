@@ -157,7 +157,7 @@ Starter files:
 - `.github/git-vibe.yml`: repository-specific GitVibe config.
 - `.github/workflows/investigate.yml`: wrapper for investigation-only runs.
 - `.github/workflows/develop.yml`: wrapper for full implementation runs.
-- `.github/workflows/address-feedback.yml`: wrapper for PR feedback remediation.
+- `.github/workflows/address-feedback.yml`: wrapper for PR feedback investigation, conditional remediation, and review.
 
 The wrapper workflows call reusable workflows such as:
 

@@ -1,11 +1,18 @@
-// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
 import {
   applyStageLabelTransition,
+  publishFeedbackInvestigationReplies,
   publishStageResultComment,
   publishStageStartComment,
 } from "../src/runner/stage-publishing.ts";
 import { stageStartMarker, workflowQueuedMarker } from "../src/shared/status-comments.ts";
+
+/**
+ * @typedef {import("../src/shared/github.ts").GitHubClient & { graphql: any; request: any }} MockGitHubClient
+ * @typedef {import("../src/shared/types.ts").ContextPacket} ContextPacket
+ * @typedef {import("../src/shared/types.ts").RunnerOptions} RunnerOptions
+ * @typedef {import("../src/shared/types.ts").TimelineItem} TimelineItem
+ */
 
 describe("stage publishing helpers", () => {
   it("skips discussion comments when the discussion node id is missing", async () => {
@@ -55,7 +62,52 @@ describe("stage publishing helpers", () => {
       }),
     );
   });
+});
 
+describe("stage publishing feedback investigation replies", () => {
+  it("publishes only to referenced review comments", async () => {
+    const client = createClient();
+    const prContext = {
+      ...context("pull-request"),
+      timeline: [
+        {
+          author: "reviewer",
+          body: "Feedback",
+          createdAt: "2026-01-01T00:00:00Z",
+          databaseId: 99,
+          id: "review-node",
+          kind: "pull-request-review-comment",
+          url: "review-url",
+        },
+      ],
+    };
+
+    await publishFeedbackInvestigationReplies({
+      client,
+      context: prContext,
+      logger: createLogger(),
+      parsedOutput: {
+        feedback_items: [
+          { id: "review-node", reply: "Already handled by the current diff.", status: "answered" },
+          { id: "missing-node", reply: "Cannot post this.", status: "rejected" },
+          { id: "review-node", reply: "Implementation needed.", status: "requires-fix" },
+        ],
+      },
+      runner: runner({ stage: "investigate" }),
+    });
+
+    expect(client.request).toHaveBeenCalledTimes(1);
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { body: "Already handled by the current diff." },
+        method: "POST",
+        path: "/repos/example/repo/pulls/12/comments/99/replies",
+      }),
+    );
+  });
+});
+
+describe("stage publishing helpers", () => {
   it("posts flat issue comments with and without source links", async () => {
     const client = createClient();
 
@@ -80,8 +132,8 @@ describe("stage publishing helpers", () => {
       }),
     });
 
-    expect(client.request.mock.calls[0][0].body.body).not.toContain("In reply to:");
-    expect(client.request.mock.calls[1][0].body.body).not.toContain("In reply to:");
+    expect(requestCalls(client)[0].body.body).not.toContain("In reply to:");
+    expect(requestCalls(client)[1].body.body).not.toContain("In reply to:");
   });
 
   it("posts discussion comments without reply metadata when no source exists", async () => {
@@ -116,8 +168,8 @@ describe("stage publishing discussion replies", () => {
         ...context("discussion"),
         artifact: { ...context("discussion").artifact, id: "D_1" },
         timeline: [
-          { id: "parent-comment", kind: "comment" },
-          { id: "command-reply", kind: "reply", parentId: "parent-comment" },
+          timelineItem({ id: "parent-comment", kind: "comment" }),
+          timelineItem({ id: "command-reply", kind: "reply", parentId: "parent-comment" }),
         ],
       },
       logger: createLogger(),
@@ -152,8 +204,11 @@ describe("stage publishing status cleanup", () => {
               run: "99",
               workflow: "validate.yml",
             }),
+            author: "git-vibe",
+            createdAt: "2026-01-01T00:00:00Z",
             id: "44",
             kind: "comment",
+            url: "comment-url",
           },
         ],
       },
@@ -164,7 +219,7 @@ describe("stage publishing status cleanup", () => {
       }),
     });
 
-    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/issues/comments/44"],
       ["POST", "/repos/example/repo/issues/12/comments"],
     ]);
@@ -189,9 +244,11 @@ describe("stage publishing stale status cleanup", () => {
               run: "97",
               stage: "review-matrix",
             }),
+            author: "git-vibe",
             createdAt: oldCreatedAt,
             id: "51",
             kind: "comment",
+            url: "comment-url",
           },
           {
             body: stageStartMarker({
@@ -200,9 +257,11 @@ describe("stage publishing stale status cleanup", () => {
               run: "98",
               stage: "implement",
             }),
+            author: "git-vibe",
             createdAt: oldCreatedAt,
             id: "52",
             kind: "comment",
+            url: "comment-url",
           },
           {
             body: stageStartMarker({
@@ -211,9 +270,11 @@ describe("stage publishing stale status cleanup", () => {
               run: "99",
               stage: "implement",
             }),
+            author: "git-vibe",
             createdAt: recentCreatedAt,
             id: "53",
             kind: "comment",
+            url: "comment-url",
           },
           {
             body: stageStartMarker({
@@ -222,9 +283,11 @@ describe("stage publishing stale status cleanup", () => {
               run: "98",
               stage: "implement",
             }),
+            author: "git-vibe",
             createdAt: oldCreatedAt,
             id: "54",
             kind: "comment",
+            url: "comment-url",
           },
           {
             body: workflowQueuedMarker({
@@ -233,9 +296,11 @@ describe("stage publishing stale status cleanup", () => {
               run: "96",
               workflow: "review-matrix.yml",
             }),
+            author: "git-vibe",
             createdAt: oldCreatedAt,
             id: "55",
             kind: "comment",
+            url: "comment-url",
           },
         ],
       },
@@ -246,7 +311,7 @@ describe("stage publishing stale status cleanup", () => {
       }),
     });
 
-    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/issues/comments/51"],
       ["DELETE", "/repos/example/repo/issues/comments/52"],
       ["DELETE", "/repos/example/repo/issues/comments/55"],
@@ -272,8 +337,11 @@ describe("stage publishing discussion status cleanup", () => {
               run: "99",
               stage: "summarize",
             }),
+            author: "git-vibe",
+            createdAt: "2026-01-01T00:00:00Z",
             id: "DC_1",
             kind: "comment",
+            url: "comment-url",
           },
         ],
       },
@@ -295,10 +363,16 @@ describe("stage publishing status cleanup failures", () => {
   it("ignores already-deleted transient status comments", async () => {
     const client = createClient();
     const logger = createLogger();
-    client.request = vi.fn(async (request) => {
-      if (request.method === "DELETE") throw new Error("GitHub API DELETE failed: 404");
-      return {};
-    });
+    client.request = vi.fn(
+      /**
+       * @param {any} request
+       * @returns {Promise<Record<string, unknown>>}
+       */
+      async (request) => {
+        if (request.method === "DELETE") throw new Error("GitHub API DELETE failed: 404");
+        return {};
+      },
+    );
 
     await publishStageStartComment({
       client,
@@ -311,8 +385,11 @@ describe("stage publishing status cleanup failures", () => {
               number: "12",
               workflow: "validate.yml",
             }),
+            author: "git-vibe",
+            createdAt: "2026-01-01T00:00:00Z",
             id: "44",
             kind: "comment",
+            url: "comment-url",
           },
         ],
       },
@@ -324,7 +401,7 @@ describe("stage publishing status cleanup failures", () => {
       "github.status_comment.delete.failed",
       expect.anything(),
     );
-    expect(client.request.mock.calls.at(-1)[0].method).toBe("POST");
+    expect(requestCalls(client).at(-1).method).toBe("POST");
   });
 });
 
@@ -344,9 +421,12 @@ describe("stage publishing review status cleanup", () => {
               run: "99",
               stage: "address-pr-feedback",
             }),
+            author: "git-vibe",
+            createdAt: "2026-01-01T00:00:00Z",
             databaseId: 77,
             id: "PRRC_node",
             kind: "pull-request-review-comment",
+            url: "review-url",
           },
         ],
       },
@@ -359,7 +439,7 @@ describe("stage publishing review status cleanup", () => {
       }),
     });
 
-    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/pulls/comments/77"],
       ["POST", "/repos/example/repo/pulls/12/comments/88/replies"],
     ]);
@@ -421,8 +501,7 @@ describe("stage label publishing helpers", () => {
     });
 
     expect(
-      client.request.mock.calls
-        .map(([request]) => request)
+      requestCalls(client)
         .filter((request) => request.method === "POST")
         .map((request) => request.body.labels[0]),
     ).toEqual([
@@ -432,84 +511,25 @@ describe("stage label publishing helpers", () => {
       "git-vibe:in-progress",
       "git-vibe:pr-opened",
     ]);
-    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
     );
-    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
     );
-    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
     );
-    expect(client.request.mock.calls.map(([request]) => request.path)).toContain(
+    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",
     );
   });
 });
 
-describe("stage label investigation blocking", () => {
-  it("blocks not-ready investigation by adding blocked and removing investigating", async () => {
-    const client = createClient();
-
-    await applyStageLabelTransition({
-      client,
-      context: context("issue"),
-      logger: createLogger(),
-      parsedOutput: blockedInvestigationOutput(),
-      runner: runner({ failOnNotReady: true, stage: "investigate" }),
-    });
-
-    expect(client.request.mock.calls.map(([request]) => [request.method, request.path])).toEqual([
-      ["POST", "/repos/example/repo/issues/12/labels"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
-    ]);
-    expect(client.request.mock.calls[0][0].body.labels).toEqual(["git-vibe:blocked"]);
-  });
-
-  it("ignores a missing investigating label when blocking not-ready investigation", async () => {
-    const client = createClient();
-    client.request = vi.fn(async (request) => {
-      if (request.method === "DELETE") throw new Error("GitHub API DELETE label failed: 404");
-      return {};
-    });
-
-    await expect(
-      applyStageLabelTransition({
-        client,
-        context: context("issue"),
-        logger: createLogger(),
-        parsedOutput: blockedInvestigationOutput(),
-        runner: runner({ failOnNotReady: true, stage: "investigate" }),
-      }),
-    ).resolves.toBeUndefined();
-
-    expect(client.request).toHaveBeenCalledTimes(2);
-  });
-
-  it("logs and rethrows unexpected investigating label removal failures", async () => {
-    const client = createClient();
-    const logger = createLogger();
-    client.request = vi.fn(async (request) => {
-      if (request.method === "DELETE") throw new Error("delete unavailable");
-      return {};
-    });
-
-    await expect(
-      applyStageLabelTransition({
-        client,
-        context: context("issue"),
-        logger,
-        parsedOutput: blockedInvestigationOutput(),
-        runner: runner({ failOnNotReady: true, stage: "investigate" }),
-      }),
-    ).rejects.toThrow("delete unavailable");
-    expect(logger.event).toHaveBeenCalledWith(
-      "github.issue.label.remove.failed",
-      expect.objectContaining({ issue: "12", label: "git-vibe:investigating" }),
-    );
-  });
-});
-
+/**
+ * @param {ContextPacket["artifact"]["type"]} type
+ * @returns {ContextPacket}
+ */
 function context(type) {
   return {
     artifact: {
@@ -538,16 +558,6 @@ function output() {
   };
 }
 
-function blockedInvestigationOutput() {
-  return {
-    ...output(),
-    blocking_questions: ["Choose the config key."],
-    implementation_plan: [],
-    next_state: "needs-info",
-    stage: "investigate",
-  };
-}
-
 function readyInvestigationOutput() {
   return {
     ...output(),
@@ -558,6 +568,10 @@ function readyInvestigationOutput() {
   };
 }
 
+/**
+ * @param {Partial<RunnerOptions>} [overrides]
+ * @returns {RunnerOptions}
+ */
 function runner(overrides = {}) {
   return {
     cwd: "/repo",
@@ -573,20 +587,66 @@ function runner(overrides = {}) {
   };
 }
 
+/**
+ * @returns {MockGitHubClient}
+ */
 function createClient() {
-  return {
-    graphql: vi.fn(async (query) => {
-      if (query.includes("GitVibeAddDiscussionComment")) {
-        return { addDiscussionComment: { comment: { id: "comment", url: "url" } } };
-      }
-      return {};
-    }),
-    request: vi.fn(async () => ({})),
-  };
+  return /** @type {MockGitHubClient} */ ({
+    apiBaseUrl: "https://api.github.test",
+    graphql: vi.fn(
+      /**
+       * @param {string} query
+       * @returns {Promise<Record<string, unknown>>}
+       */
+      async (query) => {
+        if (query.includes("GitVibeAddDiscussionComment")) {
+          return { addDiscussionComment: { comment: { id: "comment", url: "url" } } };
+        }
+        return {};
+      },
+    ),
+    request: vi.fn(
+      /**
+       * @param {any} _request
+       * @returns {Promise<Record<string, unknown>>}
+       */
+      async (_request) => ({}),
+    ),
+    retryBaseDelayMs: 0,
+  });
 }
 
 function createLogger() {
   return {
     event: vi.fn(),
+  };
+}
+
+/**
+ * @param {MockGitHubClient} client
+ * @returns {any[]}
+ */
+function requestCalls(client) {
+  return client.request.mock.calls.map(
+    /**
+     * @param {any[]} call
+     */
+    (call) => call[0],
+  );
+}
+
+/**
+ * @param {Partial<TimelineItem>} overrides
+ * @returns {TimelineItem}
+ */
+function timelineItem(overrides) {
+  return {
+    author: "git-vibe",
+    body: "",
+    createdAt: "2026-01-01T00:00:00Z",
+    id: "timeline-item",
+    kind: "comment",
+    url: "comment-url",
+    ...overrides,
   };
 }

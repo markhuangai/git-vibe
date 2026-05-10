@@ -89,6 +89,10 @@ export interface ContextPacket {
     title: string;
     type: "issue" | "discussion" | "pull-request";
     url: string;
+    pullRequestHead?: {
+      branch: string;
+      repository: string;
+    };
   };
   generatedAt: string;
   handoffs?: StageHandoff[];

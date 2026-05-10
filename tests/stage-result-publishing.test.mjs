@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
@@ -118,6 +117,7 @@ describe("stage result PR replies", () => {
     const fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
+      pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
       response(200, {}),
     ]);
@@ -139,9 +139,10 @@ describe("stage result PR replies", () => {
       token: "token",
     });
 
-    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[3][1].body).body).toContain("## GitVibe PR Feedback Update");
-    expect(JSON.parse(fetch.mock.calls[3][1].body).body).toContain(
+    const commentCall = issueCommentCall(fetch);
+    expect(commentCall[0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(JSON.parse(commentCall[1].body).body).toContain("## GitVibe PR Feedback Update");
+    expect(JSON.parse(commentCall[1].body).body).toContain(
       "In reply to: https://github.com/example/repo/pull/12#issuecomment-2",
     );
   });
@@ -153,6 +154,7 @@ describe("stage result PR replies", () => {
     const fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
+      pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
       response(200, {}),
     ]);
@@ -175,11 +177,20 @@ describe("stage result PR replies", () => {
       token: "token",
     });
 
-    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/pulls/12/comments/88/replies");
-    expect(JSON.parse(fetch.mock.calls[3][1].body).body).toContain("## GitVibe PR Feedback Update");
+    const replyCall = fetch.mock.calls.find(([url]) =>
+      String(url).includes("/repos/example/repo/pulls/12/comments/88/replies"),
+    );
+    expect(replyCall).toBeDefined();
+    expect(JSON.parse(String(replyCall?.[1]?.body)).body).toContain(
+      "## GitVibe PR Feedback Update",
+    );
   });
 });
 
+/**
+ * @param {string} [config]
+ * @returns {Promise<string>}
+ */
 async function workspace(config = "") {
   const cwd = await mkdtemp(join(tmpdir(), "git-vibe-publish-"));
   process.env.RUNNER_TEMP = mkdtempSync(join(tmpdir(), "git-vibe-runner-"));
@@ -189,6 +200,9 @@ async function workspace(config = "") {
   return cwd;
 }
 
+/**
+ * @param {string} cwd
+ */
 function commitAll(cwd) {
   execFileSync("git", ["config", "user.name", "tester"], { cwd });
   execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd });
@@ -196,6 +210,9 @@ function commitAll(cwd) {
   execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" });
 }
 
+/**
+ * @param {Record<string, unknown>} output
+ */
 function aiResult(output) {
   return {
     steps: [
@@ -247,14 +264,56 @@ function feedbackOutput() {
   };
 }
 
+/**
+ * @param {any[]} responses
+ */
 function fetchMock(responses) {
-  return vi.fn(async () => {
-    const next = responses.shift();
-    if (!next) throw new Error("unexpected fetch");
-    return next;
-  });
+  return vi.fn(
+    /**
+     * @param {any} url
+     * @param {any} [init]
+     */
+    async (url, init = {}) => {
+      if (isLabelRequest(url, init)) return response(200, {});
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected fetch");
+      return next;
+    },
+  );
 }
 
+/**
+ * @param {any} fetch
+ */
+function issueCommentCall(fetch) {
+  return fetch.mock.calls.find(
+    /**
+     * @param {any[]} call
+     */
+    (call) => {
+      const [url, init] = call;
+      return (
+        String(url).includes("/repos/example/repo/issues/12/comments") &&
+        String(init?.method || "GET").toUpperCase() === "POST"
+      );
+    },
+  );
+}
+
+/**
+ * @param {any} url
+ * @param {any} init
+ */
+function isLabelRequest(url, init) {
+  const method = String(init.method || "GET").toUpperCase();
+  return method === "POST"
+    ? /\/issues\/\d+\/labels$/.test(String(url))
+    : method === "DELETE" && String(url).includes("/labels/");
+}
+
+/**
+ * @param {string} body
+ */
 function issueResponse(body) {
   return response(200, {
     body,
@@ -266,6 +325,9 @@ function issueResponse(body) {
   });
 }
 
+/**
+ * @param {unknown[]} comments
+ */
 function commentsResponse(comments) {
   return response(200, comments);
 }
@@ -278,6 +340,13 @@ function reviewThreadsResponse() {
       },
     },
   });
+}
+
+/**
+ * @param {string} branch
+ */
+function pullRequestResponse(branch) {
+  return response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });
 }
 
 function discussionResponse() {
@@ -296,10 +365,18 @@ function discussionResponse() {
   });
 }
 
+/**
+ * @param {Record<string, unknown>} data
+ */
 function graphqlResponse(data) {
   return response(200, { data });
 }
 
+/**
+ * @param {number} status
+ * @param {unknown} value
+ * @returns {any}
+ */
 function response(status, value) {
   return {
     ok: status >= 200 && status < 300,

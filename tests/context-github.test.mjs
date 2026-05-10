@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
@@ -21,6 +20,11 @@ import { gitVibeLabelList } from "../src/shared/labels.ts";
 
 const originalFetch = globalThis.fetch;
 
+/**
+ * @typedef {import("../src/shared/github.ts").GitHubClient & { graphql: any; request: any }} MockGitHubClient
+ * @typedef {import("../src/shared/github.ts").GitHubRequest} GitHubRequest
+ */
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -39,6 +43,7 @@ describe("GitHub context builders", () => {
 
     expect(context.artifact).toMatchObject({
       number: "4",
+      pullRequestHead: { branch: "git-vibe/4", repository: "example/repo" },
       title: "Issue title",
       type: "pull-request",
     });
@@ -56,9 +61,9 @@ describe("GitHub context builders", () => {
   });
 
   it("uses stable fallbacks for sparse issue payloads", async () => {
-    const client = {
+    const client = mockGitHubClient({
       request: vi.fn().mockResolvedValueOnce({}).mockResolvedValueOnce([{}]),
-    };
+    });
 
     const context = await buildIssueContext({
       client,
@@ -78,10 +83,82 @@ describe("GitHub context builders", () => {
   });
 });
 
+describe("GitHub pull request feedback context", () => {
+  it("adds source issue, discussion, parent issue, and sub-issue context", async () => {
+    const client = mockGitHubClient({
+      request: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ...issueFixture(),
+          body: "## GitVibe Traceability\n\nRefs #15",
+        })
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(pullRequestFixture())
+        .mockResolvedValueOnce({
+          ...issueFixture(),
+          body: "Source issue body\n\n<!-- git-vibe:source-discussion number=9 url=https://github.com/example/repo/discussions/9 -->",
+          number: 15,
+        })
+        .mockResolvedValueOnce([{ body: "Source issue comment", id: 15 }])
+        .mockResolvedValueOnce({ ...issueFixture(), body: "Parent issue body", number: 8 })
+        .mockResolvedValueOnce([{ body: "Parent issue comment", id: 8 }])
+        .mockResolvedValueOnce({ ...issueFixture(), body: "Sub-issue body", number: 16 })
+        .mockResolvedValueOnce([{ body: "Sub-issue comment", id: 16 }]),
+      graphql: vi
+        .fn()
+        .mockResolvedValueOnce(reviewThreadFixtures())
+        .mockResolvedValueOnce(discussionFixture())
+        .mockResolvedValueOnce(relatedIssuesFixture()),
+    });
+
+    const context = await buildIssueContext({
+      client,
+      issueNumber: "4",
+      repository: "example/repo",
+      token: "token",
+      type: "pull-request",
+    });
+
+    expect(context.timeline.map((item) => item.kind)).toEqual(
+      expect.arrayContaining([
+        "source-issue-body",
+        "source-issue-comment",
+        "source-discussion-body",
+        "source-discussion-comment",
+        "parent-issue-body",
+        "parent-issue-comment",
+        "sub-issue-body",
+        "sub-issue-comment",
+      ]),
+    );
+    expect(context.timeline.map((item) => item.body)).toEqual(
+      expect.arrayContaining([
+        "Source issue comment",
+        "Discussion comment",
+        "Parent issue comment",
+        "Sub-issue comment",
+      ]),
+    );
+  });
+});
+
 function pullRequestContextClient() {
-  return {
-    request: vi.fn().mockResolvedValueOnce(issueFixture()).mockResolvedValueOnce(commentFixtures()),
+  return mockGitHubClient({
+    request: vi
+      .fn()
+      .mockResolvedValueOnce(issueFixture())
+      .mockResolvedValueOnce(commentFixtures())
+      .mockResolvedValueOnce(pullRequestFixture()),
     graphql: vi.fn().mockResolvedValueOnce(reviewThreadFixtures()),
+  });
+}
+
+function pullRequestFixture() {
+  return {
+    head: {
+      ref: "git-vibe/4",
+      repo: { full_name: "example/repo" },
+    },
   };
 }
 
@@ -131,6 +208,44 @@ function reviewThreadFixtures() {
   };
 }
 
+function discussionFixture() {
+  return {
+    repository: {
+      discussion: {
+        author: { login: "author" },
+        body: "Discussion body",
+        comments: {
+          nodes: [
+            {
+              author: { login: "maintainer" },
+              body: "Discussion comment",
+              createdAt: "2026-01-06T00:00:00Z",
+              id: "discussion-comment",
+              replies: { nodes: [] },
+              url: "discussion-comment-url",
+            },
+          ],
+        },
+        createdAt: "2026-01-05T00:00:00Z",
+        id: "discussion-id",
+        title: "Discussion title",
+        url: "discussion-url",
+      },
+    },
+  };
+}
+
+function relatedIssuesFixture() {
+  return {
+    repository: {
+      issue: {
+        parent: { number: 8 },
+        subIssues: { nodes: [{ number: 16 }] },
+      },
+    },
+  };
+}
+
 function reviewThreadFixture() {
   return {
     comments: {
@@ -173,6 +288,16 @@ function outdatedReviewThreadFixture() {
   });
 }
 
+/**
+ * @param {{
+ *   body: string;
+ *   createdAt: string;
+ *   id: string;
+ *   isOutdated?: boolean;
+ *   isResolved?: boolean;
+ *   url: string;
+ * }} options
+ */
 function filteredReviewThreadFixture(options) {
   return {
     comments: {
@@ -194,7 +319,7 @@ function filteredReviewThreadFixture(options) {
 
 describe("GitHub discussion context builders", () => {
   it("builds discussion context with replies and parent ids", async () => {
-    const client = {
+    const client = mockGitHubClient({
       graphql: vi.fn().mockResolvedValueOnce({
         repository: {
           discussion: {
@@ -229,7 +354,7 @@ describe("GitHub discussion context builders", () => {
           },
         },
       }),
-    };
+    });
 
     const context = await buildDiscussionContext({
       client,
@@ -247,7 +372,7 @@ describe("GitHub discussion context builders", () => {
   });
 
   it("uses stable fallbacks for sparse discussion payloads", async () => {
-    const client = {
+    const client = mockGitHubClient({
       graphql: vi.fn().mockResolvedValueOnce({
         repository: {
           discussion: {
@@ -258,7 +383,7 @@ describe("GitHub discussion context builders", () => {
           },
         },
       }),
-    };
+    });
 
     const context = await buildDiscussionContext({
       client,
@@ -313,7 +438,9 @@ describe("GitHub client", () => {
     expect(splitRepository("owner/repo")).toEqual({ owner: "owner", repo: "repo" });
     expect(() => splitRepository("missing")).toThrow("repository must be owner/repo");
 
-    globalThis.fetch.mockResolvedValueOnce(response(200, {}));
+    /** @type {ReturnType<typeof vi.fn>} */ (globalThis.fetch).mockResolvedValueOnce(
+      response(200, {}),
+    );
     await expect(
       repositoryDefaultBranch({ client, owner: "owner", repo: "repo", token: "t" }),
     ).rejects.toThrow("did not return default_branch");
@@ -384,14 +511,22 @@ describe("GitVibe config and labels", () => {
   });
 
   it("creates missing labels, ignores existing labels, and removes labels with encoded names", async () => {
+    /** @type {GitHubRequest[]} */
     const requests = [];
-    const client = {
-      request: vi.fn(async (request) => {
-        requests.push(request);
-        if (request.body?.name === gitVibeLabelList[0].name) throw new Error("422 already exists");
-        return {};
-      }),
-    };
+    const client = mockGitHubClient({
+      request: vi.fn(
+        /**
+         * @param {GitHubRequest} request
+         * @returns {Promise<Record<string, unknown>>}
+         */
+        async (request) => {
+          requests.push(request);
+          const body = /** @type {{ name?: string } | undefined} */ (request.body);
+          if (body?.name === gitVibeLabelList[0].name) throw new Error("422 already exists");
+          return {};
+        },
+      ),
+    });
 
     await ensureGitVibeLabels({ client, owner: "example", repo: "repo", token: "token" });
     await removeIssueLabel({
@@ -406,17 +541,17 @@ describe("GitVibe config and labels", () => {
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(
       gitVibeLabelList.length,
     );
-    expect(requests.at(-1).path).toBe("/repos/example/repo/issues/3/labels/git-vibe%3Aapproved");
+    expect(requests.at(-1)?.path).toBe("/repos/example/repo/issues/3/labels/git-vibe%3Aapproved");
     expect(isProtectedGitVibeLabel("git-vibe:anything")).toBe(true);
     expect(isProtectedGitVibeLabel("gvi:review-fix")).toBe(true);
   });
 
   it("rethrows unexpected label creation failures", async () => {
-    const client = {
+    const client = mockGitHubClient({
       request: vi.fn(async () => {
         throw new Error("500 unavailable");
       }),
-    };
+    });
 
     await expect(
       ensureGitVibeLabels({ client, owner: "example", repo: "repo", token: "token" }),
@@ -424,10 +559,30 @@ describe("GitVibe config and labels", () => {
   });
 });
 
+/**
+ * @param {number} status
+ * @param {unknown} value
+ * @param {boolean} [ok]
+ * @returns {any}
+ */
 function response(status, value, ok = status >= 200 && status < 300) {
   return {
     ok,
     status,
     text: async () => (typeof value === "string" ? value : JSON.stringify(value)),
   };
+}
+
+/**
+ * @param {Partial<MockGitHubClient>} [overrides]
+ * @returns {MockGitHubClient}
+ */
+function mockGitHubClient(overrides = {}) {
+  return /** @type {MockGitHubClient} */ ({
+    apiBaseUrl: "https://api.github.test",
+    graphql: vi.fn(async () => ({})),
+    request: vi.fn(async () => ({})),
+    retryBaseDelayMs: 0,
+    ...overrides,
+  });
 }

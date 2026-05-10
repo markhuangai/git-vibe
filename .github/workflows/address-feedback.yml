@@ -97,11 +97,16 @@ env:
   GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
-  address-feedback:
+  investigate-feedback:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    outputs:
+      next-state: ${{ steps.investigate.outputs.next-state }}
+      result-file: ${{ steps.investigate.outputs.result-file }}
+      status: ${{ steps.investigate.outputs.status }}
+      summary: ${{ steps.investigate.outputs.summary }}
     permissions:
-      contents: write
+      contents: read
       issues: write
       pull-requests: write
     steps:
@@ -121,7 +126,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: ./.git-vibe/actions/address-pr-feedback
+      - id: investigate
+        uses: ./.git-vibe/actions/investigate
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
@@ -129,3 +135,100 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          fail-on-blocked: "true"
+      - name: Upload feedback investigation handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-vibe-pr-feedback-investigation-${{ inputs.pr-number }}
+          path: ${{ runner.temp }}/git-vibe-investigate-result.json
+          if-no-files-found: ignore
+
+  address-feedback:
+    runs-on: ${{ inputs.runner }}
+    needs: investigate-feedback
+    if: needs.investigate-feedback.outputs.next-state == 'fixes-required'
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    outputs:
+      next-state: ${{ steps.address.outputs.next-state }}
+      result-file: ${{ steps.address.outputs.result-file }}
+      status: ${{ steps.address.outputs.status }}
+      summary: ${{ steps.address.outputs.summary }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+      - name: Download feedback investigation handoff
+        uses: actions/download-artifact@v4
+        with:
+          name: git-vibe-pr-feedback-investigation-${{ inputs.pr-number }}
+          path: ${{ runner.temp }}/git-vibe-feedback-handoff
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: address
+        uses: ./.git-vibe/actions/address-pr-feedback
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          pr-number: ${{ inputs.pr-number }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}
+          fail-on-blocked: "true"
+          handoff-dir: ${{ runner.temp }}/git-vibe-feedback-handoff
+      - name: Upload feedback remediation result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-vibe-pr-feedback-remediation-${{ inputs.pr-number }}
+          path: ${{ runner.temp }}/git-vibe-address-pr-feedback-result.json
+          if-no-files-found: ignore
+
+  review-matrix:
+    runs-on: ${{ inputs.runner }}
+    needs: address-feedback
+    if: needs.address-feedback.outputs.next-state == 'feedback-addressed'
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./.git-vibe/actions/review-matrix
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          pr-number: ${{ inputs.pr-number }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}
+          fail-on-blocked: "true"

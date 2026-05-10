@@ -27,7 +27,14 @@
     "references": { "type": "array", "items": { "type": "string" } },
     "next_state": {
       "type": "string",
-      "enum": ["needs-info", "ready-for-validation", "ready-for-implementation", "blocked"]
+      "enum": [
+        "needs-info",
+        "ready-for-validation",
+        "ready-for-implementation",
+        "fixes-required",
+        "no-fixes-needed",
+        "blocked"
+      ]
     },
     "proposed_labels": { "type": "array", "items": { "type": "string" } },
     "branch": { "type": "string" },
@@ -36,6 +43,25 @@
     "issue_title": { "type": "string" },
     "issue_body": { "type": "string" },
     "tests": { "type": "array", "items": { "type": "string" } },
-    "skipped_feedback": { "type": "array", "items": { "type": "string" } }
+    "skipped_feedback": { "type": "array", "items": { "type": "string" } },
+    "feedback_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "summary"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["requires-fix", "answered", "rejected", "already-addressed", "blocked"]
+          },
+          "summary": { "type": "string" },
+          "reply": { "type": "string" },
+          "implementation_notes": { "type": "string" },
+          "references": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
   }
 }

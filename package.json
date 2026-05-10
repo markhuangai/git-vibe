@@ -31,7 +31,7 @@
   },
   "lint-staged": {
     "*.{js,mjs,ts,json,md,yml,yaml}": "prettier --check",
-    "*.{js,mjs}": "eslint"
+    "*.{js,mjs,ts}": "eslint"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",
@@ -52,6 +52,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
     "@vitest/coverage-v8": "^4.1.5",
     "esbuild": "^0.28.0",
     "eslint": "^10.3.0",

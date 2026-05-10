@@ -1,13 +1,16 @@
 name: GitVibe investigate
-description: Inspect an approved issue and produce implementation context.
+description: Inspect an approved issue or pull request feedback and produce implementation context.
 
 inputs:
   token:
     description: GitHub token used for API access.
     required: true
   issue-number:
-    description: Issue number to investigate.
-    required: true
+    description: Issue number to investigate. Required unless pr-number is set.
+    required: false
+  pr-number:
+    description: Pull request number whose feedback should be investigated. Required unless issue-number is set.
+    required: false
   stage-timeout-minutes:
     description: Maximum minutes allocated to this stage.
     required: false
@@ -79,6 +82,7 @@ runs:
       env:
         GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
