@@ -11,7 +11,7 @@
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
 - `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
-- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to `git-vibe/actions@main` until a release tag exists.
+- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to the pinned `git-vibe/actions@v1` release.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.

@@ -103,13 +103,11 @@ describe("Claude Code CLI adapter", () => {
     expect(spawn.mock.calls[0][2].env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
     expect(process.stdout.write).toHaveBeenCalledWith(
-      Buffer.from(
-        JSON.stringify({
-          is_error: false,
-          structured_output: { stage: "validate", status: "completed" },
-          type: "result",
-        }),
-      ),
+      JSON.stringify({
+        is_error: false,
+        structured_output: { stage: "validate", status: "completed" },
+        type: "result",
+      }),
     );
     expect(schema.required).toEqual(["stage", "status"]);
     expect(generateText).not.toHaveBeenCalled();
@@ -178,8 +176,8 @@ describe("Claude Code CLI adapter defaults", () => {
       '{"stage":"validate","status":"completed"}',
     );
 
-    expect(process.stdout.write).toHaveBeenCalledWith(Buffer.from(output));
-    expect(process.stderr.write).toHaveBeenCalledWith(Buffer.from("claude warning\n"));
+    expect(process.stdout.write).toHaveBeenCalledWith(output);
+    expect(process.stderr.write).toHaveBeenCalledWith("claude warning\n");
   });
 });
 

@@ -1,8 +1,1 @@
-export {
-  baseBranchFromEnv,
-  gitVibeBaseBranchVariable,
-  gitVibeConfigPath,
-  loadConfig,
-  parseConfig,
-  testCommandsFor,
-} from "../shared/config.js";
+export { baseBranchFromEnv, loadConfig, testCommandsFor } from "../shared/config.js";

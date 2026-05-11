@@ -283,7 +283,7 @@ describe("AI stage runner stage fallbacks", () => {
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith(
       expect.stringContaining("System\n\nPrompt"),
     );
-    expect(process.stdout.write).toHaveBeenCalledWith(Buffer.from("codex event\n"));
+    expect(process.stdout.write).toHaveBeenCalledWith("codex event\n");
     expect(JSON.parse(readFileSync(schemaPathFrom(spawn.mock.calls[0][1]), "utf8"))).toEqual(
       expect.objectContaining({
         required: ["stage", "working_capabilities"],

@@ -19,8 +19,12 @@ vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 
 const { runStage } = await import("../src/runner/stage-runner.ts");
-const { buildValidationRepairPrompt, validationRepairAttemptsFor, validationRepairMaxTurnsFor } =
-  await import("../src/runner/validation.ts");
+const {
+  buildValidationRepairPrompt,
+  runValidationCommand,
+  validationRepairAttemptsFor,
+  validationRepairMaxTurnsFor,
+} = await import("../src/runner/validation.ts");
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -171,6 +175,29 @@ describe("validation repair helpers", () => {
     expect(prompt).toContain("output truncated");
     expect(prompt).not.toContain("secret-value");
     expect(prompt).not.toContain("bundle-secret");
+  });
+
+  it("runs validation commands without runner secrets in the child environment", () => {
+    process.env.GITVIBE_GITHUB_TOKEN = "repo-token";
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ MINIMAX_API_KEY: "bundle-secret" });
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const script = [
+      "process.stdout.write(process.env.GITVIBE_GITHUB_TOKEN || 'missing-token')",
+      "process.stderr.write(process.env.GITVIBE_AI_ENV_JSON || 'missing-bundle')",
+    ].join(";");
+
+    try {
+      runValidationCommand(
+        process.cwd(),
+        `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`,
+      );
+      expect(stdout).toHaveBeenCalledWith("missing-token");
+      expect(stderr).toHaveBeenCalledWith("missing-bundle");
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
   });
 });
 

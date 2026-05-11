@@ -139,7 +139,7 @@ The starter workflows call the public reusable workflow namespace:
 ```yaml
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@main
+    uses: git-vibe/actions/.github/workflows/develop.yml@v1
 ```
 
 Reusable workflows operate on the repository where the workflow run starts
@@ -412,7 +412,7 @@ Detailed docs:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: git-vibe/actions/investigate@main
+  - uses: git-vibe/actions/investigate@v1
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
@@ -423,7 +423,7 @@ steps:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@main
+    uses: git-vibe/actions/.github/workflows/develop.yml@v1
     with:
       issue-number: "123"
       runner: docker-runner

@@ -1,6 +1,6 @@
 export const sourceDiscussionMarker = "<!-- git-vibe:source-discussion";
-export const reviewFixMarker = "<!-- git-vibe:review-fix";
-export const reviewFixLinkMarker = "<!-- git-vibe:review-fix-link";
+const reviewFixMarker = "<!-- git-vibe:review-fix";
+const reviewFixLinkMarker = "<!-- git-vibe:review-fix-link";
 
 export interface ReviewFixTrace {
   branch: string;

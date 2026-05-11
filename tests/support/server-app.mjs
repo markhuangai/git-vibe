@@ -123,7 +123,7 @@ export function featureIssue() {
 
 export const repositoryPayload = () => ({ name: "repo", owner: { login: "example" } });
 
-export const requests = (client) => client.request.mock.calls.map(([request]) => request);
+const requests = (client) => client.request.mock.calls.map(([request]) => request);
 
 export function requestBodies(client, method, pathPart) {
   return requests(client)

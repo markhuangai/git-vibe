@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import type { GitVibeConfig, RunnerOptions } from "../shared/types.js";
-import { optionalAiEnvBundleSecretValues } from "./cli-adapter-utils.js";
+import { optionalAiEnvBundleSecretValues, sanitizedChildEnv } from "./cli-adapter-utils.js";
+import { redactLogText } from "./logging.js";
 
 export interface ValidationCommandFailure {
   command: string;
@@ -10,7 +11,7 @@ export interface ValidationCommandFailure {
   stdout: string;
 }
 
-export class ValidationCommandError extends Error {
+class ValidationCommandError extends Error {
   readonly failure: ValidationCommandFailure;
 
   constructor(failure: ValidationCommandFailure) {
@@ -23,12 +24,13 @@ export function runValidationCommand(cwd: string, command: string): void {
   const result = spawnSync(command, {
     cwd,
     encoding: "utf8",
+    env: sanitizedChildEnv(),
     shell: true,
   });
   const stdout = result.stdout || "";
   const stderr = result.stderr || "";
-  if (stdout) process.stdout.write(stdout);
-  if (stderr) process.stderr.write(stderr);
+  if (stdout) process.stdout.write(redactLogText(stdout));
+  if (stderr) process.stderr.write(redactLogText(stderr));
 
   if (result.error || result.status !== 0) {
     throw new ValidationCommandError({

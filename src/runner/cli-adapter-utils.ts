@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { JsonObject } from "../shared/types.js";
+import { redactLogText } from "./logging.js";
 
 interface CliCommandOptions {
   args: string[];
@@ -39,12 +40,7 @@ export function cliProfileEnv(
   profilePath: string,
   baseEnv: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
-  const env = { ...baseEnv };
-  delete env[aiEnvBundleVariable];
-  delete env.CODEX_AUTH_JSON;
-  delete env.CLAUDE_CODE_OAUTH_TOKEN;
-  delete env.GITVIBE_AI_API_KEY;
-  delete env.GITVIBE_AI_BASE_URL;
+  const env = sanitizedChildEnv(baseEnv);
 
   const profileEnv = profile.env;
   if (profileEnv === undefined) return env;
@@ -56,6 +52,16 @@ export function cliProfileEnv(
     env[target] = bundleValue(source, `${profilePath}.env.${target}`, bundle);
   }
 
+  return env;
+}
+
+export function sanitizedChildEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...baseEnv };
+  for (const name of Object.keys(env)) {
+    if (name === aiEnvBundleVariable || legacyAiEnvNames.has(name) || sensitiveEnvName(name)) {
+      delete env[name];
+    }
+  }
   return env;
 }
 
@@ -104,12 +110,12 @@ export async function runStreamingCommand(options: CliCommandOptions): Promise<C
   child.stdout?.on("data", (chunk: Buffer | string) => {
     const buffer = chunkBuffer(chunk);
     stdoutChunks.push(buffer);
-    process.stdout.write(buffer);
+    process.stdout.write(redactLogText(buffer.toString("utf8")));
   });
   child.stderr?.on("data", (chunk: Buffer | string) => {
     const buffer = chunkBuffer(chunk);
     stderrChunks.push(buffer);
-    process.stderr.write(buffer);
+    process.stderr.write(redactLogText(buffer.toString("utf8")));
   });
   child.stdin?.end(options.input);
 
@@ -153,7 +159,7 @@ function chunkBuffer(chunk: Buffer | string): Buffer {
 }
 
 function errorSuffix(stderr: string): string {
-  const message = stderr.trim();
+  const message = redactLogText(stderr.trim());
   return message ? `: ${message}` : "";
 }
 
@@ -185,6 +191,8 @@ export function parseRequiredAiEnvBundle(
   return parsed as Record<string, string>;
 }
 
+const legacyAiEnvNames = new Set(["GITVIBE_AI_BASE_URL"]);
+
 function bundleValue(source: unknown, sourcePath: string, bundle: Record<string, string>): string {
   if (!isRecord(source)) throw new Error(`${sourcePath} must be an object with from_bundle.`);
   const key = stringValue(source.from_bundle);
@@ -193,4 +201,8 @@ function bundleValue(source: unknown, sourcePath: string, bundle: Record<string,
     throw new Error(`GITVIBE_AI_ENV_JSON key ${key} is required by ${sourcePath}.from_bundle.`);
   }
   return bundle[key];
+}
+
+function sensitiveEnvName(name: string): boolean {
+  return /(AUTH|AUTHORIZATION|CREDENTIALS?|KEY|PASSWORD|SECRET|TOKEN)/i.test(name);
 }

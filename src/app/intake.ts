@@ -2,8 +2,8 @@ import type { CreatedDiscussion } from "../shared/discussions.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { sourceDiscussionMarker } from "../shared/traceability.js";
 
-export const conversionMarker = "<!-- git-vibe:converted-to-discussion";
-export const discussionSetupMarker = "<!-- git-vibe:discussion-setup-error";
+const conversionMarker = "<!-- git-vibe:converted-to-discussion";
+const discussionSetupMarker = "<!-- git-vibe:discussion-setup-error";
 
 export interface IntakeIssue {
   body?: string | null;

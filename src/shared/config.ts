@@ -4,7 +4,7 @@ import { parse } from "yaml";
 import { z } from "zod";
 import type { GitVibeConfig } from "./types.js";
 
-export const gitVibeConfigPath = ".github/git-vibe.yml";
+const gitVibeConfigPath = ".github/git-vibe.yml";
 export const gitVibeBaseBranchVariable = "GITVIBE_BASE_BRANCH";
 
 const configSchema = z
@@ -32,7 +32,7 @@ export function loadConfig(cwd = process.cwd()): GitVibeConfig {
   return parseConfig(readFileSync(absolutePath, "utf8"));
 }
 
-export function parseConfig(content: string): GitVibeConfig {
+function parseConfig(content: string): GitVibeConfig {
   const parsed = parse(content) as unknown;
   return configSchema.parse(parsed || {}) as GitVibeConfig;
 }

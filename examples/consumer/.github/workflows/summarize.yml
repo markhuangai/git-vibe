@@ -21,7 +21,7 @@ on:
 
 jobs:
   summarize:
-    uses: git-vibe/actions/.github/workflows/summarize.yml@main
+    uses: git-vibe/actions/.github/workflows/summarize.yml@v1
     with:
       discussion-number: ${{ inputs.discussion-number }}
       runner: ubuntu-latest

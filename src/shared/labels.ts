@@ -80,8 +80,8 @@ export const gitVibeInternalLabels = {
   },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
-export const gitVibePublicLabelList = Object.values(gitVibeLabels);
-export const gitVibeInternalLabelList = Object.values(gitVibeInternalLabels);
+const gitVibePublicLabelList = Object.values(gitVibeLabels);
+const gitVibeInternalLabelList = Object.values(gitVibeInternalLabels);
 export const gitVibeLabelList = [...gitVibePublicLabelList, ...gitVibeInternalLabelList];
 
 const gitVibeLabelNames: Set<string> = new Set(gitVibeLabelList.map((label) => label.name));

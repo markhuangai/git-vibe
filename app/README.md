@@ -1,8 +1,7 @@
 # GitVibe Server
 
 This is the self-hosted repository webhook server. The source of truth is
-`../src/app/server.ts`; `app/server.mjs` loads the compiled output from
-`../dist/app/server.js`.
+`../src/app/server.ts`; the runtime entry point is `../dist/app/server.js`.
 
 It currently handles:
 
