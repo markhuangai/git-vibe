@@ -1,0 +1,103 @@
+name: GitVibe release
+run-name: "[git-vibe][release]: ${{ inputs.release_tag }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to create, such as v1 or v1.2.3.
+        required: true
+        default: v1
+      source_image_tag:
+        description: Existing GHCR image tag to promote. Defaults to the workflow commit SHA.
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release request
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          REQUEST_ACTOR: ${{ github.actor }}
+          SOURCE_IMAGE_TAG: ${{ inputs.source_image_tag }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Releases must be dispatched from the main branch."
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}([-+][0-9A-Za-z._-]+)?$ ]]; then
+            echo "::error::release_tag must look like v1, v1.2.3, or v1.2.3-rc.1."
+            exit 1
+          fi
+
+          permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$REQUEST_ACTOR/permission" --jq '.permission')"
+          if [ "$permission" != "admin" ]; then
+            echo "::error::@$REQUEST_ACTOR has repository permission '$permission'; release dispatch requires admin."
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists."
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $RELEASE_TAG already exists on origin."
+            exit 1
+          fi
+
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          source_tag="${SOURCE_IMAGE_TAG:-$GITHUB_SHA}"
+          {
+            echo "image=$image"
+            echo "release_tag=$RELEASE_TAG"
+            echo "source_image=$image:$source_tag"
+            echo "release_image=$image:$RELEASE_TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Promote release image
+        run: |
+          docker pull "${{ steps.release.outputs.source_image }}"
+          docker tag "${{ steps.release.outputs.source_image }}" "${{ steps.release.outputs.release_image }}"
+          docker push "${{ steps.release.outputs.release_image }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<EOF
+          Docker image: \`${{ steps.release.outputs.release_image }}\`
+
+          Source image: \`${{ steps.release.outputs.source_image }}\`
+          Release commit: \`$GITHUB_SHA\`
+          EOF
+
+          gh release create "${{ steps.release.outputs.release_tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "GitVibe ${{ steps.release.outputs.release_tag }}" \
+            --notes-file release-notes.md \
+            --generate-notes \
+            --latest

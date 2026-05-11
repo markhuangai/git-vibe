@@ -4,7 +4,7 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, ["run-name"]?: string }} Workflow
+ * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
@@ -44,6 +44,7 @@ const actionFiles = [
 ];
 
 const workflowRunNameSpecs = [
+  { file: ".github/workflows/release.yml", stage: "release" },
   { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
   { file: ".github/workflows/summarize.yml", stage: "summarize", artifact: "Discussion" },
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
@@ -79,6 +80,7 @@ const workflowRunNameSpecs = [
 ];
 
 const workflowStaticNames = {
+  ".github/workflows/release.yml": "GitVibe release",
   ".github/workflows/validate.yml": "GitVibe validate",
   ".github/workflows/summarize.yml": "GitVibe summarize",
   ".github/workflows/materialize.yml": "GitVibe materialize",
@@ -497,6 +499,7 @@ describe("GitVibe app deployment boundary", () => {
 
     expect(paths).toContain("src/app/**");
     expect(paths).toContain("src/shared/**");
+    expect(paths).toContain(".github/workflows/release.yml");
     expect(paths).not.toContain("src/**");
     expect(paths).not.toContain("src/runner/**");
     expect(paths).not.toContain("prompts/**");
@@ -514,6 +517,27 @@ describe("GitVibe app deployment boundary", () => {
     expect(dockerfile).not.toContain("COPY --from=build /app/dist ./dist");
     expect(dockerfile).not.toContain("COPY --from=build /app/prompts ./prompts");
     expect(dockerfile).not.toContain("COPY --from=build /app/schemas ./schemas");
+  });
+
+  it("publishes releases only from main by repository admins", () => {
+    const workflow = readWorkflow(".github/workflows/release.yml");
+    const content = readFileSync(".github/workflows/release.yml", "utf8");
+
+    expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
+      default: "v1",
+      required: true,
+    });
+    expect(workflow.permissions).toMatchObject({
+      contents: "write",
+      packages: "write",
+    });
+    expect(content).toContain('GITHUB_REF" != "refs/heads/main"');
+    expect(content).toContain("collaborators/$REQUEST_ACTOR/permission");
+    expect(content).toContain('permission" != "admin"');
+    expect(content).toContain("docker pull");
+    expect(content).toContain("docker push");
+    expect(content).toContain("gh release create");
+    expect(content).toContain("--generate-notes");
   });
 });
 
