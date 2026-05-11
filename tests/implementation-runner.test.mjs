@@ -13,6 +13,7 @@ const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-mod
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -56,11 +57,17 @@ describe("implementation structured output recovery", () => {
       response(200, {}),
     ]);
 
-    await expect(runImplement(cwd)).resolves.toMatchObject({
+    await expect(runImplement(cwd, { maxTurns: 200 })).resolves.toMatchObject({
       summary: "Recovered structured output.",
     });
 
     expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[0][0]).toMatchObject({
+      stopWhen: [{ toolName: "output_validator" }, { count: 190 }],
+    });
+    expect(generateText.mock.calls[1][0]).toMatchObject({
+      stopWhen: [{ toolName: "output_validator" }, { count: 10 }],
+    });
     expect(generateText.mock.calls[1][0].prompt).toContain(
       "gitvibe_structured_output_finalization",
     );
@@ -136,7 +143,7 @@ describe("implementation runtime artifact staging", () => {
   });
 });
 
-async function runImplement(cwd) {
+async function runImplement(cwd, overrides = {}) {
   return runStage({
     cwd,
     dryRun: false,
@@ -147,6 +154,7 @@ async function runImplement(cwd) {
     stage: "implement",
     stageTimeoutMinutes: 1,
     token: "token",
+    ...overrides,
   });
 }
 

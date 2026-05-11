@@ -15,7 +15,7 @@ inputs:
   max-turns:
     description: Maximum AI turns allocated to this stage.
     required: false
-    default: "120"
+    default: "200"
   dry-run:
     description: Describe work without mutating GitHub.
     required: false

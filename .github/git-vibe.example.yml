@@ -111,7 +111,7 @@ ai:
     feedback_timeout_minutes: 120
     publish_timeout_minutes: 15
     default_max_turns: 90
-    implementation_max_turns: 120
+    implementation_max_turns: 200
     feedback_max_turns: 120
     review_max_iterations: 5
     validation_repair_attempts: 3

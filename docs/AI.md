@@ -229,7 +229,8 @@ Tool policy by stage:
 Default AI budgets:
 
 - default max turns: `90`.
-- implementation and PR feedback max turns: `120`.
+- implementation max turns: `200`.
+- PR feedback max turns: `120`.
 - validation repair max turns: `45` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
 - validation repair attempts: `3` per implementation run.
 - review-fix continuation depth limit: `5` review-fix issues before GitVibe blocks and asks for human intervention.

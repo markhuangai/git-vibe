@@ -292,6 +292,7 @@ function validationRepairRunner({
           maxAttempts,
           runner: options,
         }),
+        reserveFinalizationTurns: false,
       }),
       context,
       definition,
@@ -325,7 +326,12 @@ async function runStageAiResult({
   if (options.dryRun) return buildResult(dryRunContent(options.stage, context, logger));
 
   try {
-    return await buildResult(await runAiStage(aiRunOptions));
+    return await buildResult(
+      await runAiStage({
+        ...aiRunOptions,
+        reserveFinalizationTurns: options.stage === "implement",
+      }),
+    );
   } catch (error) {
     if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
     return recoverImplementStructuredOutput({
@@ -373,6 +379,7 @@ async function recoverImplementStructuredOutput({
         cwd: options.cwd,
         error: firstError,
       }),
+      reserveFinalizationTurns: false,
       toolOverride: ["read", "grep", "glob", "bash-readonly", "diff"],
     });
     const result = await stageRunResult({

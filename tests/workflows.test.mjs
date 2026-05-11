@@ -327,10 +327,13 @@ describe("GitVibe workflow numeric inputs", () => {
 
     expect(workflow.on?.workflow_dispatch?.inputs?.validation_repair_attempts?.default).toBe(3);
     expect(workflow.on?.workflow_dispatch?.inputs?.validation_repair_max_turns?.default).toBe(45);
+    expect(workflow.on?.workflow_dispatch?.inputs?.implementation_max_turns?.default).toBe(200);
     expect(workflow.on?.workflow_call?.inputs?.validation_repair_attempts?.default).toBe(3);
     expect(workflow.on?.workflow_call?.inputs?.validation_repair_max_turns?.default).toBe(45);
+    expect(workflow.on?.workflow_call?.inputs?.implementation_max_turns?.default).toBe(200);
     expect(action.inputs?.["validation-repair-attempts"]?.default).toBe("3");
     expect(action.inputs?.["validation-repair-max-turns"]?.default).toBe("45");
+    expect(action.inputs?.["max-turns"]?.default).toBe("200");
   });
 });
 
