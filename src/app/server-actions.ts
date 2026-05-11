@@ -44,9 +44,14 @@ export async function markPullRequestApproved(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<void> {
-  await addIssueLabel(options, prNumber, gitVibeLabels.prApproved.name);
-  await removeIssueLabelIfPresent(options, prNumber, gitVibeLabels.readyForApproval.name);
-  await updateSourceIssueLabelsForPullRequest(options, prNumber, {
+  const sourceIssueNumbers = await sourceIssuesForPullRequest(options, prNumber);
+  if (sourceIssueNumbers.length === 0) {
+    options.log(`skipped approved review labels for PR #${prNumber}: missing GitVibe traceability`);
+    return;
+  }
+
+  await markPullRequestApprovalState(options, prNumber);
+  await updateSourceIssueLabels(options, sourceIssueNumbers, {
     add: [],
     remove: [gitVibeLabels.approved.name],
     reason: "approved review",
@@ -57,11 +62,30 @@ export async function markPullRequestMerged(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<void> {
-  await updateSourceIssueLabelsForPullRequest(options, prNumber, {
+  const sourceIssueNumbers = await sourceIssuesForPullRequest(options, prNumber);
+  if (sourceIssueNumbers.length === 0) {
+    options.log(`skipped merged PR labels for PR #${prNumber}: missing GitVibe traceability`);
+    return;
+  }
+
+  await markPullRequestApprovalState(options, prNumber);
+  await updateSourceIssueLabels(options, sourceIssueNumbers, {
     add: [gitVibeLabels.prMerged.name],
-    remove: [gitVibeLabels.prOpened.name, gitVibeLabels.prApproved.name],
+    remove: [
+      gitVibeLabels.prOpened.name,
+      gitVibeLabels.prApproved.name,
+      gitVibeLabels.approved.name,
+    ],
     reason: "merged PR",
   });
+}
+
+async function markPullRequestApprovalState(
+  options: WebhookActionContext,
+  prNumber: string,
+): Promise<void> {
+  await removeIssueLabelIfPresent(options, prNumber, gitVibeLabels.readyForApproval.name);
+  await addIssueLabel(options, prNumber, gitVibeLabels.prApproved.name);
 }
 
 export async function dispatchWorkflow(
@@ -297,20 +321,12 @@ export function approvalRequiresInvestigationBody(label: string): string {
   return `GitVibe removed \`${label}\` because this issue has not completed investigation yet. Add \`${gitVibeLabels.investigate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.investigating.name}\` and then \`${gitVibeLabels.investigated.name}\` when the investigation is ready for implementation.`;
 }
 
-async function updateSourceIssueLabelsForPullRequest(
+async function updateSourceIssueLabels(
   options: WebhookActionContext,
-  prNumber: string,
+  issueNumbers: string[],
   change: { add: string[]; reason: string; remove: string[] },
 ): Promise<void> {
-  const issues = await sourceIssuesForPullRequest(options, prNumber);
-  if (issues.length === 0) {
-    options.log(
-      `skipped ${change.reason} labels for PR #${prNumber}: missing GitVibe traceability`,
-    );
-    return;
-  }
-
-  for (const issueNumber of issues) {
+  for (const issueNumber of issueNumbers) {
     for (const label of change.add) {
       await addIssueLabel(options, issueNumber, label);
     }

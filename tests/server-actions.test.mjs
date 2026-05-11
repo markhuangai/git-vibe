@@ -302,6 +302,7 @@ describe("server action pull request labels", () => {
     );
     expect(removeIssueLabel.mock.calls.map(([request]) => request)).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ issueNumber: "5", label: "git-vibe:ready-for-approval" }),
         expect.objectContaining({ issueNumber: "12", label: "git-vibe:pr-opened" }),
       ]),
     );

@@ -35,4 +35,4 @@ Core defaults:
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
 - AI returns structured results; deterministic GitVibe code performs GitHub writes.
 - App, runner, and shared TypeScript live in one package but separate source boundaries so runner-only changes do not redeploy the app.
-- The repository uses pnpm, TypeScript source, runner-built action runtimes, PR-only CI on `self-hosted`, 90% function/line/statement coverage, and ESLint-enforced JavaScript/MJS size limits of 700 lines per file and 100 lines per function.
+- The repository uses pnpm, TypeScript source, runner-built action runtimes, PR-only CI on the `docker-runner` self-hosted runner label, 90% function/line/statement coverage, and ESLint-enforced JavaScript/MJS size limits of 700 lines per file and 100 lines per function.

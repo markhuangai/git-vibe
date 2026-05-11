@@ -44,6 +44,7 @@ describe("stage label PR feedback transitions", () => {
         "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
         "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",
       ]),
     );
   });

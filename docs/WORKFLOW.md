@@ -113,14 +113,15 @@ flowchart TD
   PrInvestigating -->|fixes required| PrInvestigated["PR git-vibe:investigated"]
   PrInvestigating -->|questions or unsafe feedback| PrBlocked["PR git-vibe:blocked"]
   PrInvestigated -->|feedback implementation starts| PrInProgress["PR git-vibe:in-progress"]
-  PrInProgress -->|review-matrix passed| PrReady
+  PrInProgress -->|review-matrix passed, remove investigated| PrReady
   PrInProgress -->|review-matrix changes required| PrBlocked
 
   PrApprovedEvent["Trusted PR approval submitted"] -->|add to PR| PrApproved["PR git-vibe:pr-approved"]
   PrApprovedEvent -->|remove stale source label| ApprovalCleanup["git-vibe:approved"]
 
-  PrMergedEvent["GitVibe PR merged"] -->|add| PrMerged["git-vibe:pr-merged"]
-  PrMergedEvent -->|remove stale labels| MergeCleanup["git-vibe:pr-opened + git-vibe:pr-approved"]
+  PrMergedEvent["GitVibe PR merged"] -->|remove ready, add to PR| PrApproved
+  PrMergedEvent -->|add to source issue| PrMerged["git-vibe:pr-merged"]
+  PrMergedEvent -->|remove stale source labels| MergeCleanup["git-vibe:approved + git-vibe:pr-opened + git-vibe:pr-approved"]
 
   ReviewMatrix["review-matrix requires fixes"] -->|create review-fix issue with hidden marker and| ReviewFix["gvi:review-fix"]
 ```
@@ -391,7 +392,7 @@ sequenceDiagram
     WF->>PR: Add investigated, then in-progress
     Agent->>PR: Push fixes to the existing PR head branch
     WF->>Agent: Run review-matrix on the updated PR branch
-    WF->>PR: Add ready-for-approval after review passes
+    WF->>PR: Remove investigated and add ready-for-approval after review passes
   else No fixes needed
     WF->>PR: Restore ready-for-approval without implementation
   else Blocked
@@ -418,9 +419,9 @@ GitVibe must make every generated artifact discoverable from the others.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
 - When a pull request is opened by GitVibe, the source issue gets `git-vibe:pr-opened`, stale source `git-vibe:in-progress`, `git-vibe:investigated`, and `git-vibe:ready-for-approval` labels are removed, and the PR gets `git-vibe:ready-for-approval`.
-- During PR feedback handling, the PR owns `git-vibe:investigating`, `git-vibe:investigated`, `git-vibe:in-progress`, `git-vibe:blocked`, and `git-vibe:ready-for-approval`; the source issue remains at `git-vibe:pr-opened`.
+- During PR feedback handling, the PR owns one active workflow-state label at a time among `git-vibe:investigating`, `git-vibe:investigated`, `git-vibe:in-progress`, `git-vibe:blocked`, and `git-vibe:ready-for-approval`; the source issue remains at `git-vibe:pr-opened`.
 - When a trusted reviewer approves a GitVibe pull request, the PR gets `git-vibe:pr-approved`, PR `git-vibe:ready-for-approval` is removed, and stale source `git-vibe:approved` is removed.
-- When a GitVibe pull request is merged before default-branch closure, the source issue gets `git-vibe:pr-merged` and stale workflow state labels are removed.
+- When a GitVibe pull request is merged before default-branch closure, the PR gets `git-vibe:pr-approved`, PR `git-vibe:ready-for-approval` is removed, the source issue gets `git-vibe:pr-merged`, and stale source workflow state labels are removed.
 - The source issue gets a comment linking the PR and latest workflow run.
 - PR feedback runs add comments linking the feedback workflow run, changed commits, and any review comments that were skipped with rationale.
 - Prefer GitHub-native references (`#123`, full issue/discussion/PR URLs, and workflow run URLs) so GitHub creates backlinks and rich references where supported; use explicit bot comments where GitHub does not create a first-class link automatically.

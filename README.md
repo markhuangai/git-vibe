@@ -342,21 +342,29 @@ tests:
 
 Each AI stage must define `profile` or `profiles`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.
+CLI adapters use fixed commands (`codex exec` and `claude -p`); profiles choose
+adapter, model, auth, env, and reasoning settings, not the executable command.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.
 
+Optional repository prompt additions live under
+`.git-vibe/prompts/<stage>/system.md` and `.git-vibe/prompts/<stage>/user.md`.
+They append to GitVibe's built-in prompts without replacing stage contracts,
+schema requirements, or branch/file mutation boundaries. See
+[Repository Prompt Additions](docs/AI.md#repository-prompt-additions).
+
 Current implementation status:
 
-| Area                                                                     | Status                                        |
-| ------------------------------------------------------------------------ | --------------------------------------------- |
-| Direct repository webhook mode                                           | Implemented first                             |
-| `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first                             |
-| Source-built composite actions and reusable workflows                    | Implemented                                   |
-| JSON Schema stage contracts                                              | Implemented                                   |
-| Relay, Actions-native receiver, and polling delivery modes               | Planned behind config shape                   |
-| Active `cli-codex` and `cli-claude-code` stage adapters                  | Planned; smoke-test support exists separately |
-| External GitHub mention partners                                         | Planned opt-in surface                        |
+| Area                                                                     | Status                      |
+| ------------------------------------------------------------------------ | --------------------------- |
+| Direct repository webhook mode                                           | Implemented first           |
+| `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first           |
+| Source-built composite actions and reusable workflows                    | Implemented                 |
+| JSON Schema stage contracts                                              | Implemented                 |
+| Relay, Actions-native receiver, and polling delivery modes               | Planned behind config shape |
+| Active `cli-codex` and `cli-claude-code` stage adapters                  | Implemented                 |
+| External GitHub mention partners                                         | Planned opt-in surface      |
 
 See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
 
@@ -418,7 +426,7 @@ jobs:
     uses: git-vibe/actions/.github/workflows/develop.yml@main
     with:
       issue-number: "123"
-      runner: self-hosted
+      runner: docker-runner
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

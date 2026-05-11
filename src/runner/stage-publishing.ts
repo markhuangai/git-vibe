@@ -538,6 +538,7 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
     return isPullRequest
       ? [
           gitVibeLabels.blocked.name,
+          gitVibeLabels.investigated.name,
           gitVibeLabels.inProgress.name,
           gitVibeLabels.investigating.name,
         ]

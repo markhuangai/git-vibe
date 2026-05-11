@@ -182,7 +182,7 @@ ai:
         - diff
     address-pr-feedback:
       enabled: true
-      profile: codex_cli_high
+      profile: local_proxy
       tools:
         - read
         - grep

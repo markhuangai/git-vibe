@@ -52,21 +52,21 @@ AI integration layers:
 - Context builder: gathers issue/discussion/PR timelines, repo snapshots, relevant files, reactions, workflow history, and linked artifacts into a stage-specific context packet.
 - Stage contracts: typed task definitions for investigation, refinement, validation, implementation, review, and feedback remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
-- CLI adapters: `cli-codex` and `cli-claude-code` run their CLIs in non-interactive mode, stream CLI output to the action log, and parse structured output.
+- CLI adapters: `cli-codex` and `cli-claude-code` run fixed non-interactive CLI commands, stream CLI output to the action log, and parse structured output.
 - External mention adapter: optional GitHub-visible comments to Codex, Claude, Copilot, or similar apps.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 
 Initial stage contracts:
 
-| Stage                   | Access                             | Output                                                                       | May advance state                            |
-| ----------------------- | ---------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| Triage classification   | Read issue/discussion only         | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
-| Bug investigation       | Read repo and issue timeline       | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                              |
-| Feature refinement      | Read repo and discussion timeline  | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without protected approval |
-| Validation              | Read repo and accepted context     | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
-| Implementation          | Write `git-vibe/{root-issue}` only | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
-| Review matrix           | Read branch and diff               | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` follow-up issues |
-| PR feedback remediation | Write existing branch only         | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
+| Stage                   | Repository scope                    | Output                                                                       | May advance state                            |
+| ----------------------- | ----------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
+| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                              |
+| Feature refinement      | Repo snapshot and discussion thread | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without protected approval |
+| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
+| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
+| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` follow-up issues |
+| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
 
 AI result envelope:
 
@@ -90,7 +90,7 @@ AI result envelope:
 ## Execution Rules
 
 - AI cannot authorize itself. Approval, merge, protected-label acceptance, and release decisions always require admin/collaborator authority.
-- Read-only stages must not perform GitHub writes or use repo mutation tools.
+- Non-write stages may publish deterministic comments and label transitions, but GitVibe applies branch and file mutations only for write stages.
 - Implementation and feedback stages run on isolated branches and may use the configured repository PAT only for deterministic GitHub writes performed by GitVibe code.
 - GitHub writes are deterministic code operations. AI returns a structured result envelope; GitVibe validates it, renders comments, updates labels, links artifacts, and dispatches workflows.
 - Every AI comment should include a concise summary, concrete evidence/references, unresolved questions, and the next expected human action.
@@ -103,7 +103,7 @@ AI result envelope:
 
 ## Repository Prompt Additions
 
-Consumer repositories can add optional stage-specific prompt text without overriding GitVibe's built-in stage contracts, schemas, access limits, or deterministic write behavior.
+Consumer repositories can add optional stage-specific prompt text without overriding GitVibe's built-in stage contracts, schemas, repository scope, branch/file mutation boundaries, or deterministic write behavior.
 
 Repository prompt addition paths:
 
@@ -116,7 +116,7 @@ When an addition file exists, GitVibe appends its contents inside an explicit `<
 
 Rules:
 
-- Repository prompt additions are additive only. They cannot replace or weaken GitVibe system rules, stage contracts, schema requirements, access mode rules, allowed tools, GitHub write safety, command syntax, or output validation.
+- Repository prompt additions are additive only. They cannot replace or weaken GitVibe system rules, stage contracts, schema requirements, repository scope, branch/file mutation boundaries, allowed tools, GitHub write safety, command syntax, or output validation.
 - Missing files are treated as absent optional additions and do not add empty XML tags.
 - GitVibe reads additions from the consumer workspace `.git-vibe/prompts` path, not from the action asset root.
 - Non-ENOENT read errors are surfaced so broken configuration is not hidden.
@@ -136,6 +136,8 @@ CLI authentication guidance:
 - Codex CLI can use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner. When `auth_json.from_bundle` is configured, GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret, so `GITVIBE_GITHUB_TOKEN` needs repository Actions secrets read/write permission.
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
+- CLI commands are fixed by adapter: `cli-codex` runs `codex exec` and `cli-claude-code` runs `claude -p`. Profiles do not accept a `command` override.
+- CLI adapters bypass native permission and sandbox prompts. Run them only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
 
 ## Profile-Based Routing
 
@@ -209,8 +211,8 @@ Normalized reasoning config:
 
 Adapter mappings:
 
-- `cli-codex`: map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
-- `cli-claude-code`: pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`; set `bare: true` to add Claude Code's `--bare` minimal mode when the runner uses API-key or third-party provider auth instead of OAuth/keychain auth.
+- `cli-codex`: run `codex exec` with `--dangerously-bypass-approvals-and-sandbox`; map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
+- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`; set `bare: true` to add Claude Code's `--bare` minimal mode when the runner uses API-key or third-party provider auth instead of OAuth/keychain auth.
 - CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native tool loop and run without per-tool permission prompts in this workflow.
 - `ai-sdk-agentool` with native OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable; set a stable `providerOptions.openai.promptCacheKey` by default.
 - `ai-sdk-agentool` with OpenAI-compatible endpoints: do not add OpenAI prompt cache request fields by default because non-OpenAI endpoints may reject unknown fields.
