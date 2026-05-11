@@ -41,7 +41,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
-      CODEX_AUTH_JSON: '{"tokens":[]}',
+      CODEX_AUTH_JSON: codexAuthJson("old"),
       GITVIBE_AI_API_KEY: "test-key",
       GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
@@ -329,6 +329,19 @@ function codexOptions() {
     stageDefinition: stageDefinitions.validate,
     system: "System",
   };
+}
+
+function codexAuthJson(label) {
+  return `${JSON.stringify({
+    auth_mode: "chatgpt",
+    last_refresh: "2026-05-09T11:57:42.136804048Z",
+    tokens: {
+      access_token: `access-${label}`,
+      account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
+      id_token: `header.${label}.signature`,
+      refresh_token: `refresh-${label}`,
+    },
+  })}\n`;
 }
 
 function mockCodexOutput(content) {

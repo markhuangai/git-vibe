@@ -9,6 +9,7 @@ import {
   bundleKeyFromSource,
   bundleValueFromSource,
   cliProfileEnv,
+  isRecord,
   parseRequiredAiEnvBundle,
 } from "./cli-adapter-utils.js";
 
@@ -54,6 +55,24 @@ export async function writeBackCodexAuth(options: {
   if (!options.auth) return;
 
   const refreshedAuthJson = readFileSync(options.auth.authPath, "utf8");
+  let validation: CodexAuthValidation;
+  try {
+    validation = validateCodexAuthJson(refreshedAuthJson);
+  } catch (error) {
+    options.logger?.event("codex.auth_json.validation.failed", {
+      bundle_key: options.auth.bundleKey,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+  options.logger?.event("codex.auth_json.validation.done", {
+    auth_mode: validation.authMode,
+    bundle_key: options.auth.bundleKey,
+    has_access_token: validation.hasAccessToken,
+    has_id_token: validation.hasIdToken,
+    has_refresh_token: validation.hasRefreshToken,
+    has_tokens: validation.hasTokens,
+  });
   const updatedBundle = updatedAiEnvBundle(options.auth, refreshedAuthJson);
   if (!updatedBundle) {
     options.logger?.event("codex.auth_json.writeback.skip", { reason: "unchanged" });
@@ -108,6 +127,74 @@ function updatedAiEnvBundle(
   );
   if (bundle[auth.bundleKey] === refreshedAuthJson) return undefined;
   return JSON.stringify({ ...bundle, [auth.bundleKey]: refreshedAuthJson });
+}
+
+interface CodexAuthValidation {
+  authMode: string;
+  hasAccessToken: boolean;
+  hasIdToken: boolean;
+  hasRefreshToken: boolean;
+  hasTokens: boolean;
+}
+
+function validateCodexAuthJson(authJson: string): CodexAuthValidation {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(authJson) as unknown;
+  } catch (error) {
+    throw new Error(`Codex auth.json must be valid JSON before write-back: ${String(error)}.`);
+  }
+  if (!isRecord(parsed)) throw new Error("Codex auth.json must be a JSON object.");
+
+  const authMode = requiredString(parsed.auth_mode, "auth_mode");
+  const tokens = parsed.tokens;
+  if (tokens !== undefined && !isRecord(tokens)) {
+    throw new Error("Codex auth.json tokens must be a JSON object when present.");
+  }
+
+  const tokenObject = isRecord(tokens) ? tokens : undefined;
+  const idToken = optionalString(tokenObject?.id_token, "tokens.id_token");
+  const accessToken = optionalString(tokenObject?.access_token, "tokens.access_token");
+  const refreshToken = optionalString(tokenObject?.refresh_token, "tokens.refresh_token");
+
+  if (idToken !== undefined && !jwtShaped(idToken)) {
+    throw new Error("Codex auth.json tokens.id_token must be JWT-shaped.");
+  }
+
+  if (authMode === "chatgpt") {
+    if (!tokenObject) throw new Error("Codex auth.json tokens are required for chatgpt auth.");
+    if (!idToken) throw new Error("Codex auth.json tokens.id_token is required for chatgpt auth.");
+    if (!refreshToken) {
+      throw new Error("Codex auth.json tokens.refresh_token is required for chatgpt auth.");
+    }
+  }
+
+  return {
+    authMode,
+    hasAccessToken: accessToken !== undefined,
+    hasIdToken: idToken !== undefined,
+    hasRefreshToken: refreshToken !== undefined,
+    hasTokens: tokenObject !== undefined,
+  };
+}
+
+function optionalString(value: unknown, path: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error(`Codex auth.json ${path} must be a string.`);
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error(`Codex auth.json ${path} must be non-empty.`);
+  return trimmed;
+}
+
+function requiredString(value: unknown, path: string): string {
+  const result = optionalString(value, path);
+  if (result === undefined) throw new Error(`Codex auth.json ${path} is required.`);
+  return result;
+}
+
+function jwtShaped(value: string): boolean {
+  const parts = value.split(".");
+  return parts.length === 3 && parts.every((part) => part.length > 0);
 }
 
 async function updateRepositorySecret(options: {

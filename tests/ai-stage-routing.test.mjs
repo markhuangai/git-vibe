@@ -245,7 +245,7 @@ describe("AI stage runner stage config validation", () => {
 
 describe("AI stage runner stage fallbacks", () => {
   it("runs configured Codex CLI profiles with runtime stage context", async () => {
-    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: '{"tokens":[]}\n' });
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: codexAuthJson("old") });
     mockCodexOutput('{"stage":"validate","status":"completed"}');
     const schema = {
       additionalProperties: false,
@@ -290,7 +290,7 @@ describe("AI stage runner stage fallbacks", () => {
       }),
     );
     const childEnv = spawn.mock.calls[0][2].env;
-    expect(readFileSync(join(childEnv.CODEX_HOME, "auth.json"), "utf8")).toBe('{"tokens":[]}\n');
+    expect(readFileSync(join(childEnv.CODEX_HOME, "auth.json"), "utf8")).toBe(codexAuthJson("old"));
     expect(childEnv.CODEX_AUTH_JSON).toBeUndefined();
     expect(childEnv.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(schema.required).toEqual(["stage"]);
@@ -535,6 +535,19 @@ function outputPathFrom(args) {
 
 function schemaPathFrom(args) {
   return args[args.indexOf("--output-schema") + 1];
+}
+
+function codexAuthJson(label) {
+  return `${JSON.stringify({
+    auth_mode: "chatgpt",
+    last_refresh: "2026-05-09T11:57:42.136804048Z",
+    tokens: {
+      access_token: `access-${label}`,
+      account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
+      id_token: `header.${label}.signature`,
+      refresh_token: `refresh-${label}`,
+    },
+  })}\n`;
 }
 
 function codexCliConfig() {
