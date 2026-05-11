@@ -54,7 +54,7 @@ ai:
       context_window_tokens: 200000
       provider:
         type: openai-compatible
-        model: glm-5
+        model: qwen3.6-plus
         base_url:
           from_bundle: GITVIBE_AI_BASE_URL
         api_key:
@@ -98,9 +98,9 @@ ai:
           from_bundle: GITVIBE_AI_API_KEY
         ANTHROPIC_BASE_URL:
           from_bundle: ANTHROPIC_BASE_URL
-        ANTHROPIC_DEFAULT_OPUS_MODEL: glm-5
-        ANTHROPIC_DEFAULT_SONNET_MODEL: glm-5
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: glm-5
+        ANTHROPIC_DEFAULT_OPUS_MODEL: qwen3.6-plus
+        ANTHROPIC_DEFAULT_SONNET_MODEL: qwen3.6-plus
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: qwen3.6-plus
         ANTHROPIC_MODEL: opus
         CLAUDE_CODE_SUBAGENT_MODEL: opus
       model: opus
