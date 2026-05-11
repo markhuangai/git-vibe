@@ -74,13 +74,15 @@ final message file supplies the structured result for validation.
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, prompts
 `claude -p`, and validates the CLI response JSON instead of treating CLI
-installation as a passed smoke test. `cli-claude-code` stages run `claude -p` with
-`--dangerously-skip-permissions`, `--output-format json`, and `--json-schema`;
-profile `bare: true` adds Claude Code's minimal mode for API-key or third-party
-provider auth. Configure Claude OAuth and provider env through profile
-`env.<NAME>.from_bundle` mappings. CLI adapter stdout and stderr are streamed to
-the action log while GitVibe still captures the structured result for
-validation.
+installation as a passed smoke test. It loads the first enabled
+`cli-claude-code` profile from `.github/git-vibe.yml` unless
+`GITVIBE_AI_SMOKE_CLAUDE_PROFILE` names a specific profile. `cli-claude-code`
+stages run `claude -p` with `--dangerously-skip-permissions`, `--output-format
+json`, and `--json-schema`; profile `bare: true` adds Claude Code's minimal mode
+for API-key or third-party provider auth. Configure Claude OAuth and provider env
+through profile `env.<NAME>` mappings using either `{ from_bundle: KEY }` or
+literal strings. CLI adapter stdout and stderr are streamed to the action log
+while GitVibe still captures the structured result for validation.
 
 ## Quality Gates
 

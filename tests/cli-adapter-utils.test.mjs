@@ -23,6 +23,7 @@ describe("CLI profile environment bundle", () => {
         env: {
           ANTHROPIC_API_KEY: { from_bundle: "MINIMAX_API_KEY" },
           ANTHROPIC_BASE_URL: { from_bundle: "MINIMAX_BASE_URL" },
+          ANTHROPIC_MODEL: "glm-5",
         },
       },
       "ai.profiles.claude_minimax",
@@ -44,6 +45,7 @@ describe("CLI profile environment bundle", () => {
     expect(env).toMatchObject({
       ANTHROPIC_API_KEY: "minimax-key",
       ANTHROPIC_BASE_URL: "https://minimax.test/anthropic",
+      ANTHROPIC_MODEL: "glm-5",
       PATH: "/bin",
     });
     expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
@@ -89,7 +91,9 @@ describe("CLI profile environment bundle", () => {
       PATH: "/bin",
     });
   });
+});
 
+describe("CLI profile environment bundle values", () => {
   it("resolves Codex auth JSON from the bundle", () => {
     expect(
       bundleValueFromSource({ from_bundle: "CODEX_AUTH_JSON" }, "ai.profiles.codex.auth_json", {
@@ -97,6 +101,26 @@ describe("CLI profile environment bundle", () => {
       }),
     ).toBe('{"tokens":[]}');
     expect(bundleValueFromSource(undefined, "ai.profiles.codex.auth_json", {})).toBeUndefined();
+  });
+
+  it("allows literal-only profile env without an AI env bundle", () => {
+    const env = cliProfileEnv(
+      {
+        env: {
+          ANTHROPIC_MODEL: "glm-5",
+          CLAUDE_CODE_SUBAGENT_MODEL: "glm-5",
+        },
+      },
+      "ai.profiles.claude_code",
+      { GITVIBE_AI_ENV_JSON: undefined, PATH: "/bin" },
+    );
+
+    expect(env).toMatchObject({
+      ANTHROPIC_MODEL: "glm-5",
+      CLAUDE_CODE_SUBAGENT_MODEL: "glm-5",
+      PATH: "/bin",
+    });
+    expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
   });
 
   it("resolves Codex auth bundle keys without reading the bundle", () => {

@@ -238,19 +238,20 @@ describe("GitVibe AI smoke workflow", () => {
     const codexRun = workflowStep(workflow, "codex", "Run Codex smoke test")?.run || "";
     const claudeRun =
       workflowStep(workflow, "claude-code", "Run Claude Code smoke test")?.run || "";
+    const claudeInstall = workflow.jobs?.["claude-code"]?.steps?.some(
+      (step) => step.run === "pnpm install --frozen-lockfile",
+    );
 
     expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
+    expect(claudeInstall).toBe(true);
     expect(codexRun).toContain("codex exec");
     expect(codexRun).toContain("--output-last-message");
     expect(codexRun).toContain("validateSmokeResponse(response, process.argv[3])");
     expect(codexRun).toContain('"source": { "enum": ["codex"] }');
     expect(codexRun).not.toContain("codex --version");
 
-    expect(claudeRun).toContain("claude -p");
-    expect(claudeRun).toContain("--output-format json");
-    expect(claudeRun).toContain("--json-schema");
-    expect(claudeRun).toContain("validateSmokeResponse(response, process.argv[3])");
-    expect(claudeRun).toContain('"source": { "enum": ["claude-code"] }');
+    expect(claudeRun).toContain("node scripts/smoke-test-claude-code.mjs");
+    expect(claudeRun).not.toContain("claude -p");
     expect(claudeRun).not.toContain("claude --version");
   });
 });

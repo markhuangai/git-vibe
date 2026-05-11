@@ -46,10 +46,13 @@ export function cliProfileEnv(
   if (profileEnv === undefined) return env;
   if (!isRecord(profileEnv)) throw new Error(`${profilePath}.env must be an object.`);
 
-  const bundle = parseRequiredAiEnvBundle(baseEnv, `${profilePath}.env`);
+  let bundle: Record<string, string> | undefined;
   for (const [target, source] of Object.entries(profileEnv)) {
     if (!target.trim()) throw new Error(`${profilePath}.env keys must be non-empty strings.`);
-    env[target] = bundleValue(source, `${profilePath}.env.${target}`, bundle);
+    env[target] = profileEnvValue(source, `${profilePath}.env.${target}`, () => {
+      bundle ??= parseRequiredAiEnvBundle(baseEnv, `${profilePath}.env`);
+      return bundle;
+    });
   }
 
   return env;
@@ -201,6 +204,15 @@ function bundleValue(source: unknown, sourcePath: string, bundle: Record<string,
     throw new Error(`GITVIBE_AI_ENV_JSON key ${key} is required by ${sourcePath}.from_bundle.`);
   }
   return bundle[key];
+}
+
+function profileEnvValue(
+  source: unknown,
+  sourcePath: string,
+  bundle: () => Record<string, string>,
+): string {
+  if (typeof source === "string") return source;
+  return bundleValue(source, sourcePath, bundle());
 }
 
 function sensitiveEnvName(name: string): boolean {
