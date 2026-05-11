@@ -51,12 +51,16 @@ afterEach(() => {
 describe("Claude Code CLI adapter", () => {
   it("runs configured profiles with structured output", async () => {
     const result = {
+      duration_ms: 12,
       is_error: false,
+      num_turns: 2,
+      stop_reason: "end_turn",
       subtype: "success",
       structured_output: { stage: "validate", status: "completed" },
+      terminal_reason: "completed",
       type: "result",
     };
-    mockClaudeStreamOutput({ subtype: "init", type: "system" }, result);
+    mockReadableClaudeStream(result);
     const schema = {
       additionalProperties: false,
       properties: {
@@ -107,7 +111,19 @@ describe("Claude Code CLI adapter", () => {
     expect(spawn.mock.calls[0][2].env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
     expect(process.stdout.write).toHaveBeenCalledWith(
-      `${JSON.stringify({ subtype: "init", type: "system" })}\n${JSON.stringify(result)}\n`,
+      expect.stringContaining("ai.claude.init model=opus"),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining("ai.claude.message text=Reading files"),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining("ai.claude.tool input=file_path=src/index.ts tool=Read"),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining("ai.claude.tool_result chars=6 text=1 code"),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining("ai.claude.result duration_ms=12 reason=completed"),
     );
     expect(schema.required).toEqual(["stage", "status"]);
     expect(generateText).not.toHaveBeenCalled();
@@ -176,8 +192,47 @@ describe("Claude Code CLI adapter defaults", () => {
       '{"stage":"validate","status":"completed"}',
     );
 
-    expect(process.stdout.write).toHaveBeenCalledWith(output);
+    expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining("ai.claude.result"));
+    expect(process.stdout.write).not.toHaveBeenCalledWith(output);
     expect(process.stderr.write).toHaveBeenCalledWith("claude warning\n");
+  });
+
+  it("renders diagnostic stream events through the stage logger", async () => {
+    const logger = { event: vi.fn() };
+    mockDiagnosticClaudeStream({
+      is_error: false,
+      structured_output: { stage: "validate", status: "completed" },
+      subtype: "success",
+      type: "result",
+    });
+
+    await expect(runAiStage({ ...validateStageOptions(claudeCodeConfig()), logger })).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
+    );
+
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.claude.retry",
+      expect.objectContaining({ attempt: 1, status: 503 }),
+    );
+    expect(logger.event).toHaveBeenCalledWith("ai.claude.thinking", { chars: 8 });
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.claude.tool",
+      expect.objectContaining({ input: "command=pnpm test", tool: "Bash" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.claude.tool",
+      expect.objectContaining({ input: "keys=stage,status", tool: "StructuredOutput" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith("ai.claude.assistant", { items: 1 });
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.claude.system",
+      expect.objectContaining({ subtype: "custom" }),
+    );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.claude.event",
+      expect.objectContaining({ type: "custom" }),
+    );
+    expect(process.stdout.write).not.toHaveBeenCalled();
   });
 });
 
@@ -240,6 +295,72 @@ function mockClaudeOutput(result) {
 
 function mockClaudeStreamOutput(...events) {
   mockClaudeRawOutput(`${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
+}
+
+function mockReadableClaudeStream(result) {
+  mockClaudeStreamOutput(
+    {
+      claude_code_version: "2.1.138",
+      model: "opus",
+      permissionMode: "bypassPermissions",
+      subtype: "init",
+      tools: ["Read", "StructuredOutput"],
+      type: "system",
+    },
+    {
+      message: {
+        content: [
+          { text: "Reading files", type: "text" },
+          { input: { file_path: "src/index.ts" }, name: "Read", type: "tool_use" },
+        ],
+      },
+      type: "assistant",
+    },
+    {
+      message: {
+        content: [{ content: "1\tcode", type: "tool_result" }],
+      },
+      type: "user",
+    },
+    result,
+  );
+}
+
+function mockDiagnosticClaudeStream(result) {
+  mockClaudeStreamOutput(
+    {
+      attempt: 1,
+      error: "server_error",
+      error_status: 503,
+      retry_delay_ms: 12.5,
+      subtype: "api_retry",
+      type: "system",
+    },
+    {
+      message: {
+        content: [
+          { thinking: "thinking", type: "thinking" },
+          { input: { command: "pnpm test" }, name: "Bash", type: "tool_use" },
+          {
+            input: { stage: "validate", status: "completed" },
+            name: "StructuredOutput",
+            type: "tool_use",
+          },
+          { input: {}, name: "Noop", type: "tool_use" },
+        ],
+      },
+      type: "assistant",
+    },
+    {
+      message: {
+        content: [{ source: "unknown", type: "image" }],
+      },
+      type: "assistant",
+    },
+    { subtype: "custom", type: "system" },
+    { type: "custom" },
+    result,
+  );
 }
 
 function mockClaudeRawOutput(result, options = {}) {

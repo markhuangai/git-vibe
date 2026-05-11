@@ -126,79 +126,28 @@ ai:
       enabled: true
       profile: local_proxy
       fallback_profile: codex_cli
-      tools:
-        - read
-        - grep
-        - glob
-        - diff
-        - web-fetch
-        - web-search
     summarize:
       enabled: true
       profile: local_proxy
-      tools:
-        - read
-        - grep
-        - glob
-        - web-fetch
-        - web-search
     validate:
       enabled: true
       profile: local_proxy
-      tools:
-        - read
-        - grep
-        - glob
-        - web-fetch
-        - web-search
     materialize:
       enabled: true
       profile: local_proxy
-      tools:
-        - read
-        - grep
-        - glob
     implement:
       enabled: true
       profile: local_proxy
-      tools:
-        - read
-        - grep
-        - glob
-        - edit
-        - write
-        - multi-edit
-        - bash
-        - diff
     review-matrix:
       enabled: true
       profiles:
         - local_proxy
-      tools:
-        - read
-        - grep
-        - glob
-        - diff
     create-pr:
       enabled: true
       profile: local_proxy
-      tools:
-        - read
-        - grep
-        - glob
-        - diff
     address-pr-feedback:
       enabled: true
       profile: local_proxy
-      tools:
-        - read
-        - grep
-        - glob
-        - edit
-        - write
-        - multi-edit
-        - bash
-        - diff
 
 bug_investigation:
   auto_start_on_new_bug: false

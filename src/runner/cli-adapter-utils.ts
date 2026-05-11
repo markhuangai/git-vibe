@@ -10,6 +10,8 @@ interface CliCommandOptions {
   env: NodeJS.ProcessEnv;
   input: string;
   stdoutFile?: string;
+  stdoutFlush?: () => void;
+  stdoutLog?: (text: string) => void;
 }
 
 interface CliCommandResult {
@@ -118,7 +120,9 @@ export async function runStreamingCommand(options: CliCommandOptions): Promise<C
     const buffer = chunkBuffer(chunk);
     stdoutChunks.push(buffer);
     if (options.stdoutFile) appendFileSync(options.stdoutFile, buffer);
-    process.stdout.write(redactLogText(buffer.toString("utf8")));
+    const text = buffer.toString("utf8");
+    if (options.stdoutLog) options.stdoutLog(text);
+    else process.stdout.write(redactLogText(text));
   });
   child.stderr?.on("data", (chunk: Buffer | string) => {
     const buffer = chunkBuffer(chunk);
@@ -136,6 +140,7 @@ export async function runStreamingCommand(options: CliCommandOptions): Promise<C
       resolve({ code: exitCode, signal: exitSignal });
     });
   });
+  options.stdoutFlush?.();
   const stdout = Buffer.concat(stdoutChunks).toString("utf8");
   const stderr = Buffer.concat(stderrChunks).toString("utf8");
 

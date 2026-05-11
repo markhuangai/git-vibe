@@ -126,79 +126,28 @@ ai:
     investigate:
       enabled: true
       profile: codex_cli_high
-      tools:
-        - read
-        - grep
-        - glob
-        - diff
-        - web-fetch
-        - web-search
     summarize:
       enabled: true
       profile: codex_cli_high
-      tools:
-        - read
-        - grep
-        - glob
-        - web-fetch
-        - web-search
     validate:
       enabled: true
       profile: codex_cli_high
-      tools:
-        - read
-        - grep
-        - glob
-        - web-fetch
-        - web-search
     materialize:
       enabled: true
       profile: codex_cli_high
-      tools:
-        - read
-        - grep
-        - glob
     implement:
       enabled: true
       profile: claude_code
-      tools:
-        - read
-        - grep
-        - glob
-        - edit
-        - write
-        - multi-edit
-        - bash
-        - diff
     review-matrix:
       enabled: true
       profiles:
         - codex_cli_xhigh
-      tools:
-        - read
-        - grep
-        - glob
-        - diff
     create-pr:
       enabled: true
       profile: codex_cli_high
-      tools:
-        - read
-        - grep
-        - glob
-        - diff
     address-pr-feedback:
       enabled: true
       profile: claude_code
-      tools:
-        - read
-        - grep
-        - glob
-        - edit
-        - write
-        - multi-edit
-        - bash
-        - diff
 
 bug_investigation:
   auto_start_on_new_bug: false

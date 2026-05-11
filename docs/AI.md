@@ -137,7 +137,7 @@ CLI authentication guidance:
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 - CLI commands are fixed by adapter: `cli-codex` runs `codex exec` and `cli-claude-code` runs `claude -p`. Profiles do not accept a `command` override.
-- CLI adapters bypass native permission and sandbox prompts. Run them only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
+- CLI adapters bypass native permission and sandbox prompts. GitVibe does not pass stage `tools` as CLI allowed-tool settings; Codex and Claude Code own their native agent/tool loops. Run them only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
 
 ## Profile-Based Routing
 
@@ -179,9 +179,6 @@ ai:
         CLAUDE_CODE_OAUTH_TOKEN:
           from_bundle: CLAUDE_OAUTH_TOKEN
       model: opus
-      # Optional: use Claude Code's minimal mode for API-key or third-party provider setups.
-      # Do not use bare mode for OAuth/keychain sessions.
-      bare: false
       reasoning:
         effort: xhigh
 
@@ -212,13 +209,15 @@ Normalized reasoning config:
 Adapter mappings:
 
 - `cli-codex`: run `codex exec` with `--dangerously-bypass-approvals-and-sandbox`; map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
-- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`; set `bare: true` to add Claude Code's `--bare` minimal mode when the runner uses API-key or third-party provider auth instead of OAuth/keychain auth.
-- CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native tool loop and run without per-tool permission prompts in this workflow.
+- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`. GitVibe does not set `--bare` unless a profile explicitly opts in with `bare: true`.
+- CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native agent/tool loop and run without per-tool permission prompts in this workflow.
 - `ai-sdk-agentool` with native OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable; set a stable `providerOptions.openai.promptCacheKey` by default.
 - `ai-sdk-agentool` with OpenAI-compatible endpoints: do not add OpenAI prompt cache request fields by default because non-OpenAI endpoints may reject unknown fields.
 - `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use; set `providerOptions.anthropic.cacheControl: { type: "ephemeral" }` by default.
 
-Tool policy by stage:
+AI SDK tool policy by stage:
+
+Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters ignore this setting because their native agents own tool selection.
 
 - triage: no tools, GitHub context only.
 - investigation/refinement/validation: read, grep, glob, limited read-only bash, web fetch, web search.

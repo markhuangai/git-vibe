@@ -10,6 +10,8 @@ import {
   strictOutputSchema,
   stringValue,
 } from "./cli-adapter-utils.js";
+import type { StageLogger } from "./logging.js";
+import { redactLogText } from "./logging.js";
 
 export async function runClaudeCodeCliStage({
   options,
@@ -49,6 +51,7 @@ export async function runClaudeCodeCliStage({
     provider: "cli-claude-code",
   });
 
+  const streamLogger = createClaudeStreamLogger(options.logger);
   const output = await runStreamingCommand({
     args,
     command,
@@ -56,6 +59,8 @@ export async function runClaudeCodeCliStage({
     env: claudeEnv(profile, profileName),
     input: options.prompt,
     stdoutFile: streamFile,
+    stdoutFlush: streamLogger.flush,
+    stdoutLog: streamLogger.write,
   });
   const result = claudeOutput(readFileSync(streamFile, "utf8"));
   writeFileSync(outputFile, result);
@@ -83,6 +88,183 @@ function claudeModeArgs(profile: Record<string, unknown>): string[] {
 
 function claudeEnv(profile: Record<string, unknown>, profileName: string): NodeJS.ProcessEnv {
   return cliProfileEnv(profile, `ai.profiles.${profileName}`);
+}
+
+function createClaudeStreamLogger(logger: StageLogger | undefined): {
+  flush: () => void;
+  write: (text: string) => void;
+} {
+  let pending = "";
+  return {
+    flush() {
+      if (pending.trim()) logClaudeStreamLine(pending, logger);
+      pending = "";
+    },
+    write(text: string) {
+      pending += text;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop() || "";
+      for (const line of lines) logClaudeStreamLine(line, logger);
+    },
+  };
+}
+
+function logClaudeStreamLine(line: string, logger: StageLogger | undefined): void {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+
+  try {
+    const event = JSON.parse(trimmed) as unknown;
+    if (isRecord(event)) {
+      logClaudeEvent(event, logger);
+      return;
+    }
+  } catch {
+    // Fall through and log a compact raw line when Claude emits non-JSON output.
+  }
+
+  logClaudeProgress(logger, "ai.claude.raw", { text: compactText(trimmed) });
+}
+
+function logClaudeEvent(event: Record<string, unknown>, logger: StageLogger | undefined): void {
+  const type = stringValue(event.type);
+  if (type === "assistant") {
+    logClaudeAssistantEvent(event, logger);
+    return;
+  }
+  if (type === "result") {
+    logClaudeResultEvent(event, logger);
+    return;
+  }
+  if (type === "system") {
+    logClaudeSystemEvent(event, logger);
+    return;
+  }
+  if (type === "user") {
+    logClaudeUserEvent(event, logger);
+    return;
+  }
+  logClaudeProgress(logger, "ai.claude.event", { type: type || "unknown" });
+}
+
+function logClaudeAssistantEvent(
+  event: Record<string, unknown>,
+  logger: StageLogger | undefined,
+): void {
+  const content = messageContent(event);
+  let emitted = false;
+  for (const item of content) {
+    const contentType = stringValue(item.type);
+    if (contentType === "text") {
+      logClaudeProgress(logger, "ai.claude.message", {
+        text: compactText(stringValue(item.text) || ""),
+      });
+      emitted = true;
+    }
+    if (contentType === "thinking") {
+      logClaudeProgress(logger, "ai.claude.thinking", {
+        chars: String(item.thinking || "").length,
+      });
+      emitted = true;
+    }
+    if (contentType === "tool_use") {
+      logClaudeProgress(logger, "ai.claude.tool", {
+        input: summarizeToolInput(item.input),
+        tool: stringValue(item.name) || "unknown",
+      });
+      emitted = true;
+    }
+  }
+  if (!emitted) logClaudeProgress(logger, "ai.claude.assistant", { items: content.length });
+}
+
+function logClaudeSystemEvent(
+  event: Record<string, unknown>,
+  logger: StageLogger | undefined,
+): void {
+  const subtype = stringValue(event.subtype);
+  if (subtype === "api_retry") {
+    logClaudeProgress(logger, "ai.claude.retry", {
+      attempt: event.attempt,
+      delay_ms: Math.round(Number(event.retry_delay_ms) || 0),
+      error: event.error,
+      status: event.error_status,
+    });
+    return;
+  }
+  if (subtype === "init") {
+    logClaudeProgress(logger, "ai.claude.init", {
+      model: event.model,
+      permission: event.permissionMode,
+      tools: Array.isArray(event.tools) ? event.tools.length : undefined,
+      version: event.claude_code_version,
+    });
+    return;
+  }
+  logClaudeProgress(logger, "ai.claude.system", { subtype: subtype || "unknown" });
+}
+
+function logClaudeUserEvent(event: Record<string, unknown>, logger: StageLogger | undefined): void {
+  for (const item of messageContent(event)) {
+    if (stringValue(item.type) !== "tool_result") continue;
+    const content = String(item.content || "");
+    logClaudeProgress(logger, "ai.claude.tool_result", {
+      chars: content.length,
+      error: item.is_error === true || undefined,
+      text: compactText(content),
+    });
+  }
+}
+
+function logClaudeResultEvent(
+  event: Record<string, unknown>,
+  logger: StageLogger | undefined,
+): void {
+  logClaudeProgress(logger, "ai.claude.result", {
+    duration_ms: event.duration_ms,
+    error: event.is_error === true || undefined,
+    reason: event.terminal_reason || event.stop_reason,
+    subtype: event.subtype,
+    turns: event.num_turns,
+  });
+}
+
+function messageContent(event: Record<string, unknown>): Record<string, unknown>[] {
+  const message = event.message;
+  if (!isRecord(message) || !Array.isArray(message.content)) return [];
+  return message.content.filter(isRecord);
+}
+
+function summarizeToolInput(input: unknown): string {
+  if (!isRecord(input)) return "";
+  const filePath = stringValue(input.file_path);
+  if (filePath) return `file_path=${filePath}`;
+  const command = stringValue(input.command);
+  if (command) return `command=${compactText(command)}`;
+  const keys = Object.keys(input);
+  return keys.length > 0 ? `keys=${keys.slice(0, 5).join(",")}` : "";
+}
+
+function logClaudeProgress(
+  logger: StageLogger | undefined,
+  name: string,
+  fields: Record<string, unknown>,
+): void {
+  if (logger) {
+    logger.event(name, fields);
+    return;
+  }
+
+  const rendered = Object.entries(fields)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${key}=${compactText(String(value))}`)
+    .join(" ");
+  process.stdout.write(redactLogText(`[git-vibe] ${name}${rendered ? ` ${rendered}` : ""}\n`));
+}
+
+function compactText(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  return compact.length <= 180 ? compact : `${compact.slice(0, 177)}...`;
 }
 
 function claudeOutput(stdout: string): string {
