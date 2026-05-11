@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -52,18 +52,20 @@ describe("GitVibe AI CLI setup", () => {
 describe("GitVibe AI CLI setup Codex installer", () => {
   it("uses an existing Codex CLI without installing a package", () => {
     const cwd = configuredWorkspace(codexConfig());
+    const env = runtimeEnv(cwd);
     /** @type {CommandCall[]} */
     const calls = [];
 
     const code = setupAiCli({
       argv: ["validate"],
-      env: runtimeEnv(cwd),
+      env,
       execFileSync: execMock(calls, []),
       log: () => undefined,
     });
 
     expect(code).toBe(0);
-    expectCommand(calls, "codex", ["--version"]);
+    expectCommand(calls, "/mock/bin/codex", ["--version"]);
+    expect(readFileSync(env.GITHUB_PATH, "utf8")).toContain("/mock/bin");
     expectNoCommand(calls, "corepack");
     expectNoCommand(calls, "pnpm");
   });
@@ -128,18 +130,57 @@ describe("GitVibe AI CLI setup Codex installer", () => {
 describe("GitVibe AI CLI setup Claude Code installer", () => {
   it("uses an existing Claude Code CLI without running the installer", () => {
     const cwd = configuredWorkspace(claudeConfig());
+    const env = runtimeEnv(cwd);
     /** @type {CommandCall[]} */
     const calls = [];
 
     const code = setupAiCli({
       argv: ["validate"],
-      env: runtimeEnv(cwd),
+      env,
       execFileSync: execMock(calls, []),
       log: () => undefined,
     });
 
     expect(code).toBe(0);
+    expectCommand(calls, "/mock/bin/claude", ["--version"]);
+    expect(readFileSync(env.GITHUB_PATH, "utf8")).toContain("/mock/bin");
+    expectNoCommand(calls, "curl");
+  });
+
+  it("verifies an existing Claude Code command when shell resolution returns a command name", () => {
+    const cwd = configuredWorkspace(claudeConfig());
+    const env = runtimeEnv(cwd);
+    /** @type {CommandCall[]} */
+    const calls = [];
+
+    const code = setupAiCli({
+      argv: ["validate"],
+      env,
+      execFileSync: execMock(calls, [], { claude: "claude" }),
+      log: () => undefined,
+    });
+
+    expect(code).toBe(0);
     expectCommand(calls, "claude", ["--version"]);
+    expect(existsSync(env.GITHUB_PATH)).toBe(false);
+    expectNoCommand(calls, "curl");
+  });
+
+  it("verifies an existing Claude Code path when GITHUB_PATH is unavailable", () => {
+    const cwd = configuredWorkspace(claudeConfig());
+    const env = { ...runtimeEnv(cwd), GITHUB_PATH: undefined };
+    /** @type {CommandCall[]} */
+    const calls = [];
+
+    const code = setupAiCli({
+      argv: ["validate"],
+      env,
+      execFileSync: execMock(calls, []),
+      log: () => undefined,
+    });
+
+    expect(code).toBe(0);
+    expectCommand(calls, "/mock/bin/claude", ["--version"]);
     expectNoCommand(calls, "curl");
   });
 
@@ -283,17 +324,17 @@ function runtimeEnv(cwd) {
 /**
  * @param {CommandCall[]} calls
  * @param {string[]} missingCommands
- * @returns {(command: string, args?: readonly string[], options?: ExecOptions) => Buffer}
+ * @param {Record<string, string>} [resolvedCommands]
+ * @returns {(command: string, args?: readonly string[], options?: ExecOptions) => Buffer | string}
  */
-function execMock(calls, missingCommands) {
+function execMock(calls, missingCommands, resolvedCommands = {}) {
   return (command, args = [], options = {}) => {
     calls.push({ args: [...args], command, env: options.env, stdio: options.stdio });
-    if (
-      command === "bash" &&
-      args[0] === "-lc" &&
-      missingCommands.some((missing) => args[1] === `command -v ${missing}`)
-    ) {
-      throw new Error("missing command");
+    if (command === "bash" && args[0] === "-lc" && typeof args[1] === "string") {
+      const commandName = args[1].replace("command -v ", "");
+      if (missingCommands.includes(commandName)) throw new Error("missing command");
+      if (resolvedCommands[commandName]) return `${resolvedCommands[commandName]}\n`;
+      return Buffer.from(`/mock/bin/${commandName}\n`);
     }
     return Buffer.from("ok\n");
   };

@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, delimiter, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   activeProfileByName,
@@ -88,9 +88,10 @@ function installCodex(
   env: NodeJS.ProcessEnv,
   log: (message: string) => void,
 ): void {
-  if (commandExists(runtime, "codex", env)) {
+  const existing = commandPath(runtime, "codex", env);
+  if (existing) {
     log("Codex CLI already available.");
-    verifyCommand(runtime, "codex", env);
+    verifyExistingCommand(runtime, existing, env);
     return;
   }
 
@@ -115,9 +116,10 @@ function installClaudeCode(
   env: NodeJS.ProcessEnv,
   log: (message: string) => void,
 ): void {
-  if (commandExists(runtime, "claude", env)) {
+  const existing = commandPath(runtime, "claude", env);
+  if (existing) {
     log("Claude Code CLI already available.");
-    verifyCommand(runtime, "claude", env);
+    verifyExistingCommand(runtime, existing, env);
     return;
   }
 
@@ -150,11 +152,37 @@ function commandExists(
   }
 }
 
-function verifyCommand(
+function commandPath(
   runtime: SetupAiCliRuntime,
-  command: "claude" | "codex",
+  command: "claude" | "codex" | "corepack" | "pnpm",
+  env: NodeJS.ProcessEnv,
+): string | undefined {
+  try {
+    const output = (runtime.execFileSync || execFileSync)(
+      "bash",
+      ["-lc", `command -v ${command}`],
+      {
+        env,
+      },
+    );
+    return firstLine(output);
+  } catch {
+    return undefined;
+  }
+}
+
+function verifyExistingCommand(
+  runtime: SetupAiCliRuntime,
+  command: string,
   env: NodeJS.ProcessEnv,
 ): void {
+  const commandDir = command.includes("/") ? dirname(command) : undefined;
+  if (commandDir) addPath(runtime, commandDir, env);
+  const commandEnv = commandDir ? prependPath(env, commandDir) : env;
+  verifyCommand(runtime, command, commandEnv);
+}
+
+function verifyCommand(runtime: SetupAiCliRuntime, command: string, env: NodeJS.ProcessEnv): void {
   runCommand(runtime, command, ["--version"], env);
 }
 
@@ -178,6 +206,14 @@ function addPath(runtime: SetupAiCliRuntime, path: string, env: NodeJS.ProcessEn
 
 function prependPath(env: NodeJS.ProcessEnv, path: string): NodeJS.ProcessEnv {
   return { ...env, PATH: [path, env.PATH].filter(Boolean).join(delimiter) };
+}
+
+function firstLine(output: Buffer | string): string | undefined {
+  const value = Buffer.isBuffer(output) ? output.toString("utf8") : output;
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 function runnerTemp(env: NodeJS.ProcessEnv): string {
