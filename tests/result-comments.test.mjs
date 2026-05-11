@@ -158,6 +158,29 @@ describe("compact stage result comments", () => {
     expect(body).not.toContain("Threaded PR review replies are not implemented");
   });
 
+  it("keeps supplemental details in compact validation comments", () => {
+    const body = renderStageResultComment({
+      context: context("discussion"),
+      parsedOutput: {
+        comment_body:
+          "Planned move list:\n- `git-vibe:investigating` -> `gvi:investigating`\n- `git-vibe:in-progress` -> `gvi:in-progress`",
+        findings: ["The label migration needs maintainer confirmation."],
+        next_state: "needs-info",
+        questions: ["Confirm the planned move list above."],
+        references: [],
+        stage: "validate",
+        status: "completed",
+        summary: "Validation needs maintainer input.",
+      },
+      stage: "validate",
+    });
+
+    expect(body).toContain("### Details");
+    expect(body).toContain("Planned move list:");
+    expect(body).toContain("`git-vibe:investigating` -> `gvi:investigating`");
+    expect(body).toContain("### Open Questions\n- Confirm the planned move list above.");
+  });
+
   it("renders retry guidance when investigation has blocking questions", () => {
     const body = renderStageResultComment({
       context: context("issue"),
