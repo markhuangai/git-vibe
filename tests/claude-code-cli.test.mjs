@@ -50,11 +50,13 @@ afterEach(() => {
 
 describe("Claude Code CLI adapter", () => {
   it("runs configured profiles with structured output", async () => {
-    mockClaudeOutput({
+    const result = {
       is_error: false,
+      subtype: "success",
       structured_output: { stage: "validate", status: "completed" },
       type: "result",
-    });
+    };
+    mockClaudeStreamOutput({ subtype: "init", type: "system" }, result);
     const schema = {
       additionalProperties: false,
       properties: {
@@ -80,7 +82,8 @@ describe("Claude Code CLI adapter", () => {
         "--model",
         "opus",
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--effort",
         "xhigh",
       ]),
@@ -104,11 +107,7 @@ describe("Claude Code CLI adapter", () => {
     expect(spawn.mock.calls[0][2].env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
     expect(process.stdout.write).toHaveBeenCalledWith(
-      JSON.stringify({
-        is_error: false,
-        structured_output: { stage: "validate", status: "completed" },
-        type: "result",
-      }),
+      `${JSON.stringify({ subtype: "init", type: "system" })}\n${JSON.stringify(result)}\n`,
     );
     expect(schema.required).toEqual(["stage", "status"]);
     expect(generateText).not.toHaveBeenCalled();
@@ -198,6 +197,11 @@ describe("Claude Code CLI adapter errors", () => {
     await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).rejects.toThrow(
       "Claude Code CLI failed: unknown error",
     );
+
+    mockClaudeOutput({ is_error: false, subtype: "error_max_structured_output_retries" });
+    await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).rejects.toThrow(
+      "Claude Code CLI failed: error_max_structured_output_retries",
+    );
   });
 
   it("reports non-object and non-JSON results", async () => {
@@ -209,6 +213,11 @@ describe("Claude Code CLI adapter errors", () => {
     mockClaudeOutput({ is_error: false, result: "not json", type: "result" });
     await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).rejects.toThrow(
       "Claude Code CLI result did not contain a JSON object.",
+    );
+
+    mockClaudeStreamOutput({ subtype: "init", type: "system" });
+    await expect(runAiStage(validateStageOptions(claudeCodeConfig()))).rejects.toThrow(
+      "Claude Code CLI stream did not contain a result event.",
     );
   });
 
@@ -227,6 +236,10 @@ describe("Claude Code CLI adapter errors", () => {
 
 function mockClaudeOutput(result) {
   mockClaudeRawOutput(JSON.stringify(result));
+}
+
+function mockClaudeStreamOutput(...events) {
+  mockClaudeRawOutput(`${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
 }
 
 function mockClaudeRawOutput(result, options = {}) {

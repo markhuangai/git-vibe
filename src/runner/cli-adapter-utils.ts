@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { appendFileSync, writeFileSync } from "node:fs";
 import type { JsonObject } from "../shared/types.js";
 import { redactLogText } from "./logging.js";
 
@@ -8,6 +9,7 @@ interface CliCommandOptions {
   cwd: string;
   env: NodeJS.ProcessEnv;
   input: string;
+  stdoutFile?: string;
 }
 
 interface CliCommandResult {
@@ -102,6 +104,8 @@ export function optionalAiEnvBundleSecretValues(
 }
 
 export async function runStreamingCommand(options: CliCommandOptions): Promise<CliCommandResult> {
+  if (options.stdoutFile) writeFileSync(options.stdoutFile, "");
+
   const child = spawn(options.command, options.args, {
     cwd: options.cwd,
     env: options.env,
@@ -113,6 +117,7 @@ export async function runStreamingCommand(options: CliCommandOptions): Promise<C
   child.stdout?.on("data", (chunk: Buffer | string) => {
     const buffer = chunkBuffer(chunk);
     stdoutChunks.push(buffer);
+    if (options.stdoutFile) appendFileSync(options.stdoutFile, buffer);
     process.stdout.write(redactLogText(buffer.toString("utf8")));
   });
   child.stderr?.on("data", (chunk: Buffer | string) => {

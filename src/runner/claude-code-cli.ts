@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { RunAiStageOptions } from "./ai.js";
 import {
   cliProfileEnv,
@@ -19,6 +22,9 @@ export async function runClaudeCodeCliStage({
 }): Promise<string> {
   const command = "claude";
   const model = cliModelName(profile, "cli-claude-code");
+  const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-claude-"));
+  const outputFile = join(contextDir, `${options.stage}.output.json`);
+  const streamFile = join(contextDir, `${options.stage}.stream.jsonl`);
   const args = [
     "-p",
     ...claudeModeArgs(profile),
@@ -26,7 +32,8 @@ export async function runClaudeCodeCliStage({
     "--model",
     model,
     "--output-format",
-    "json",
+    "stream-json",
+    "--verbose",
     "--json-schema",
     JSON.stringify(strictOutputSchema(options.schema)),
     "--system-prompt",
@@ -48,15 +55,20 @@ export async function runClaudeCodeCliStage({
     cwd: options.cwd,
     env: claudeEnv(profile, profileName),
     input: options.prompt,
+    stdoutFile: streamFile,
   });
+  const result = claudeOutput(readFileSync(streamFile, "utf8"));
+  writeFileSync(outputFile, result);
   options.logger?.event("ai.request.done", {
     adapter: "cli-claude-code",
+    output_file: outputFile,
     stderr_chars: output.stderr.length,
+    stream_file: streamFile,
     stdout_chars: output.stdout.length,
     profile: profileName,
   });
 
-  return claudeOutput(output.stdout);
+  return readFileSync(outputFile, "utf8").trim();
 }
 
 function claudeReasoningArgs(profile: Record<string, unknown>): string[] {
@@ -74,9 +86,9 @@ function claudeEnv(profile: Record<string, unknown>, profileName: string): NodeJ
 }
 
 function claudeOutput(stdout: string): string {
-  const parsed = JSON.parse(stdout) as unknown;
+  const parsed = parseClaudeOutput(stdout);
   if (!isRecord(parsed)) throw new Error("Claude Code CLI returned a non-object result.");
-  if (parsed.is_error === true) {
+  if (parsed.is_error === true || failedResultSubtype(parsed.subtype)) {
     throw new Error(`Claude Code CLI failed: ${claudeError(parsed)}`);
   }
   if (isRecord(parsed.structured_output)) {
@@ -85,10 +97,41 @@ function claudeOutput(stdout: string): string {
   return extractJson(String(parsed.result || ""));
 }
 
+function parseClaudeOutput(stdout: string): unknown {
+  const trimmed = stdout.trim();
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (isClaudeStreamEvent(parsed)) return parseClaudeJsonLines(trimmed);
+    return parsed;
+  } catch {
+    return parseClaudeJsonLines(trimmed);
+  }
+}
+
+function isClaudeStreamEvent(event: unknown): boolean {
+  return isRecord(event) && typeof event.type === "string" && event.type !== "result";
+}
+
+function parseClaudeJsonLines(stdout: string): unknown {
+  let result: unknown;
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const event = JSON.parse(line) as unknown;
+    if (isRecord(event) && event.type === "result") result = event;
+  }
+  if (result !== undefined) return result;
+  throw new Error("Claude Code CLI stream did not contain a result event.");
+}
+
+function failedResultSubtype(subtype: unknown): boolean {
+  return typeof subtype === "string" && subtype.startsWith("error");
+}
+
 function claudeError(result: Record<string, unknown>): string {
   const errors = result.errors;
   if (Array.isArray(errors) && errors.length > 0) return errors.join("; ");
-  return typeof result.result === "string" && result.result ? result.result : "unknown error";
+  if (typeof result.result === "string" && result.result) return result.result;
+  return typeof result.subtype === "string" ? result.subtype : "unknown error";
 }
 
 function extractJson(text: string): string {
