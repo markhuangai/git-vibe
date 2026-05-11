@@ -13,6 +13,7 @@ import { renderStageResultComment } from "./result-comments.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
 import {
   applyStageLabelTransition,
+  applyStageStartLabelTransition,
   type PublishedArtifactComment,
   publishStageResultComment,
   publishStageStartComment,
@@ -169,6 +170,14 @@ async function publishStageStart(options: {
       runner: options.options,
     });
     if (comment) transientComments.push(comment);
+  }
+  if (!options.options.dryRun) {
+    await applyStageStartLabelTransition({
+      client: options.client,
+      context: options.context,
+      logger: options.logger,
+      runner: options.options,
+    });
   }
   if (
     !options.options.dryRun &&

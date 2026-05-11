@@ -31,6 +31,7 @@ export interface StagePublishingOptions {
 }
 
 type ArtifactCommentOptions = Omit<StagePublishingOptions, "parsedOutput"> & { body: string };
+type LabelTransitionOptions = Omit<StagePublishingOptions, "parsedOutput"> & { label: string };
 
 export interface PublishedArtifactComment {
   id: string;
@@ -83,7 +84,21 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
   const label = labelForStage(options.context, options.runner, options.parsedOutput);
   if (!label) return;
 
-  for (const staleLabel of staleLabelsForTransition(options.context, label)) {
+  await applyIssueLabelTransition({ ...options, label });
+}
+
+export async function applyStageStartLabelTransition(
+  options: Omit<StagePublishingOptions, "parsedOutput">,
+): Promise<void> {
+  if (options.context.artifact.type === "discussion") return;
+  const label = labelForStageStart(options.context, options.runner);
+  if (!label) return;
+
+  await applyIssueLabelTransition({ ...options, label });
+}
+
+async function applyIssueLabelTransition(options: LabelTransitionOptions): Promise<void> {
+  for (const staleLabel of staleLabelsForTransition(options.context, options.label)) {
     await removeEquivalentIssueLabels({
       client: options.client,
       issueNumber: options.context.artifact.number,
@@ -95,18 +110,18 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
   }
   options.logger.event("github.issue.label.start", {
     issue: options.context.artifact.number,
-    label,
+    label: options.label,
   });
   await addIssueLabel({
     client: options.client,
     issueNumber: options.context.artifact.number,
-    label,
+    label: options.label,
     repository: options.runner.repository,
     token: options.runner.token,
   });
   options.logger.event("github.issue.label.done", {
     issue: options.context.artifact.number,
-    label,
+    label: options.label,
   });
 }
 
@@ -180,6 +195,14 @@ async function applyInvestigationLabelTransition(options: StagePublishingOptions
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.investigating.name,
+    logger: options.logger,
+    repository: options.runner.repository,
+    token: options.runner.token,
+  });
+  await removeEquivalentIssueLabels({
+    client: options.client,
+    issueNumber: options.context.artifact.number,
+    label: gitVibeLabels.inProgress.name,
     logger: options.logger,
     repository: options.runner.repository,
     token: options.runner.token,
@@ -522,6 +545,13 @@ function labelForStage(
   return undefined;
 }
 
+function labelForStageStart(context: ContextPacket, runner: RunnerOptions): string | undefined {
+  if (context.artifact.type === "issue" && runner.stage === "implement") {
+    return gitVibeLabels.inProgress.name;
+  }
+  return undefined;
+}
+
 function staleLabelsForTransition(context: ContextPacket, label: string): string[] {
   const isPullRequest = context.artifact.type === "pull-request";
   if (label === gitVibeLabels.blocked.name) {
@@ -531,7 +561,7 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
           gitVibeLabels.inProgress.name,
           gitVibeLabels.readyForApproval.name,
         ]
-      : [];
+      : [gitVibeLabels.inProgress.name];
   }
   if (label === gitVibeLabels.inProgress.name) {
     return isPullRequest

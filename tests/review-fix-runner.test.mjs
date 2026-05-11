@@ -251,7 +251,7 @@ describe("review-fix deterministic paths", () => {
 
     expect(result).toMatchObject({ status: "blocked" });
     expect(requestBody(client, 0).body).toContain("review-fix depth 6 exceeds");
-    expect(requestBody(client, 1).labels).toEqual(["gvi:blocked"]);
+    expect(labelRequestBody(client, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
   });
 
   it("surfaces sparse review-fix issue responses after preserving review details", async () => {
@@ -591,4 +591,10 @@ function sparseReviewFixClient() {
 
 function requestBody(client, index) {
   return client.request.mock.calls[index][0].body;
+}
+
+function labelRequestBody(client, label) {
+  return client.request.mock.calls
+    .map((call) => call[0].body)
+    .find((body) => body?.labels?.[0] === label);
 }

@@ -103,8 +103,8 @@ describe("implementation structured output recovery", () => {
       summary: "Implementation stopped because the stage did not return schema-valid JSON.",
     });
 
-    expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["gvi:blocked"]);
+    expect(issueCommentCall(fetch)?.[0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
   });
 });
 
@@ -219,6 +219,24 @@ function isLabelRequest(url, init) {
     (method === "POST" && /\/issues\/\d+\/labels$/.test(path)) ||
     (method === "DELETE" && path.includes("/labels/"))
   );
+}
+
+function issueCommentCall(fetch) {
+  return fetch.mock.calls.find(([url, init]) => {
+    return (
+      String(url).includes("/repos/example/repo/issues/12/comments") &&
+      String(init?.method || "GET").toUpperCase() === "POST"
+    );
+  });
+}
+
+function labelRequestBody(fetch, label) {
+  const call = fetch.mock.calls.find(([url, init]) => {
+    if (!String(url).includes("/repos/example/repo/issues/12/labels")) return false;
+    if (String(init?.method || "GET").toUpperCase() !== "POST") return false;
+    return JSON.parse(String(init?.body || "{}")).labels?.[0] === label;
+  });
+  return call ? JSON.parse(String(call[1]?.body || "{}")) : undefined;
 }
 
 function issueResponse(body) {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applyStageLabelTransition,
+  applyStageStartLabelTransition,
   publishFeedbackInvestigationReplies,
   publishStageResultComment,
   publishStageStartComment,
@@ -443,6 +444,38 @@ describe("stage publishing review status cleanup", () => {
       ["DELETE", "/repos/example/repo/pulls/comments/77"],
       ["POST", "/repos/example/repo/pulls/12/comments/88/replies"],
     ]);
+  });
+});
+
+describe("stage start label publishing helpers", () => {
+  it("marks issue implementation in progress when implement starts", async () => {
+    const client = createClient();
+
+    await applyStageStartLabelTransition({
+      client,
+      context: context("discussion"),
+      logger: createLogger(),
+      runner: runner({ stage: "implement" }),
+    });
+    await applyStageStartLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      runner: runner({ stage: "validate" }),
+    });
+    await applyStageStartLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      runner: runner({ stage: "implement" }),
+    });
+
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
+      ["POST", "/repos/example/repo/issues/12/labels"],
+    ]);
+    expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:in-progress"]);
   });
 });
 

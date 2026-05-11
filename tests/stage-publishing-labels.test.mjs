@@ -55,7 +55,26 @@ describe("stage label PR feedback transitions", () => {
 });
 
 describe("stage label investigation blocking", () => {
-  it("blocks not-ready investigation by adding blocked and removing investigating", async () => {
+  it("removes in-progress when an issue stage blocks", async () => {
+    const client = createClient();
+
+    await applyStageLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      parsedOutput: { ...output(), status: "blocked" },
+      runner: runner({ stage: "implement" }),
+    });
+
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress"],
+      ["POST", "/repos/example/repo/issues/12/labels"],
+    ]);
+    expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:blocked"]);
+  });
+
+  it("blocks not-ready investigation by adding blocked and removing active labels", async () => {
     const client = createClient();
 
     await applyStageLabelTransition({
@@ -70,11 +89,13 @@ describe("stage label investigation blocking", () => {
       ["POST", "/repos/example/repo/issues/12/labels"],
       ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
       ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress"],
     ]);
     expect(requestCalls(client)[0].body.labels).toEqual(["gvi:blocked"]);
   });
 
-  it("ignores a missing investigating label when blocking not-ready investigation", async () => {
+  it("ignores missing active labels when blocking not-ready investigation", async () => {
     const client = createClient();
     client.request = vi.fn(
       /**
@@ -97,7 +118,7 @@ describe("stage label investigation blocking", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(client.request).toHaveBeenCalledTimes(3);
+    expect(client.request).toHaveBeenCalledTimes(5);
   });
 
   it("logs and rethrows unexpected investigating label removal failures", async () => {

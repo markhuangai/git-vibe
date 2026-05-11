@@ -230,12 +230,13 @@ describe("stage runner implementation writes", () => {
       ],
       text: "{}",
     });
-    globalThis.fetch = fetchMock([
+    const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
       response(200, { default_branch: "main" }),
       response(200, {}),
     ]);
+    globalThis.fetch = fetch;
 
     await expect(
       runStage({
@@ -250,6 +251,21 @@ describe("stage runner implementation writes", () => {
         token: "token",
       }),
     ).resolves.toMatchObject({ status: "completed" });
+
+    const firstInProgressLabelIndex = fetch.mock.calls.findIndex(([url, init]) => {
+      if (!String(url).includes("/repos/example/repo/issues/12/labels")) return false;
+      if (String(init?.method || "GET").toUpperCase() !== "POST") return false;
+      return JSON.parse(String(init?.body || "{}")).labels?.[0] === "gvi:in-progress";
+    });
+    const repositoryLookupIndex = fetch.mock.calls.findIndex(([url, init]) => {
+      return (
+        String(url).includes("/repos/example/repo") &&
+        !String(url).includes("/issues/") &&
+        String(init?.method || "GET").toUpperCase() === "GET"
+      );
+    });
+    expect(firstInProgressLabelIndex).toBeGreaterThan(1);
+    expect(firstInProgressLabelIndex).toBeLessThan(repositoryLookupIndex);
   });
 });
 
