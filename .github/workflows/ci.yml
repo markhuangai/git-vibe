@@ -8,7 +8,7 @@ on:
 
 jobs:
   quality:
-    runs-on: rootless-docker
+    runs-on: docker-runner
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

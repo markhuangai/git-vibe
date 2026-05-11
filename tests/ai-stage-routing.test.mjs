@@ -13,6 +13,7 @@ const spawnedChildren = [];
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -204,14 +205,10 @@ describe("AI stage runner explicit profile routing", () => {
 });
 
 describe("AI stage runner stage config validation", () => {
-  it("enforces enabled and canonical access stage config", async () => {
+  it("enforces disabled stage config", async () => {
     await expectValidationConfigError(
       { ai: { stages: { validate: { enabled: false } } } },
       "ai.stages.validate is disabled.",
-    );
-    await expectValidationConfigError(
-      { ai: { stages: { validate: { access: "branch-write" } } } },
-      "ai.stages.validate.access must match canonical access read-only.",
     );
   });
 
@@ -224,10 +221,6 @@ describe("AI stage runner stage config validation", () => {
     await expectValidationConfigError(
       { ai: { stages: { validate: { enabled: "yes" } } } },
       "ai.stages.validate.enabled must be a boolean.",
-    );
-    await expectValidationConfigError(
-      { ai: { stages: { validate: { access: true } } } },
-      "ai.stages.validate.access must be a string.",
     );
     await expectValidationConfigError(
       validationConfigWithStage({ tools: ["read", ""] }),
@@ -253,7 +246,7 @@ describe("AI stage runner stage config validation", () => {
 
 describe("AI stage runner stage fallbacks", () => {
   it("runs configured Codex CLI profiles with runtime stage context", async () => {
-    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: '{"tokens":[]}\n' });
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: codexAuthJson("old") });
     mockCodexOutput('{"stage":"validate","status":"completed"}');
     const schema = {
       additionalProperties: false,
@@ -273,12 +266,11 @@ describe("AI stage runner stage fallbacks", () => {
       "codex",
       expect.arrayContaining([
         "exec",
+        "--dangerously-bypass-approvals-and-sandbox",
         "--cd",
         process.cwd(),
         "--model",
         "gpt-5.5",
-        "--sandbox",
-        "read-only",
         "-c",
         'model_reasoning_effort="xhigh"',
         "-c",
@@ -292,14 +284,14 @@ describe("AI stage runner stage fallbacks", () => {
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith(
       expect.stringContaining("System\n\nPrompt"),
     );
-    expect(process.stdout.write).toHaveBeenCalledWith(Buffer.from("codex event\n"));
+    expect(process.stdout.write).toHaveBeenCalledWith("codex event\n");
     expect(JSON.parse(readFileSync(schemaPathFrom(spawn.mock.calls[0][1]), "utf8"))).toEqual(
       expect.objectContaining({
         required: ["stage", "working_capabilities"],
       }),
     );
     const childEnv = spawn.mock.calls[0][2].env;
-    expect(readFileSync(join(childEnv.CODEX_HOME, "auth.json"), "utf8")).toBe('{"tokens":[]}\n');
+    expect(readFileSync(join(childEnv.CODEX_HOME, "auth.json"), "utf8")).toBe(codexAuthJson("old"));
     expect(childEnv.CODEX_AUTH_JSON).toBeUndefined();
     expect(childEnv.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(schema.required).toEqual(["stage"]);
@@ -308,7 +300,7 @@ describe("AI stage runner stage fallbacks", () => {
 });
 
 describe("AI stage runner Codex CLI defaults", () => {
-  it("uses command, model, sandbox, and auth defaults for Codex CLI profiles", async () => {
+  it("uses command, model, and auth defaults for Codex CLI profiles", async () => {
     mockCodexOutput('{"stage":"implement","status":"completed"}');
 
     await expect(
@@ -334,7 +326,8 @@ describe("AI stage runner Codex CLI defaults", () => {
     const args = spawn.mock.calls[0][1];
     expect(spawn.mock.calls[0][0]).toBe("codex");
     expect(args).toEqual(expect.arrayContaining(["exec", "--model", "codex-test-model"]));
-    expect(args).toEqual(expect.arrayContaining(["--sandbox", "workspace-write"]));
+    expect(args).toContain("--dangerously-bypass-approvals-and-sandbox");
+    expect(args).not.toContain("--sandbox");
     expect(args).not.toContain("-c");
     expect(spawn.mock.calls[0][2].env.CODEX_HOME).toBeUndefined();
   });
@@ -545,6 +538,19 @@ function schemaPathFrom(args) {
   return args[args.indexOf("--output-schema") + 1];
 }
 
+function codexAuthJson(label) {
+  return `${JSON.stringify({
+    auth_mode: "chatgpt",
+    last_refresh: "2026-05-09T11:57:42.136804048Z",
+    tokens: {
+      access_token: `access-${label}`,
+      account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
+      id_token: `header.${label}.signature`,
+      refresh_token: `refresh-${label}`,
+    },
+  })}\n`;
+}
+
 function codexCliConfig() {
   return {
     ai: {
@@ -552,7 +558,6 @@ function codexCliConfig() {
         codex_cli: {
           adapter: "cli-codex",
           auth_json: { from_bundle: "CODEX_AUTH_JSON" },
-          command: "codex exec",
           model: "gpt-5.5",
           reasoning: {
             effort: "xhigh",

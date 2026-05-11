@@ -1,6 +1,6 @@
 {
   "name": "@git-vibe/app",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": false,
   "type": "module",
   "packageManager": "pnpm@10.33.3",
@@ -36,8 +36,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/openai": "^3.0.60",
-    "acorn": "^8.15.0",
-    "acorn-walk": "^8.3.4",
     "agentool": "^1.4.1",
     "ai": "^6.0.175",
     "libsodium-wrappers": "^0.8.4",

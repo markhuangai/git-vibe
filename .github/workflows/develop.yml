@@ -12,7 +12,7 @@ on:
         description: Runner label for all jobs.
         required: false
         type: string
-        default: rootless-docker
+        default: docker-runner
       implementation_timeout_minutes:
         description: Maximum minutes for the implementation job.
         required: false
@@ -37,7 +37,7 @@ on:
         description: Maximum AI turns for implementation and feedback-style coding work.
         required: false
         type: number
-        default: 120
+        default: 200
       validation_repair_attempts:
         description: Maximum validation repair attempts inside each implementation run.
         required: false
@@ -78,7 +78,7 @@ on:
         description: Runner label for all jobs.
         required: false
         type: string
-        default: rootless-docker
+        default: docker-runner
       implementation_timeout_minutes:
         description: Maximum minutes for the implementation job.
         required: false
@@ -103,7 +103,7 @@ on:
         description: Maximum AI turns for implementation and feedback-style coding work.
         required: false
         type: number
-        default: 120
+        default: 200
       validation_repair_attempts:
         description: Maximum validation repair attempts inside each implementation run.
         required: false
@@ -133,7 +133,7 @@ on:
         description: GitVibe action source ref.
         required: false
         type: string
-        default: main
+        default: v1
     secrets:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.

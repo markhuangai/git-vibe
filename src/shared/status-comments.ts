@@ -1,4 +1,4 @@
-export type TransientStatusKind = "workflow-queued" | "stage-start";
+type TransientStatusKind = "workflow-queued" | "stage-start";
 
 export interface TransientStatusMarker {
   artifact: "issue" | "pull-request" | "discussion";

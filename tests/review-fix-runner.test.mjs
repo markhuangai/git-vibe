@@ -19,6 +19,7 @@ const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-mod
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -70,7 +71,7 @@ describe("stage runner review-fix writes", () => {
     const issue = bodyAt(fetch, 2);
     expect(issue.labels).toEqual(["gvi:review-fix"]);
     expect(issue.body).toContain(
-      "git-vibe:review-fix root=12 parent=12 branch=git-vibe/12 depth=1",
+      "git-vibe:review-fix kind=issue root=12 parent=12 branch=git-vibe/12 depth=1",
     );
     expect(issue.body).toContain("src/foo.ts: fix required");
     expect(bodyAt(fetch, 3).body).toContain("Follow-up review-fix issue: #13");
@@ -250,7 +251,7 @@ describe("review-fix deterministic paths", () => {
 
     expect(result).toMatchObject({ status: "blocked" });
     expect(requestBody(client, 0).body).toContain("review-fix depth 6 exceeds");
-    expect(requestBody(client, 1).labels).toEqual(["git-vibe:blocked"]);
+    expect(requestBody(client, 1).labels).toEqual(["gvi:blocked"]);
   });
 
   it("surfaces sparse review-fix issue responses after preserving review details", async () => {

@@ -1,6 +1,6 @@
 export const sourceDiscussionMarker = "<!-- git-vibe:source-discussion";
-export const reviewFixMarker = "<!-- git-vibe:review-fix";
-export const reviewFixLinkMarker = "<!-- git-vibe:review-fix-link";
+const reviewFixMarker = "<!-- git-vibe:review-fix";
+const reviewFixLinkMarker = "<!-- git-vibe:review-fix-link";
 
 export interface ReviewFixTrace {
   branch: string;
@@ -14,6 +14,11 @@ export interface ReviewFixLink {
   issue: string;
   parent: string;
   root: string;
+}
+
+export interface PullRequestReviewFixTrace {
+  depth: number;
+  pullRequest: string;
 }
 
 export interface SourceDiscussionTrace {
@@ -53,6 +58,7 @@ export function gitVibeBranchName(number: string): string {
 export function reviewFixTraceFromBody(body: string): ReviewFixTrace | undefined {
   const attributes = markerAttributes(body, reviewFixMarker);
   if (!attributes) return undefined;
+  if (attributes.kind && attributes.kind !== "issue") return undefined;
 
   const trace = {
     branch: attributes.branch || "",
@@ -63,6 +69,19 @@ export function reviewFixTraceFromBody(body: string): ReviewFixTrace | undefined
   if (!isPositiveIssueNumber(trace.root) || !isPositiveIssueNumber(trace.parent)) return undefined;
   if (!Number.isInteger(trace.depth) || trace.depth < 1) return undefined;
   if (trace.branch !== gitVibeBranchName(trace.root)) return undefined;
+  return trace;
+}
+
+export function pullRequestReviewFixFromBody(body: string): PullRequestReviewFixTrace | undefined {
+  const attributes = markerAttributes(body, reviewFixMarker);
+  if (!attributes || attributes.kind !== "pull-request") return undefined;
+
+  const trace = {
+    depth: Number(attributes.depth),
+    pullRequest: attributes.pr || "",
+  };
+  if (!isPositiveIssueNumber(trace.pullRequest)) return undefined;
+  if (!Number.isInteger(trace.depth) || trace.depth < 1) return undefined;
   return trace;
 }
 
@@ -88,7 +107,11 @@ export function reviewFixLinkFromBody(body: string): ReviewFixLink | undefined {
 }
 
 export function reviewFixIssueMarker(trace: ReviewFixTrace): string {
-  return `${reviewFixMarker} root=${trace.root} parent=${trace.parent} branch=${trace.branch} depth=${trace.depth} -->`;
+  return `${reviewFixMarker} kind=issue root=${trace.root} parent=${trace.parent} branch=${trace.branch} depth=${trace.depth} -->`;
+}
+
+export function pullRequestReviewFixMarker(trace: PullRequestReviewFixTrace): string {
+  return `${reviewFixMarker} kind=pull-request pr=${trace.pullRequest} depth=${trace.depth} -->`;
 }
 
 export function reviewFixLinkComment(options: {

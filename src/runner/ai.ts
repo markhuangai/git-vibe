@@ -1,6 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, stepCountIs } from "ai";
+import { generateText, hasToolCall, stepCountIs } from "ai";
 import { createBash } from "agentool/bash";
 import { createDiff } from "agentool/diff";
 import { createEdit } from "agentool/edit";
@@ -63,6 +63,9 @@ interface AiResult {
   usage?: unknown;
 }
 
+const OUTPUT_FINALIZATION_RESERVED_TURNS = 10;
+const MIN_TURNS_BEFORE_RESERVE = OUTPUT_FINALIZATION_RESERVED_TURNS * 2;
+
 export interface RunAiStageOptions {
   config: GitVibeConfig;
   cwd: string;
@@ -74,6 +77,7 @@ export interface RunAiStageOptions {
   stageDefinition: StageDefinition;
   system: string;
   github?: CodexAuthWritebackGitHub;
+  reserveFinalizationTurns?: boolean;
   toolOverride?: string[];
   logger?: StageLogger;
 }
@@ -142,6 +146,7 @@ async function runAiSdkStageWithProfile(
   const tools = createTools(options);
   const model = createModel(options, profileName, profile);
   const contextWindowTokens = contextWindowTokensForProfile(profileName, profile, options.config);
+  const primaryTurnBudget = primaryTurnBudgetFor(options);
   let maxContextUsedPct: number | undefined;
   let stepCount = 0;
   logger?.event("ai.request.start", {
@@ -191,7 +196,7 @@ async function runAiSdkStageWithProfile(
     }),
     prompt: options.prompt,
     providerOptions: providerOptionsForRequest({ options, profile, profileName }) as never,
-    stopWhen: stepCountIs(options.maxTurns),
+    stopWhen: [hasToolCall("output_validator"), stepCountIs(primaryTurnBudget)],
     system: options.system,
     temperature: generationNumber(profile, "temperature", 0.2),
     tools,
@@ -208,6 +213,13 @@ async function runAiSdkStageWithProfile(
   const output = extractValidatedOutput(result);
   logAiSdkIoOutput({ options, output, profileName, result });
   return output;
+}
+
+function primaryTurnBudgetFor(options: RunAiStageOptions): number {
+  if (!options.reserveFinalizationTurns || options.maxTurns <= MIN_TURNS_BEFORE_RESERVE) {
+    return options.maxTurns;
+  }
+  return options.maxTurns - OUTPUT_FINALIZATION_RESERVED_TURNS;
 }
 
 function usageLogFields(usage: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -557,16 +569,6 @@ function validateStageConfig(options: RunAiStageOptions): void {
   }
   if (stageConfig.enabled !== undefined && typeof stageConfig.enabled !== "boolean") {
     throw new Error(`ai.stages.${options.stage}.enabled must be a boolean.`);
-  }
-
-  const access = stringValue(stageConfig.access);
-  if (stageConfig.access !== undefined && !access) {
-    throw new Error(`ai.stages.${options.stage}.access must be a string.`);
-  }
-  if (access && access !== options.stageDefinition.access) {
-    throw new Error(
-      `ai.stages.${options.stage}.access must match canonical access ${options.stageDefinition.access}.`,
-    );
   }
 }
 

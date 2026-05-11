@@ -96,6 +96,7 @@ function renderCompactStageResultComment(options: StageResultCommentOptions): st
     stateLine(output),
     "",
     textField(output.summary) || "No summary provided.",
+    ...detailsSection(output),
     ...compactValidationSection(options.stage, output),
     ...listSection("Blocking Questions", limitList(arrayField(output.blocking_questions), 5)),
     ...compactNextActionSection(options.stage, output),

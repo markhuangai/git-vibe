@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   gitVibeBranchName,
+  pullRequestReviewFixFromBody,
+  pullRequestReviewFixMarker,
   reviewFixIssueMarker,
   reviewFixIssueBody,
   reviewFixLinkComment,
@@ -23,6 +25,7 @@ describe("GitVibe review-fix traceability", () => {
       parent: "7",
       root: "7",
     });
+    expect(marker).toContain("kind=issue");
     expect(
       reviewFixTraceFromBody("<!-- git-vibe:review-fix root=7 parent=7 branch=main depth=1 -->"),
     ).toBeUndefined();
@@ -39,6 +42,22 @@ describe("GitVibe review-fix traceability", () => {
     expect(gitVibeBranchName("7")).toBe("git-vibe/7");
   });
 
+  it("parses pull request review-fix markers", () => {
+    const marker = pullRequestReviewFixMarker({ depth: 2, pullRequest: "12" });
+
+    expect(marker).toBe("<!-- git-vibe:review-fix kind=pull-request pr=12 depth=2 -->");
+    expect(pullRequestReviewFixFromBody(`${marker}\n\nbody`)).toEqual({
+      depth: 2,
+      pullRequest: "12",
+    });
+    expect(reviewFixTraceFromBody(marker)).toBeUndefined();
+    expect(
+      pullRequestReviewFixFromBody("<!-- git-vibe:review-fix kind=issue pr=12 depth=2 -->"),
+    ).toBeUndefined();
+  });
+});
+
+describe("GitVibe review-fix traceability validation", () => {
   it("rejects malformed review-fix markers", () => {
     expect(reviewFixTraceFromBody("no marker")).toBeUndefined();
     expect(reviewFixTraceFromBody("<!-- git-vibe:review-fix root=7")).toBeUndefined();

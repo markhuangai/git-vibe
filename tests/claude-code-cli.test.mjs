@@ -11,6 +11,7 @@ const spawnedChildren = [];
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -75,16 +76,16 @@ describe("Claude Code CLI adapter", () => {
       expect.arrayContaining([
         "-p",
         "--bare",
+        "--dangerously-skip-permissions",
         "--model",
         "opus",
         "--output-format",
         "json",
-        "--permission-mode",
-        "dontAsk",
         "--effort",
         "xhigh",
       ]),
     );
+    expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--tools");
     expect(JSON.parse(jsonSchemaFrom(args))).toEqual(
       expect.objectContaining({ required: ["stage", "status", "questions"] }),
@@ -103,13 +104,11 @@ describe("Claude Code CLI adapter", () => {
     expect(spawn.mock.calls[0][2].env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
     expect(process.stdout.write).toHaveBeenCalledWith(
-      Buffer.from(
-        JSON.stringify({
-          is_error: false,
-          structured_output: { stage: "validate", status: "completed" },
-          type: "result",
-        }),
-      ),
+      JSON.stringify({
+        is_error: false,
+        structured_output: { stage: "validate", status: "completed" },
+        type: "result",
+      }),
     );
     expect(schema.required).toEqual(["stage", "status"]);
     expect(generateText).not.toHaveBeenCalled();
@@ -125,7 +124,7 @@ describe("Claude Code CLI adapter", () => {
 });
 
 describe("Claude Code CLI adapter defaults", () => {
-  it("uses branch-write permissions and configured model without tool restrictions", async () => {
+  it("uses configured model without permission mode or tool restrictions", async () => {
     mockClaudeOutput({
       is_error: false,
       structured_output: { stage: "implement", status: "completed" },
@@ -138,7 +137,8 @@ describe("Claude Code CLI adapter defaults", () => {
 
     const args = spawn.mock.calls[0][1];
     expect(args).toEqual(expect.arrayContaining(["--model", "claude-test-model"]));
-    expect(args).toEqual(expect.arrayContaining(["--permission-mode", "acceptEdits"]));
+    expect(args).toContain("--dangerously-skip-permissions");
+    expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
     expect(args).not.toContain("--tools");
@@ -177,8 +177,8 @@ describe("Claude Code CLI adapter defaults", () => {
       '{"stage":"validate","status":"completed"}',
     );
 
-    expect(process.stdout.write).toHaveBeenCalledWith(Buffer.from(output));
-    expect(process.stderr.write).toHaveBeenCalledWith(Buffer.from("claude warning\n"));
+    expect(process.stdout.write).toHaveBeenCalledWith(output);
+    expect(process.stderr.write).toHaveBeenCalledWith("claude warning\n");
   });
 });
 
@@ -295,7 +295,6 @@ function claudeCodeConfig() {
         claude_code: {
           adapter: "cli-claude-code",
           bare: true,
-          command: "claude -p",
           env: {
             ANTHROPIC_API_KEY: { from_bundle: "MINIMAX_API_KEY" },
             ANTHROPIC_BASE_URL: { from_bundle: "MINIMAX_BASE_URL" },

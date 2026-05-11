@@ -1,11 +1,20 @@
 // @ts-nocheck
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bundleKeyFromSource,
   bundleValueFromSource,
   cliProfileEnv,
   optionalAiEnvBundleSecretValues,
+  runStreamingCommand,
+  sanitizedChildEnv,
 } from "../src/runner/cli-adapter-utils.ts";
+
+const originalEnv = { ...process.env };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  process.env = { ...originalEnv };
+});
 
 describe("CLI profile environment bundle", () => {
   it("resolves selected profile env keys from GITVIBE_AI_ENV_JSON", () => {
@@ -20,6 +29,7 @@ describe("CLI profile environment bundle", () => {
       {
         CLAUDE_CODE_OAUTH_TOKEN: "old-claude-token",
         CODEX_AUTH_JSON: "old-codex-auth",
+        GITVIBE_GITHUB_TOKEN: "repo-token",
         GITVIBE_AI_API_KEY: "old-ai-key",
         GITVIBE_AI_BASE_URL: "https://old-ai.test/v1",
         GITVIBE_AI_ENV_JSON: JSON.stringify({
@@ -39,6 +49,7 @@ describe("CLI profile environment bundle", () => {
     expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(env.CODEX_AUTH_JSON).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(env.GITVIBE_GITHUB_TOKEN).toBeUndefined();
     expect(env.GITVIBE_AI_API_KEY).toBeUndefined();
     expect(env.GITVIBE_AI_BASE_URL).toBeUndefined();
     expect(env.UNUSED_KEY).toBeUndefined();
@@ -60,6 +71,23 @@ describe("CLI profile environment bundle", () => {
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     expect(env.GITVIBE_AI_API_KEY).toBeUndefined();
     expect(env.GITVIBE_AI_BASE_URL).toBeUndefined();
+  });
+
+  it("strips generic secret-like variables from child environments", () => {
+    expect(
+      sanitizedChildEnv({
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-token",
+        GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
+        INPUT_TOKEN: "action-input-token",
+        NORMAL_VALUE: "kept",
+        PATH: "/bin",
+        SSH_AUTH_SOCK: "/tmp/agent.sock",
+        "npm_config_//registry.npmjs.org/:_authToken": "npm-token",
+      }),
+    ).toEqual({
+      NORMAL_VALUE: "kept",
+      PATH: "/bin",
+    });
   });
 
   it("resolves Codex auth JSON from the bundle", () => {
@@ -152,6 +180,50 @@ describe("AI env bundle redaction helpers", () => {
       }),
     ).toEqual(["secret-a", "secret-c"]);
     expect(optionalAiEnvBundleSecretValues({ GITVIBE_AI_ENV_JSON: "{" })).toEqual([]);
+  });
+});
+
+describe("CLI command logging", () => {
+  it("redacts streamed child process output and failure messages", async () => {
+    process.env.GITVIBE_TEST_SECRET = "super-secret-value";
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await expect(
+      runStreamingCommand({
+        args: [
+          "-e",
+          "process.stdout.write('super-secret-value'); process.stderr.write('super-secret-value')",
+        ],
+        command: process.execPath,
+        cwd: process.cwd(),
+        env: { PATH: process.env.PATH },
+        input: "",
+      }),
+    ).resolves.toMatchObject({
+      stderr: "super-secret-value",
+      stdout: "super-secret-value",
+    });
+
+    expect(stdout).toHaveBeenCalledWith("<redacted:GITVIBE_TEST_SECRET>");
+    expect(stderr).toHaveBeenCalledWith("<redacted:GITVIBE_TEST_SECRET>");
+
+    let caught;
+    try {
+      await runStreamingCommand({
+        args: ["-e", "process.stderr.write('super-secret-value'); process.exit(1)"],
+        command: process.execPath,
+        cwd: process.cwd(),
+        env: { PATH: process.env.PATH },
+        input: "",
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).toContain("<redacted:GITVIBE_TEST_SECRET>");
+    expect(caught.message).not.toContain("super-secret-value");
   });
 });
 

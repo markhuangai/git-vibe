@@ -8,7 +8,6 @@ export type Stage =
   | "create-pr"
   | "address-pr-feedback";
 
-export type StageAccess = "read-only" | "branch-write" | "publish-write";
 export type JsonObject = Record<string, unknown>;
 export type SourceCommentKind =
   | "discussion-comment"
@@ -18,7 +17,6 @@ export type SourceCommentKind =
   | "pull-request-review-comment";
 
 export interface StageDefinition {
-  access: StageAccess;
   promptDir: string;
   schemaFile: string;
   schemaId: string;

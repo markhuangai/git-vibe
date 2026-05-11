@@ -10,7 +10,11 @@ import {
   repositoryActionsVariable,
   repositoryDefaultBranch,
 } from "../shared/github.js";
-import { gitVibeLabels } from "../shared/labels.js";
+import {
+  equivalentGitVibeLabelNames,
+  gitVibeInternalLabels,
+  gitVibeLabels,
+} from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
 import {
   matchesTransientStatusScope,
@@ -18,7 +22,11 @@ import {
   workflowQueuedMarker,
   workflowRunIdFromUrl,
 } from "../shared/status-comments.js";
-import { gitVibeTraceabilityIssueNumbers } from "../shared/traceability.js";
+import {
+  gitVibeTraceabilityIssueNumbers,
+  pullRequestReviewFixFromBody,
+  reviewFixTraceFromBody,
+} from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import type { IntakeComment } from "./intake.js";
 import { removeIssueLabel } from "./labels.js";
@@ -44,9 +52,14 @@ export async function markPullRequestApproved(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<void> {
-  await addIssueLabel(options, prNumber, gitVibeLabels.prApproved.name);
-  await removeIssueLabelIfPresent(options, prNumber, gitVibeLabels.readyForApproval.name);
-  await updateSourceIssueLabelsForPullRequest(options, prNumber, {
+  const sourceIssueNumbers = await sourceIssuesForPullRequest(options, prNumber);
+  if (sourceIssueNumbers.length === 0) {
+    options.log(`skipped approved review labels for PR #${prNumber}: missing GitVibe traceability`);
+    return;
+  }
+
+  await markPullRequestApprovalState(options, prNumber);
+  await updateSourceIssueLabels(options, sourceIssueNumbers, {
     add: [],
     remove: [gitVibeLabels.approved.name],
     reason: "approved review",
@@ -57,11 +70,32 @@ export async function markPullRequestMerged(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<void> {
-  await updateSourceIssueLabelsForPullRequest(options, prNumber, {
+  const sourceIssueNumbers = await sourceIssuesForPullRequest(options, prNumber);
+  if (sourceIssueNumbers.length === 0) {
+    options.log(`skipped merged PR labels for PR #${prNumber}: missing GitVibe traceability`);
+    return;
+  }
+
+  await markPullRequestApprovalState(options, prNumber);
+  await updateSourceIssueLabels(options, sourceIssueNumbers, {
     add: [gitVibeLabels.prMerged.name],
-    remove: [gitVibeLabels.prOpened.name, gitVibeLabels.prApproved.name],
+    remove: [
+      gitVibeLabels.prOpened.name,
+      gitVibeLabels.prApproved.name,
+      gitVibeLabels.approved.name,
+    ],
     reason: "merged PR",
   });
+}
+
+async function markPullRequestApprovalState(
+  options: WebhookActionContext,
+  prNumber: string,
+): Promise<void> {
+  for (const label of equivalentGitVibeLabelNames(gitVibeLabels.readyForApproval.name)) {
+    await removeIssueLabelIfPresent(options, prNumber, label);
+  }
+  await addIssueLabel(options, prNumber, gitVibeLabels.prApproved.name);
 }
 
 export async function dispatchWorkflow(
@@ -188,7 +222,8 @@ export function labelReason(label: string): string {
 }
 
 export function issueHasLabel(issue: WebhookPayload["issue"], label: string): boolean {
-  return Boolean(issue?.labels?.some((item) => item.name === label));
+  const labelNames = new Set(equivalentGitVibeLabelNames(label));
+  return Boolean(issue?.labels?.some((item) => item.name && labelNames.has(item.name)));
 }
 
 export async function acknowledgeCommand(options: WebhookActionContext): Promise<boolean> {
@@ -280,6 +315,52 @@ export async function removeIssueLabelIfPresent(
   }
 }
 
+export async function removeEquivalentIssueLabelIfPresent(
+  options: WebhookActionContext,
+  issueNumber: string,
+  label: string,
+): Promise<void> {
+  for (const equivalentLabel of equivalentGitVibeLabelNames(label)) {
+    await removeIssueLabelIfPresent(options, issueNumber, equivalentLabel);
+  }
+}
+
+export async function handleManagedReviewFixLabel(
+  options: WebhookActionContext,
+  issueNumber: string,
+): Promise<void> {
+  const label = gitVibeInternalLabels.reviewFix.name;
+  if (await hasManagedReviewFixMarker(options, issueNumber)) {
+    const subject = options.payload.issue?.pull_request ? "PR" : "issue";
+    options.log(`accepted managed internal review-fix label on ${subject} #${issueNumber}`);
+    return;
+  }
+
+  await removeIssueLabel({
+    client: options.client,
+    issueNumber,
+    label,
+    owner: options.owner,
+    repo: options.repo,
+    token: options.token,
+  });
+  await createIssueComment(options, issueNumber, internalLabelRejectionBody(label));
+}
+
+async function hasManagedReviewFixMarker(
+  options: WebhookActionContext,
+  issueNumber: string,
+): Promise<boolean> {
+  if (!options.payload.issue?.pull_request) {
+    return Boolean(reviewFixTraceFromBody(options.payload.issue?.body || ""));
+  }
+
+  const comments = await issueComments(options, issueNumber);
+  return comments.some(
+    (comment) => pullRequestReviewFixFromBody(comment.body || "")?.pullRequest === issueNumber,
+  );
+}
+
 export function commandWorkflow(command: string): string | null {
   if (command === "investigate") return "investigate.yml";
   return null;
@@ -297,25 +378,19 @@ export function approvalRequiresInvestigationBody(label: string): string {
   return `GitVibe removed \`${label}\` because this issue has not completed investigation yet. Add \`${gitVibeLabels.investigate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.investigating.name}\` and then \`${gitVibeLabels.investigated.name}\` when the investigation is ready for implementation.`;
 }
 
-async function updateSourceIssueLabelsForPullRequest(
+async function updateSourceIssueLabels(
   options: WebhookActionContext,
-  prNumber: string,
+  issueNumbers: string[],
   change: { add: string[]; reason: string; remove: string[] },
 ): Promise<void> {
-  const issues = await sourceIssuesForPullRequest(options, prNumber);
-  if (issues.length === 0) {
-    options.log(
-      `skipped ${change.reason} labels for PR #${prNumber}: missing GitVibe traceability`,
-    );
-    return;
-  }
-
-  for (const issueNumber of issues) {
+  for (const issueNumber of issueNumbers) {
     for (const label of change.add) {
       await addIssueLabel(options, issueNumber, label);
     }
     for (const label of change.remove) {
-      await removeIssueLabelIfPresent(options, issueNumber, label);
+      for (const equivalentLabel of equivalentGitVibeLabelNames(label)) {
+        await removeIssueLabelIfPresent(options, issueNumber, equivalentLabel);
+      }
     }
   }
 }

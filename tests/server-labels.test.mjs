@@ -35,7 +35,7 @@ describe("GitVibe app server issue labels", () => {
     const client = createClient({ permission: { role_name: "maintain" } });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
-      issue: { number: 9 },
+      issue: { labels: [{ name: gitVibeLabels.blocked.name }], number: 9 },
       label: { name: gitVibeLabels.investigate.name },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
@@ -49,14 +49,22 @@ describe("GitVibe app server issue labels", () => {
       }),
     ]);
     expect(requestBodies(client, "POST", "/issues/9/labels")).toContainEqual({
-      labels: ["git-vibe:investigating"],
+      labels: ["gvi:investigating"],
     });
     expect(requestPaths(client, "DELETE")).toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Ainvestigate",
     );
+    expect(requestPaths(client, "DELETE")).toEqual(
+      expect.arrayContaining([
+        "/repos/example/repo/issues/9/labels/gvi%3Ablocked",
+        "/repos/example/repo/issues/9/labels/git-vibe%3Ablocked",
+      ]),
+    );
     expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
   });
+});
 
+describe("GitVibe app server issue approval labels", () => {
   it("rejects approved issue labels until investigation has completed", async () => {
     const client = createClient({ permission: { role_name: "maintain" } });
     await createApp({ client }).handleWebhook("issues", {
@@ -97,6 +105,46 @@ describe("GitVibe app server issue labels", () => {
       }),
     ]);
     expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
+  });
+
+  it("accepts legacy investigated labels when approving in-flight issues", async () => {
+    const client = createClient({ permission: { role_name: "maintain" } });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [{ name: gitVibeLabels.approved.name }, { name: "git-vibe:investigated" }],
+        number: 9,
+      },
+      label: { name: gitVibeLabels.approved.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: { "issue-number": "9" },
+        ref: "main",
+        return_run_details: true,
+      }),
+    ]);
+    expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
+  });
+});
+
+describe("GitVibe app server managed runtime labels", () => {
+  it("accepts trusted managed runtime labels without dispatching workflows", async () => {
+    const client = createClient({ permission: { role_name: "maintain" } });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 11 },
+      label: { name: gitVibeLabels.investigating.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toEqual([]);
+    expect(requestBodies(client, "POST", "/issues/11/comments")).toEqual([]);
   });
 });
 
@@ -298,6 +346,23 @@ describe("GitVibe app server discussion label cleanup", () => {
       { discussionId: "discussion-node", labelIds: ["review-fix-label-node"] },
     ]);
     expect(discussionCommentBodies(client).at(-1)).toContain("internal runtime labels");
+  });
+
+  it("accepts trusted managed runtime discussion labels without dispatching workflows", async () => {
+    const client = createClient({ permission: { permission: "write" } });
+    const app = createApp({ client });
+
+    await app.handleWebhook("discussion", {
+      action: "labeled",
+      discussion: { node_id: "discussion-node", number: 5 },
+      label: { name: gitVibeLabels.readyForApproval.name, node_id: "ready-label-node" },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(discussionLabelRemovals(client)).toEqual([]);
+    expect(discussionCommentBodies(client)).toEqual([]);
   });
 });
 

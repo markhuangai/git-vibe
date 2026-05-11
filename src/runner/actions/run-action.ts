@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runStage } from "../stage-runner.js";
 import { isInvestigationReady } from "../stage-publishing.js";
+import { redactLogText } from "../logging.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { StageRunResult } from "../../shared/types.js";
@@ -62,7 +63,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     }
     return 0;
   } catch (caught) {
-    error(caught instanceof Error ? caught.message : String(caught));
+    error(redactLogText(caught instanceof Error ? caught.message : String(caught)));
     return 1;
   }
 }

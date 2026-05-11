@@ -7,6 +7,7 @@ const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-mod
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -67,7 +68,7 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
         maxRetries: 0,
         prompt: "Prompt",
         providerOptions: { custom: true },
-        stopWhen: { count: 3 },
+        stopWhen: [{ toolName: "output_validator" }, { count: 3 }],
         system: "System",
         temperature: 0.5,
       }),

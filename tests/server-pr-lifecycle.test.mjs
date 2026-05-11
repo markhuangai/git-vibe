@@ -25,10 +25,11 @@ describe("GitVibe app server PR approval labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
-      labels: ["git-vibe:pr-approved"],
+      labels: ["gvi:pr-approved"],
     });
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
+        "/repos/example/repo/issues/22/labels/gvi%3Aready-for-approval",
         "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
       ]),
@@ -50,7 +51,7 @@ describe("GitVibe app server PR approval labels", () => {
 
     expect(requestPaths(client, "GET")).toContain("/repos/example/repo/pulls/22");
     expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
-      labels: ["git-vibe:pr-approved"],
+      labels: ["gvi:pr-approved"],
     });
   });
 
@@ -75,6 +76,25 @@ describe("GitVibe app server PR approval labels", () => {
       "ignored approved review from untrusted actor @guest on PR #22",
     );
   });
+
+  it("skips PR approval labels without GitVibe traceability", async () => {
+    const log = vi.fn();
+    const client = createClient();
+    const app = createApp({ client, log });
+
+    await app.handleWebhook("pull_request_review", {
+      action: "submitted",
+      pull_request: { body: "Refs #12", number: 22 },
+      repository: repositoryPayload(),
+      review: { state: "approved" },
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestBodies(client, "POST", "/issues/22/labels")).toEqual([]);
+    expect(log).toHaveBeenCalledWith(
+      "skipped approved review labels for PR #22: missing GitVibe traceability",
+    );
+  });
 });
 
 describe("GitVibe app server PR merge labels", () => {
@@ -94,15 +114,23 @@ describe("GitVibe app server PR merge labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
-      labels: ["git-vibe:pr-merged"],
+      labels: ["gvi:pr-merged"],
     });
     expect(requestBodies(client, "POST", "/issues/13/labels")).toContainEqual({
-      labels: ["git-vibe:pr-merged"],
+      labels: ["gvi:pr-merged"],
+    });
+    expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
+      labels: ["gvi:pr-approved"],
     });
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
+        "/repos/example/repo/issues/22/labels/gvi%3Aready-for-approval",
+        "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Apr-opened",
         "/repos/example/repo/issues/12/labels/git-vibe%3Apr-opened",
+        "/repos/example/repo/issues/12/labels/gvi%3Apr-approved",
         "/repos/example/repo/issues/12/labels/git-vibe%3Apr-approved",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
       ]),
     );
   });
@@ -145,7 +173,7 @@ describe("GitVibe app server PR merge labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
-      labels: ["git-vibe:pr-merged"],
+      labels: ["gvi:pr-merged"],
     });
   });
 
@@ -162,6 +190,7 @@ describe("GitVibe app server PR merge labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/12/labels")).toEqual([]);
+    expect(requestBodies(client, "POST", "/issues/22/labels")).toEqual([]);
     expect(log).toHaveBeenCalledWith(
       "skipped merged PR labels for PR #22: missing GitVibe traceability",
     );

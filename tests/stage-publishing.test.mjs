@@ -505,20 +505,32 @@ describe("stage label publishing helpers", () => {
         .filter((request) => request.method === "POST")
         .map((request) => request.body.labels[0]),
     ).toEqual([
-      "git-vibe:blocked",
-      "git-vibe:ready-for-approval",
-      "git-vibe:investigated",
-      "git-vibe:in-progress",
-      "git-vibe:pr-opened",
+      "gvi:blocked",
+      "gvi:ready-for-approval",
+      "gvi:investigated",
+      "gvi:in-progress",
+      "gvi:pr-opened",
     ]);
     expect(requestCalls(client).map((request) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating",
+    );
+    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
+    );
+    expect(requestCalls(client).map((request) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/gvi%3Ain-progress",
+    );
+    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
+    );
+    expect(requestCalls(client).map((request) => request.path)).toContain(
+      "/repos/example/repo/issues/12/labels/gvi%3Ainvestigated",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",

@@ -21,7 +21,7 @@ on:
 
 jobs:
   materialize:
-    uses: git-vibe/actions/.github/workflows/materialize.yml@main
+    uses: git-vibe/actions/.github/workflows/materialize.yml@v1
     with:
       discussion-number: ${{ inputs.discussion-number }}
       runner: ubuntu-latest

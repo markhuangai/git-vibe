@@ -12,6 +12,7 @@ const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-mod
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -308,7 +309,7 @@ describe("stage runner materialize writes", () => {
 
     expect(result.summary).toBe("Materialized.");
     expect(fetch.mock.calls[1][0]).toContain("/repos/example/repo/issues");
-    expect(JSON.parse(fetch.mock.calls[1][1].body).labels).toEqual(["git-vibe:story"]);
+    expect(JSON.parse(fetch.mock.calls[1][1].body).labels).toEqual(["gvi:story"]);
     expect(JSON.parse(fetch.mock.calls[2][1].body).variables.body).toContain(
       "GitVibe created implementation issue #13",
     );

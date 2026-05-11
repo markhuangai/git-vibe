@@ -13,14 +13,19 @@ const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-mod
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 
 const { runStage } = await import("../src/runner/stage-runner.ts");
-const { buildValidationRepairPrompt, validationRepairAttemptsFor, validationRepairMaxTurnsFor } =
-  await import("../src/runner/validation.ts");
+const {
+  buildValidationRepairPrompt,
+  runValidationCommand,
+  validationRepairAttemptsFor,
+  validationRepairMaxTurnsFor,
+} = await import("../src/runner/validation.ts");
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -75,7 +80,9 @@ describe("implementation validation repair", () => {
     ).resolves.toMatchObject({ summary: "Repaired validation failure." });
 
     expect(generateText).toHaveBeenCalledTimes(2);
-    expect(generateText.mock.calls[1][0]).toMatchObject({ stopWhen: { count: 3 } });
+    expect(generateText.mock.calls[1][0]).toMatchObject({
+      stopWhen: [{ toolName: "output_validator" }, { count: 3 }],
+    });
     expect(generateText.mock.calls[1][0].prompt).toContain("gitvibe_validation_repair");
     expect(generateText.mock.calls[1][0].prompt).toContain("test -f repaired && rm repaired");
   });
@@ -116,7 +123,7 @@ describe("implementation validation repair", () => {
     expect(fetch.mock.calls.some(([url]) => String(url).includes("/issues/12/comments"))).toBe(
       true,
     );
-    expect(labelBodies(fetch)).toContainEqual(["git-vibe:blocked"]);
+    expect(labelBodies(fetch)).toContainEqual(["gvi:blocked"]);
   });
 });
 
@@ -171,6 +178,29 @@ describe("validation repair helpers", () => {
     expect(prompt).toContain("output truncated");
     expect(prompt).not.toContain("secret-value");
     expect(prompt).not.toContain("bundle-secret");
+  });
+
+  it("runs validation commands without runner secrets in the child environment", () => {
+    process.env.GITVIBE_GITHUB_TOKEN = "repo-token";
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ MINIMAX_API_KEY: "bundle-secret" });
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const script = [
+      "process.stdout.write(process.env.GITVIBE_GITHUB_TOKEN || 'missing-token')",
+      "process.stderr.write(process.env.GITVIBE_AI_ENV_JSON || 'missing-bundle')",
+    ].join(";");
+
+    try {
+      runValidationCommand(
+        process.cwd(),
+        `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`,
+      );
+      expect(stdout).toHaveBeenCalledWith("missing-token");
+      expect(stderr).toHaveBeenCalledWith("missing-bundle");
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
   });
 });
 

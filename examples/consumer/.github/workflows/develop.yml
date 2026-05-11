@@ -21,7 +21,7 @@ on:
 
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@main
+    uses: git-vibe/actions/.github/workflows/develop.yml@v1
     with:
       issue-number: ${{ inputs.issue-number }}
       runner: ubuntu-latest

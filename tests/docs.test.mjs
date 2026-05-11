@@ -14,7 +14,7 @@ describe("documentation workflow descriptions", () => {
     const workflow = readFileSync("docs/WORKFLOW.md", "utf8");
 
     expect(workflow).toContain("FeedbackInvestigation");
-    expect(workflow).toContain("PR git-vibe:ready-for-approval");
+    expect(workflow).toContain("PR gvi:ready-for-approval");
     expect(workflow).toContain("investigate` in PR-feedback mode");
   });
 });

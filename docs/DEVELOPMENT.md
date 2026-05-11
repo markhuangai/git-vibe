@@ -11,7 +11,7 @@
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
 - `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
-- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to `git-vibe/actions@main` until a release tag exists.
+- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to the pinned `git-vibe/actions@v1` release.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
@@ -30,7 +30,7 @@
 - Unit tests for AI context packet ordering, author weighting, stage contract validation, provider adapter errors, and comment rendering.
 - Webhook integration tests for issues, issue comments, discussions, discussion comments, PR conversation comments, PR review comments, source-comment dispatch metadata, and labels.
 - End-to-end fixture repo tests for story conversion, implementation issue creation, approved development, PR creation, and PR feedback handling.
-- Security tests for guest command rejection, bot-event recursion prevention, fork PR secret protection, token redaction, and read-only AI stages performing no mutations.
+- Security tests for guest command rejection, bot-event recursion prevention, fork PR secret protection, token redaction, and non-write stage routing performing no repository mutations.
 
 ## Manual AI Smoke Tests
 
@@ -63,15 +63,20 @@ entry must be a string. Alternatively, pre-seed a persistent
 GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
 secret after successful CLI execution; the token in `GITVIBE_GITHUB_TOKEN` must
 include repository Actions secrets read/write permission for that path.
+In GitVibe stages, `cli-codex` runs `codex exec` with
+`--dangerously-bypass-approvals-and-sandbox`, `--output-schema`, and
+`--output-last-message`; stdout and stderr stream to the action log while the
+final message file supplies the structured result for validation.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, then verifies
 `claude --version`. `cli-claude-code` stages run `claude -p` with
-`--output-format json` and `--json-schema`; profile `bare: true` adds Claude
-Code's minimal mode for API-key or third-party provider auth. Configure Claude
-OAuth and provider env through profile `env.<NAME>.from_bundle` mappings. CLI
-adapter stdout and stderr are streamed to the action log while GitVibe still
-captures the structured result for validation.
+`--dangerously-skip-permissions`, `--output-format json`, and `--json-schema`;
+profile `bare: true` adds Claude Code's minimal mode for API-key or third-party
+provider auth. Configure Claude OAuth and provider env through profile
+`env.<NAME>.from_bundle` mappings. CLI adapter stdout and stderr are streamed to
+the action log while GitVibe still captures the structured result for
+validation.
 
 ## Quality Gates
 
@@ -84,7 +89,7 @@ captures the structured result for validation.
 - Run `pnpm audit --prod` in PR CI.
 - Enforce JavaScript/MJS size limits through ESLint: 700 lines per file and 100 lines per function. Generated bundles are excluded.
 - Use Husky + lint-staged for staged format/lint checks, then run typecheck and coverage in pre-commit.
-- CI is a PR quality gate plus manual dispatch, runs coverage before build, and must run on `self-hosted` runners for this repository.
+- CI is a PR quality gate plus manual dispatch, runs coverage before build, and uses the `docker-runner` self-hosted runner label for this repository.
 - Reusable GitVibe workflows install Node `22` and pnpm `10.33.3` before invoking source-built composite actions. The composite actions read `.github/git-vibe.yml` and install Codex CLI or Claude Code only when the selected stage profile uses a matching CLI adapter.
 
 ## Assumptions
@@ -93,6 +98,6 @@ captures the structured result for validation.
 - `git-vibe/actions` is the public action/workflow repository.
 - `.github/git-vibe.yml` is the consumer repo config file.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
-- `gvi:` labels are internal runtime labels. Do not add them manually in tests, docs, or examples unless the flow also creates the matching hidden marker.
+- `gvi:` labels are internal runtime labels. Do not add them manually in tests, docs, or examples; `gvi:review-fix` additionally requires a matching hidden marker with `kind=issue` or `kind=pull-request`.
 - Approval uses protected labels, not commands or reactions. Reactions may only be used as an optional community signal to start investigation-only bug review.
 - External Codex, Claude, and Copilot integrations are optional GitHub-visible mention partners.

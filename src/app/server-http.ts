@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+const maxWebhookBodyBytes = 25 * 1024 * 1024;
+
 export function verifyGitHubSignature(
   body: string,
   signatureHeader: string | undefined,
@@ -22,12 +24,38 @@ export function verifyGitHubSignature(
   }
 }
 
-export function readBody(req: IncomingMessage): Promise<string> {
+export function readBody(req: IncomingMessage, maxBytes = maxWebhookBodyBytes): Promise<string> {
   return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolveBody(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    let byteLength = 0;
+    let settled = false;
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+      req.destroy();
+    };
+
+    req.on("data", (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      byteLength += buffer.length;
+      if (byteLength > maxBytes) {
+        fail(Object.assign(new Error("request body too large"), { statusCode: 413 }));
+        return;
+      }
+      chunks.push(buffer);
+    });
+    req.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolveBody(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
   });
 }
 

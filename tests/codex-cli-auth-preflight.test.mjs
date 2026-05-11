@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"tokens":["old"]}\n' }),
+    GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: codexAuthJson("old") }),
   };
 });
 
@@ -38,10 +38,7 @@ describe("Codex CLI auth preflight", () => {
     spawn.mockImplementationOnce((_command, _args, childOptions) =>
       mockChildProcess({
         onInput: () => {
-          writeFileSync(
-            join(childOptions.env.CODEX_HOME, "auth.json"),
-            '{"tokens":["preflight"]}\n',
-          );
+          writeFileSync(join(childOptions.env.CODEX_HOME, "auth.json"), codexAuthJson("preflight"));
         },
         stdout: "Logged in\n",
       }),
@@ -50,7 +47,7 @@ describe("Codex CLI auth preflight", () => {
       mockChildProcess({
         onInput: () => {
           expect(readFileSync(join(childOptions.env.CODEX_HOME, "auth.json"), "utf8")).toBe(
-            '{"tokens":["preflight"]}\n',
+            codexAuthJson("preflight"),
           );
           writeFileSync(outputPathFrom(args), '{"stage":"validate","status":"completed"}');
         },
@@ -75,7 +72,6 @@ describe("Codex CLI auth preflight", () => {
         profile: {
           adapter: "cli-codex",
           auth_json: { from_bundle: "CODEX_AUTH_JSON" },
-          command: "codex exec",
           model: "gpt-5.5",
         },
         profileName: "codex_cli",
@@ -84,13 +80,26 @@ describe("Codex CLI auth preflight", () => {
 
     expect(spawn.mock.calls.map(([command, args]) => [command, args.slice(0, 2)])).toEqual([
       ["codex", ["login", "status"]],
-      ["codex", ["exec", "--cd"]],
+      ["codex", ["exec", "--dangerously-bypass-approvals-and-sandbox"]],
     ]);
     expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON)).toEqual({
-      CODEX_AUTH_JSON: '{"tokens":["preflight"]}\n',
+      CODEX_AUTH_JSON: codexAuthJson("preflight"),
     });
   });
 });
+
+function codexAuthJson(label) {
+  return `${JSON.stringify({
+    auth_mode: "chatgpt",
+    last_refresh: "2026-05-09T11:57:42.136804048Z",
+    tokens: {
+      access_token: `access-${label}`,
+      account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
+      id_token: `header.${label}.signature`,
+      refresh_token: `refresh-${label}`,
+    },
+  })}\n`;
+}
 
 async function githubClientWithPublicKey() {
   await sodium.ready;

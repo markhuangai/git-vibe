@@ -12,6 +12,7 @@ const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-mod
 
 vi.mock("ai", () => ({
   generateText,
+  hasToolCall: vi.fn((toolName) => ({ toolName })),
   stepCountIs: vi.fn((count) => ({ count })),
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
@@ -92,7 +93,7 @@ describe("stage runner write skips and branch validation", () => {
     ).resolves.toMatchObject({ status: "blocked" });
     expect(fetch).toHaveBeenCalledTimes(5);
     expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:blocked"]);
+    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["gvi:blocked"]);
 
     globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
     await expect(

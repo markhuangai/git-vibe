@@ -1,8 +1,7 @@
 # GitVibe Server
 
 This is the self-hosted repository webhook server. The source of truth is
-`../src/app/server.ts`; `app/server.mjs` loads the compiled output from
-`../dist/app/server.js`.
+`../src/app/server.ts`; the runtime entry point is `../dist/app/server.js`.
 
 It currently handles:
 
@@ -15,7 +14,8 @@ It currently handles:
 - `/git-vibe address-feedback` on pull request comments.
 - `/git-vibe ...` as the only supported public command prefix.
 - Accepted admin/collaborator comment commands get a `rocket` reaction before workflow dispatch.
-- Protected `git-vibe:*` issue and discussion labels, including `git-vibe:validate` and `git-vibe:approved`.
+- Protected public trigger labels, including `git-vibe:validate`, `git-vibe:investigate`, and `git-vibe:approved`.
+- Internal `gvi:*` runtime labels managed by GitVibe.
 - Fine-grained PAT-backed GitHub API writes.
 - Repository permission checks before dispatching workflows.
 - Workflow dispatch to reusable GitVibe workflows. Comment commands use queued comments only when reaction acknowledgement fails; protected labels and trusted reviews still use queued comments with exact workflow links when GitHub returns them.

@@ -1,4 +1,4 @@
-export function testAiConfigYaml(extraAi = "") {
+function testAiConfigYaml(extraAi = "") {
   const extra = extraAi.trimEnd();
   return `ai:
   profiles:

@@ -57,7 +57,7 @@ AI output, and writes routine GitHub state changes with deterministic code.
 
 ```mermaid
 flowchart LR
-  A[Issue, Discussion, or PR] --> B["/git-vibe command or git-vibe:* label"]
+  A[Issue, Discussion, or PR] --> B["/git-vibe command or public trigger label"]
   B --> C[Webhook server validates actor and marker]
   C --> D[Reusable GitHub workflow]
   D --> E[Stage-specific AI worker]
@@ -110,8 +110,12 @@ own review passes.
 `address-feedback.yml` runs PR feedback investigation first. GitVibe replies to
 false-positive, obsolete, or already-addressed review comments without coding. If
 the investigation finds required fixes, GitVibe updates the existing PR branch,
-runs `review-matrix` on the updated PR, and restores `git-vibe:ready-for-approval`
-only after review passes.
+runs `review-matrix` on the updated PR, and restores `gvi:ready-for-approval`
+only after review passes. If that review still returns `changes-required`,
+GitVibe posts the review result on the PR, keeps the PR at `gvi:blocked`, adds
+`gvi:review-fix` with a PR-scoped hidden marker, and queues another
+`address-feedback.yml` run. PR feedback review-fix retries stop after three
+iterations.
 
 ## Quick Start
 
@@ -139,7 +143,7 @@ The starter workflows call the public reusable workflow namespace:
 ```yaml
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@main
+    uses: git-vibe/actions/.github/workflows/develop.yml@v1
 ```
 
 Reusable workflows operate on the repository where the workflow run starts
@@ -261,13 +265,14 @@ Use `/git-vibe` for the remaining comment-triggered workflows:
 | `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
 | `/git-vibe address-feedback` | Pull request conversation | Investigates open PR feedback and fixes only actionable items |
 
-Use protected labels for validation and approval transitions:
+Use protected labels for investigation, validation, and approval transitions:
 
-| Label               | Typical surface      | Effect                                                                       |
-| ------------------- | -------------------- | ---------------------------------------------------------------------------- |
-| `git-vibe:validate` | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                      |
-| `git-vibe:approved` | Implementation issue | Dispatches the development pipeline                                          |
-| `git-vibe:approved` | Feature Discussion   | Dispatches materialization, which creates an issue and closes the Discussion |
+| Label                  | Typical surface      | Effect                                                                         |
+| ---------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| `git-vibe:investigate` | Bug issue            | Runs investigation, then GitVibe replaces the trigger with `gvi:investigating` |
+| `git-vibe:validate`    | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                        |
+| `git-vibe:approved`    | Implementation issue | Dispatches the development pipeline                                            |
+| `git-vibe:approved`    | Feature Discussion   | Dispatches materialization, which creates an issue and closes the Discussion   |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
@@ -298,9 +303,6 @@ version: 1
 
 commands:
   prefix: /git-vibe
-
-runner:
-  default: ubuntu-latest
 
 github_auth:
   mode: webhook-pat
@@ -345,35 +347,43 @@ tests:
 
 Each AI stage must define `profile` or `profiles`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.
+CLI adapters use fixed commands (`codex exec` and `claude -p`); profiles choose
+adapter, model, auth, env, and reasoning settings, not the executable command.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.
 
+Optional repository prompt additions live under
+`.git-vibe/prompts/<stage>/system.md` and `.git-vibe/prompts/<stage>/user.md`.
+They append to GitVibe's built-in prompts without replacing stage contracts,
+schema requirements, or branch/file mutation boundaries. See
+[Repository Prompt Additions](docs/AI.md#repository-prompt-additions).
+
 Current implementation status:
 
-| Area                                                                     | Status                                        |
-| ------------------------------------------------------------------------ | --------------------------------------------- |
-| Direct repository webhook mode                                           | Implemented first                             |
-| `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first                             |
-| Source-built composite actions and reusable workflows                    | Implemented                                   |
-| JSON Schema stage contracts                                              | Implemented                                   |
-| Relay, Actions-native receiver, and polling delivery modes               | Planned behind config shape                   |
-| Active `cli-codex` and `cli-claude-code` stage adapters                  | Planned; smoke-test support exists separately |
-| External GitHub mention partners                                         | Planned opt-in surface                        |
+| Area                                                                     | Status                      |
+| ------------------------------------------------------------------------ | --------------------------- |
+| Direct repository webhook mode                                           | Implemented first           |
+| `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first           |
+| Source-built composite actions and reusable workflows                    | Implemented                 |
+| JSON Schema stage contracts                                              | Implemented                 |
+| Relay, Actions-native receiver, and polling delivery modes               | Planned behind config shape |
+| Active `cli-codex` and `cli-claude-code` stage adapters                  | Implemented                 |
+| External GitHub mention partners                                         | Planned opt-in surface      |
 
 See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
 
 ## Security Model
 
-| Boundary      | Rule                                                                                |
-| ------------- | ----------------------------------------------------------------------------------- |
-| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events               |
-| Commands      | The server checks repository permission before protected actions                    |
-| Labels        | Public `git-vibe:` labels are policy-gated; internal `gvi:` labels are GitVibe-only |
-| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config                |
-| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state   |
-| Branch writes | Implementation uses deterministic root issue branches: `git-vibe/{root-issue}`      |
-| Pull requests | GitVibe can open or update PRs, but humans review and merge                         |
+| Boundary      | Rule                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events                          |
+| Commands      | The server checks repository permission before protected actions                               |
+| Labels        | Public `git-vibe:` trigger labels are policy-gated; internal `gvi:` labels are GitVibe-managed |
+| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config                           |
+| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state              |
+| Branch writes | Implementation uses deterministic root issue branches: `git-vibe/{root-issue}`                 |
+| Pull requests | GitVibe can open or update PRs, but humans review and merge                                    |
 
 The PAT is long-lived. Scope it narrowly to the managed repository and never log
 or render it.
@@ -407,7 +417,7 @@ Detailed docs:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: git-vibe/actions/investigate@main
+  - uses: git-vibe/actions/investigate@v1
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
@@ -418,10 +428,10 @@ steps:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@main
+    uses: git-vibe/actions/.github/workflows/develop.yml@v1
     with:
       issue-number: "123"
-      runner: self-hosted
+      runner: docker-runner
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
