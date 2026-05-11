@@ -19,7 +19,7 @@ on:
         type: boolean
         default: false
       run-claude-code:
-        description: Install and verify Claude Code on the pipeline runner.
+        description: Run Claude Code CLI smoke test on the pipeline runner.
         required: false
         type: boolean
         default: false
@@ -99,9 +99,57 @@ jobs:
       - name: Run Codex smoke test
         shell: bash
         run: |
-          codex --version
-          codex exec --json \
-            "Reply with JSON: {\"ok\": true, \"source\": \"codex\"}. Do not modify files."
+          smoke_dir="$(mktemp -d)"
+          schema_file="$smoke_dir/schema.json"
+          output_file="$smoke_dir/output.json"
+          cat > "$schema_file" <<'JSON'
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ok", "source"],
+            "properties": {
+              "ok": { "type": "boolean" },
+              "source": { "enum": ["codex"] }
+            }
+          }
+          JSON
+
+          codex exec \
+            --dangerously-bypass-approvals-and-sandbox \
+            --output-schema "$schema_file" \
+            --output-last-message "$output_file" \
+            "Return exactly this JSON object: {\"ok\": true, \"source\": \"codex\"}. Do not modify files."
+
+          node - "$output_file" codex <<'NODE'
+          const { readFileSync } = require("node:fs");
+
+          function extractJsonObject(text) {
+            const trimmed = text.trim();
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+
+            const fenced = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            if (fenced) return fenced[1].trim();
+
+            const start = trimmed.indexOf("{");
+            const end = trimmed.lastIndexOf("}");
+            if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+
+            throw new Error(`response did not contain a JSON object: ${trimmed.slice(0, 200)}`);
+          }
+
+          function validateSmokeResponse(output, expectedSource) {
+            if (!output || typeof output !== "object" || Array.isArray(output)) {
+              throw new Error("response JSON must be an object.");
+            }
+            if (output.ok !== true || output.source !== expectedSource) {
+              throw new Error(`unexpected smoke response: ${JSON.stringify(output)}`);
+            }
+          }
+
+          const response = JSON.parse(extractJsonObject(readFileSync(process.argv[2], "utf8")));
+          validateSmokeResponse(response, process.argv[3]);
+          console.log(`[git-vibe] ${process.argv[3]} smoke response ok.`);
+          NODE
 
   claude-code:
     if: ${{ inputs.run-claude-code }}
@@ -110,6 +158,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install Claude Code CLI
         shell: bash
         run: |
@@ -120,8 +171,72 @@ jobs:
 
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Verify Claude Code CLI
+      - name: Run Claude Code smoke test
         shell: bash
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          claude --version
+          smoke_dir="$(mktemp -d)"
+          output_file="$smoke_dir/output.json"
+          schema="$(
+            cat <<'JSON'
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ok", "source"],
+            "properties": {
+              "ok": { "type": "boolean" },
+              "source": { "enum": ["claude-code"] }
+            }
+          }
+          JSON
+          )"
+
+          claude -p \
+            --dangerously-skip-permissions \
+            --output-format json \
+            --json-schema "$schema" \
+            --no-session-persistence \
+            "Return exactly this JSON object: {\"ok\": true, \"source\": \"claude-code\"}. Do not modify files." \
+            > "$output_file"
+
+          node - "$output_file" claude-code <<'NODE'
+          const { readFileSync } = require("node:fs");
+
+          function extractJsonObject(text) {
+            const trimmed = text.trim();
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+
+            const fenced = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            if (fenced) return fenced[1].trim();
+
+            const start = trimmed.indexOf("{");
+            const end = trimmed.lastIndexOf("}");
+            if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+
+            throw new Error(`response did not contain a JSON object: ${trimmed.slice(0, 200)}`);
+          }
+
+          function validateSmokeResponse(output, expectedSource) {
+            if (!output || typeof output !== "object" || Array.isArray(output)) {
+              throw new Error("response JSON must be an object.");
+            }
+            if (output.ok !== true || output.source !== expectedSource) {
+              throw new Error(`unexpected smoke response: ${JSON.stringify(output)}`);
+            }
+          }
+
+          const result = JSON.parse(readFileSync(process.argv[2], "utf8"));
+          if (!result || typeof result !== "object" || Array.isArray(result)) {
+            throw new Error("Claude Code stdout must be a JSON object.");
+          }
+          if (result.is_error === true) {
+            throw new Error(`Claude Code smoke failed: ${result.result || "unknown error"}`);
+          }
+
+          const response =
+            result.structured_output && typeof result.structured_output === "object"
+              ? result.structured_output
+              : JSON.parse(extractJsonObject(String(result.result || "")));
+          validateSmokeResponse(response, process.argv[3]);
+          console.log(`[git-vibe] ${process.argv[3]} smoke response ok.`);
+          NODE

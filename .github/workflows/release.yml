@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: app
+    runs-on: rootless-docker
     steps:
       - uses: actions/checkout@v4
         with:

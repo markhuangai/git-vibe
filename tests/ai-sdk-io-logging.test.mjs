@@ -131,9 +131,14 @@ async function mockGenerateTextWithAssistantStep(request) {
       totalTokens: 14,
     },
   });
+  const content = '{"stage":"implement","status":"completed"}';
   return {
-    steps: [{ toolCalls: [{ toolName: "read" }] }],
-    text: '{"stage":"implement","status":"completed"}',
+    steps: [
+      {
+        toolCalls: [{ toolName: "read" }, { input: { content }, toolName: "output_validator" }],
+      },
+    ],
+    text: content,
   };
 }
 

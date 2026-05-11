@@ -81,7 +81,7 @@ describe("implementation validation repair", () => {
 
     expect(generateText).toHaveBeenCalledTimes(2);
     expect(generateText.mock.calls[1][0]).toMatchObject({
-      stopWhen: [{ toolName: "output_validator" }, { count: 3 }],
+      stopWhen: [expect.any(Function), { count: 3 }],
     });
     expect(generateText.mock.calls[1][0].prompt).toContain("gitvibe_validation_repair");
     expect(generateText.mock.calls[1][0].prompt).toContain("test -f repaired && rm repaired");

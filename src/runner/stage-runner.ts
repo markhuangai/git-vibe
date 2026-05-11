@@ -25,7 +25,7 @@ import {
   runnerBaseBranch,
 } from "./stage-branches.js";
 import { dryRunContent, stageContract } from "./stage-dry-run.js";
-import { gitOutput, repositoryContext } from "./stage-git.js";
+import { repositoryContext } from "./stage-git.js";
 import {
   applyDeterministicWrites,
   markPullRequestFeedbackInvestigationStarted,
@@ -343,74 +343,16 @@ async function runStageAiResult({
     );
   } catch (error) {
     if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
-    return recoverImplementStructuredOutput({
-      aiRunOptions,
-      context,
-      definition,
-      firstError: error,
-      logger,
-      options,
-    });
-  }
-}
-
-function isStructuredOutputFailure(error: unknown): boolean {
-  const message = summarizeError(error);
-  return (
-    message === "AI response did not contain a JSON object" ||
-    /^AI output failed .+ validation:/.test(message)
-  );
-}
-
-async function recoverImplementStructuredOutput({
-  aiRunOptions,
-  context,
-  definition,
-  firstError,
-  logger,
-  options,
-}: {
-  aiRunOptions: RunAiStageOptions;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  firstError: unknown;
-  logger: StageLogger;
-  options: RunnerOptions;
-}): Promise<StageRunResult> {
-  logger.event("output.finalize.start", { error: summarizeError(firstError) });
-  try {
-    const content = await runAiStage({
-      ...aiRunOptions,
-      maxTurns: structuredOutputFinalizationMaxTurns(options),
-      prompt: buildStructuredOutputFinalizationPrompt({
-        basePrompt: aiRunOptions.prompt,
-        context,
-        cwd: options.cwd,
-        error: firstError,
-      }),
-      reserveFinalizationTurns: false,
-      toolOverride: ["read", "grep", "glob", "bash-readonly", "diff"],
-    });
-    const result = await stageRunResult({
-      content,
-      context,
-      definition,
-      logger,
-      options,
-    });
-    logger.event("output.finalize.done", { status: result.status });
-    return result;
-  } catch (error) {
     logger.event("output.finalize.failed", {
       error: summarizeError(error),
-      previous_error: summarizeError(firstError),
+      recovery: "same_session_exhausted",
     });
     return stageRunResult({
       content: JSON.stringify(
         blockedImplementOutput({
           context,
           finalError: error,
-          firstError,
+          firstError: error,
           options,
         }),
       ),
@@ -420,6 +362,15 @@ async function recoverImplementStructuredOutput({
       options,
     });
   }
+}
+
+function isStructuredOutputFailure(error: unknown): boolean {
+  const message = summarizeError(error);
+  return (
+    message === "AI response did not call output_validator" ||
+    message === "AI response did not contain a JSON object" ||
+    /^AI output failed .+ validation:/.test(message)
+  );
 }
 
 async function stageRunResult({
@@ -519,36 +470,6 @@ function withSourceComment(context: ContextPacket, options: RunnerOptions): Cont
   return { ...context, source: { ...(context.source || {}), comment: options.sourceComment } };
 }
 
-function buildStructuredOutputFinalizationPrompt(options: {
-  basePrompt: string;
-  context: ContextPacket;
-  cwd: string;
-  error: unknown;
-}): string {
-  const branch = issueBranch(options.context);
-  return `${options.basePrompt}
-
-<gitvibe_structured_output_finalization>
-The previous implement attempt may have changed the working tree, but it did not return JSON matching the implement.v1 schema.
-
-Failure: ${summarizeError(options.error)}
-
-Current Git status:
-\`\`\`
-${gitOutput(options.cwd, ["status", "--short", "--branch"]) || "(clean)"}
-\`\`\`
-
-Diff stat against HEAD:
-\`\`\`
-${gitOutput(options.cwd, ["diff", "--stat", "HEAD"]) || "(no diff)"}
-\`\`\`
-
-Do not edit files, change branches, commit, push, fetch, merge, reset, or delete files. Inspect only the current working tree and return one JSON object matching implement.v1. Use status "completed" only when the intended implementation is present and ready for GitVibe validation and commit. Otherwise use status "blocked" and next_state "blocked".
-
-The branch field, if included, must be ${branch}.
-</gitvibe_structured_output_finalization>`;
-}
-
 function blockedImplementOutput(options: {
   context: ContextPacket;
   finalError: unknown;
@@ -579,8 +500,4 @@ function blockedImplementOutput(options: {
     summary,
     tests: ["Not run after the implement stage failed to produce schema-valid JSON."],
   };
-}
-
-function structuredOutputFinalizationMaxTurns(options: RunnerOptions): number {
-  return Math.min(Math.max(options.maxTurns, 3), 10);
 }

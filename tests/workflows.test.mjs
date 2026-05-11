@@ -6,7 +6,7 @@ import { parse } from "yaml";
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
  * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
- * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
+ * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
 
@@ -226,6 +226,32 @@ describe("GitVibe workflow wiring", () => {
         `${file} omits old Claude auth`,
       ).toBeUndefined();
     }
+  });
+});
+
+describe("GitVibe AI smoke workflow", () => {
+  it("validates Codex and Claude Code responses instead of treating CLI presence as success", () => {
+    const workflow = readWorkflow(".github/workflows/ai-smoke.yml");
+    const claudeSetupNode = workflow.jobs?.["claude-code"]?.steps?.find(
+      (step) => step.uses === "actions/setup-node@v4",
+    );
+    const codexRun = workflowStep(workflow, "codex", "Run Codex smoke test")?.run || "";
+    const claudeRun =
+      workflowStep(workflow, "claude-code", "Run Claude Code smoke test")?.run || "";
+
+    expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
+    expect(codexRun).toContain("codex exec");
+    expect(codexRun).toContain("--output-last-message");
+    expect(codexRun).toContain("validateSmokeResponse(response, process.argv[3])");
+    expect(codexRun).toContain('"source": { "enum": ["codex"] }');
+    expect(codexRun).not.toContain("codex --version");
+
+    expect(claudeRun).toContain("claude -p");
+    expect(claudeRun).toContain("--output-format json");
+    expect(claudeRun).toContain("--json-schema");
+    expect(claudeRun).toContain("validateSmokeResponse(response, process.argv[3])");
+    expect(claudeRun).toContain('"source": { "enum": ["claude-code"] }');
+    expect(claudeRun).not.toContain("claude --version");
   });
 });
 
@@ -556,6 +582,16 @@ function gitVibeActionSteps(workflow, matchesUse) {
         uses: step.uses,
       })),
   );
+}
+
+/**
+ * @param {Workflow} workflow
+ * @param {string} jobName
+ * @param {string} stepName
+ * @returns {WorkflowStep | undefined}
+ */
+function workflowStep(workflow, jobName, stepName) {
+  return workflow.jobs?.[jobName]?.steps?.find((step) => step.name === stepName);
 }
 
 /**

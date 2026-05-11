@@ -82,21 +82,22 @@ describe("AI SDK prompt caching", () => {
 });
 
 function mockCompletedText(stage) {
+  const content = JSON.stringify({
+    assumptions: [],
+    blocking_questions: [],
+    comment_body: "Done.",
+    findings: [],
+    implementation_plan: [],
+    next_state: stage === "summarize" ? "ready-for-materialization" : "ready-for-implementation",
+    questions: [],
+    references: [],
+    stage,
+    status: "completed",
+    summary: "Done.",
+  });
   generateText.mockResolvedValueOnce({
-    steps: [],
-    text: JSON.stringify({
-      assumptions: [],
-      blocking_questions: [],
-      comment_body: "Done.",
-      findings: [],
-      implementation_plan: [],
-      next_state: stage === "summarize" ? "ready-for-materialization" : "ready-for-implementation",
-      questions: [],
-      references: [],
-      stage,
-      status: "completed",
-      summary: "Done.",
-    }),
+    steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
+    text: content,
   });
 }
 

@@ -306,6 +306,12 @@ describe("stage output validation", () => {
         text: `\`\`\`json\n${content}\n\`\`\``,
       }),
     ).toBe(content);
+    expect(
+      extractValidatedOutput({
+        steps: [{ toolCalls: [{ input: null, toolName: "output_validator" }] }],
+        text: content,
+      }),
+    ).toBe(content);
     expect(extractValidatedOutput({ steps: [], text: content })).toBe(content);
     expect(
       extractValidatedOutput({
@@ -314,6 +320,9 @@ describe("stage output validation", () => {
       }),
     ).toBe(content);
     expect(extractValidatedOutput({ text: content })).toBe(content);
+    expect(() => extractValidatedOutput({ text: "not json" })).toThrow(
+      "AI response did not contain a JSON object",
+    );
   });
 });
 

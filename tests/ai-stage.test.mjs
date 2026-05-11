@@ -68,7 +68,7 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
         maxRetries: 0,
         prompt: "Prompt",
         providerOptions: { custom: true },
-        stopWhen: [{ toolName: "output_validator" }, { count: 3 }],
+        stopWhen: [expect.any(Function), { count: 3 }],
         system: "System",
         temperature: 0.5,
       }),
@@ -113,11 +113,14 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
       tool_calls: 2,
       tools: "read,output_validator",
     });
-    expect(logger.event).toHaveBeenCalledWith("ai.request.done", {
-      steps: 1,
-      tool_calls: 2,
-      tools_used: "read,output_validator",
-    });
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.request.done",
+      expect.objectContaining({
+        steps: 1,
+        tool_calls: 2,
+        tools_used: "read,output_validator",
+      }),
+    );
   });
 });
 
@@ -180,10 +183,7 @@ function mockTelemetryGenerateText() {
       finishReason: "stop",
       toolCalls: [{ toolName: "read" }, { toolName: "output_validator" }],
     });
-    return {
-      steps: [{ toolCalls: [{ toolName: "read" }, { toolName: "output_validator" }] }],
-      text: '{"stage":"investigate","status":"completed"}',
-    };
+    return aiTextResult("investigate", [{ toolName: "read" }]);
   });
 }
 
@@ -253,18 +253,12 @@ function mockToolSummaryGenerateText() {
       success: true,
       toolCall: { toolName: "glob" },
     });
-    return {
-      steps: [{ toolCalls: [] }],
-      text: '{"stage":"validate","status":"completed"}',
-    };
+    return aiTextResult("validate");
   });
 }
 
 async function createRetryingProviderFetch({ config = localProxyConfig(), logger }) {
-  generateText.mockResolvedValueOnce({
-    steps: [],
-    text: '{"stage":"investigate","status":"completed"}',
-  });
+  generateText.mockResolvedValueOnce(aiTextResult("investigate"));
 
   await runAiStage({
     config,
@@ -319,13 +313,18 @@ function toolSummaryCalls() {
   ];
 }
 
+function aiTextResult(stage, toolCalls = []) {
+  const content = JSON.stringify({ stage, status: "completed" });
+  return {
+    steps: [{ toolCalls: [...toolCalls, { input: { content }, toolName: "output_validator" }] }],
+    text: content,
+  };
+}
+
 describe("AI stage runner provider failures", () => {
   it("uses direct AI SDK profile model names without a model variable", async () => {
     const logger = { event: vi.fn() };
-    generateText.mockResolvedValueOnce({
-      steps: [],
-      text: '{"stage":"investigate","status":"completed"}',
-    });
+    generateText.mockResolvedValueOnce(aiTextResult("investigate"));
 
     await expect(
       runAiStage({
@@ -380,7 +379,7 @@ describe("AI stage runner provider failures", () => {
         stageDefinition: stageDefinitions.summarize,
         system: "System",
       }),
-    ).rejects.toThrow("AI response did not contain a JSON object");
+    ).rejects.toThrow("AI response did not call output_validator");
 
     expect(createAnthropic).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "anthropic-key", fetch: expect.any(Function) }),
@@ -581,7 +580,7 @@ describe("AI stage runner telemetry edge cases", () => {
       request.experimental_onToolCallFinish(undefined);
       request.experimental_onToolCallFinish({ success: false });
       request.onStepFinish(undefined);
-      return { text: '{"stage":"summarize","status":"completed"}' };
+      return aiTextResult("summarize");
     });
 
     await expect(
@@ -611,11 +610,14 @@ describe("AI stage runner telemetry edge cases", () => {
       tool_calls: 0,
       tools: "none",
     });
-    expect(logger.event).toHaveBeenCalledWith("ai.request.done", {
-      steps: 1,
-      tool_calls: 0,
-      tools_used: "none",
-    });
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.request.done",
+      expect.objectContaining({
+        steps: 1,
+        tool_calls: 1,
+        tools_used: "output_validator",
+      }),
+    );
   });
 });
 

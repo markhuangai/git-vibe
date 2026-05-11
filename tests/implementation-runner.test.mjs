@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 describe("implementation structured output recovery", () => {
-  it("finalizes malformed implementation output with inspection-only tools", async () => {
+  it("continues malformed implementation output with validator-only tools", async () => {
     const cwd = await workspace();
     commitAll(cwd);
     generateText.mockResolvedValueOnce({ steps: [], text: "not json" });
@@ -63,22 +63,17 @@ describe("implementation structured output recovery", () => {
 
     expect(generateText).toHaveBeenCalledTimes(2);
     expect(generateText.mock.calls[0][0]).toMatchObject({
-      stopWhen: [{ toolName: "output_validator" }, { count: 190 }],
+      stopWhen: [expect.any(Function), { count: 190 }],
     });
     expect(generateText.mock.calls[1][0]).toMatchObject({
-      stopWhen: [{ toolName: "output_validator" }, { count: 10 }],
+      activeTools: ["output_validator"],
+      stopWhen: [expect.any(Function), { count: 10 }],
+      toolChoice: { type: "tool", toolName: "output_validator" },
     });
-    expect(generateText.mock.calls[1][0].prompt).toContain(
-      "gitvibe_structured_output_finalization",
+    expect(generateText.mock.calls[1][0].messages.at(-1).content).toContain(
+      "Call output_validator with the exact final JSON.",
     );
-    expect(Object.keys(generateText.mock.calls[1][0].tools).sort()).toEqual([
-      "bash",
-      "diff",
-      "glob",
-      "grep",
-      "output_validator",
-      "read",
-    ]);
+    expect(Object.keys(generateText.mock.calls[1][0].tools).sort()).toEqual(["output_validator"]);
     expect(generateText.mock.calls[1][0].tools.edit).toBeUndefined();
     expect(generateText.mock.calls[1][0].tools.write).toBeUndefined();
     expect(generateText.mock.calls[1][0].tools.multi_edit).toBeUndefined();

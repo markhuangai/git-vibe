@@ -50,7 +50,9 @@ The local proxy job uses AI SDK plus `agentool`, defaults to `glm-5`, and
 requires the model to call the read-only `agentool` file reader.
 
 Codex CLI smoke testing is optional. The workflow installs `@openai/codex`
-when the `codex` command is missing, then uses:
+when the `codex` command is missing, prompts `codex exec`, and validates the
+CLI response JSON instead of treating CLI installation as a passed smoke test.
+It uses:
 
 ```text
 secrets.GITVIBE_AI_ENV_JSON
@@ -70,8 +72,9 @@ In GitVibe stages, `cli-codex` runs `codex exec` with
 final message file supplies the structured result for validation.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
-Anthropic's native installer when the `claude` command is missing, then verifies
-`claude --version`. `cli-claude-code` stages run `claude -p` with
+Anthropic's native installer when the `claude` command is missing, prompts
+`claude -p`, and validates the CLI response JSON instead of treating CLI
+installation as a passed smoke test. `cli-claude-code` stages run `claude -p` with
 `--dangerously-skip-permissions`, `--output-format json`, and `--json-schema`;
 profile `bare: true` adds Claude Code's minimal mode for API-key or third-party
 provider auth. Configure Claude OAuth and provider env through profile

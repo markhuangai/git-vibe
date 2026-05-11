@@ -47,10 +47,7 @@ describe("AI stage runner provider bundle config", () => {
       GITVIBE_AI_API_KEY: "test-key",
       GITVIBE_AI_BASE_URL: "",
     });
-    generateText.mockResolvedValueOnce({
-      steps: [],
-      text: '{"stage":"investigate","status":"completed"}',
-    });
+    generateText.mockResolvedValueOnce(aiResult("investigate"));
 
     await expect(
       runInvestigate(nativeOpenAiConfig({ baseUrl: { from_bundle: "GITVIBE_AI_BASE_URL" } })),
@@ -72,6 +69,14 @@ function runInvestigate(config) {
     stageDefinition: stageDefinitions.investigate,
     system: "System",
   });
+}
+
+function aiResult(stage) {
+  const content = JSON.stringify({ stage, status: "completed" });
+  return {
+    steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
+    text: content,
+  };
 }
 
 function configWithoutApiKey() {

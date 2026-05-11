@@ -55,10 +55,7 @@ afterEach(() => {
 describe("AI stage runner stage routing", () => {
   it("uses runtime stage IDs for profile and tool overrides", async () => {
     const logger = { event: vi.fn() };
-    generateText.mockResolvedValueOnce({
-      steps: [],
-      text: '{"stage":"validate","status":"completed"}',
-    });
+    generateText.mockResolvedValueOnce(aiResult("validate"));
 
     await expect(
       runAiStage({
@@ -358,10 +355,7 @@ describe("AI stage runner Codex CLI defaults", () => {
 
 describe("AI stage runner profile arrays", () => {
   it("uses stage profile arrays and removes duplicate profile names", async () => {
-    generateText.mockResolvedValueOnce({
-      steps: [],
-      text: '{"stage":"validate","status":"completed"}',
-    });
+    generateText.mockResolvedValueOnce(aiResult("validate"));
 
     await expect(
       runAiStage(
@@ -394,10 +388,7 @@ describe("AI stage runner profile arrays", () => {
 describe("AI stage runner fallback profiles", () => {
   it("retries the configured fallback profile when the primary profile fails", async () => {
     const logger = { event: vi.fn() };
-    generateText.mockResolvedValueOnce({
-      steps: [],
-      text: '{"stage":"investigate","status":"completed"}',
-    });
+    generateText.mockResolvedValueOnce(aiResult("investigate"));
 
     await expect(
       runAiStage({
@@ -571,6 +562,14 @@ function codexCliConfig() {
         },
       },
     },
+  };
+}
+
+function aiResult(stage) {
+  const content = JSON.stringify({ stage, status: "completed" });
+  return {
+    steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
+    text: content,
   };
 }
 

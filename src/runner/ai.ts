@@ -1,6 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, hasToolCall, stepCountIs } from "ai";
+import { generateText, stepCountIs } from "ai";
 import { createBash } from "agentool/bash";
 import { createDiff } from "agentool/diff";
 import { createEdit } from "agentool/edit";
@@ -12,7 +12,7 @@ import { createRead } from "agentool/read";
 import { createWebFetch } from "agentool/web-fetch";
 import { createWebSearch } from "agentool/web-search";
 import { createWrite } from "agentool/write";
-import type { LanguageModel, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import {
   activeProfileByName,
   adapterName,
@@ -29,6 +29,13 @@ import { runClaudeCodeCliStage } from "./claude-code-cli.js";
 import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
+import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
+import {
+  extractValidatedOutput,
+  outputValidatorContentFromSteps,
+  type AiResult,
+  type AiStep,
+} from "./ai-output.js";
 import {
   arrayField,
   numberField,
@@ -42,25 +49,33 @@ import {
   toolStartFields,
 } from "./ai-tool-logging.js";
 import type { StageLogger } from "./logging.js";
-import { redactLogText, summarizeError } from "./logging.js";
+import { summarizeError } from "./logging.js";
+import { validateOutput } from "./schemas.js";
 import type { GitVibeConfig, JsonObject, Stage, StageDefinition } from "../shared/types.js";
 
 export { retryDelayMsForHeaders };
+export { extractValidatedOutput };
 
-interface AiToolCall {
-  input?: unknown;
-  toolName?: string;
+interface AiSdkRequest {
+  activeTools?: string[];
+  maxTurns: number;
+  messages?: ModelMessage[];
+  phase: string;
+  prompt?: string;
+  toolChoice?: unknown;
+  tools: ToolSet;
 }
 
-interface AiStep {
-  toolCalls?: AiToolCall[];
-}
-
-interface AiResult {
-  steps?: AiStep[];
-  text: string;
-  totalUsage?: unknown;
-  usage?: unknown;
+interface AiSdkRuntime {
+  contextWindowTokens: number | undefined;
+  model: LanguageModel;
+  options: RunAiStageOptions;
+  profile: Record<string, unknown>;
+  profileName: string;
+  state: {
+    maxContextUsedPct?: number;
+    stepCount: number;
+  };
 }
 
 const OUTPUT_FINALIZATION_RESERVED_TURNS = 10;
@@ -142,77 +157,190 @@ async function runAiSdkStageWithProfile(
   profileName: string,
   profile: Record<string, unknown>,
 ): Promise<string> {
-  const logger = options.logger;
   const tools = createTools(options);
-  const model = createModel(options, profileName, profile);
-  const contextWindowTokens = contextWindowTokensForProfile(profileName, profile, options.config);
+  const runtime = aiSdkRuntime({ options, profile, profileName });
   const primaryTurnBudget = primaryTurnBudgetFor(options);
-  let maxContextUsedPct: number | undefined;
-  let stepCount = 0;
-  logger?.event("ai.request.start", {
-    context_window_tokens: contextWindowTokens,
-    max_turns: options.maxTurns,
-    model: modelName(profile),
-    profile: profileName,
-    provider: providerType(profile),
-    tools: Object.keys(tools).join(","),
-  });
-  logAiSdkIoInput({ options, profile, profileName, tools });
 
-  const result = await generateText({
+  const primaryResult = await runAiSdkRequest(runtime, {
+    maxTurns: primaryTurnBudget,
+    phase: "primary",
+    prompt: options.prompt,
+    tools,
+  });
+  const primary = await validatedOutputOrError(primaryResult, options);
+  if (primary.ok) {
+    logAiSdkIoOutput({ options, output: primary.output, profileName, result: primaryResult });
+    return primary.output;
+  }
+
+  const finalizationTurns = options.maxTurns - primaryTurnBudget;
+  if (!options.reserveFinalizationTurns || finalizationTurns <= 0) throw primary.error;
+
+  options.logger?.event("ai.continuation.start", {
+    max_turns: finalizationTurns,
+    reason: continuationReason(primaryResult, primaryTurnBudget),
+  });
+  const finalTools = { output_validator: tools.output_validator };
+  const finalResult = await runAiSdkRequest(runtime, {
+    activeTools: ["output_validator"],
+    maxTurns: finalizationTurns,
+    messages: continuationMessages({
+      instruction: structuredOutputContinuationInstruction(primary.error),
+      prompt: options.prompt,
+      result: primaryResult,
+    }),
+    phase: "structured_output_continuation",
+    toolChoice: { type: "tool", toolName: "output_validator" },
+    tools: finalTools,
+  });
+  const final = await validatedOutputOrError(finalResult, options);
+  if (!final.ok) throw final.error;
+  logAiSdkIoOutput({ options, output: final.output, profileName, result: finalResult });
+  return final.output;
+}
+
+function aiSdkRuntime(options: {
+  options: RunAiStageOptions;
+  profile: Record<string, unknown>;
+  profileName: string;
+}): AiSdkRuntime {
+  return {
+    contextWindowTokens: contextWindowTokensForProfile(
+      options.profileName,
+      options.profile,
+      options.options.config,
+    ),
+    model: createModel(options.options, options.profileName, options.profile),
+    options: options.options,
+    profile: options.profile,
+    profileName: options.profileName,
+    state: { stepCount: 0 },
+  };
+}
+
+async function runAiSdkRequest(runtime: AiSdkRuntime, request: AiSdkRequest): Promise<AiResult> {
+  runtime.options.logger?.event("ai.request.start", {
+    context_window_tokens: runtime.contextWindowTokens,
+    max_turns: runtime.options.maxTurns,
+    model: modelName(runtime.profile),
+    phase: request.phase,
+    profile: runtime.profileName,
+    provider: providerType(runtime.profile),
+    turn_budget: request.maxTurns,
+    tools: Object.keys(request.tools).join(","),
+  });
+  logAiSdkIoInput({
+    model: modelName(runtime.profile),
+    options: runtime.options,
+    profileName: runtime.profileName,
+    tools: request.tools,
+  });
+  const result = (await generateText({
+    ...baseAiSdkRequest(runtime),
+    ...aiSdkCallbacks(runtime),
+    ...activeToolsInput(request),
+    ...promptInput(request),
+    stopWhen: [hasSchemaValidOutputValidatorCall(runtime.options), stepCountIs(request.maxTurns)],
+    ...toolChoiceInput(request),
+    tools: request.tools,
+  })) as AiResult;
+  runtime.options.logger?.event("ai.request.done", requestDoneFields(runtime, request, result));
+  return result;
+}
+
+function baseAiSdkRequest(runtime: AiSdkRuntime) {
+  return {
+    maxRetries: 0,
+    model: runtime.model,
+    prepareStep: createContextCompactionPrepareStep({
+      config: runtime.options.config,
+      logger: runtime.options.logger,
+      model: runtime.model,
+      profile: runtime.profile,
+      profileName: runtime.profileName,
+    }),
+    providerOptions: providerOptionsForRequest({
+      options: runtime.options,
+      profile: runtime.profile,
+      profileName: runtime.profileName,
+    }) as never,
+    system: runtime.options.system,
+    temperature: generationNumber(runtime.profile, "temperature", 0.2),
+  };
+}
+
+function aiSdkCallbacks(runtime: AiSdkRuntime) {
+  return {
     experimental_onToolCallFinish: (event: unknown) => {
-      logger?.event(
+      runtime.options.logger?.event(
         toolCallSucceeded(event) ? "ai.tool.done" : "ai.tool.failed",
         toolFinishFields(event),
       );
     },
     experimental_onToolCallStart: (event: unknown) => {
-      logger?.event("ai.tool.start", toolStartFields(event));
+      runtime.options.logger?.event("ai.tool.start", toolStartFields(event));
     },
-    maxRetries: 0,
-    model,
     onStepFinish: (event: unknown) => {
-      stepCount += 1;
-      const contextUsedPct = contextUsedPctForUsage(usageRecord(event), contextWindowTokens);
-      maxContextUsedPct = maxNumber(maxContextUsedPct, contextUsedPct);
-      logger?.event("ai.step.done", {
-        assistant_reasoning_chars: stringLength(stringField(event, "reasoningText")),
-        assistant_text_chars: stringLength(stringField(event, "text")),
-        finish_reason: stringField(event, "finishReason"),
-        step: stepCount,
-        tool_calls: arrayField(event, "toolCalls").length,
-        tools: toolNames(arrayField(event, "toolCalls")).join(",") || "none",
-        ...usageLogFields(usageRecord(event)),
-        ...optionalNumberField("context_used_pct", contextUsedPct),
+      runtime.state.stepCount += 1;
+      const contextUsedPct = contextUsedPctForUsage(
+        usageRecord(event),
+        runtime.contextWindowTokens,
+      );
+      runtime.state.maxContextUsedPct = maxNumber(runtime.state.maxContextUsedPct, contextUsedPct);
+      runtime.options.logger?.event("ai.step.done", stepDoneFields(runtime, event, contextUsedPct));
+      logAiSdkAssistantStep({
+        event,
+        options: runtime.options,
+        profileName: runtime.profileName,
+        step: runtime.state.stepCount,
       });
-      logAiSdkAssistantStep({ event, options, profileName, step: stepCount });
     },
-    prepareStep: createContextCompactionPrepareStep({
-      config: options.config,
-      logger,
-      model,
-      profile,
-      profileName,
-    }),
-    prompt: options.prompt,
-    providerOptions: providerOptionsForRequest({ options, profile, profileName }) as never,
-    stopWhen: [hasToolCall("output_validator"), stepCountIs(primaryTurnBudget)],
-    system: options.system,
-    temperature: generationNumber(profile, "temperature", 0.2),
-    tools,
-  });
+  };
+}
 
-  logger?.event("ai.request.done", {
-    steps: result.steps?.length || stepCount,
-    tool_calls: result.steps?.flatMap((step) => step.toolCalls || []).length || 0,
-    tools_used:
-      toolNames(result.steps?.flatMap((step) => step.toolCalls || []) || []).join(",") || "none",
+function stepDoneFields(
+  runtime: AiSdkRuntime,
+  event: unknown,
+  contextUsedPct: number | undefined,
+): Record<string, unknown> {
+  return {
+    assistant_reasoning_chars: stringLength(stringField(event, "reasoningText")),
+    assistant_text_chars: stringLength(stringField(event, "text")),
+    finish_reason: stringField(event, "finishReason"),
+    step: runtime.state.stepCount,
+    tool_calls: arrayField(event, "toolCalls").length,
+    tools: toolNames(arrayField(event, "toolCalls")).join(",") || "none",
+    ...usageLogFields(usageRecord(event)),
+    ...optionalNumberField("context_used_pct", contextUsedPct),
+  };
+}
+
+function requestDoneFields(
+  runtime: AiSdkRuntime,
+  request: AiSdkRequest,
+  result: AiResult,
+): Record<string, unknown> {
+  const toolCalls = result.steps?.flatMap((step) => step.toolCalls || []) || [];
+  return {
+    phase: request.phase,
+    steps: result.steps?.length || runtime.state.stepCount,
+    tool_calls: toolCalls.length,
+    tools_used: toolNames(toolCalls).join(",") || "none",
     ...usageLogFields(requestUsageRecord(result)),
-    ...optionalNumberField("max_context_used_pct", maxContextUsedPct),
-  });
-  const output = extractValidatedOutput(result);
-  logAiSdkIoOutput({ options, output, profileName, result });
-  return output;
+    ...optionalNumberField("max_context_used_pct", runtime.state.maxContextUsedPct),
+  };
+}
+
+function activeToolsInput(request: AiSdkRequest): object {
+  return request.activeTools ? { activeTools: request.activeTools as never } : {};
+}
+
+function promptInput(request: AiSdkRequest): { messages: ModelMessage[] } | { prompt: string } {
+  return request.messages ? { messages: request.messages } : { prompt: request.prompt || "" };
+}
+
+function toolChoiceInput(request: AiSdkRequest): object {
+  return request.toolChoice ? { toolChoice: request.toolChoice as never } : {};
 }
 
 function primaryTurnBudgetFor(options: RunAiStageOptions): number {
@@ -220,6 +348,65 @@ function primaryTurnBudgetFor(options: RunAiStageOptions): number {
     return options.maxTurns;
   }
   return options.maxTurns - OUTPUT_FINALIZATION_RESERVED_TURNS;
+}
+
+async function validatedOutputOrError(
+  result: AiResult,
+  options: RunAiStageOptions,
+): Promise<{ ok: true; output: string } | { error: unknown; ok: false }> {
+  try {
+    const output = outputValidatorContentFromSteps(result.steps || []);
+    if (!output) throw new Error("AI response did not call output_validator");
+    await validateOutput({ content: output, schema: options.schema, schemaId: options.schemaId });
+    return { ok: true, output };
+  } catch (error) {
+    return { error, ok: false };
+  }
+}
+
+function hasSchemaValidOutputValidatorCall(options: RunAiStageOptions) {
+  return async ({ steps }: { steps: AiStep[] }): Promise<boolean> => {
+    const content = outputValidatorContentFromSteps(steps);
+    if (!content) return false;
+    try {
+      await validateOutput({ content, schema: options.schema, schemaId: options.schemaId });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+}
+
+function continuationReason(result: AiResult, primaryTurnBudget: number): string {
+  return (result.steps?.length || 0) >= primaryTurnBudget
+    ? "primary_turn_budget"
+    : "structured_output_failure";
+}
+
+function continuationMessages(options: {
+  instruction: string;
+  prompt: string;
+  result: AiResult;
+}): ModelMessage[] {
+  return [
+    { content: options.prompt, role: "user" },
+    ...responseMessages(options.result),
+    { content: options.instruction, role: "user" },
+  ];
+}
+
+function responseMessages(result: AiResult): ModelMessage[] {
+  if (result.response?.messages?.length) return result.response.messages;
+  return [{ content: result.text || "No final assistant text was returned.", role: "assistant" }];
+}
+
+function structuredOutputContinuationInstruction(error: unknown): string {
+  return [
+    "The primary stage turn budget is exhausted or the previous final output was not schema-valid.",
+    "Stop repository work now. Summarize the completed work and return the required structured result.",
+    "Call output_validator with the exact final JSON. If validation fails, fix every reported error and call output_validator again.",
+    `Previous validation error: ${summarizeError(error)}`,
+  ].join("\n");
 }
 
 function usageLogFields(usage: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -249,111 +436,6 @@ function usageLogFields(usage: Record<string, unknown> | undefined): Record<stri
 
 function requestUsageRecord(result: AiResult): Record<string, unknown> | undefined {
   return recordValue(result.totalUsage) || recordValue(result.usage);
-}
-
-function logAiSdkIoInput(options: {
-  options: RunAiStageOptions;
-  profile: Record<string, unknown>;
-  profileName: string;
-  tools: ToolSet;
-}): void {
-  options.options.logger?.raw?.(
-    aiIoLogGroup({
-      body: [
-        fieldLine("adapter", "ai-sdk-agentool"),
-        fieldLine("profile", options.profileName),
-        fieldLine("model", modelName(options.profile)),
-        fieldLine("schema_id", options.options.schemaId),
-        fieldLine("max_turns", String(options.options.maxTurns)),
-        fieldLine("tools", Object.keys(options.tools).join(",")),
-        section("system", options.options.system),
-        section("prompt", options.options.prompt),
-      ].join("\n"),
-      label: "input",
-      options: options.options,
-      profileName: options.profileName,
-    }),
-  );
-}
-
-function logAiSdkIoOutput(options: {
-  options: RunAiStageOptions;
-  output: string;
-  profileName: string;
-  result: AiResult;
-}): void {
-  options.options.logger?.raw?.(
-    aiIoLogGroup({
-      body: [
-        fieldLine("raw_text_chars", String(options.result.text.length)),
-        fieldLine("extracted_json_chars", String(options.output.length)),
-        section("raw_text", options.result.text),
-        section("extracted_json", options.output),
-      ].join("\n"),
-      label: "output",
-      options: options.options,
-      profileName: options.profileName,
-    }),
-  );
-}
-
-function logAiSdkAssistantStep(options: {
-  event: unknown;
-  options: RunAiStageOptions;
-  profileName: string;
-  step: number;
-}): void {
-  const text = stringField(options.event, "text") || "";
-  const reasoningText = stringField(options.event, "reasoningText") || "";
-  if (!text && !reasoningText) return;
-
-  options.options.logger?.raw?.(
-    aiSdkLogGroup({
-      body: [
-        fieldLine("step", String(options.step)),
-        fieldLine("assistant_text_chars", String(text.length)),
-        fieldLine("assistant_reasoning_chars", String(reasoningText.length)),
-        section("assistant_text", text),
-        section("assistant_reasoning", reasoningText),
-      ].join("\n"),
-      label: "assistant",
-      options: options.options,
-      profileName: options.profileName,
-    }),
-  );
-}
-
-function aiIoLogGroup(options: {
-  body: string;
-  label: "input" | "output";
-  options: RunAiStageOptions;
-  profileName: string;
-}): string {
-  return aiSdkLogGroup(options);
-}
-
-function aiSdkLogGroup(options: {
-  body: string;
-  label: "assistant" | "input" | "output";
-  options: RunAiStageOptions;
-  profileName: string;
-}): string {
-  const title = `[git-vibe] ${options.options.stage} ai-sdk-agentool ${options.label} profile=${options.profileName} schema=${options.options.schemaId}`;
-  return `::group::${title}\n${options.body}\n::endgroup::`;
-}
-
-function fieldLine(name: string, value: string): string {
-  return `${name}: ${value}`;
-}
-
-function section(name: string, value: string): string {
-  return `--- ${name} ---\n${boundedAiIoText(value)}`;
-}
-
-function boundedAiIoText(value: string): string {
-  const redacted = redactLogText(value);
-  if (redacted.length <= 200) return redacted;
-  return `${redacted.slice(0, 200)}\n... git-vibe ai-sdk-agentool IO section truncated at 200 chars ...`;
 }
 
 function usageRecord(event: unknown): Record<string, unknown> | undefined {
@@ -585,40 +667,4 @@ function optionalProviderBundleValue(source: unknown, sourcePath: string): strin
   if (source === undefined) return undefined;
   const value = bundleValueFromSource(source, sourcePath);
   return value || undefined;
-}
-
-export function extractValidatedOutput(result: AiResult): string {
-  return outputValidatorContent(result) || extractJson(result.text);
-}
-
-function outputValidatorContent(result: AiResult): string | undefined {
-  const calls = result.steps?.flatMap((step) => step.toolCalls || []) || [];
-  for (let index = calls.length - 1; index >= 0; index -= 1) {
-    const call = calls[index];
-    if (call.toolName !== "output_validator") continue;
-
-    const input = call.input;
-    if (!input || typeof input !== "object") continue;
-
-    const content = (input as Record<string, unknown>).content;
-    if (typeof content === "string") {
-      return content.trim();
-    }
-  }
-
-  return undefined;
-}
-
-function extractJson(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    return trimmed;
-  }
-
-  const match = trimmed.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-  if (match) {
-    return match[1].trim();
-  }
-
-  throw new Error("AI response did not contain a JSON object");
 }

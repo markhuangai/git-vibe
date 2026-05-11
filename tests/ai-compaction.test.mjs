@@ -232,7 +232,11 @@ describe("AI context compaction stage wiring", () => {
       });
       expect(prepared).toEqual({ messages: compacted });
       request.onStepFinish({ finishReason: "stop", toolCalls: [] });
-      return { steps: [], text: '{"stage":"investigate","status":"completed"}' };
+      const content = '{"stage":"investigate","status":"completed"}';
+      return {
+        steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
+        text: content,
+      };
     });
 
     await expect(runAiStage(aiSdkOptions({ logger }))).resolves.toBe(
