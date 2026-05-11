@@ -101,6 +101,26 @@ AI result envelope:
 - System and user prompt templates live under `prompts/<stage>/`. User prompts use XML sections for GitHub context, repository context, stage contract, and output schema.
 - Stage output contracts live under `schemas/stages/` as JSON Schema files. Runner code binds each schema to `createOutputValidator` from `agentool/output-validator` and validates the final JSON again before deterministic writes.
 
+## Repository Prompt Additions
+
+Consumer repositories can add optional stage-specific prompt text without overriding GitVibe's built-in stage contracts, schemas, access limits, or deterministic write behavior.
+
+Repository prompt addition paths:
+
+- `.git-vibe/prompts/<stage>/system.md`: appended to the rendered system prompt for that stage.
+- `.git-vibe/prompts/<stage>/user.md`: appended to the rendered user prompt for that stage.
+
+The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `materialize`, `summarize`, `validate`).
+
+When an addition file exists, GitVibe appends its contents inside an explicit `<repository_prompt_addition>` XML section after the bundled GitVibe-controlled prompt content. The XML section makes clear that the content is repository-provided additive prompt text. GitVibe does not emit the XML section when the matching file is missing or empty.
+
+Rules:
+
+- Repository prompt additions are additive only. They cannot replace or weaken GitVibe system rules, stage contracts, schema requirements, access mode rules, allowed tools, GitHub write safety, command syntax, or output validation.
+- Missing files are treated as absent optional additions and do not add empty XML tags.
+- GitVibe reads additions from the consumer workspace `.git-vibe/prompts` path, not from the action asset root.
+- Non-ENOENT read errors are surfaced so broken configuration is not hidden.
+
 ## Provider Strategy
 
 - v1 should implement `ai-sdk-agentool` using Vercel AI SDK, `agentool` 1.4.x, provider SDKs, and Zod schemas.

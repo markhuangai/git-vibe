@@ -71,6 +71,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const schema = loadStageSchema(definition.schemaFile);
   const prompts = renderPrompts({
     context,
+    cwd: options.cwd,
     outputSchema: schema,
     promptDir: definition.promptDir,
     repositoryContext: repositoryContext(options.cwd, branchState.branchState),
