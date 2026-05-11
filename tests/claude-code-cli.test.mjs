@@ -120,8 +120,9 @@ describe("Claude Code CLI adapter", () => {
       expect.stringContaining("ai.claude.tool input=file_path=src/index.ts tool=Read"),
     );
     expect(process.stdout.write).toHaveBeenCalledWith(
-      expect.stringContaining("ai.claude.tool_result chars=6 text=1 code"),
+      expect.stringContaining("ai.claude.tool_result chars=6"),
     );
+    expect(process.stdout.write).not.toHaveBeenCalledWith(expect.stringContaining("text=1 code"));
     expect(process.stdout.write).toHaveBeenCalledWith(
       expect.stringContaining("ai.claude.result duration_ms=12 reason=completed"),
     );

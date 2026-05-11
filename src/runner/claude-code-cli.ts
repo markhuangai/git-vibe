@@ -211,7 +211,6 @@ function logClaudeUserEvent(event: Record<string, unknown>, logger: StageLogger 
     logClaudeProgress(logger, "ai.claude.tool_result", {
       chars: content.length,
       error: item.is_error === true || undefined,
-      text: compactText(content),
     });
   }
 }
