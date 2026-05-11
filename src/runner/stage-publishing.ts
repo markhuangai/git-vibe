@@ -559,9 +559,10 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
       ? [
           gitVibeLabels.investigating.name,
           gitVibeLabels.inProgress.name,
+          gitVibeLabels.approved.name,
           gitVibeLabels.readyForApproval.name,
         ]
-      : [gitVibeLabels.inProgress.name];
+      : [gitVibeLabels.inProgress.name, gitVibeLabels.approved.name];
   }
   if (label === gitVibeLabels.inProgress.name) {
     return isPullRequest

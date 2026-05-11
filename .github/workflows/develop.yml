@@ -183,6 +183,34 @@ jobs:
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
 
+  implementation-blocked-cleanup:
+    runs-on: ${{ inputs.runner }}
+    needs: implement
+    if: always() && (needs.implement.result == 'failure' || needs.implement.result == 'cancelled')
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./.git-vibe/actions/mark-blocked
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          dry-run: ${{ inputs.dry-run }}
+
   review-matrix:
     runs-on: ${{ inputs.runner }}
     needs: implement

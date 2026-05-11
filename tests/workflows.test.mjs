@@ -37,6 +37,7 @@ const actionFiles = [
   "create-pr/action.yml",
   "implement/action.yml",
   "investigate/action.yml",
+  "mark-blocked/action.yml",
   "materialize/action.yml",
   "review-matrix/action.yml",
   "summarize/action.yml",
@@ -287,10 +288,16 @@ describe("GitVibe action runtime setup", () => {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
       const setupStep = content.indexOf("dist/actions/setup-ai-cli.js");
-      const runStep = content.indexOf("dist/actions/run-action.js");
+      const runEntrypoint =
+        file === "mark-blocked/action.yml"
+          ? "dist/actions/mark-blocked.js"
+          : "dist/actions/run-action.js";
+      const runStep = content.indexOf(runEntrypoint);
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
-      expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
+      if (file !== "mark-blocked/action.yml") {
+        expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
+      }
       expect(content, `${file} should prefer Corepack when available`).toContain(
         "command -v corepack",
       );
@@ -307,8 +314,12 @@ describe("GitVibe action runtime setup", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
-      expect(setupStep, `${file} should set up CLIs before stage execution`).toBeLessThan(runStep);
-      expect(buildStep, `${file} should build before setting up CLIs`).toBeLessThan(setupStep);
+      if (file !== "mark-blocked/action.yml") {
+        expect(setupStep, `${file} should set up CLIs before stage execution`).toBeLessThan(
+          runStep,
+        );
+        expect(buildStep, `${file} should build before setting up CLIs`).toBeLessThan(setupStep);
+      }
     }
   });
 
@@ -343,6 +354,13 @@ describe("GitVibe workflow numeric inputs", () => {
       const workflow = readWorkflow(file);
       for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
         const timeout = job["timeout-minutes"];
+        if (
+          file === ".github/workflows/develop.yml" &&
+          jobName === "implementation-blocked-cleanup"
+        ) {
+          expect(timeout).toBe(10);
+          continue;
+        }
         expect(timeout, `${file} ${jobName} timeout uses fromJSON`).toMatch(
           /^\$\{\{ fromJSON\(inputs\.[a-z_]+_minutes\) \}\}$/,
         );
@@ -427,6 +445,7 @@ describe("GitVibe develop workflow", () => {
   it("starts at implementation after issue-label investigation approval", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
     const implement = workflow.jobs?.implement;
+    const cleanup = workflow.jobs?.["implementation-blocked-cleanup"];
     const reviewMatrix = workflow.jobs?.["review-matrix"];
     const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
     const createPr = workflow.jobs?.["create-pr"];
@@ -450,6 +469,19 @@ describe("GitVibe develop workflow", () => {
     expect(
       implement?.steps?.find((step) => step.uses === "./.git-vibe/actions/implement")?.with,
     ).not.toHaveProperty("handoff-dir");
+    expect(cleanup).toMatchObject({
+      if: "always() && (needs.implement.result == 'failure' || needs.implement.result == 'cancelled')",
+      needs: "implement",
+      permissions: expect.objectContaining({ issues: "write" }),
+    });
+    expect(
+      cleanup?.steps?.find((step) => step.uses === "./.git-vibe/actions/mark-blocked"),
+    ).toMatchObject({
+      with: expect.objectContaining({
+        "dry-run": "${{ inputs.dry-run }}",
+        "issue-number": "${{ inputs.issue-number }}",
+      }),
+    });
     expect(reviewMatrix).toMatchObject({
       needs: "implement",
       outputs: expect.objectContaining({

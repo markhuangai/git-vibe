@@ -5,7 +5,7 @@ import { build } from "esbuild";
 
 mkdirSync("dist/actions", { recursive: true });
 
-for (const action of ["run-action", "setup-ai-cli"]) {
+for (const action of ["mark-blocked", "run-action", "setup-ai-cli"]) {
   const launcherFile = `dist/actions/${action}.js`;
   const bundleFile = `dist/actions/${action}.cjs`;
 

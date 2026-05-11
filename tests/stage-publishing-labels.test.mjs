@@ -69,6 +69,7 @@ describe("stage label investigation blocking", () => {
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
       ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
       ["POST", "/repos/example/repo/issues/12/labels"],
     ]);
     expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:blocked"]);
