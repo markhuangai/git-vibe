@@ -270,12 +270,12 @@ describe("server action discussion and issue labels", () => {
     removeIssueLabel.mockRejectedValueOnce(new Error("404 Not Found"));
 
     await expect(
-      actions.removeIssueLabelIfPresent(context, "12", "git-vibe:ready-for-approval"),
+      actions.removeIssueLabelIfPresent(context, "12", "gvi:ready-for-approval"),
     ).resolves.toBeUndefined();
 
     removeIssueLabel.mockRejectedValueOnce(new Error("permission denied"));
     await expect(
-      actions.removeIssueLabelIfPresent(context, "12", "git-vibe:ready-for-approval"),
+      actions.removeIssueLabelIfPresent(context, "12", "gvi:ready-for-approval"),
     ).rejects.toThrow("permission denied");
   });
 });
@@ -296,13 +296,15 @@ describe("server action pull request labels", () => {
 
     expect(context.client.request).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: { labels: ["git-vibe:pr-approved"] },
+        body: { labels: ["gvi:pr-approved"] },
         path: "/repos/example/repo/issues/5/labels",
       }),
     );
     expect(removeIssueLabel.mock.calls.map(([request]) => request)).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ issueNumber: "5", label: "gvi:ready-for-approval" }),
         expect.objectContaining({ issueNumber: "5", label: "git-vibe:ready-for-approval" }),
+        expect.objectContaining({ issueNumber: "12", label: "gvi:pr-opened" }),
         expect.objectContaining({ issueNumber: "12", label: "git-vibe:pr-opened" }),
       ]),
     );
@@ -333,12 +335,12 @@ describe("server action formatting helpers", () => {
     expect(actions.commandWorkflow("investigate")).toBe("investigate.yml");
     expect(actions.commandWorkflow("unknown")).toBeNull();
     expect(
-      actions.issueHasLabel(
-        { labels: [{ name: "git-vibe:investigated" }] },
-        "git-vibe:investigated",
-      ),
+      actions.issueHasLabel({ labels: [{ name: "gvi:investigated" }] }, "gvi:investigated"),
     ).toBe(true);
-    expect(actions.issueHasLabel(undefined, "git-vibe:investigated")).toBe(false);
+    expect(
+      actions.issueHasLabel({ labels: [{ name: "git-vibe:investigated" }] }, "gvi:investigated"),
+    ).toBe(true);
+    expect(actions.issueHasLabel(undefined, "gvi:investigated")).toBe(false);
     expect(actions.labelReason("git-vibe:validate")).toContain("git-vibe:validate");
     expect(actions.protectedLabelRejectionBody(actionContext(), "git-vibe:approved")).toContain(
       "@alice",

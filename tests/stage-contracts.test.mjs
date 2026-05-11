@@ -277,7 +277,7 @@ describe("stage output validation", () => {
           branch: "git-vibe/123",
           comment_body: "Ready for review.",
           findings: [],
-          next_state: "git-vibe:pr-opened",
+          next_state: "gvi:pr-opened",
           pr_body: "Refs #123",
           pr_title: "GitVibe: Title",
           references: [],

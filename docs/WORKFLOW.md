@@ -23,7 +23,7 @@ stateDiagram-v2
   BugNeedsContext --> BugInvestigation: answers plus investigate label
   BugInvestigation --> ImplementationIssue: ready, add investigated label
 
-  ImplementationIssue --> Development: protected approved label after investigated
+  ImplementationIssue --> Development: protected approved label after investigation
   ReviewFixIssue --> Development: internal review-fix marker
 
   Development --> Implementation: branch, commits, validation passes
@@ -46,8 +46,8 @@ stateDiagram-v2
 
 - Bugs remain issues.
 - New bug issues do not automatically start AI work by default.
-- Bug fixing is always gated: investigate first, post findings, ask for expected behavior, then approve implementation after `git-vibe:investigated` is present.
-- If `git-vibe:approved` is added to an issue before `git-vibe:investigated`, GitVibe removes `git-vibe:approved` and comments with the required investigation step.
+- Bug fixing is always gated: investigate first, post findings, ask for expected behavior, then approve implementation after `gvi:investigated` is present.
+- If `git-vibe:approved` is added to an issue before `gvi:investigated`, GitVibe removes `git-vibe:approved` and comments with the required investigation step.
 - If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
@@ -55,7 +55,7 @@ stateDiagram-v2
   commands and protected labels.
 - Accepted comment commands from admins and collaborators receive a `rocket` reaction before GitVibe dispatches the workflow. If the reaction cannot be added, GitVibe posts a queued workflow comment as the visible fallback.
 - Status updates prefer reactions, then labels, then comments. The issue
-  `git-vibe:investigate` dispatch adds `git-vibe:investigating` instead of a
+  `git-vibe:investigate` dispatch adds `gvi:investigating` instead of a
   queued comment; label-backed and review-backed dispatches include the exact workflow run URL
   when GitHub returns it. Runner stages remove prior transient queued/running
   GitVibe status comments for the same artifact before posting the next running
@@ -87,72 +87,72 @@ Active label flow:
 
 ```mermaid
 flowchart TD
-  FeatureIssue["Feature issue opened"] -->|add| NeedsDiscussion["git-vibe:needs-discussion"]
+  FeatureIssue["Feature issue opened"] -->|add| NeedsDiscussion["gvi:needs-discussion"]
   NeedsDiscussion -->|create linked discussion, comment, close issue| ClosedFeatureIssue["original feature issue closed"]
   DiscussionApproved["Discussion labeled git-vibe:approved"] -->|dispatch materialize.yml| Materialize["materialize stage"]
-  Materialize -->|create implementation issue with| Story["git-vibe:story"]
+  Materialize -->|create implementation issue with| Story["gvi:story"]
   Materialize -->|comment with implementation issue link, close discussion| ClosedDiscussion["source discussion closed"]
 
   IssueValidate["Issue labeled git-vibe:validate"] -->|dispatch validate.yml, remove trigger label| ValidateIssue["validate issue"]
   DiscussionValidate["Discussion labeled git-vibe:validate"] -->|dispatch validate.yml, remove trigger label| ValidateDiscussion["validate discussion"]
-  ValidateIssue -->|ready for approval| ReadyForApproval["git-vibe:ready-for-approval"]
+  ValidateIssue -->|ready for approval| ReadyForApproval["gvi:ready-for-approval"]
 
-  IssueInvestigate["Issue labeled git-vibe:investigate"] -->|dispatch investigate.yml, remove trigger, add| Investigating["git-vibe:investigating"]
-  Investigating -->|ready investigation posted, remove investigating, add| Investigated["git-vibe:investigated"]
-  Investigating -->|blocked or not-ready investigation, add blocked, remove investigating| Blocked["git-vibe:blocked"]
-  ApprovedTooEarly["Issue labeled git-vibe:approved before git-vibe:investigated"] -->|comment and remove| ApprovedViolation["git-vibe:approved"]
+  IssueInvestigate["Issue labeled git-vibe:investigate"] -->|dispatch investigate.yml, remove trigger, add| Investigating["gvi:investigating"]
+  Investigating -->|ready investigation posted, remove investigating, add| Investigated["gvi:investigated"]
+  Investigating -->|blocked or not-ready investigation, add blocked, remove investigating| Blocked["gvi:blocked"]
+  ApprovedTooEarly["Issue labeled git-vibe:approved before gvi:investigated"] -->|comment and remove| ApprovedViolation["git-vibe:approved"]
   Investigated -->|issue labeled git-vibe:approved, dispatch develop.yml| Develop["develop.yml"]
-  Develop -->|implement stage| InProgress["git-vibe:in-progress"]
+  Develop -->|implement stage| InProgress["gvi:in-progress"]
 
-  InProgress -->|create-pr completed| PrOpened["git-vibe:pr-opened"]
-  PrOpened -->|remove| InProgressRemoved["git-vibe:in-progress + git-vibe:investigated"]
-  PrOpened -->|add label to PR| PrReady["PR git-vibe:ready-for-approval"]
+  InProgress -->|create-pr completed| PrOpened["gvi:pr-opened"]
+  PrOpened -->|remove| InProgressRemoved["gvi:in-progress + gvi:investigated"]
+  PrOpened -->|add label to PR| PrReady["PR gvi:ready-for-approval"]
 
-  PrFeedback["address-feedback or trusted changes-requested review"] -->|remove ready, add| PrInvestigating["PR git-vibe:investigating"]
+  PrFeedback["address-feedback or trusted changes-requested review"] -->|remove ready, add| PrInvestigating["PR gvi:investigating"]
   PrInvestigating -->|no fixes needed, reply to feedback| PrReady
-  PrInvestigating -->|fixes required| PrInvestigated["PR git-vibe:investigated"]
-  PrInvestigating -->|questions or unsafe feedback| PrBlocked["PR git-vibe:blocked"]
-  PrInvestigated -->|feedback implementation starts| PrInProgress["PR git-vibe:in-progress"]
+  PrInvestigating -->|fixes required| PrInvestigated["PR gvi:investigated"]
+  PrInvestigating -->|questions or unsafe feedback| PrBlocked["PR gvi:blocked"]
+  PrInvestigated -->|feedback implementation starts| PrInProgress["PR gvi:in-progress"]
   PrInProgress -->|review-matrix passed, remove investigated| PrReady
   PrInProgress -->|review-matrix changes required| PrBlocked
 
-  PrApprovedEvent["Trusted PR approval submitted"] -->|add to PR| PrApproved["PR git-vibe:pr-approved"]
+  PrApprovedEvent["Trusted PR approval submitted"] -->|add to PR| PrApproved["PR gvi:pr-approved"]
   PrApprovedEvent -->|remove stale source label| ApprovalCleanup["git-vibe:approved"]
 
   PrMergedEvent["GitVibe PR merged"] -->|remove ready, add to PR| PrApproved
-  PrMergedEvent -->|add to source issue| PrMerged["git-vibe:pr-merged"]
-  PrMergedEvent -->|remove stale source labels| MergeCleanup["git-vibe:approved + git-vibe:pr-opened + git-vibe:pr-approved"]
+  PrMergedEvent -->|add to source issue| PrMerged["gvi:pr-merged"]
+  PrMergedEvent -->|remove stale source labels| MergeCleanup["git-vibe:approved + gvi:pr-opened + gvi:pr-approved"]
 
-  ReviewMatrix["review-matrix requires fixes"] -->|create review-fix issue with hidden marker and| ReviewFix["gvi:review-fix"]
+  ReviewMatrix["review-matrix requires fixes"] -->|create issue or PR marker and| ReviewFix["gvi:review-fix"]
 ```
 
-Active public labels:
+Active public trigger labels:
 
 ```text
-git-vibe:needs-discussion
-git-vibe:story
 git-vibe:validate
-git-vibe:ready-for-approval
-git-vibe:approved
 git-vibe:investigate
-git-vibe:investigated
-git-vibe:investigating
-git-vibe:blocked
-git-vibe:in-progress
-git-vibe:pr-opened
-git-vibe:pr-approved
-git-vibe:pr-merged
+git-vibe:approved
 ```
 
 Active internal runtime labels:
 
 ```text
+gvi:needs-discussion
+gvi:story
+gvi:ready-for-approval
+gvi:investigated
+gvi:investigating
+gvi:blocked
+gvi:in-progress
+gvi:pr-opened
+gvi:pr-approved
+gvi:pr-merged
 gvi:review-fix
 ```
 
-`gvi:` labels are private GitVibe runtime labels. Maintainers should not add them
-manually; GitVibe creates missing managed labels on app startup and on the first
-webhook seen for a repository.
+`gvi:` labels are private GitVibe runtime labels. Maintainers should not add
+them manually; GitVibe creates missing managed labels on app startup and on the
+first webhook seen for a repository.
 
 ### Fine-Grained PAT Permissions
 
@@ -176,13 +176,15 @@ then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
 secret. Every other listed permission needs read/write access.
 
 GitHub labels are not natively protected per label. GitVibe must treat public
-automation labels and internal `gvi:` labels as protected by policy: only
+trigger labels and internal `gvi:` labels as protected by policy: only
 configured admin/collaborator roles may add or remove them, and the server must
 verify the webhook sender on every relevant label event before dispatching
-automation. If an unauthorized actor adds a protected `git-vibe:*` label,
-GitVibe removes the label, posts an audit comment, and does not start the
-pipeline. If anyone adds `gvi:review-fix` without a valid GitVibe hidden marker,
-GitVibe removes it.
+automation. If an unauthorized actor adds a protected `git-vibe:*` or `gvi:*`
+label, GitVibe removes the label, posts an audit comment, and does not start the
+pipeline. Known `gvi:*` runtime labels never dispatch workflows from label
+events. If anyone adds `gvi:review-fix` without a valid GitVibe hidden marker,
+GitVibe removes it. Issue follow-ups use `kind=issue`; pull request feedback
+retries use `kind=pull-request`.
 
 ## Pipeline
 
@@ -252,14 +254,14 @@ without changing code.
 Investigation is completed before the `develop` workflow starts. A trusted actor
 can add `git-vibe:investigate` or run `/git-vibe investigate` to dispatch
 `investigate.yml`; the label path removes `git-vibe:investigate` and adds
-`git-vibe:investigating` after dispatch. A not-ready investigation posts its
-findings and blocking questions, adds `git-vibe:blocked`, removes
-`git-vibe:investigating`, and waits for maintainer answers. Maintainers answer
+`gvi:investigating` after dispatch. A not-ready investigation posts its
+findings and blocking questions, adds `gvi:blocked`, removes
+`gvi:investigating`, and waits for maintainer answers. Maintainers answer
 the questions and add `git-vibe:investigate` to retry. A ready investigation
-posts the investigation result to the issue, removes `git-vibe:investigating`,
-and adds `git-vibe:investigated`.
+posts the investigation result to the issue, removes `gvi:investigating`,
+and adds `gvi:investigated`.
 
-For issues, `git-vibe:approved` is valid only after `git-vibe:investigated` is
+For issues, `git-vibe:approved` is valid only after `gvi:investigated` is
 present. If approval is added too early, GitVibe removes `git-vibe:approved` and
 comments with the required investigation step. The later `develop.yml`
 implementation run reads the posted investigation result from the issue
@@ -281,7 +283,7 @@ sequenceDiagram
   alt label trigger
     Maint->>Issue: Apply git-vibe:investigate
     App->>AI: Dispatch investigation-only workflow
-    App->>Issue: Replace git-vibe:investigate with git-vibe:investigating
+    App->>Issue: Replace git-vibe:investigate with gvi:investigating
   else command trigger
     Maint->>Issue: /git-vibe investigate
     App->>AI: Dispatch investigation-only workflow
@@ -290,11 +292,11 @@ sequenceDiagram
 
   alt investigation is ready
     AI->>Issue: Post ready investigation and implementation plan
-    App->>Issue: Remove git-vibe:investigating and add git-vibe:investigated
+    App->>Issue: Remove gvi:investigating and add gvi:investigated
     Maint->>Issue: Apply git-vibe:approved label
     App->>AI: Dispatch develop workflow
   else investigation is blocked
-    App->>Issue: Add git-vibe:blocked and remove git-vibe:investigating
+    App->>Issue: Add gvi:blocked and remove gvi:investigating
     Maint->>Issue: Answer blocking questions
     Maint->>Issue: Re-apply git-vibe:investigate
   end
@@ -385,18 +387,23 @@ sequenceDiagram
   App->>App: Validate actor permission
   App->>PR: Add rocket reaction for command, or queued comment for review/fallback
   App->>WF: Dispatch feedback workflow with source-comment metadata
-  WF->>PR: Remove ready-for-approval and add investigating
+  WF->>PR: Remove gvi:ready-for-approval and add gvi:investigating
   WF->>Agent: Provide PR, source issue, linked discussion, parent issue, sub-issue, and open review-thread context
   Agent->>PR: Publish feedback investigation and reply to false-positive or already-addressed review comments
   alt Fixes required
-    WF->>PR: Add investigated, then in-progress
+    WF->>PR: Add gvi:investigated, then gvi:in-progress
     Agent->>PR: Push fixes to the existing PR head branch
     WF->>Agent: Run review-matrix on the updated PR branch
-    WF->>PR: Remove investigated and add ready-for-approval after review passes
+    alt Review passes
+      WF->>PR: Remove gvi:review-fix and add gvi:ready-for-approval
+    else Review still requires changes
+      WF->>PR: Post review result, add gvi:blocked and gvi:review-fix
+      WF->>App: Queue another address-feedback.yml run, max 3
+    end
   else No fixes needed
-    WF->>PR: Restore ready-for-approval without implementation
+    WF->>PR: Restore gvi:ready-for-approval without implementation
   else Blocked
-    WF->>PR: Add blocked and wait for maintainer answers
+    WF->>PR: Add gvi:blocked and wait for maintainer answers
   end
 ```
 
@@ -413,15 +420,16 @@ only for actionable feedback.
 GitVibe must make every generated artifact discoverable from the others.
 
 - When a feature issue is converted to a discussion, the closed issue gets a comment linking the discussion, and the discussion body or first bot comment links the original issue.
-- When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `git-vibe:story`, and the discussion gets a comment linking the implementation issue.
+- When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `gvi:story`, and the discussion gets a comment linking the implementation issue.
 - Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering surface. Discussions use threaded replies; issue, pull request conversation, and submitted-review triggers use flat comments with an explicit source link. Pull request review-comment replies remain supported for existing metadata.
 - When the app dispatches automation from a comment command, a successful `rocket` reaction is the acknowledgement and GitVibe does not also post a queued comment. Protected label dispatches, trusted review dispatches, and failed command reactions still use queued comments with hidden metadata and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact. These queued/running comments are transient: GitVibe deletes matching prior transient status comments and keeps durable result, traceability, investigation, and validation comments.
 - Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
-- When a pull request is opened by GitVibe, the source issue gets `git-vibe:pr-opened`, stale source `git-vibe:in-progress`, `git-vibe:investigated`, and `git-vibe:ready-for-approval` labels are removed, and the PR gets `git-vibe:ready-for-approval`.
-- During PR feedback handling, the PR owns one active workflow-state label at a time among `git-vibe:investigating`, `git-vibe:investigated`, `git-vibe:in-progress`, `git-vibe:blocked`, and `git-vibe:ready-for-approval`; the source issue remains at `git-vibe:pr-opened`.
-- When a trusted reviewer approves a GitVibe pull request, the PR gets `git-vibe:pr-approved`, PR `git-vibe:ready-for-approval` is removed, and stale source `git-vibe:approved` is removed.
-- When a GitVibe pull request is merged before default-branch closure, the PR gets `git-vibe:pr-approved`, PR `git-vibe:ready-for-approval` is removed, the source issue gets `git-vibe:pr-merged`, and stale source workflow state labels are removed.
+- When a pull request is opened by GitVibe, the source issue gets `gvi:pr-opened`, stale source `gvi:in-progress`, `gvi:investigated`, and `gvi:ready-for-approval` labels are removed, and the PR gets `gvi:ready-for-approval`.
+- During PR feedback handling, the PR owns one active workflow-state label at a time among `gvi:investigating`, `gvi:investigated`, `gvi:in-progress`, `gvi:blocked`, and `gvi:ready-for-approval`; the source issue remains at `gvi:pr-opened`.
+- When PR feedback review still returns `changes-required`, the PR gets a durable review-matrix result comment, `gvi:blocked`, and PR-scoped `gvi:review-fix`; GitVibe queues another `address-feedback.yml` run until the PR has three review-fix markers.
+- When a trusted reviewer approves a GitVibe pull request, the PR gets `gvi:pr-approved`, PR `gvi:ready-for-approval` is removed, and stale source `git-vibe:approved` is removed.
+- When a GitVibe pull request is merged before default-branch closure, the PR gets `gvi:pr-approved`, PR `gvi:ready-for-approval` is removed, the source issue gets `gvi:pr-merged`, and stale source workflow state labels are removed.
 - The source issue gets a comment linking the PR and latest workflow run.
 - PR feedback runs add comments linking the feedback workflow run, changed commits, and any review comments that were skipped with rationale.
 - Prefer GitHub-native references (`#123`, full issue/discussion/PR URLs, and workflow run URLs) so GitHub creates backlinks and rich references where supported; use explicit bot comments where GitHub does not create a first-class link automatically.

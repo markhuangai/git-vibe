@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { testCommandsFor } from "./config.js";
 import { addDiscussionComment, closeDiscussion } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
-import { gitVibeLabels } from "../shared/labels.js";
+import { equivalentGitVibeLabelNames, gitVibeLabels } from "../shared/labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import {
   ensureGitIdentity,
@@ -29,6 +29,7 @@ import { branchForWriteStage, runnerBaseBranch, type BaseBranchState } from "./s
 import { runValidationCommand, validationRepairAttemptsFor } from "./validation.js";
 import type { ValidationCommandFailure } from "./validation.js";
 import { implementationIssueBody, reviewFixTraceFromBody } from "../shared/traceability.js";
+import { maybeHandlePullRequestReviewFixRequired } from "./pr-feedback-review-fix.js";
 import type {
   ContextPacket,
   GitVibeConfig,
@@ -65,6 +66,11 @@ export async function applyDeterministicWrites(
   if (options.result.status !== "completed") return publishBlockedResult(options);
   const reviewFixResult = await maybeHandleReviewFixRequired(options);
   if (reviewFixResult) return reviewFixResult;
+  const pullRequestReviewFixResult = await maybeHandlePullRequestReviewFixRequired({
+    ...options,
+    runner: options.options,
+  });
+  if (pullRequestReviewFixResult) return pullRequestReviewFixResult;
 
   if (!isWriteStage(options.options.stage)) {
     return publishReadOnlyResult(options);
@@ -214,14 +220,14 @@ export async function markPullRequestFeedbackInvestigationStarted(options: {
   options: RunnerOptions;
 }): Promise<void> {
   if (options.context.artifact.type !== "pull-request") return;
-  await removeRunnerIssueLabelIfPresent({
+  await removeEquivalentRunnerIssueLabels({
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.readyForApproval.name,
     logger: options.logger,
     runner: options.options,
   });
-  await removeRunnerIssueLabelIfPresent({
+  await removeEquivalentRunnerIssueLabels({
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.blocked.name,
@@ -637,6 +643,18 @@ async function removeRunnerIssueLabelIfPresent(options: {
       label: options.label,
     });
     throw error;
+  }
+}
+
+async function removeEquivalentRunnerIssueLabels(options: {
+  client: GitHubClient;
+  issueNumber: string;
+  label: string;
+  logger: StageLogger;
+  runner: RunnerOptions;
+}): Promise<void> {
+  for (const label of equivalentGitVibeLabelNames(options.label)) {
+    await removeRunnerIssueLabelIfPresent({ ...options, label });
   }
 }
 

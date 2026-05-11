@@ -275,6 +275,14 @@ describe("pull request feedback investigation labels", () => {
         path: "/repos/example/repo/issues/12/labels",
       }),
     );
+    expect(client.request.mock.calls.map(([request]) => request.path)).toEqual(
+      expect.arrayContaining([
+        "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
+      ]),
+    );
   });
 
   it("rethrows unexpected label removal failures", async () => {

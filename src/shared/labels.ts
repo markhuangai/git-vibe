@@ -13,12 +13,12 @@ export const gitVibeLabels = {
   blocked: {
     color: "D93F0B",
     description: "GitVibe is blocked by missing or contradictory information.",
-    name: "git-vibe:blocked",
+    name: "gvi:blocked",
   },
   inProgress: {
     color: "FBCA04",
     description: "GitVibe implementation is in progress.",
-    name: "git-vibe:in-progress",
+    name: "gvi:in-progress",
   },
   investigate: {
     color: "C5DEF5",
@@ -28,42 +28,42 @@ export const gitVibeLabels = {
   investigated: {
     color: "0E8A16",
     description: "GitVibe investigation completed and implementation approval is allowed.",
-    name: "git-vibe:investigated",
+    name: "gvi:investigated",
   },
   investigating: {
     color: "1D76DB",
     description: "GitVibe is investigating a bug or request.",
-    name: "git-vibe:investigating",
+    name: "gvi:investigating",
   },
   needsDiscussion: {
     color: "5319E7",
     description: "Feature request should be discussed before implementation.",
-    name: "git-vibe:needs-discussion",
+    name: "gvi:needs-discussion",
   },
   prOpened: {
     color: "0E8A16",
     description: "GitVibe opened or updated a pull request.",
-    name: "git-vibe:pr-opened",
+    name: "gvi:pr-opened",
   },
   prApproved: {
     color: "0E8A16",
     description: "GitVibe pull request was approved by a trusted reviewer.",
-    name: "git-vibe:pr-approved",
+    name: "gvi:pr-approved",
   },
   prMerged: {
     color: "5319E7",
     description: "GitVibe pull request was merged while the issue awaits default-branch closure.",
-    name: "git-vibe:pr-merged",
+    name: "gvi:pr-merged",
   },
   readyForApproval: {
     color: "FBCA04",
     description: "GitVibe believes the issue is ready for approval.",
-    name: "git-vibe:ready-for-approval",
+    name: "gvi:ready-for-approval",
   },
   story: {
     color: "5319E7",
     description: "Implementation issue materialized from a GitVibe discussion.",
-    name: "git-vibe:story",
+    name: "gvi:story",
   },
   validate: {
     color: "C5DEF5",
@@ -72,19 +72,49 @@ export const gitVibeLabels = {
   },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
+export const gitVibeLegacyLabelAliases = {
+  blocked: "git-vibe:blocked",
+  inProgress: "git-vibe:in-progress",
+  investigated: "git-vibe:investigated",
+  investigating: "git-vibe:investigating",
+  needsDiscussion: "git-vibe:needs-discussion",
+  prApproved: "git-vibe:pr-approved",
+  prMerged: "git-vibe:pr-merged",
+  prOpened: "git-vibe:pr-opened",
+  readyForApproval: "git-vibe:ready-for-approval",
+  story: "git-vibe:story",
+} as const satisfies Partial<Record<keyof typeof gitVibeLabels, string>>;
+
 export const gitVibeInternalLabels = {
   reviewFix: {
     color: "6F42C1",
-    description: "Internal GitVibe review-fix continuation issue.",
+    description: "Internal GitVibe review-fix continuation marker.",
     name: "gvi:review-fix",
   },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
-const gitVibePublicLabelList = Object.values(gitVibeLabels);
+const gitVibeManagedLabelList = Object.values(gitVibeLabels);
 const gitVibeInternalLabelList = Object.values(gitVibeInternalLabels);
-export const gitVibeLabelList = [...gitVibePublicLabelList, ...gitVibeInternalLabelList];
+export const gitVibeLabelList = [...gitVibeManagedLabelList, ...gitVibeInternalLabelList];
 
 const gitVibeLabelNames: Set<string> = new Set(gitVibeLabelList.map((label) => label.name));
+const gitVibeRuntimeLabelNames: Set<string> = new Set(
+  Object.values(gitVibeLabels)
+    .filter((label) => label.name.startsWith("gvi:"))
+    .map((label) => label.name),
+);
+const legacyByCanonicalLabelName: Map<string, string> = new Map(
+  Object.entries(gitVibeLegacyLabelAliases).map(([key, legacyName]) => [
+    gitVibeLabels[key as keyof typeof gitVibeLabels].name,
+    legacyName,
+  ]),
+);
+const canonicalByLegacyLabelName: Map<string, string> = new Map(
+  [...legacyByCanonicalLabelName.entries()].map(([canonicalName, legacyName]) => [
+    legacyName,
+    canonicalName,
+  ]),
+);
 
 export function isGitVibeLabel(name: string): boolean {
   return gitVibeLabelNames.has(name) || name.startsWith("git-vibe:") || name.startsWith("gvi:");
@@ -92,4 +122,18 @@ export function isGitVibeLabel(name: string): boolean {
 
 export function isInternalGitVibeLabel(name: string): boolean {
   return name.startsWith("gvi:");
+}
+
+export function isGitVibeRuntimeLabel(name: string): boolean {
+  return gitVibeRuntimeLabelNames.has(canonicalGitVibeLabelName(name));
+}
+
+export function canonicalGitVibeLabelName(name: string): string {
+  return canonicalByLegacyLabelName.get(name) || name;
+}
+
+export function equivalentGitVibeLabelNames(name: string): string[] {
+  const canonicalName = canonicalGitVibeLabelName(name);
+  const legacyName = legacyByCanonicalLabelName.get(canonicalName);
+  return legacyName ? [canonicalName, legacyName] : [canonicalName];
 }

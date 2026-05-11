@@ -25,10 +25,11 @@ describe("GitVibe app server PR approval labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
-      labels: ["git-vibe:pr-approved"],
+      labels: ["gvi:pr-approved"],
     });
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
+        "/repos/example/repo/issues/22/labels/gvi%3Aready-for-approval",
         "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
       ]),
@@ -50,7 +51,7 @@ describe("GitVibe app server PR approval labels", () => {
 
     expect(requestPaths(client, "GET")).toContain("/repos/example/repo/pulls/22");
     expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
-      labels: ["git-vibe:pr-approved"],
+      labels: ["gvi:pr-approved"],
     });
   });
 
@@ -113,18 +114,21 @@ describe("GitVibe app server PR merge labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
-      labels: ["git-vibe:pr-merged"],
+      labels: ["gvi:pr-merged"],
     });
     expect(requestBodies(client, "POST", "/issues/13/labels")).toContainEqual({
-      labels: ["git-vibe:pr-merged"],
+      labels: ["gvi:pr-merged"],
     });
     expect(requestBodies(client, "POST", "/issues/22/labels")).toContainEqual({
-      labels: ["git-vibe:pr-approved"],
+      labels: ["gvi:pr-approved"],
     });
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
+        "/repos/example/repo/issues/22/labels/gvi%3Aready-for-approval",
         "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Apr-opened",
         "/repos/example/repo/issues/12/labels/git-vibe%3Apr-opened",
+        "/repos/example/repo/issues/12/labels/gvi%3Apr-approved",
         "/repos/example/repo/issues/12/labels/git-vibe%3Apr-approved",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
       ]),
@@ -169,7 +173,7 @@ describe("GitVibe app server PR merge labels", () => {
     });
 
     expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
-      labels: ["git-vibe:pr-merged"],
+      labels: ["gvi:pr-merged"],
     });
   });
 

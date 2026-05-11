@@ -104,7 +104,7 @@ describe("implementation structured output recovery", () => {
     });
 
     expect(fetch.mock.calls[3][0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:blocked"]);
+    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["gvi:blocked"]);
   });
 });
 

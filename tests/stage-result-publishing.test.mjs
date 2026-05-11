@@ -74,7 +74,7 @@ describe("stage result publishing", () => {
     expect(startBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(commentBody).toContain("<!-- git-vibe:stage-result stage=validate");
     expect(commentBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
-    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["git-vibe:ready-for-approval"]);
+    expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["gvi:ready-for-approval"]);
   });
 
   it("publishes summarize results back to the source discussion", async () => {

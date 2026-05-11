@@ -58,15 +58,15 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                   | Repository scope                    | Output                                                                       | May advance state                            |
-| ----------------------- | ----------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured         |
-| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                              |
-| Feature refinement      | Repo snapshot and discussion thread | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without protected approval |
-| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows         |
-| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                 | May create/update branch, not merge          |
-| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` follow-up issues |
-| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge      |
+| Stage                   | Repository scope                    | Output                                                                       | May advance state                                                   |
+| ----------------------- | ----------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured                                |
+| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                                                     |
+| Feature refinement      | Repo snapshot and discussion thread | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without protected approval                        |
+| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows                                |
+| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                 | May create/update branch, not merge                                 |
+| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` issue follow-ups or PR feedback retries |
+| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge                             |
 
 AI result envelope:
 
@@ -233,7 +233,8 @@ Default AI budgets:
 - PR feedback max turns: `120`.
 - validation repair max turns: `45` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
 - validation repair attempts: `3` per implementation run.
-- review-fix continuation depth limit: `5` review-fix issues before GitVibe blocks and asks for human intervention.
+- issue review-fix continuation depth limit: `5` follow-up issues before GitVibe blocks and asks for human intervention.
+- PR feedback review-fix retry limit: `3` `address-feedback.yml` redispatches before the PR remains blocked.
 - provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
 - ai-sdk-agentool context window: `200000` estimated tokens, with compaction before a model call when messages reach `90%` of the configured window.
 - investigation/refinement/validation/review timeout: `60` minutes.

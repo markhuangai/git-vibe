@@ -478,6 +478,7 @@ describe("GitVibe address feedback workflow", () => {
     expect(review).toMatchObject({
       if: "needs.address-feedback.outputs.next-state == 'feedback-addressed'",
       needs: "address-feedback",
+      permissions: expect.objectContaining({ actions: "write" }),
     });
     expect(
       review?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),

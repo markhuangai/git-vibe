@@ -5,8 +5,12 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
-import { gitVibeInternalLabels, gitVibeLabels, isInternalGitVibeLabel } from "../shared/labels.js";
-import { reviewFixTraceFromBody } from "../shared/traceability.js";
+import {
+  gitVibeInternalLabels,
+  gitVibeLabels,
+  isGitVibeRuntimeLabel,
+  isInternalGitVibeLabel,
+} from "../shared/labels.js";
 import {
   buildDiscussionBody,
   buildDiscussionTitle,
@@ -29,6 +33,7 @@ import {
   createDiscussionComment,
   createIssueComment,
   dispatchWorkflow,
+  handleManagedReviewFixLabel,
   internalLabelRejectionBody,
   issueComments,
   issueHasLabel,
@@ -37,6 +42,7 @@ import {
   markPullRequestMerged,
   postQueuedWorkflowComment,
   protectedLabelRejectionBody,
+  removeEquivalentIssueLabelIfPresent,
   removeDiscussionLabelBestEffort,
   removeDiscussionLabelFromPayload,
   sourceReviewInput,
@@ -443,18 +449,7 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
   }
 
   if (label === gitVibeLabels.investigate.name) {
-    await dispatchWorkflow(options, "investigate.yml", {
-      "issue-number": issueNumber,
-    });
-    await addIssueLabel(options, issueNumber, gitVibeLabels.investigating.name);
-    await removeIssueLabel({
-      client: options.client,
-      issueNumber,
-      label,
-      owner: options.owner,
-      repo: options.repo,
-      token: options.token,
-    });
+    await handleInvestigateIssueLabel(options, issueNumber, label);
     return;
   }
 
@@ -502,7 +497,12 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
   }
 
   if (label === gitVibeInternalLabels.reviewFix.name) {
-    await handleReviewFixLabel(options, issueNumber);
+    await handleManagedReviewFixLabel(options, issueNumber);
+    return;
+  }
+
+  if (isGitVibeRuntimeLabel(label)) {
+    options.log(`accepted managed runtime label ${label} on issue #${issueNumber}`);
     return;
   }
 
@@ -517,6 +517,26 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     });
     await createIssueComment(options, issueNumber, internalLabelRejectionBody(label));
   }
+}
+
+async function handleInvestigateIssueLabel(
+  options: WebhookContext,
+  issueNumber: string,
+  label: string,
+): Promise<void> {
+  await dispatchWorkflow(options, "investigate.yml", {
+    "issue-number": issueNumber,
+  });
+  await removeEquivalentIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
+  await addIssueLabel(options, issueNumber, gitVibeLabels.investigating.name);
+  await removeIssueLabel({
+    client: options.client,
+    issueNumber,
+    label,
+    owner: options.owner,
+    repo: options.repo,
+    token: options.token,
+  });
 }
 
 async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
@@ -559,6 +579,11 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
+    return;
+  }
+
+  if (isGitVibeRuntimeLabel(label)) {
+    options.log(`accepted managed runtime label ${label} on discussion #${discussionNumber}`);
     return;
   }
 
@@ -615,28 +640,6 @@ async function handlePullRequestClosed(options: WebhookContext): Promise<void> {
   }
 
   await markPullRequestMerged(options, prNumber);
-}
-
-async function handleReviewFixLabel(options: WebhookContext, issueNumber: string): Promise<void> {
-  const trace = reviewFixTraceFromBody(options.payload.issue?.body || "");
-  if (!trace) {
-    await removeIssueLabel({
-      client: options.client,
-      issueNumber,
-      label: gitVibeInternalLabels.reviewFix.name,
-      owner: options.owner,
-      repo: options.repo,
-      token: options.token,
-    });
-    await createIssueComment(
-      options,
-      issueNumber,
-      internalLabelRejectionBody(gitVibeInternalLabels.reviewFix.name),
-    );
-    return;
-  }
-
-  options.log(`accepted managed internal review-fix label on issue #${issueNumber}`);
 }
 
 async function requireTrustedActor(options: WebhookContext): Promise<void> {

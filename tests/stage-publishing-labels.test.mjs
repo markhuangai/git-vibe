@@ -38,9 +38,13 @@ describe("stage label PR feedback transitions", () => {
       requestCalls(client)
         .filter((request) => request.method === "POST")
         .map((request) => request.body.labels[0]),
-    ).toEqual(["git-vibe:investigated", "git-vibe:in-progress", "git-vibe:ready-for-approval"]);
+    ).toEqual(["gvi:investigated", "gvi:in-progress", "gvi:ready-for-approval"]);
     expect(requestCalls(client).map((request) => request.path)).toEqual(
       expect.arrayContaining([
+        "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating",
+        "/repos/example/repo/issues/12/labels/gvi%3Ain-progress",
+        "/repos/example/repo/issues/12/labels/gvi%3Ainvestigated",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
         "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
@@ -64,9 +68,10 @@ describe("stage label investigation blocking", () => {
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["POST", "/repos/example/repo/issues/12/labels"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
       ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
     ]);
-    expect(requestCalls(client)[0].body.labels).toEqual(["git-vibe:blocked"]);
+    expect(requestCalls(client)[0].body.labels).toEqual(["gvi:blocked"]);
   });
 
   it("ignores a missing investigating label when blocking not-ready investigation", async () => {
@@ -92,7 +97,7 @@ describe("stage label investigation blocking", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(client.request).toHaveBeenCalledTimes(2);
+    expect(client.request).toHaveBeenCalledTimes(3);
   });
 
   it("logs and rethrows unexpected investigating label removal failures", async () => {
@@ -120,7 +125,7 @@ describe("stage label investigation blocking", () => {
     ).rejects.toThrow("delete unavailable");
     expect(logger.event).toHaveBeenCalledWith(
       "github.issue.label.remove.failed",
-      expect.objectContaining({ issue: "12", label: "git-vibe:investigating" }),
+      expect.objectContaining({ issue: "12", label: "gvi:investigating" }),
     );
   });
 });

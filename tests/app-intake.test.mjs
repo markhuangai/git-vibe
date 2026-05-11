@@ -4,10 +4,12 @@ import {
   createRepositoryDiscussion,
 } from "../src/shared/discussions.ts";
 import {
+  equivalentGitVibeLabelNames,
   gitVibeInternalLabels,
   gitVibeLabelList,
   gitVibeLabels,
   isGitVibeLabel,
+  isGitVibeRuntimeLabel,
 } from "../src/shared/labels.ts";
 import { implementationIssueBody } from "../src/shared/traceability.ts";
 import {
@@ -111,12 +113,18 @@ describe("GitVibe labels", () => {
     const names = gitVibeLabelList.map((label) => label.name);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain("git-vibe:approved");
-    expect(names).toContain("git-vibe:story");
+    expect(names).toContain("gvi:story");
     expect(names).toContain("git-vibe:validate");
     expect(names).toContain(gitVibeInternalLabels.reviewFix.name);
     expect(isGitVibeLabel("git-vibe:custom")).toBe(true);
     expect(isGitVibeLabel("gvi:runtime")).toBe(true);
     expect(isGitVibeLabel("bug")).toBe(false);
+    expect(isGitVibeRuntimeLabel("gvi:investigating")).toBe(true);
+    expect(isGitVibeRuntimeLabel("git-vibe:investigating")).toBe(true);
+    expect(equivalentGitVibeLabelNames("gvi:investigating")).toEqual([
+      "gvi:investigating",
+      "git-vibe:investigating",
+    ]);
   });
 });
 

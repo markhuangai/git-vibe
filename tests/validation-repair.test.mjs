@@ -123,7 +123,7 @@ describe("implementation validation repair", () => {
     expect(fetch.mock.calls.some(([url]) => String(url).includes("/issues/12/comments"))).toBe(
       true,
     );
-    expect(labelBodies(fetch)).toContainEqual(["git-vibe:blocked"]);
+    expect(labelBodies(fetch)).toContainEqual(["gvi:blocked"]);
   });
 });
 

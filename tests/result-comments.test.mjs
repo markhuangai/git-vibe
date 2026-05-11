@@ -33,7 +33,7 @@ describe("stage result comments", () => {
         partial_capabilities: ["Issue comments are flat replies with source links"],
         pr_body: "Refs #12",
         pr_title: "GitVibe: implement feature",
-        proposed_labels: ["git-vibe:ready-for-approval"],
+        proposed_labels: ["gvi:ready-for-approval"],
         questions: ["Confirm copy text"],
         references: ["https://github.com/example/repo/issues/12"],
         stage: "create-pr",
@@ -163,10 +163,10 @@ describe("compact stage result comments", () => {
       context: context("discussion"),
       parsedOutput: {
         comment_body:
-          "Planned move list:\n- `git-vibe:investigating` -> `gvi:investigating`\n- `git-vibe:in-progress` -> `gvi:in-progress`",
-        findings: ["The label migration needs maintainer confirmation."],
+          "Validation notes:\n- Runtime labels are internal state\n- Trigger labels stay public",
+        findings: ["The validation needs maintainer confirmation."],
         next_state: "needs-info",
-        questions: ["Confirm the planned move list above."],
+        questions: ["Confirm the validation notes above."],
         references: [],
         stage: "validate",
         status: "completed",
@@ -176,9 +176,9 @@ describe("compact stage result comments", () => {
     });
 
     expect(body).toContain("### Details");
-    expect(body).toContain("Planned move list:");
-    expect(body).toContain("`git-vibe:investigating` -> `gvi:investigating`");
-    expect(body).toContain("### Open Questions\n- Confirm the planned move list above.");
+    expect(body).toContain("Validation notes:");
+    expect(body).toContain("Runtime labels are internal state");
+    expect(body).toContain("### Open Questions\n- Confirm the validation notes above.");
   });
 
   it("renders retry guidance when investigation has blocking questions", () => {

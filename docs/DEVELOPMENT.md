@@ -98,6 +98,6 @@ validation.
 - `git-vibe/actions` is the public action/workflow repository.
 - `.github/git-vibe.yml` is the consumer repo config file.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
-- `gvi:` labels are internal runtime labels. Do not add them manually in tests, docs, or examples unless the flow also creates the matching hidden marker.
+- `gvi:` labels are internal runtime labels. Do not add them manually in tests, docs, or examples; `gvi:review-fix` additionally requires a matching hidden marker with `kind=issue` or `kind=pull-request`.
 - Approval uses protected labels, not commands or reactions. Reactions may only be used as an optional community signal to start investigation-only bug review.
 - External Codex, Claude, and Copilot integrations are optional GitHub-visible mention partners.

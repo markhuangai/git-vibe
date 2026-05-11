@@ -57,7 +57,7 @@ AI output, and writes routine GitHub state changes with deterministic code.
 
 ```mermaid
 flowchart LR
-  A[Issue, Discussion, or PR] --> B["/git-vibe command or git-vibe:* label"]
+  A[Issue, Discussion, or PR] --> B["/git-vibe command or public trigger label"]
   B --> C[Webhook server validates actor and marker]
   C --> D[Reusable GitHub workflow]
   D --> E[Stage-specific AI worker]
@@ -110,8 +110,12 @@ own review passes.
 `address-feedback.yml` runs PR feedback investigation first. GitVibe replies to
 false-positive, obsolete, or already-addressed review comments without coding. If
 the investigation finds required fixes, GitVibe updates the existing PR branch,
-runs `review-matrix` on the updated PR, and restores `git-vibe:ready-for-approval`
-only after review passes.
+runs `review-matrix` on the updated PR, and restores `gvi:ready-for-approval`
+only after review passes. If that review still returns `changes-required`,
+GitVibe posts the review result on the PR, keeps the PR at `gvi:blocked`, adds
+`gvi:review-fix` with a PR-scoped hidden marker, and queues another
+`address-feedback.yml` run. PR feedback review-fix retries stop after three
+iterations.
 
 ## Quick Start
 
@@ -261,13 +265,14 @@ Use `/git-vibe` for the remaining comment-triggered workflows:
 | `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
 | `/git-vibe address-feedback` | Pull request conversation | Investigates open PR feedback and fixes only actionable items |
 
-Use protected labels for validation and approval transitions:
+Use protected labels for investigation, validation, and approval transitions:
 
-| Label               | Typical surface      | Effect                                                                       |
-| ------------------- | -------------------- | ---------------------------------------------------------------------------- |
-| `git-vibe:validate` | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                      |
-| `git-vibe:approved` | Implementation issue | Dispatches the development pipeline                                          |
-| `git-vibe:approved` | Feature Discussion   | Dispatches materialization, which creates an issue and closes the Discussion |
+| Label                  | Typical surface      | Effect                                                                         |
+| ---------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| `git-vibe:investigate` | Bug issue            | Runs investigation, then GitVibe replaces the trigger with `gvi:investigating` |
+| `git-vibe:validate`    | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                        |
+| `git-vibe:approved`    | Implementation issue | Dispatches the development pipeline                                            |
+| `git-vibe:approved`    | Feature Discussion   | Dispatches materialization, which creates an issue and closes the Discussion   |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
@@ -370,15 +375,15 @@ See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
 
 ## Security Model
 
-| Boundary      | Rule                                                                                |
-| ------------- | ----------------------------------------------------------------------------------- |
-| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events               |
-| Commands      | The server checks repository permission before protected actions                    |
-| Labels        | Public `git-vibe:` labels are policy-gated; internal `gvi:` labels are GitVibe-only |
-| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config                |
-| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state   |
-| Branch writes | Implementation uses deterministic root issue branches: `git-vibe/{root-issue}`      |
-| Pull requests | GitVibe can open or update PRs, but humans review and merge                         |
+| Boundary      | Rule                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events                          |
+| Commands      | The server checks repository permission before protected actions                               |
+| Labels        | Public `git-vibe:` trigger labels are policy-gated; internal `gvi:` labels are GitVibe-managed |
+| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config                           |
+| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state              |
+| Branch writes | Implementation uses deterministic root issue branches: `git-vibe/{root-issue}`                 |
+| Pull requests | GitVibe can open or update PRs, but humans review and merge                                    |
 
 The PAT is long-lived. Scope it narrowly to the managed repository and never log
 or render it.

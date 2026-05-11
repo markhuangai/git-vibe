@@ -1,5 +1,5 @@
 import type { CreatedDiscussion } from "../shared/discussions.js";
-import { gitVibeLabels } from "../shared/labels.js";
+import { equivalentGitVibeLabelNames, gitVibeLabels } from "../shared/labels.js";
 import { sourceDiscussionMarker } from "../shared/traceability.js";
 
 const conversionMarker = "<!-- git-vibe:converted-to-discussion";
@@ -86,8 +86,11 @@ function hasSourceDiscussionMarker(body: string | null | undefined): boolean {
 }
 
 function issueHasLabel(issue: IntakeIssue, labelName: string): boolean {
+  const labelNames = new Set(equivalentGitVibeLabelNames(labelName));
   return (issue.labels || []).some((label) =>
-    typeof label === "string" ? label === labelName : label.name === labelName,
+    typeof label === "string"
+      ? labelNames.has(label)
+      : Boolean(label.name && labelNames.has(label.name)),
   );
 }
 
