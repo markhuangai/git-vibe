@@ -1,4 +1,17 @@
 #!/bin/sh
+set -eu
+
 corepack pnpm exec lint-staged
-corepack pnpm typecheck
-corepack pnpm coverage
+
+corepack pnpm typecheck &
+typecheck_pid=$!
+
+corepack pnpm coverage &
+coverage_pid=$!
+
+status=0
+
+wait "$typecheck_pid" || status=$?
+wait "$coverage_pid" || status=$?
+
+exit "$status"
