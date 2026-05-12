@@ -114,6 +114,12 @@ describe("Claude Code CLI adapter", () => {
       expect.stringContaining("ai.claude.init model=opus"),
     );
     expect(process.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('ai.claude.prompt kind=system preview="System" chars=6'),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('ai.claude.prompt kind=user preview="Prompt" chars=6'),
+    );
+    expect(process.stdout.write).toHaveBeenCalledWith(
       expect.stringContaining("ai.claude.message text=Reading files"),
     );
     expect(process.stdout.write).toHaveBeenCalledWith(
@@ -234,6 +240,29 @@ describe("Claude Code CLI adapter defaults", () => {
       expect.objectContaining({ type: "custom" }),
     );
     expect(process.stdout.write).not.toHaveBeenCalled();
+  });
+});
+
+describe("Claude Code CLI prompt logging", () => {
+  it("caps prompt previews at 300 compact characters and logs full counts", async () => {
+    mockClaudeOutput({
+      is_error: false,
+      structured_output: { stage: "validate", status: "completed" },
+      type: "result",
+    });
+    const longPrompt = `${"a".repeat(160)}\n${"b".repeat(160)}`;
+
+    await expect(
+      runAiStage({
+        ...validateStageOptions(claudeCodeConfig()),
+        prompt: longPrompt,
+        system: "System",
+      }),
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
+
+    const output = process.stdout.write.mock.calls.map((call) => call[0]).join("");
+    expect(output).toContain(`kind=user preview="${`${"a".repeat(160)} ${"b".repeat(136)}...`}"`);
+    expect(output).toContain("chars=321");
   });
 });
 

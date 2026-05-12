@@ -50,6 +50,8 @@ export async function runClaudeCodeCliStage({
     profile: profileName,
     provider: "cli-claude-code",
   });
+  logClaudePromptPreview(options.logger, options.stage, "system", options.system);
+  logClaudePromptPreview(options.logger, options.stage, "user", options.prompt);
 
   const streamLogger = createClaudeStreamLogger(options.logger);
   const output = await runStreamingCommand({
@@ -259,6 +261,31 @@ function logClaudeProgress(
     .map(([key, value]) => `${key}=${compactText(String(value))}`)
     .join(" ");
   process.stdout.write(redactLogText(`[git-vibe] ${name}${rendered ? ` ${rendered}` : ""}\n`));
+}
+
+function logClaudePromptPreview(
+  logger: StageLogger | undefined,
+  stage: string,
+  kind: "system" | "user",
+  text: string,
+): void {
+  const line = `[git-vibe] ${stage} ai.claude.prompt kind=${kind} preview=${JSON.stringify(
+    previewText(text),
+  )} chars=${text.length}`;
+  if (logger?.raw) {
+    logger.raw(line);
+    return;
+  }
+  if (logger) {
+    logger.event("ai.claude.prompt", { chars: text.length, kind, preview: previewText(text) });
+    return;
+  }
+  process.stdout.write(redactLogText(`${line}\n`));
+}
+
+function previewText(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  return compact.length <= 300 ? compact : `${compact.slice(0, 297)}...`;
 }
 
 function compactText(text: string): string {

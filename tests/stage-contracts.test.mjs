@@ -180,6 +180,8 @@ describe("stage prompt standards guidance", () => {
     expect(prompts.prompt).toContain("Before editing, verify current repository standards");
     expect(prompts.prompt).toContain("`.github/git-vibe.yml` `tests.commands`");
     expect(prompts.prompt).toContain("required validation context");
+    expect(prompts.prompt).toContain("fix it before returning final JSON");
+    expect(prompts.prompt).toContain("Do not dismiss a failing configured check as pre-existing");
     expect(prompts.prompt).toContain(
       "repository standards or validation requirements discovered before or while coding",
     );
