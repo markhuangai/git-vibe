@@ -72,7 +72,16 @@ ai:
           reasoningSummary: concise
         anthropic:
           effort: high
-    codex_cli_high:
+    codex_5.4_high:
+      enabled: true
+      adapter: cli-codex
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
+      model: gpt-5.4
+      reasoning:
+        effort: high
+        summary: concise
+    codex_5.5_high:
       enabled: true
       adapter: cli-codex
       auth_json:
@@ -81,7 +90,7 @@ ai:
       reasoning:
         effort: high
         summary: concise
-    codex_cli_xhigh:
+    codex_5.5_xhigh:
       enabled: true
       adapter: cli-codex
       auth_json:
@@ -125,29 +134,29 @@ ai:
   stages:
     investigate:
       enabled: true
-      profile: codex_cli_high
+      profile: codex_5.5_high
     summarize:
       enabled: true
-      profile: codex_cli_high
+      profile: codex_5.5_high
     validate:
       enabled: true
-      profile: codex_cli_high
+      profile: codex_5.5_high
     materialize:
       enabled: true
-      profile: codex_cli_high
+      profile: codex_5.5_high
     implement:
       enabled: true
-      profile: claude_code
+      profile: codex_5.4_high
     review-matrix:
       enabled: true
       profiles:
-        - codex_cli_xhigh
+        - codex_5.5_xhigh
     create-pr:
       enabled: true
-      profile: codex_cli_high
+      profile: codex_5.5_high
     address-pr-feedback:
       enabled: true
-      profile: claude_code
+      profile: codex_5.4_high
 
 bug_investigation:
   auto_start_on_new_bug: false
