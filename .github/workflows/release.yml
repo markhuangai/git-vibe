@@ -24,6 +24,8 @@ concurrency:
 jobs:
   release:
     runs-on: rootless-docker
+    env:
+      DOCKER_CONTEXT: default
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,13 +79,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if docker buildx inspect rootless >/dev/null 2>&1; then
+          if docker buildx inspect rootless --bootstrap >/dev/null 2>&1; then
             docker buildx use rootless
           else
+            docker buildx rm rootless >/dev/null 2>&1 || true
             docker buildx create --name rootless --use default
+            docker buildx inspect --bootstrap
           fi
-
-          docker buildx inspect --bootstrap
 
       - uses: docker/login-action@v3
         with:

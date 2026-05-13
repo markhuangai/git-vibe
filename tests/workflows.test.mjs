@@ -590,10 +590,12 @@ describe("GitVibe app deployment boundary", () => {
       contents: "write",
       packages: "write",
     });
+    expect(workflow.jobs?.release?.env).toMatchObject({ DOCKER_CONTEXT: "default" });
     expect(content).toContain('GITHUB_REF" != "refs/heads/main"');
     expect(content).toContain("collaborators/$REQUEST_ACTOR/permission");
     expect(content).toContain('permission" != "admin"');
-    expect(content).toContain("docker buildx inspect rootless");
+    expect(content).toContain("docker buildx inspect rootless --bootstrap");
+    expect(content).toContain("docker buildx rm rootless");
     expect(content).toContain("docker buildx create --name rootless --use default");
     expect(content).toContain("docker pull");
     expect(content).toContain("docker push");
