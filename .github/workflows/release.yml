@@ -25,6 +25,7 @@ jobs:
   release:
     runs-on: rootless-docker
     env:
+      BUILDX_CONFIG: /tmp/.docker-buildx
       DOCKER_CONTEXT: default
     steps:
       - uses: actions/checkout@v4
@@ -86,12 +87,6 @@ jobs:
             docker buildx create --name rootless --use default
             docker buildx inspect --bootstrap
           fi
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
 
       - name: Promote release image
         run: |
