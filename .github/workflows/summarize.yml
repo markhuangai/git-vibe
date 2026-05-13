@@ -97,12 +97,48 @@ env:
   GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
-  summarize:
+  plan-summarize:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      max-parallel: ${{ steps.plan.outputs.max-parallel }}
+      mode: ${{ steps.plan.outputs.mode }}
+      synthesizer-profile: ${{ steps.plan.outputs.synthesizer-profile }}
     permissions:
       contents: read
-      discussions: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: plan
+        uses: ./.git-vibe/actions/plan-stage
+        with:
+          stage: summarize
+
+  summarize-members:
+    runs-on: ${{ inputs.runner }}
+    needs: plan-summarize
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan-summarize.outputs.max-parallel) }}
+      matrix: ${{ fromJSON(needs.plan-summarize.outputs.matrix) }}
+    permissions:
+      contents: read
+      discussions: read
     steps:
       - uses: actions/checkout@v4
       - name: Checkout GitVibe action source
@@ -126,6 +162,59 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          execution-mode: member
+          profile: ${{ matrix.profile }}
+          role: ${{ matrix.role }}
+      - name: Upload summary member result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/git-vibe-summarize-result.json
+          if-no-files-found: ignore
+
+  summarize:
+    runs-on: ${{ inputs.runner }}
+    needs:
+      - plan-summarize
+      - summarize-members
+    if: always() && needs.plan-summarize.result == 'success'
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    permissions:
+      contents: read
+      discussions: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download summary member results
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: git-vibe-summarize-member-*
+          path: ${{ runner.temp }}/git-vibe-summarize-members
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./.git-vibe/actions/summarize
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          discussion-number: ${{ inputs.discussion-number }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}
+          execution-mode: finalizer
+          profile: ${{ needs.plan-summarize.outputs.synthesizer-profile }}
+          member-results-dir: ${{ runner.temp }}/git-vibe-summarize-members
       - name: Upload summary result
         if: always()
         uses: actions/upload-artifact@v4

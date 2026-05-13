@@ -22,8 +22,7 @@ function testAiConfigYaml(extraAi = "") {
     implement:
       profile: test
     review-matrix:
-      profiles:
-        - test
+      profile: test
     create-pr:
       profile: test
     address-pr-feedback:

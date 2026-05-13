@@ -39,6 +39,7 @@ const actionFiles = [
   "investigate/action.yml",
   "mark-blocked/action.yml",
   "materialize/action.yml",
+  "plan-stage/action.yml",
   "review-matrix/action.yml",
   "summarize/action.yml",
   "validate/action.yml",
@@ -291,11 +292,14 @@ describe("GitVibe action runtime setup", () => {
       const runEntrypoint =
         file === "mark-blocked/action.yml"
           ? "dist/actions/mark-blocked.js"
-          : "dist/actions/run-action.js";
+          : file === "plan-stage/action.yml"
+            ? "dist/actions/plan-stage.js"
+            : "dist/actions/run-action.js";
       const runStep = content.indexOf(runEntrypoint);
+      const needsAiSetup = !["mark-blocked/action.yml", "plan-stage/action.yml"].includes(file);
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
-      if (file !== "mark-blocked/action.yml") {
+      if (needsAiSetup) {
         expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
       }
       expect(content, `${file} should prefer Corepack when available`).toContain(
@@ -314,7 +318,7 @@ describe("GitVibe action runtime setup", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
-      if (file !== "mark-blocked/action.yml") {
+      if (needsAiSetup) {
         expect(setupStep, `${file} should set up CLIs before stage execution`).toBeLessThan(
           runStep,
         );
@@ -358,6 +362,10 @@ describe("GitVibe workflow numeric inputs", () => {
           file === ".github/workflows/develop.yml" &&
           jobName === "implementation-blocked-cleanup"
         ) {
+          expect(timeout).toBe(10);
+          continue;
+        }
+        if (jobName.startsWith("plan-")) {
           expect(timeout).toBe(10);
           continue;
         }
@@ -446,6 +454,8 @@ describe("GitVibe develop workflow", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
     const implement = workflow.jobs?.implement;
     const cleanup = workflow.jobs?.["implementation-blocked-cleanup"];
+    const planReview = workflow.jobs?.["plan-review-matrix"];
+    const reviewMembers = workflow.jobs?.["review-matrix-members"];
     const reviewMatrix = workflow.jobs?.["review-matrix"];
     const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
     const createPr = workflow.jobs?.["create-pr"];
@@ -482,8 +492,19 @@ describe("GitVibe develop workflow", () => {
         "issue-number": "${{ inputs.issue-number }}",
       }),
     });
-    expect(reviewMatrix).toMatchObject({
+    expect(planReview).toMatchObject({
       needs: "implement",
+    });
+    expect(reviewMembers).toMatchObject({
+      "continue-on-error": true,
+      needs: "plan-review-matrix",
+      strategy: expect.objectContaining({
+        "max-parallel": "${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel) }}",
+      }),
+    });
+    expect(reviewMatrix).toMatchObject({
+      if: "always() && needs.plan-review-matrix.result == 'success'",
+      needs: ["plan-review-matrix", "review-matrix-members"],
       outputs: expect.objectContaining({
         "next-state": "${{ steps.review.outputs.next-state }}",
       }),
@@ -492,7 +513,11 @@ describe("GitVibe develop workflow", () => {
       reviewMatrix?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),
     ).toMatchObject({
       id: "review",
-      with: expect.objectContaining({ "fail-on-blocked": "true" }),
+      with: expect.objectContaining({
+        "execution-mode": "finalizer",
+        "fail-on-blocked": "true",
+        "member-results-dir": "${{ runner.temp }}/git-vibe-review-matrix-members",
+      }),
     });
     expect(reviewChangesRequired).toMatchObject({
       if: "needs.review-matrix.outputs.next-state == 'changes-required'",
@@ -510,6 +535,8 @@ describe("GitVibe address feedback workflow", () => {
     const workflow = readWorkflow(".github/workflows/address-feedback.yml");
     const investigate = workflow.jobs?.["investigate-feedback"];
     const address = workflow.jobs?.["address-feedback"];
+    const planReview = workflow.jobs?.["plan-review-matrix"];
+    const reviewMembers = workflow.jobs?.["review-matrix-members"];
     const review = workflow.jobs?.["review-matrix"];
 
     expect(investigate?.outputs).toMatchObject({
@@ -536,16 +563,29 @@ describe("GitVibe address feedback workflow", () => {
         "handoff-dir": "${{ runner.temp }}/git-vibe-feedback-handoff",
       }),
     });
-    expect(review).toMatchObject({
+    expect(planReview).toMatchObject({
       if: "needs.address-feedback.outputs.next-state == 'feedback-addressed'",
       needs: "address-feedback",
+    });
+    expect(reviewMembers).toMatchObject({
+      "continue-on-error": true,
+      needs: "plan-review-matrix",
+      strategy: expect.objectContaining({
+        matrix: "${{ fromJSON(needs.plan-review-matrix.outputs.matrix) }}",
+      }),
+    });
+    expect(review).toMatchObject({
+      if: "always() && needs.plan-review-matrix.result == 'success'",
+      needs: ["plan-review-matrix", "review-matrix-members"],
       permissions: expect.objectContaining({ actions: "write" }),
     });
     expect(
       review?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),
     ).toMatchObject({
       with: expect.objectContaining({
+        "execution-mode": "finalizer",
         "fail-on-blocked": "true",
+        "member-results-dir": "${{ runner.temp }}/git-vibe-review-matrix-members",
         "pr-number": "${{ inputs.pr-number }}",
       }),
     });

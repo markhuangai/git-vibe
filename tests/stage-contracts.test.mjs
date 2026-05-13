@@ -505,6 +505,34 @@ describe("repository prompt additions across stages", () => {
     cleanupWorkspace(cwd);
   });
 
+  it("appends role definitions after GitVibe and repository system guidance", () => {
+    const cwd = createRepoPromptWorkspace(stageDefinitions["review-matrix"].promptDir, {
+      "system.md": "Repository review guidance.",
+    });
+    const definition = stageDefinitions["review-matrix"];
+    const schema = loadStageSchema(definition.schemaFile);
+    const prompts = renderPrompts({
+      context: baseContext,
+      cwd,
+      outputSchema: schema,
+      promptDir: definition.promptDir,
+      repositoryContext: "## main",
+      roleDefinition: "Security role guidance.",
+      stageContract: "Return JSON.",
+    });
+
+    expect(prompts.system).toContain("<git_vibe_role_definition>");
+    expect(prompts.system).toContain("Security role guidance.");
+    expect(prompts.system.indexOf("GitVibe Stage Agent Contract")).toBeLessThan(
+      prompts.system.indexOf("<git_vibe_role_definition>"),
+    );
+    expect(prompts.system.indexOf("Repository review guidance.")).toBeLessThan(
+      prompts.system.indexOf("<git_vibe_role_definition>"),
+    );
+
+    cleanupWorkspace(cwd);
+  });
+
   it("omits XML tags for empty repository prompt files", () => {
     const cwd = createRepoPromptWorkspace(stageDefinitions.investigate.promptDir, {
       "system.md": "",

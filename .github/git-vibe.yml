@@ -115,6 +115,17 @@ ai:
       model: opus
       reasoning:
         effort: max
+  role_groups:
+    swarm:
+      synthesizer: local_proxy
+      parallel: 3
+      roles:
+        - role: correctness.md
+          profile: codex_5.5_high
+        - role: security.md
+          profile: local_proxy
+        - role: maintainability.md
+          profile: local_proxy
   budgets:
     default_timeout_minutes: 60
     implementation_timeout_minutes: 120
@@ -134,13 +145,13 @@ ai:
   stages:
     investigate:
       enabled: true
-      profile: codex_5.5_high
+      role_group: swarm
     summarize:
       enabled: true
       profile: codex_5.5_high
     validate:
       enabled: true
-      profile: codex_5.5_high
+      role_group: swarm
     materialize:
       enabled: true
       profile: codex_5.5_high
@@ -149,8 +160,7 @@ ai:
       profile: codex_5.4_high
     review-matrix:
       enabled: true
-      profiles:
-        - codex_5.5_xhigh
+      role_group: swarm
     create-pr:
       enabled: true
       profile: codex_5.5_high

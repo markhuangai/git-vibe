@@ -21,17 +21,25 @@ export function adapterName(profile: Record<string, unknown>): string {
 
 export function profileNamesForStage(config: GitVibeConfig, stage: Stage): string[] {
   const stageConfig = stageConfigFor(config, stage);
-  const profileNames = explicitProfileNames(stageConfig);
-  if (!profileNames) {
-    throw new Error(`ai.stages.${stage} must define profile or profiles.`);
+  if (stageConfig.profiles !== undefined) {
+    throw new Error(
+      `ai.stages.${stage}.profiles is no longer supported; use profile or role_group.`,
+    );
+  }
+  if (stageConfig.role_group !== undefined) {
+    throw new Error(`ai.stages.${stage}.role_group requires matrix workflow execution.`);
+  }
+  const profile = stringValue(stageConfig.profile);
+  if (!profile) {
+    throw new Error(`ai.stages.${stage} must define profile or role_group.`);
   }
   const fallback = stringValue(stageConfig.fallback_profile);
 
-  if (fallback && !profileNames.includes(fallback)) {
-    return [...profileNames, fallback];
+  if (fallback && fallback !== profile) {
+    return [profile, fallback];
   }
 
-  return profileNames;
+  return [profile];
 }
 
 export function stageConfigFor(config: GitVibeConfig, stage: Stage): Record<string, unknown> {
@@ -48,25 +56,6 @@ export function stageConfigFor(config: GitVibeConfig, stage: Stage): Record<stri
 
 export function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function explicitProfileNames(stageConfig: Record<string, unknown>): string[] | undefined {
-  const profile = stringValue(stageConfig.profile);
-  if (profile && stageConfig.profiles !== undefined) {
-    throw new Error("Stage AI config cannot define both profile and profiles.");
-  }
-  if (profile) return [profile];
-  if (stageConfig.profiles === undefined) return undefined;
-  if (!Array.isArray(stageConfig.profiles) || stageConfig.profiles.length === 0) {
-    throw new Error("Stage AI config profiles must be a non-empty string array.");
-  }
-
-  const profiles = stageConfig.profiles.map((value) => stringValue(value));
-  if (profiles.some((value) => !value)) {
-    throw new Error("Stage AI config profiles must be a non-empty string array.");
-  }
-
-  return [...new Set(profiles as string[])];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

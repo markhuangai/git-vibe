@@ -26,11 +26,19 @@ export function stageResultCommentHandoffs(timeline: TimelineItem[]): StageHando
 
 export function writeStageResultFile(options: {
   directory: string;
+  metadata?: JsonObject;
   result: StageRunResult;
   stage: Stage;
 }): string {
   const file = join(options.directory, `git-vibe-${options.stage}-result.json`);
-  writeFileSync(file, JSON.stringify(stageHandoff(options.stage, options.result), null, 2));
+  writeFileSync(
+    file,
+    JSON.stringify(
+      { ...stageHandoff(options.stage, options.result), ...options.metadata },
+      null,
+      2,
+    ),
+  );
   return file;
 }
 

@@ -8,6 +8,7 @@ export interface RenderPromptOptions {
   outputSchema: JsonObject;
   promptDir: string;
   repositoryContext: string;
+  roleDefinition?: string;
   stageContract: string;
 }
 
@@ -25,6 +26,11 @@ export function renderPrompts(options: RenderPromptOptions): { prompt: string; s
 
   const repoSystemAddition = readRepoPromptAddition(options.cwd, options.promptDir, "system.md");
   if (repoSystemAddition) systemParts.push(repoSystemAddition);
+  if (options.roleDefinition) {
+    systemParts.push(`<git_vibe_role_definition>
+${options.roleDefinition}
+</git_vibe_role_definition>`);
+  }
 
   const repoUserAddition = readRepoPromptAddition(options.cwd, options.promptDir, "user.md");
   if (repoUserAddition) userParts.push(repoUserAddition);

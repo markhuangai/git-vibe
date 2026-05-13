@@ -27,12 +27,16 @@ export interface StageDefinition {
 export interface RunnerOptions {
   cwd: string;
   dryRun: boolean;
+  executionMode?: "finalizer" | "member" | "standard";
   failOnNotReady?: boolean;
   handoffDir?: string;
   issueNumber: string;
+  memberResultsDir?: string;
   maxTurns: number;
   prNumber: string;
+  profileName?: string;
   repository: string;
+  roleName?: string;
   sourceComment?: SourceComment;
   stage: Stage;
   stageTimeoutMinutes: number;

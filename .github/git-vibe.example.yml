@@ -105,6 +105,17 @@ ai:
       model: opus
       reasoning:
         effort: xhigh
+  role_groups:
+    review_gate:
+      synthesizer: local_proxy
+      parallel: 2
+      roles:
+        - role: correctness.md
+          profile: local_proxy
+        - role: security.md
+          profile: local_proxy
+        - role: maintainability.md
+          profile: local_proxy
   budgets:
     default_timeout_minutes: 60
     implementation_timeout_minutes: 120
@@ -125,7 +136,6 @@ ai:
     investigate:
       enabled: true
       profile: local_proxy
-      fallback_profile: codex_cli
     summarize:
       enabled: true
       profile: local_proxy
@@ -140,8 +150,7 @@ ai:
       profile: local_proxy
     review-matrix:
       enabled: true
-      profiles:
-        - local_proxy
+      role_group: review_gate
     create-pr:
       enabled: true
       profile: local_proxy
@@ -177,12 +186,6 @@ analysis:
   include_reactions: true
   chronological: true
   preserve_thread_parents: true
-
-review_matrix:
-  - correctness
-  - tests
-  - security
-  - maintainability
 
 external_agents:
   codex:
