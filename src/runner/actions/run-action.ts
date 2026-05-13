@@ -8,7 +8,7 @@ import { isInvestigationReady } from "../stage-publishing.js";
 import { redactLogText } from "../logging.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
-import type { StageRunResult } from "../../shared/types.js";
+import type { RunnerOptions, StageRunResult } from "../../shared/types.js";
 
 export interface ActionRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -32,15 +32,23 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
     const target = readTargetInputs(stage, env);
     const maxTurns = numberEnv(env, "GITVIBE_MAX_TURNS", 90);
+    const executionMode = executionModeEnv(env);
+    const profileName = envValue(env, "GITVIBE_PROFILE_NAME") || undefined;
+    const memberResultsDir = envValue(env, "GITVIBE_MEMBER_RESULTS_DIR") || undefined;
+    validateExecutionModeInputs(executionMode, profileName, memberResultsDir);
     const result = await (runtime.runStage || runStage)({
       cwd: env.GITHUB_WORKSPACE || runtime.cwd || process.cwd(),
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
+      executionMode,
       failOnNotReady: envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true",
       handoffDir: envValue(env, "GITVIBE_HANDOFF_DIR") || undefined,
       issueNumber: target.issueNumber,
+      memberResultsDir,
       maxTurns,
       prNumber: target.prNumber,
+      profileName,
       repository,
+      roleName: envValue(env, "GITVIBE_ROLE_NAME") || undefined,
       sourceComment: parseSourceComment(envValue(env, "GITVIBE_SOURCE_COMMENT")),
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
@@ -121,6 +129,27 @@ function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number): numb
   const value = Number(rawValue);
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number.`);
   return value;
+}
+
+function executionModeEnv(env: NodeJS.ProcessEnv): RunnerOptions["executionMode"] {
+  const value = envValue(env, "GITVIBE_EXECUTION_MODE") || "standard";
+  if (value === "standard" || value === "member" || value === "finalizer") {
+    return value;
+  }
+  throw new Error("GITVIBE_EXECUTION_MODE must be standard, member, or finalizer.");
+}
+
+function validateExecutionModeInputs(
+  executionMode: RunnerOptions["executionMode"],
+  profileName: string | undefined,
+  memberResultsDir: string | undefined,
+): void {
+  if (executionMode === "member" && !profileName) {
+    throw new Error("GITVIBE_PROFILE_NAME is required for member execution.");
+  }
+  if (executionMode === "finalizer" && !memberResultsDir) {
+    throw new Error("GITVIBE_MEMBER_RESULTS_DIR is required for finalizer execution.");
+  }
 }
 
 function workflowRunUrl(env: NodeJS.ProcessEnv): string | undefined {

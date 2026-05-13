@@ -70,7 +70,7 @@ sequenceDiagram
   App->>API: Add label, comment, or state marker
   App->>API: Dispatch workflow with target parameters and run details request
   GH->>WF: Start workflow run
-  WF->>Act: Run reusable action or reusable workflow
+  WF->>Act: Plan stage matrix, run member job(s), then finalizer
   Act->>API: Use configured repository PAT for branch, PR, comments, and metadata writes
 ```
 

@@ -47,7 +47,7 @@ export function setupAiCli(runtime: SetupAiCliRuntime = {}): number {
   try {
     const stage = parseStage(argv[0]);
     const config = loadConfig(env.GITHUB_WORKSPACE || runtime.cwd || process.cwd());
-    const adapters = cliAdaptersForStage(config, stage);
+    const adapters = cliAdaptersForStage(config, stage, envValue(env, "GITVIBE_PROFILE_NAME"));
 
     if (adapters.length === 0) {
       log(`${stage} does not require AI CLI setup.`);
@@ -66,11 +66,16 @@ export function setupAiCli(runtime: SetupAiCliRuntime = {}): number {
   }
 }
 
-export function cliAdaptersForStage(config: GitVibeConfig, stage: Stage): string[] {
+export function cliAdaptersForStage(
+  config: GitVibeConfig,
+  stage: Stage,
+  profileName?: string,
+): string[] {
   const stageConfig = stageConfigFor(config, stage);
   if (stageConfig.enabled === false) return [];
 
-  const adapters = profileNamesForStage(config, stage)
+  const profileNames = profileName ? [profileName] : profileNamesForStage(config, stage);
+  const adapters = profileNames
     .map((profileName) => adapterName(activeProfileByName(config, profileName)))
     .filter((adapter) => cliAdapters.has(adapter));
 
@@ -214,6 +219,11 @@ function firstLine(output: Buffer | string): string | undefined {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean);
+}
+
+function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const value = env[name]?.trim();
+  return value || undefined;
 }
 
 function runnerTemp(env: NodeJS.ProcessEnv): string {

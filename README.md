@@ -60,17 +60,18 @@ flowchart LR
   A[Issue, Discussion, or PR] --> B["/git-vibe command or public trigger label"]
   B --> C[Webhook server validates actor and marker]
   C --> D[Reusable GitHub workflow]
-  D --> E[Stage-specific AI worker]
-  E --> F[Schema validation]
-  F --> G{Deterministic GitVibe write}
-  G --> H[Comment or label]
-  G --> I[Commit and push root branch]
-  G --> J[Review-fix issue]
-  G --> K[Create or update PR]
-  H --> L[Human review and merge]
-  I --> L
-  J --> L
-  K --> L
+  D --> E[Plan stage matrix]
+  E --> F[Member AI worker jobs]
+  F --> G[Finalizer validates one stage result]
+  G --> H{Deterministic GitVibe write}
+  H --> I[Comment or label]
+  H --> J[Commit and push root branch]
+  H --> K[Review-fix issue]
+  H --> L[Create or update PR]
+  I --> M[Human review and merge]
+  J --> M
+  K --> M
+  L --> M
 ```
 
 GitVibe does not auto-merge, approve its own pull requests, or treat AI output as
@@ -322,6 +323,15 @@ ai:
           from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
+  role_groups:
+    review_gate:
+      synthesizer: local_proxy
+      parallel: 2
+      roles:
+        - role: correctness.md
+          profile: local_proxy
+        - role: security.md
+          profile: local_proxy
   stages:
     investigate:
       profile: local_proxy
@@ -334,8 +344,7 @@ ai:
     implement:
       profile: local_proxy
     review-matrix:
-      profiles:
-        - local_proxy
+      role_group: review_gate
     create-pr:
       profile: local_proxy
     address-pr-feedback:
@@ -345,8 +354,9 @@ tests:
   commands: []
 ```
 
-Each AI stage must define `profile` or `profiles`; GitVibe fails fast instead of
+Each AI stage must define `profile` or `role_group`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.
+Role definitions referenced by `role_group` live in `.git-vibe/role-group/*.md`.
 CLI adapters use fixed commands (`codex exec` and `claude -p`); profiles choose
 adapter, model, auth, env, and reasoning settings, not the executable command.
 

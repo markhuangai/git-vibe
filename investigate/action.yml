@@ -35,6 +35,22 @@ inputs:
     description: Return a non-zero action status when investigation is not ready for implementation.
     required: false
     default: "false"
+  execution-mode:
+    description: "Internal execution mode: standard, member, or finalizer."
+    required: false
+    default: "standard"
+  profile:
+    description: Explicit AI profile for member or finalizer execution.
+    required: false
+    default: ""
+  role:
+    description: Role markdown filename for matrix member execution.
+    required: false
+    default: ""
+  member-results-dir:
+    description: Directory containing downloaded matrix member result artifacts.
+    required: false
+    default: ""
 
 outputs:
   summary:
@@ -76,6 +92,8 @@ runs:
         "${pnpm_cmd[@]}" build
     - name: Set up configured AI CLI
       shell: bash
+      env:
+        GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" investigate
     - id: run
       shell: bash
@@ -89,4 +107,8 @@ runs:
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
         GITVIBE_FAIL_ON_NOT_READY: ${{ inputs.fail-on-not-ready }}
+        GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
+        GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
+        GITVIBE_ROLE_NAME: ${{ inputs.role }}
+        GITVIBE_MEMBER_RESULTS_DIR: ${{ inputs.member-results-dir }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" investigate

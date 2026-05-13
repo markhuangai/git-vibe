@@ -36,7 +36,7 @@ describe("GitVibe AI CLI setup", () => {
             profile: "codex_cli",
           },
           "review-matrix": {
-            profiles: ["codex_cli", "claude_code", "codex_cli"],
+            profile: "codex_cli",
           },
         },
       },
@@ -44,7 +44,10 @@ describe("GitVibe AI CLI setup", () => {
 
     expect(cliAdaptersForStage(config, "validate")).toEqual(["cli-codex"]);
     expect(cliAdaptersForStage(config, "investigate")).toEqual(["cli-codex"]);
-    expect(cliAdaptersForStage(config, "review-matrix")).toEqual(["cli-codex", "cli-claude-code"]);
+    expect(cliAdaptersForStage(config, "review-matrix")).toEqual(["cli-codex"]);
+    expect(cliAdaptersForStage(config, "review-matrix", "claude_code")).toEqual([
+      "cli-claude-code",
+    ]);
     expect(cliAdaptersForStage(config, "summarize")).toEqual([]);
   });
 });

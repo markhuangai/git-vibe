@@ -118,7 +118,7 @@ describe("AI stage runner explicit profile routing", () => {
           },
         },
       },
-      "ai.stages.validate must define profile or profiles.",
+      "ai.stages.validate must define profile or role_group.",
     );
     await expectValidationConfigError(
       {
@@ -133,7 +133,7 @@ describe("AI stage runner explicit profile routing", () => {
           },
         },
       },
-      "ai.stages.validate must define profile or profiles.",
+      "ai.stages.validate must define profile or role_group.",
     );
     await expectValidationConfigError(
       {
@@ -149,7 +149,7 @@ describe("AI stage runner explicit profile routing", () => {
           },
         },
       },
-      "ai.stages.validate must define profile or profiles.",
+      "ai.stages.validate must define profile or role_group.",
     );
     await expectValidationConfigError(
       {
@@ -225,18 +225,18 @@ describe("AI stage runner stage config validation", () => {
     );
   });
 
-  it("rejects malformed stage profile arrays", async () => {
+  it("rejects removed stage profile arrays", async () => {
     await expectValidationConfigError(
       { ai: { stages: { validate: { profiles: [] } } } },
-      "Stage AI config profiles must be a non-empty string array.",
+      "ai.stages.validate.profiles is no longer supported; use profile or role_group.",
     );
     await expectValidationConfigError(
       { ai: { stages: { validate: { profiles: ["local_proxy", ""] } } } },
-      "Stage AI config profiles must be a non-empty string array.",
+      "ai.stages.validate.profiles is no longer supported; use profile or role_group.",
     );
     await expectValidationConfigError(
       { ai: { stages: { validate: { profile: "local_proxy", profiles: ["local_proxy"] } } } },
-      "Stage AI config cannot define both profile and profiles.",
+      "ai.stages.validate.profiles is no longer supported; use profile or role_group.",
     );
   });
 });
@@ -350,38 +350,6 @@ describe("AI stage runner Codex CLI defaults", () => {
     ).rejects.toThrow("AI profile model must be configured for cli-codex profile.");
 
     expect(spawn).not.toHaveBeenCalled();
-  });
-});
-
-describe("AI stage runner profile arrays", () => {
-  it("uses stage profile arrays and removes duplicate profile names", async () => {
-    generateText.mockResolvedValueOnce(aiResult("validate"));
-
-    await expect(
-      runAiStage(
-        validateStageOptions({
-          ai: {
-            profiles: {
-              local_proxy: {
-                provider: {
-                  api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
-                  base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
-                  model: "test-model",
-                  type: "openai-compatible",
-                },
-              },
-            },
-            stages: {
-              validate: {
-                profiles: ["local_proxy", "local_proxy"],
-              },
-            },
-          },
-        }),
-      ),
-    ).resolves.toBe('{"stage":"validate","status":"completed"}');
-
-    expect(generateText).toHaveBeenCalledTimes(1);
   });
 });
 

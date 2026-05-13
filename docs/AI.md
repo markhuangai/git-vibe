@@ -38,9 +38,9 @@ flowchart TD
   A[GitHub event or scheduled scan] --> B[Orchestrator]
   B --> C[Build context packet]
   C --> D[Select stage contract]
-  D --> E[Select AI adapter]
-  E --> F[Run model or external agent]
-  F --> G[Validate structured result]
+  D --> E[Plan profile or role-group matrix]
+  E --> F[Run member AI job or jobs]
+  F --> G[Finalizer validates one structured result]
   G --> H{Policy gate}
   H -->|allowed| I[Post comment, update labels, dispatch next workflow, or push branch]
   H -->|blocked| J[Post explanation and wait for human context]
@@ -141,10 +141,11 @@ CLI authentication guidance:
 
 ## Profile-Based Routing
 
-GitVibe routes AI work through named profiles. A profile owns the adapter,
-auth source, model, reasoning settings, generation defaults, and provider-specific
-escape hatches. Each AI stage must choose one profile or an ordered profile list;
-GitVibe fails fast when a stage does not define `profile` or `profiles`.
+GitVibe routes AI work through named profiles and optional named role groups. A
+profile owns the adapter, auth source, model, reasoning settings, generation
+defaults, and provider-specific escape hatches. Each AI stage must choose
+`profile` for single execution or `role_group` for read-only matrix fanout;
+GitVibe rejects the old `profiles` stage array.
 
 ```yaml
 ai:
@@ -182,6 +183,16 @@ ai:
       reasoning:
         effort: xhigh
 
+  role_groups:
+    review_gate:
+      synthesizer: codex_cli
+      parallel: 2
+      roles:
+        - role: correctness.md
+          profile: codex_cli
+        - role: security.md
+          profile: codex_cli
+
   stages:
     investigate:
       profile: codex_cli
@@ -190,9 +201,14 @@ ai:
     create-pr:
       profile: codex_cli
     review-matrix:
-      profiles:
-        - codex_cli
+      role_group: review_gate
 ```
+
+Role definitions live in `.git-vibe/role-group/*.md`. A role group entry pairs a
+role markdown file with the exact profile that should run it. The synthesizer
+profile merges successful role outputs into the same final stage schema that
+single-profile execution returns. `role_group` is allowed only for read-only
+stages: `investigate`, `summarize`, `validate`, and `review-matrix`.
 
 Normalized reasoning config:
 

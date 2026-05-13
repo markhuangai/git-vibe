@@ -92,6 +92,7 @@ export interface RunAiStageOptions {
   stageDefinition: StageDefinition;
   system: string;
   github?: CodexAuthWritebackGitHub;
+  profileName?: string;
   reserveFinalizationTurns?: boolean;
   toolOverride?: string[];
   logger?: StageLogger;
@@ -99,7 +100,9 @@ export interface RunAiStageOptions {
 
 export async function runAiStage(options: RunAiStageOptions): Promise<string> {
   validateStageConfig(options);
-  const profiles = profileNamesForStage(options.config, options.stage);
+  const profiles = options.profileName
+    ? [options.profileName]
+    : profileNamesForStage(options.config, options.stage);
   let failure: unknown;
 
   for (const [index, profileName] of profiles.entries()) {

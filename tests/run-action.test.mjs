@@ -164,6 +164,41 @@ describe("GitVibe action launcher validation", () => {
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("Unknown GitVibe action stage: missing-stage");
   });
+
+  it("validates member and finalizer execution mode inputs", async () => {
+    const error = vi.fn();
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: { ...baseEnv, GITVIBE_EXECUTION_MODE: "parallel" },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "GITVIBE_EXECUTION_MODE must be standard, member, or finalizer.",
+    );
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: { ...baseEnv, GITVIBE_EXECUTION_MODE: "member" },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith("GITVIBE_PROFILE_NAME is required for member execution.");
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: { ...baseEnv, GITVIBE_EXECUTION_MODE: "finalizer" },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "GITVIBE_MEMBER_RESULTS_DIR is required for finalizer execution.",
+    );
+  });
 });
 
 describe("GitVibe action launcher target validation", () => {

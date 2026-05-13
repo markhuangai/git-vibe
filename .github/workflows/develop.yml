@@ -211,20 +211,50 @@ jobs:
           issue-number: ${{ inputs.issue-number }}
           dry-run: ${{ inputs.dry-run }}
 
-  review-matrix:
+  plan-review-matrix:
     runs-on: ${{ inputs.runner }}
     needs: implement
-    timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+    timeout-minutes: 10
     outputs:
-      next-state: ${{ steps.review.outputs.next-state }}
-      result-file: ${{ steps.review.outputs.result-file }}
-      status: ${{ steps.review.outputs.status }}
-      summary: ${{ steps.review.outputs.summary }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      max-parallel: ${{ steps.plan.outputs.max-parallel }}
+      mode: ${{ steps.plan.outputs.mode }}
+      synthesizer-profile: ${{ steps.plan.outputs.synthesizer-profile }}
     permissions:
-      actions: write
       contents: read
-      issues: write
-      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: plan
+        uses: ./.git-vibe/actions/plan-stage
+        with:
+          stage: review-matrix
+
+  review-matrix-members:
+    runs-on: ${{ inputs.runner }}
+    needs: plan-review-matrix
+    timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel) }}
+      matrix: ${{ fromJSON(needs.plan-review-matrix.outputs.matrix) }}
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - name: Checkout GitVibe action source
@@ -249,7 +279,68 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          execution-mode: member
+          profile: ${{ matrix.profile }}
+          role: ${{ matrix.role }}
+      - name: Upload review member result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/git-vibe-review-matrix-result.json
+          if-no-files-found: ignore
+
+  review-matrix:
+    runs-on: ${{ inputs.runner }}
+    needs:
+      - plan-review-matrix
+      - review-matrix-members
+    if: always() && needs.plan-review-matrix.result == 'success'
+    timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+    outputs:
+      next-state: ${{ steps.review.outputs.next-state }}
+      result-file: ${{ steps.review.outputs.result-file }}
+      status: ${{ steps.review.outputs.status }}
+      summary: ${{ steps.review.outputs.summary }}
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download review member results
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: git-vibe-review-matrix-member-*
+          path: ${{ runner.temp }}/git-vibe-review-matrix-members
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: review
+        uses: ./.git-vibe/actions/review-matrix
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+          max-turns: ${{ inputs.max_turns }}
+          dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
+          execution-mode: finalizer
+          profile: ${{ needs.plan-review-matrix.outputs.synthesizer-profile }}
+          member-results-dir: ${{ runner.temp }}/git-vibe-review-matrix-members
       - name: Upload review handoff
         if: always()
         uses: actions/upload-artifact@v4

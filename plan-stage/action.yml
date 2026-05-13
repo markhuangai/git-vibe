@@ -1,0 +1,46 @@
+name: GitVibe plan stage
+description: Plan GitVibe stage matrix execution from repository config.
+
+inputs:
+  stage:
+    description: GitVibe stage to plan.
+    required: true
+
+outputs:
+  matrix:
+    description: JSON matrix for stage member jobs.
+    value: ${{ steps.plan.outputs.matrix }}
+  max-parallel:
+    description: Maximum parallel member jobs.
+    value: ${{ steps.plan.outputs.max-parallel }}
+  mode:
+    description: Stage execution mode.
+    value: ${{ steps.plan.outputs.mode }}
+  role-group:
+    description: Selected role group name.
+    value: ${{ steps.plan.outputs.role-group }}
+  synthesizer-profile:
+    description: Profile used for role group synthesis.
+    value: ${{ steps.plan.outputs.synthesizer-profile }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build GitVibe action runtime
+      shell: bash
+      run: |
+        cd "$GITHUB_ACTION_PATH/.."
+        if command -v corepack >/dev/null 2>&1 && corepack enable; then
+          pnpm_cmd=(corepack pnpm)
+        elif command -v pnpm >/dev/null 2>&1; then
+          pnpm_cmd=(pnpm)
+        else
+          echo "::error::GitVibe requires pnpm or Corepack on the runner."
+          exit 127
+        fi
+        echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
+        "${pnpm_cmd[@]}" install --frozen-lockfile
+        "${pnpm_cmd[@]}" build
+    - id: plan
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../dist/actions/plan-stage.js" "${{ inputs.stage }}"

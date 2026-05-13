@@ -5,5 +5,7 @@ node_modules/
 dist/
 coverage/
 npm-debug.log*
-.git-vibe/
+.git-vibe/*
+!.git-vibe/role-group/
+!.git-vibe/role-group/*.md
 .vcp

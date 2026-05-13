@@ -10,6 +10,14 @@ import { createStageLogger, summarizeError } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
 import { issueBranch, type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
 import { renderStageResultComment } from "./result-comments.js";
+import {
+  loadMatrixStageResults,
+  matrixResultMetadata,
+  readRoleDefinition,
+  stageExecutionPlan,
+  synthesisPromptAddition,
+  synthesizerSystemAddition,
+} from "./role-groups.js";
 import { loadStageSchema, validateOutput } from "./schemas.js";
 import {
   applyStageLabelTransition,
@@ -44,10 +52,14 @@ import type {
   StageRunResult,
 } from "../shared/types.js";
 
+type RunnerStageDefinition = (typeof stageDefinitions)[RunnerOptions["stage"]];
+
 export async function runStage(options: RunnerOptions): Promise<StageRunResult> {
   const logger = createStageLogger(options.stage);
+  const executionMode = options.executionMode || "standard";
   logger.event("stage.start", {
     dry_run: options.dryRun,
+    execution_mode: executionMode,
     max_turns: options.maxTurns,
     repository: options.repository,
   });
@@ -76,6 +88,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     outputSchema: schema,
     promptDir: definition.promptDir,
     repositoryContext: repositoryContext(options.cwd, branchState.branchState),
+    roleDefinition: roleDefinitionFor(options),
     stageContract: stageContract(options.stage, context),
   });
   logger.event("prompt.ready", {
@@ -83,38 +96,32 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     tools: definition.tools.join(","),
   });
 
-  const contextDir = process.env.RUNNER_TEMP || options.cwd;
-  mkdirSync(contextDir, { recursive: true });
-  writeFileSync(
-    join(contextDir, `git-vibe-${options.stage}-context.json`),
-    JSON.stringify(context, null, 2),
-  );
-  logger.event("context.persisted", { file: `git-vibe-${options.stage}-context.json` });
+  persistContext({ context, logger, options });
 
-  const aiRunOptions = {
+  const aiRunOptions = buildAiRunOptions({
+    client,
     config,
-    cwd: options.cwd,
-    github: {
-      client,
-      repository: options.repository,
-      token: options.token,
-    },
-    logger,
-    maxTurns: options.maxTurns,
-    prompt: prompts.prompt,
-    schema,
-    schemaId: definition.schemaId,
-    stage: options.stage,
-    stageDefinition: definition,
-    system: prompts.system,
-  };
-  let result = await runStageAiResult({
-    aiRunOptions,
-    context,
     definition,
     logger,
     options,
+    prompts,
+    schema,
   });
+  let result = await runStageResultForMode({
+    aiRunOptions,
+    config,
+    context,
+    definition,
+    executionMode,
+    logger,
+    options,
+  });
+  if (executionMode === "member") {
+    logger.event("stage.done", {
+      status: result.status,
+    });
+    return result;
+  }
   result = await applyDeterministicWrites({
     client,
     config,
@@ -133,9 +140,69 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   return result;
 }
 
+function persistContext(options: {
+  context: ContextPacket;
+  logger: StageLogger;
+  options: RunnerOptions;
+}): void {
+  const contextDir = process.env.RUNNER_TEMP || options.options.cwd;
+  mkdirSync(contextDir, { recursive: true });
+  writeFileSync(
+    join(contextDir, `git-vibe-${options.options.stage}-context.json`),
+    JSON.stringify(options.context, null, 2),
+  );
+  options.logger.event("context.persisted", {
+    file: `git-vibe-${options.options.stage}-context.json`,
+  });
+}
+
+function buildAiRunOptions(options: {
+  client: GitHubClient;
+  config: GitVibeConfig;
+  definition: RunnerStageDefinition;
+  logger: StageLogger;
+  options: RunnerOptions;
+  prompts: { prompt: string; system: string };
+  schema: JsonObject;
+}): RunAiStageOptions {
+  return {
+    config: options.config,
+    cwd: options.options.cwd,
+    github: {
+      client: options.client,
+      repository: options.options.repository,
+      token: options.options.token,
+    },
+    logger: options.logger,
+    maxTurns: options.options.maxTurns,
+    profileName: options.options.profileName,
+    prompt: options.prompts.prompt,
+    schema: options.schema,
+    schemaId: options.definition.schemaId,
+    stage: options.options.stage,
+    stageDefinition: options.definition,
+    system: options.prompts.system,
+  };
+}
+
+async function runStageResultForMode(options: {
+  aiRunOptions: RunAiStageOptions;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  executionMode: RunnerOptions["executionMode"];
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<StageRunResult> {
+  if (options.executionMode === "finalizer") {
+    return runMatrixFinalizerResult(options);
+  }
+  return runStageAiResult(options);
+}
+
 async function loadRunnerContext(options: {
   client: GitHubClient;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  definition: RunnerStageDefinition;
   logger: StageLogger;
   options: RunnerOptions;
 }): Promise<ContextPacket> {
@@ -162,6 +229,7 @@ async function publishStageStart(options: {
   options: RunnerOptions;
 }): Promise<PublishedArtifactComment[]> {
   const transientComments: PublishedArtifactComment[] = [];
+  if (options.options.executionMode === "member") return transientComments;
   if (!options.options.dryRun && options.options.workflowRunUrl) {
     const comment = await publishStageStartComment({
       client: options.client,
@@ -187,6 +255,11 @@ async function publishStageStart(options: {
     await markPullRequestFeedbackInvestigationStarted(options);
   }
   return transientComments;
+}
+
+function roleDefinitionFor(options: RunnerOptions): string | undefined {
+  if (options.executionMode !== "member" || !options.roleName) return undefined;
+  return readRoleDefinition(options.cwd, options.roleName);
 }
 
 async function blockUnsafePullRequestHead(options: {
@@ -364,6 +437,75 @@ async function runStageAiResult({
   }
 }
 
+async function runMatrixFinalizerResult({
+  aiRunOptions,
+  config,
+  context,
+  definition,
+  logger,
+  options,
+}: {
+  aiRunOptions: RunAiStageOptions;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<StageRunResult> {
+  const plan = stageExecutionPlan(config, options.stage, options.cwd);
+  const results = loadMatrixStageResults(options.memberResultsDir, options.stage);
+  const expected = plan.matrix.include.length;
+  const failed = Math.max(0, expected - results.length);
+
+  logger.event("matrix.finalize.start", {
+    expected,
+    failed,
+    mode: plan.mode,
+    successful: results.length,
+  });
+  if (results.length === 0) {
+    return stageRunResult({
+      content: JSON.stringify(zeroMatrixResultsOutput({ context, expected, options })),
+      context,
+      definition,
+      logger,
+      options,
+    });
+  }
+  if (options.dryRun || plan.mode === "profile") {
+    return stageRunResult({
+      content: JSON.stringify(results[0]?.parsedOutput),
+      context,
+      definition,
+      logger,
+      options,
+    });
+  }
+
+  const prompt = [
+    aiRunOptions.prompt,
+    synthesisPromptAddition({
+      expected,
+      failed,
+      results,
+      roleGroup: plan.roleGroup,
+      stage: options.stage,
+    }),
+  ].join("\n\n");
+  return stageRunResult({
+    content: await runAiStage({
+      ...aiRunOptions,
+      profileName: plan.synthesizerProfile,
+      prompt,
+      system: [aiRunOptions.system, synthesizerSystemAddition()].join("\n\n"),
+    }),
+    context,
+    definition,
+    logger,
+    options,
+  });
+}
+
 function isStructuredOutputFailure(error: unknown): boolean {
   const message = summarizeError(error);
   return (
@@ -408,11 +550,43 @@ async function stageRunResult({
   const contextDir = process.env.RUNNER_TEMP || options.cwd;
   result.resultFile = writeStageResultFile({
     directory: contextDir,
+    metadata:
+      options.executionMode === "member"
+        ? matrixResultMetadata({
+            profileName: options.profileName,
+            result,
+            roleName: options.roleName,
+          })
+        : undefined,
     result,
     stage: options.stage,
   });
   logger.event("result.persisted", { file: `git-vibe-${options.stage}-result.json` });
   return result;
+}
+
+function zeroMatrixResultsOutput(options: {
+  context: ContextPacket;
+  expected: number;
+  options: RunnerOptions;
+}): JsonObject {
+  const reason = `No ${options.options.stage} matrix member results were available for synthesis. Expected ${options.expected}.`;
+  const base = {
+    assumptions: [],
+    comment_body: reason,
+    findings: [reason],
+    next_state: "blocked",
+    references: [options.context.artifact.url, options.options.workflowRunUrl].filter(
+      (value): value is string => Boolean(value),
+    ),
+    stage: options.options.stage,
+    status: "blocked",
+    summary: reason,
+  };
+  if (options.options.stage === "investigate") {
+    return { ...base, blocking_questions: [reason], implementation_plan: [], questions: [] };
+  }
+  return base;
 }
 
 async function contextFor({

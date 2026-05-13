@@ -197,33 +197,35 @@ flowchart TD
     G -->|no| H[Repair implementation attempt]
     H --> F
     G -->|yes| I[Commit and push root branch]
-    I --> J[Review matrix job]
-    J --> K{Review result}
-    K -->|changes required| L[Create internal review-fix issue with details]
-    L --> M[Comment on parent and link sub-issue]
-    M --> N[Dispatch new develop run]
-    N --> O[Fail current run before PR creation]
-    K -->|review passed| P[Create or update PR]
-    P --> Q[Wait for human review]
+    I --> J[Plan review-matrix stage]
+    J --> K[Run member job or role-group member jobs]
+    K --> L[Finalizer validates one review result]
+    L --> M{Review result}
+    M -->|changes required| N[Create internal review-fix issue with details]
+    N --> O[Comment on parent and link sub-issue]
+    O --> P[Dispatch new develop run]
+    P --> Q[Fail current run before PR creation]
+    M -->|review passed| R[Create or update PR]
+    R --> S[Wait for human review]
   end
 
   subgraph FollowUpRun[Next develop run for review-fix issue]
-    R[Review-fix issue] --> T[Implement fixes on existing root branch]
-    T --> U[Review matrix job]
-    U --> V{Review result}
-    V -->|changes required| W[Create next review-fix issue and fail run]
-    V -->|review passed| X[Create or update PR for issue chain]
+    T[Review-fix issue] --> U[Implement fixes on existing root branch]
+    U --> V[Plan review-matrix stage]
+    V --> W[Run member job or role-group member jobs]
+    W --> X[Finalizer validates one review result]
+    X --> Y{Review result}
+    Y -->|changes required| Z[Create next review-fix issue and fail run]
+    Y -->|review passed| AA[Create or update PR for issue chain]
   end
 
-  N -. starts .-> R
+  P -. starts .-> T
 ```
 
-Review matrix defaults:
-
-- correctness review
-- test coverage review
-- security and regression review
-- maintainability review
+Review matrix role groups are configured through `ai.role_groups`. Each role
+entry pairs a `.git-vibe/role-group/*.md` role definition with the AI profile
+that runs it, and the configured synthesizer profile merges successful role
+outputs into one final `review-matrix.v1` result.
 
 The implementation stage has an inner validation repair loop. GitVibe runs the
 configured `tests.commands` mechanically after the AI returns JSON. If a command
@@ -393,7 +395,7 @@ sequenceDiagram
   alt Fixes required
     WF->>PR: Add gvi:investigated, then gvi:in-progress
     Agent->>PR: Push fixes to the existing PR head branch
-    WF->>Agent: Run review-matrix on the updated PR branch
+    WF->>Agent: Plan review-matrix, run member job(s), and finalize one result
     alt Review passes
       WF->>PR: Remove gvi:review-fix and add gvi:ready-for-approval
     else Review still requires changes
