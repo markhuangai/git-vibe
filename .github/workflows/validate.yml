@@ -90,12 +90,12 @@ on:
         description: GitVibe action source repository.
         required: false
         type: string
-        default: git-vibe/actions
+        default: markhuangai/git-vibe
       action-ref:
         description: GitVibe action source ref.
         required: false
         type: string
-        default: v1
+        default: v1.0.0
     secrets:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.

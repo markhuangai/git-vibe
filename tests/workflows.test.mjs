@@ -211,7 +211,7 @@ describe("GitVibe workflow wiring", () => {
       const workflow = readWorkflow(file);
       const jobs = Object.values(workflow.jobs || {});
       const reusableJobs = jobs.filter((job) =>
-        String(job.uses || "").startsWith("git-vibe/actions/.github/workflows/"),
+        String(job.uses || "").startsWith("markhuangai/git-vibe/.github/workflows/"),
       );
 
       const reusableJob = reusableJobs[0];
@@ -583,7 +583,7 @@ describe("GitVibe app deployment boundary", () => {
     const content = readFileSync(".github/workflows/release.yml", "utf8");
 
     expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
-      default: "v1",
+      default: "v1.0.0",
       required: true,
     });
     expect(workflow.permissions).toMatchObject({

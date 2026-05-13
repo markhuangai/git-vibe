@@ -7,7 +7,7 @@ GitVibe is a self-hostable repository webhook server plus reusable GitHub Action
 The public action namespace should be:
 
 ```yaml
-uses: git-vibe/actions/investigate@v1
+uses: markhuangai/git-vibe/investigate@v1.0.0
 ```
 
 Reusable full pipelines should be published from the same repository:
@@ -15,7 +15,7 @@ Reusable full pipelines should be published from the same repository:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1.0.0
 ```
 
 Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The GitVibe orchestrator is hosted by the repository owner, receives or polls GitHub events, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
@@ -42,7 +42,7 @@ flowchart LR
   APP -->|labels, comments, backlinks, markers| GH
   APP -->|workflow_dispatch or repository_dispatch| WF[Consumer repo workflow]
 
-  WF -->|uses| GV[git-vibe/actions]
+  WF -->|uses| GV[markhuangai/git-vibe]
   WF --> RUNNER[GitHub-hosted or self-hosted runner]
 
   RUNNER --> LLM[Configured hosted LLM provider]
@@ -62,7 +62,7 @@ sequenceDiagram
   participant GH as GitHub
   participant App as GitVibe Server
   participant WF as GitHub Workflow
-  participant Act as git-vibe/actions
+  participant Act as markhuangai/git-vibe
   participant API as GitHub API
 
   GH->>App: Repository webhook: command, label, issue, discussion, or PR event
@@ -138,7 +138,7 @@ event_delivery:
 
 ## Consumer Setup
 
-Consumer repositories do not clone GitVibe's internal action implementation. They copy a small starter `.github` folder and pin GitVibe's public reusable workflows to the `v1` release tag.
+Consumer repositories do not clone GitVibe's internal action implementation. They copy a small starter `.github` folder and pin GitVibe's public reusable workflows to the `v1.0.0` release tag.
 
 Copy source:
 
@@ -164,7 +164,7 @@ The wrapper workflows call reusable workflows such as:
 ```yaml
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1.0.0
 ```
 
 Required repository or organization secrets/variables:

@@ -51,7 +51,7 @@ AI output, and writes routine GitHub state changes with deterministic code.
 | Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria with a label, then approve materialization |
 | AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                           |
 | Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                         |
-| Consumer repositories should stay small         | Copy a tiny `.github` starter and call reusable workflows from `git-vibe/actions`                                   |
+| Consumer repositories should stay small         | Copy a tiny `.github` starter and call reusable workflows from `markhuangai/git-vibe`                               |
 
 ## Pipeline at a glance
 
@@ -143,7 +143,7 @@ The starter workflows call the public reusable workflow namespace:
 ```yaml
 jobs:
   develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1.0.0
 ```
 
 Reusable workflows operate on the repository where the workflow run starts
@@ -417,7 +417,7 @@ Detailed docs:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: git-vibe/actions/investigate@v1
+  - uses: markhuangai/git-vibe/investigate@v1.0.0
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
@@ -428,7 +428,7 @@ steps:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: git-vibe/actions/.github/workflows/develop.yml@v1
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1.0.0
     with:
       issue-number: "123"
       runner: docker-runner
