@@ -593,8 +593,14 @@ describe("GitVibe app deployment boundary", () => {
     expect(content).toContain('GITHUB_REF" != "refs/heads/main"');
     expect(content).toContain("collaborators/$REQUEST_ACTOR/permission");
     expect(content).toContain('permission" != "admin"');
+    expect(content).toContain("docker context inspect");
+    expect(content).toContain("docker context create");
+    expect(content).toContain("docker buildx inspect release");
+    expect(content).toContain("docker buildx create --name release --use");
     expect(content).toContain("docker pull");
     expect(content).toContain("docker push");
+    expect(content).toContain("docker image rm");
+    expect(content).toContain("docker buildx prune --force --filter until=48h");
     expect(content).toContain("gh release create");
     expect(content).toContain("--generate-notes");
   });
