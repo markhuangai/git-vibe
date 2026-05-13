@@ -72,29 +72,17 @@ jobs:
             echo "release_image=$image:$RELEASE_TAG"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Ensure Docker context and buildx
+      - name: Set up Docker builder
+        shell: bash
         run: |
           set -euo pipefail
 
-          context="${DOCKER_CONTEXT:-}"
-          if [ -n "$context" ] && ! DOCKER_CONTEXT= docker context inspect "$context" >/dev/null 2>&1; then
-            if [ -n "${DOCKER_HOST:-}" ]; then
-              DOCKER_CONTEXT= docker context create "$context" --docker "host=$DOCKER_HOST"
-              echo "DOCKER_CONTEXT=$context" >> "$GITHUB_ENV"
-            else
-              echo "::warning::DOCKER_CONTEXT=$context is missing and DOCKER_HOST is unset; using the default Docker context."
-              echo "DOCKER_CONTEXT=" >> "$GITHUB_ENV"
-              unset DOCKER_CONTEXT
-            fi
-          fi
-
-          docker version
-
-          if docker buildx inspect release >/dev/null 2>&1; then
-            docker buildx use release
+          if docker buildx inspect rootless >/dev/null 2>&1; then
+            docker buildx use rootless
           else
-            docker buildx create --name release --use
+            docker buildx create --name rootless --use default
           fi
+
           docker buildx inspect --bootstrap
 
       - uses: docker/login-action@v3
