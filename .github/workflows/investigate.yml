@@ -100,6 +100,8 @@ jobs:
   plan-investigate:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
+    env:
+      GITVIBE_AI_ENV_JSON: ""
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
