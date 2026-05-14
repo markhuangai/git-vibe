@@ -94,12 +94,13 @@ on:
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
-  GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
   materialize:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     permissions:
       contents: read
       discussions: write

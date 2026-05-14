@@ -106,7 +106,6 @@ on:
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
-  GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
   plan-validate:
@@ -146,6 +145,8 @@ jobs:
     runs-on: ${{ inputs.runner }}
     needs: plan-validate
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -197,6 +198,8 @@ jobs:
       - validate-members
     if: always() && needs.plan-validate.result == 'success'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     permissions:
       contents: read
       discussions: write
