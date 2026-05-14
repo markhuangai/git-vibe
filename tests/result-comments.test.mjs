@@ -5,20 +5,9 @@ import {
 } from "../src/runner/result-comments.ts";
 
 describe("stage result comments", () => {
-  it("renders non-compact structured AI output as human-readable Markdown", () => {
+  it("renders every stage result as compact action-focused Markdown", () => {
     const body = renderStageResultComment({
-      context: {
-        artifact: {
-          body: "Issue body",
-          number: "12",
-          title: "Issue title",
-          type: "issue",
-          url: "https://github.com/example/repo/issues/12",
-        },
-        generatedAt: "2026-01-01T00:00:00Z",
-        repository: "example/repo",
-        timeline: [],
-      },
+      context: context("issue"),
       links: [{ label: "Pull request #22", url: "https://github.com/example/repo/pull/22" }],
       parsedOutput: {
         assumptions: ["Existing API remains stable"],
@@ -34,7 +23,6 @@ describe("stage result comments", () => {
         pr_body: "Refs #12",
         pr_title: "GitVibe: implement feature",
         proposed_labels: ["gvi:ready-for-approval"],
-        questions: ["Confirm copy text"],
         references: ["https://github.com/example/repo/issues/12"],
         stage: "create-pr",
         status: "completed",
@@ -51,24 +39,93 @@ describe("stage result comments", () => {
     );
     expect(body).toContain("## GitVibe Pull Request Update");
     expect(body).toContain("**Status:** `completed`");
-    expect(body).toContain("### Already Working\n- Discussion comments can be posted");
-    expect(body).toContain("### Not Working Yet\n- Threaded PR review replies are not implemented");
+    expect(body).toContain("**Next state:** `pr-draft-ready`");
+    expect(body).toContain("Validation finished.");
+    expect(body).toContain("### Next Action\nContinue with `pr-draft-ready`.");
     expect(body).toContain(
-      "### Partial Or Unclear\n- Issue comments are flat replies with source links",
+      "Full details are in the stage result artifact: `git-vibe-create-pr-result.json`.",
     );
-    expect(body).toContain("### Findings\n- The request is implementable");
+    expect(body).toContain("Pull request #22: https://github.com/example/repo/pull/22");
+    expect(body).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
+    expect(body).not.toContain("### Details");
+    expect(body).not.toContain("### Findings");
+    expect(body).not.toContain("### Pull Request");
+    expect(body).not.toContain("Detailed notes for reviewers.");
+    expect(body).not.toContain("Threaded PR review replies are not implemented");
+  });
+
+  it("renders ordered questions with up to four options", () => {
+    const body = renderStageResultComment({
+      context: context("issue"),
+      parsedOutput: {
+        blocking_questions: [
+          {
+            options: [
+              "Use .github/git-vibe.yml",
+              "Use package scripts",
+              "Use AGENTS.md",
+              "Use workflow defaults",
+              "Use a new config file",
+            ],
+            question: "Which source should define required validation commands?",
+          },
+        ],
+        next_state: "needs-info",
+        questions: ["Confirm whether the compact comment copy is acceptable."],
+        status: "blocked",
+        summary: "Investigation needs maintainer input.",
+      },
+      stage: "investigate",
+    });
+
+    expect(body).toContain("### Questions");
     expect(body).toContain(
-      "### Implementation Plan\n- src/app/server.ts: add command routing test coverage",
+      "1. [Blocking] Which source should define required validation commands?",
     );
-    expect(body).toContain("### Proposed Implementation Issue");
-    expect(body).toContain("### Pull Request");
-    expect(body).toContain("- Workflow run: https://github.com/example/repo/actions/runs/99");
-    expect(body).not.toContain('"findings"');
+    expect(body).toContain(
+      "Options: Use .github/git-vibe.yml; Use package scripts; Use AGENTS.md; Use workflow defaults; or provide additional context.",
+    );
+    expect(body).toContain("2. Confirm whether the compact comment copy is acceptable.");
+    expect(body).toContain("Options: Provide additional context.");
+    expect(body).not.toContain("Use a new config file");
+    expect(body).toContain(
+      "### Next Action\nReply with answers or selected options for every question in one comment.",
+    );
+    expect(body).not.toContain("### Blocking Questions");
+  });
+});
+
+describe("stage result comment fallbacks", () => {
+  it("handles missing summary, status, and invalid question entries", () => {
+    const body = renderStageResultComment({
+      context: context("discussion"),
+      links: [{ label: "Empty link", url: "" }],
+      parsedOutput: {
+        next_state: 42,
+        questions: [
+          "",
+          null,
+          { options: ["Ignored"], question: "" },
+          { options: "not an array", question: "Which fallback should be shown?" },
+        ],
+        status: 123,
+        summary: 123,
+      },
+      stage: "summarize",
+    });
+
+    expect(body).toContain("**Status:** `completed`");
+    expect(body).not.toContain("**Next state:**");
+    expect(body).toContain("No summary provided.");
+    expect(body).toContain("1. Which fallback should be shown?");
+    expect(body).toContain("Options: Provide additional context.");
+    expect(body).not.toContain("Ignored");
+    expect(body).not.toContain("Empty link:");
   });
 });
 
 describe("pull request feedback result comments", () => {
-  it("renders investigation feedback items for pull request artifacts", () => {
+  it("keeps pull request feedback investigation comments compact", () => {
     const body = renderStageResultComment({
       context: context("pull-request"),
       parsedOutput: {
@@ -78,7 +135,6 @@ describe("pull request feedback result comments", () => {
             status: "answered",
             summary: "Resolved the null handling feedback.",
           },
-          "loose feedback summary",
         ],
         next_state: "fixes-required",
         references: ["https://github.com/example/repo/pull/12#discussion_r1"],
@@ -90,24 +146,14 @@ describe("pull request feedback result comments", () => {
     });
 
     expect(body).toContain("## GitVibe PR Feedback Investigation");
-    expect(body).toContain("### Feedback Items");
-    expect(body).toContain("`review-comment-1` `answered`: Resolved the null handling feedback.");
-    expect(body).toContain("- loose feedback summary");
-    expect(body).toContain("### Skipped Feedback\n- Outdated thread was ignored");
-  });
-
-  it("renders default fields for incomplete structured feedback items", () => {
-    const body = renderStageResultComment({
-      context: context("pull-request"),
-      parsedOutput: {
-        feedback_items: [{}],
-        status: "completed",
-        summary: "Feedback item shape was incomplete.",
-      },
-      stage: "investigate",
-    });
-
-    expect(body).toContain("`unknown` `unknown`: No summary provided.");
+    expect(body).toContain("Open PR feedback requires code changes.");
+    expect(body).toContain("### Next Action\nContinue with `fixes-required`.");
+    expect(body).toContain(
+      "Full details are in the stage result artifact: `git-vibe-investigate-result.json`.",
+    );
+    expect(body).not.toContain("### Feedback Items");
+    expect(body).not.toContain("review-comment-1");
+    expect(body).not.toContain("### Skipped Feedback");
   });
 });
 
@@ -131,11 +177,12 @@ describe("stage start comments", () => {
 });
 
 describe("compact stage result comments", () => {
-  it("renders validation results in a compact form", () => {
+  it("keeps validation details in the artifact instead of the comment", () => {
     const body = renderStageResultComment({
       context: context("issue"),
       parsedOutput: {
-        assumptions: ["Existing API remains stable"],
+        comment_body:
+          "Validation notes:\n- Runtime labels are internal state\n- Trigger labels stay public",
         findings: ["The request is implementable"],
         missing_capabilities: ["Threaded PR review replies are not implemented"],
         next_state: "ready-for-implementation",
@@ -151,60 +198,17 @@ describe("compact stage result comments", () => {
     });
 
     expect(body).toContain("## GitVibe Validation");
+    expect(body).toContain("Validation finished.");
     expect(body).toContain(
-      "### Capability Status\n- Working: 1\n- Missing: 1\n- Partial or unclear: 1",
+      "Full details are in the stage result artifact: `git-vibe-validate-result.json`.",
     );
-    expect(body).toContain("### Key Findings\n- The request is implementable");
-    expect(body).not.toContain("Threaded PR review replies are not implemented");
+    expect(body).not.toContain("### Capability Status");
+    expect(body).not.toContain("### Key Findings");
+    expect(body).not.toContain("### Details");
+    expect(body).not.toContain("Runtime labels are internal state");
   });
 
-  it("keeps supplemental details in compact validation comments", () => {
-    const body = renderStageResultComment({
-      context: context("discussion"),
-      parsedOutput: {
-        comment_body:
-          "Validation notes:\n- Runtime labels are internal state\n- Trigger labels stay public",
-        findings: ["The validation needs maintainer confirmation."],
-        next_state: "needs-info",
-        questions: ["Confirm the validation notes above."],
-        references: [],
-        stage: "validate",
-        status: "completed",
-        summary: "Validation needs maintainer input.",
-      },
-      stage: "validate",
-    });
-
-    expect(body).toContain("### Details");
-    expect(body).toContain("Validation notes:");
-    expect(body).toContain("Runtime labels are internal state");
-    expect(body).toContain("### Open Questions\n- Confirm the validation notes above.");
-  });
-
-  it("renders retry guidance when investigation has blocking questions", () => {
-    const body = renderStageResultComment({
-      context: context("issue"),
-      parsedOutput: {
-        assumptions: [],
-        blocking_questions: ["Which config key should be used?"],
-        comment_body: "Blocked on maintainer input.",
-        findings: [],
-        implementation_plan: [],
-        next_state: "needs-info",
-        references: [],
-        stage: "investigate",
-        status: "completed",
-        summary: "Investigation needs maintainer input.",
-      },
-      stage: "investigate",
-    });
-
-    expect(body).toContain("### Blocking Questions\n- Which config key should be used?");
-    expect(body).toContain("### Next Human Action");
-    expect(body).toContain("add `git-vibe:investigate`");
-  });
-
-  it("renders next action and limits long compact sections", () => {
+  it("does not render truncated list summaries in comments", () => {
     const body = renderStageResultComment({
       context: context("issue"),
       parsedOutput: {
@@ -217,12 +221,13 @@ describe("compact stage result comments", () => {
     });
 
     expect(body).toContain("### Next Action\nContinue with `ready-for-implementation`.");
-    expect(body).toContain("- 1 more in the stage result artifact.");
+    expect(body).not.toContain("more in the stage result artifact");
+    expect(body).not.toContain("### Key Findings");
   });
 });
 
 describe("optional result comment sections", () => {
-  it("omits next action when the next state is blocked", () => {
+  it("omits next action when the next state is blocked and there are no questions", () => {
     const body = renderStageResultComment({
       context: context("issue"),
       parsedOutput: {

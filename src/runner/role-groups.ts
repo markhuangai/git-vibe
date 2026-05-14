@@ -6,6 +6,7 @@ import type { GitVibeConfig, JsonObject, Stage, StageRunResult } from "../shared
 export interface StageMatrixRow {
   artifact: string;
   index: number;
+  model: string;
   profile: string;
   role: string;
 }
@@ -55,9 +56,9 @@ export function stageExecutionPlan(
     throw new Error(`ai.stages.${stage} cannot define both profile and role_group.`);
   }
   if (profile) {
-    activeProfileByName(config, profile);
+    const activeProfile = activeProfileByName(config, profile);
     return {
-      matrix: { include: [matrixRow(stage, 0, profile, "")] },
+      matrix: { include: [matrixRow(stage, 0, profile, "", profileModelName(activeProfile))] },
       maxParallel: 1,
       mode: "profile",
     };
@@ -72,8 +73,8 @@ export function stageExecutionPlan(
     matrix: {
       include: group.roles.map((role, index) => {
         assertRoleFile(cwd, role.role);
-        activeProfileByName(config, role.profile);
-        return matrixRow(stage, index, role.profile, role.role);
+        const activeProfile = activeProfileByName(config, role.profile);
+        return matrixRow(stage, index, role.profile, role.role, profileModelName(activeProfile));
       }),
     },
     maxParallel: group.parallel,
@@ -109,6 +110,15 @@ export function stageWorkflowMatrix(plan: StageExecutionPlan): {
 
 export function stageWorkflowIndexes(plan: StageExecutionPlan): number[] {
   return plan.matrix.include.map((row) => row.index);
+}
+
+export function stageWorkflowLabels(plan: StageExecutionPlan): Record<string, string> {
+  return Object.fromEntries(
+    plan.matrix.include.map((row) => [
+      String(row.index),
+      `model=${row.model || row.profile} role=${row.role || "default"}`,
+    ]),
+  );
 }
 
 export function matrixMemberRowForStage(
@@ -258,13 +268,29 @@ function rejectProfiles(stageConfig: Record<string, unknown>, stage: Stage): voi
   }
 }
 
-function matrixRow(stage: Stage, index: number, profile: string, role: string): StageMatrixRow {
+function matrixRow(
+  stage: Stage,
+  index: number,
+  profile: string,
+  role: string,
+  model: string,
+): StageMatrixRow {
   return {
     artifact: `git-vibe-${stage}-member-${index}`,
     index,
+    model,
     profile,
     role,
   };
+}
+
+function profileModelName(profile: Record<string, unknown>): string {
+  const provider = profile.provider;
+  if (isRecord(provider)) {
+    const providerModel = stringValue(provider.model);
+    if (providerModel) return providerModel;
+  }
+  return stringValue(profile.model) || "";
 }
 
 function assertRoleFile(cwd: string, role: string): string {

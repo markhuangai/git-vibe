@@ -25,6 +25,12 @@ const stageTitles: Record<Stage, string> = {
   validate: "Validation",
 };
 
+interface NormalizedQuestion {
+  blocking: boolean;
+  options: string[];
+  question: string;
+}
+
 export function renderStageStartComment(options: {
   context: ContextPacket;
   stage: Stage;
@@ -48,14 +54,8 @@ export function renderStageStartComment(options: {
 }
 
 export function renderStageResultComment(options: StageResultCommentOptions): string {
-  if (
-    (options.stage === "investigate" && options.context.artifact.type !== "pull-request") ||
-    options.stage === "validate"
-  ) {
-    return renderCompactStageResultComment(options);
-  }
-
   const output = options.parsedOutput;
+  const questions = normalizedQuestions(output);
   const lines = [
     resultMarker(options),
     `## GitVibe ${stageTitle(options)}`,
@@ -64,47 +64,11 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
     stateLine(output),
     "",
     textField(output.summary) || "No summary provided.",
-    ...detailsSection(output),
-    ...listSection("Already Working", arrayField(output.working_capabilities)),
-    ...listSection("Not Working Yet", arrayField(output.missing_capabilities)),
-    ...listSection("Partial Or Unclear", arrayField(output.partial_capabilities)),
-    ...listSection("Findings", arrayField(output.findings)),
-    ...listSection("Blocking Questions", arrayField(output.blocking_questions)),
-    ...investigationRetrySection(options.stage, output),
-    ...listSection("Open Questions", arrayField(output.questions)),
-    ...feedbackItemsSection(output),
-    ...listSection("Implementation Plan", arrayField(output.implementation_plan)),
-    ...listSection("Assumptions", arrayField(output.assumptions)),
-    ...listSection("Proposed Labels", arrayField(output.proposed_labels)),
-    ...issueSection(output),
-    ...pullRequestSection(output),
-    ...listSection("Tests", arrayField(output.tests)),
-    ...listSection("Skipped Feedback", arrayField(output.skipped_feedback)),
-    ...referencesSection(output, options),
+    ...questionsSection(questions),
+    ...compactNextActionSection(output, questions.length > 0),
+    ...resultSection(options),
   ];
 
-  return cleanLines(lines).join("\n");
-}
-
-function renderCompactStageResultComment(options: StageResultCommentOptions): string {
-  const output = options.parsedOutput;
-  const lines = [
-    resultMarker(options),
-    `## GitVibe ${stageTitle(options)}`,
-    "",
-    `**Status:** ${inlineCode(textField(output.status) || "completed")}`,
-    stateLine(output),
-    "",
-    textField(output.summary) || "No summary provided.",
-    ...detailsSection(output),
-    ...compactValidationSection(options.stage, output),
-    ...listSection("Blocking Questions", limitList(arrayField(output.blocking_questions), 5)),
-    ...compactNextActionSection(options.stage, output),
-    ...listSection("Key Findings", limitList(arrayField(output.findings), 5)),
-    ...listSection("Implementation Plan", limitList(arrayField(output.implementation_plan), 5)),
-    ...listSection("Open Questions", limitList(arrayField(output.questions), 5)),
-    ...referencesSection(output, options),
-  ];
   return cleanLines(lines).join("\n");
 }
 
@@ -125,107 +89,75 @@ function stateLine(output: JsonObject): string {
   return nextState ? `**Next state:** ${inlineCode(nextState)}` : "";
 }
 
-function detailsSection(output: JsonObject): string[] {
-  const details = textField(output.comment_body);
-  const summary = textField(output.summary);
-  if (!details || details.trim() === summary.trim()) return [];
-  return ["", "### Details", details];
+function questionsSection(questions: NormalizedQuestion[]): string[] {
+  if (!questions.length) return [];
+  return ["", "### Questions", ...questions.flatMap(questionLines)];
 }
 
-function issueSection(output: JsonObject): string[] {
-  const title = textField(output.issue_title);
-  const body = textField(output.issue_body);
-  if (!title && !body) return [];
-  return ["", "### Proposed Implementation Issue", title ? `**Title:** ${title}` : "", body];
+function questionLines(question: NormalizedQuestion, index: number): string[] {
+  const prefix = question.blocking ? "[Blocking] " : "";
+  const options = question.options.slice(0, 4);
+  const optionsLine = options.length
+    ? `   Options: ${options.join("; ")}; or provide additional context.`
+    : "   Options: Provide additional context.";
+  return [`${index + 1}. ${prefix}${question.question}`, optionsLine];
 }
 
-function pullRequestSection(output: JsonObject): string[] {
-  const branch = textField(output.branch);
-  const title = textField(output.pr_title);
-  const body = textField(output.pr_body);
-  if (!branch && !title && !body) return [];
-  return [
-    "",
-    "### Pull Request",
-    branch ? `**Branch:** ${inlineCode(branch)}` : "",
-    title ? `**Title:** ${title}` : "",
-    body,
-  ];
-}
-
-function feedbackItemsSection(output: JsonObject): string[] {
-  if (!Array.isArray(output.feedback_items) || output.feedback_items.length === 0) return [];
-  return [
-    "",
-    "### Feedback Items",
-    ...output.feedback_items.map((item) => {
-      if (!item || typeof item !== "object") return `- ${String(item)}`;
-      const fields = item as Record<string, unknown>;
-      const id = textField(fields.id) || "unknown";
-      const status = textField(fields.status) || "unknown";
-      const summary = textField(fields.summary) || "No summary provided.";
-      return `- ${inlineCode(id)} ${inlineCode(status)}: ${summary}`;
-    }),
-  ];
-}
-
-function referencesSection(output: JsonObject, options: StageResultCommentOptions): string[] {
-  const references = [
-    ...arrayField(output.references),
-    ...linkReferences(options.links || []),
-    options.workflowRunUrl ? `Workflow run: ${options.workflowRunUrl}` : "",
-  ].filter(Boolean);
-  return listSection("References", uniqueStrings(references));
-}
-
-function compactValidationSection(stage: Stage, output: JsonObject): string[] {
-  if (stage !== "validate") return [];
-  const working = arrayField(output.working_capabilities).length;
-  const missing = arrayField(output.missing_capabilities).length;
-  const partial = arrayField(output.partial_capabilities).length;
-  if (!working && !missing && !partial) return [];
-  return [
-    "",
-    "### Capability Status",
-    `- Working: ${working}`,
-    `- Missing: ${missing}`,
-    `- Partial or unclear: ${partial}`,
-  ];
-}
-
-function compactNextActionSection(stage: Stage, output: JsonObject): string[] {
-  if (stage === "investigate" && arrayField(output.blocking_questions).length) {
-    return investigationRetrySection(stage, output);
+function compactNextActionSection(output: JsonObject, hasQuestions: boolean): string[] {
+  if (hasQuestions) {
+    return [
+      "",
+      "### Next Action",
+      "Reply with answers or selected options for every question in one comment.",
+    ];
   }
   const nextState = textField(output.next_state);
   if (!nextState || nextState === "blocked") return [];
   return ["", "### Next Action", `Continue with ${inlineCode(nextState)}.`];
 }
 
-function listSection(title: string, values: string[]): string[] {
-  if (!values.length) return [];
-  return ["", `### ${title}`, ...values.map((value) => `- ${value}`)];
+function resultSection(options: StageResultCommentOptions): string[] {
+  const references = [
+    `Full details are in the stage result artifact: ${inlineCode(
+      `git-vibe-${options.stage}-result.json`,
+    )}.`,
+    ...linkReferences(options.links || []),
+    options.workflowRunUrl ? `Workflow run: ${options.workflowRunUrl}` : "",
+  ].filter(Boolean);
+  return ["", "### Result", ...references];
 }
 
-function limitList(values: string[], limit: number): string[] {
-  if (values.length <= limit) return values;
-  return [...values.slice(0, limit), `${values.length - limit} more in the stage result artifact.`];
-}
-
-function investigationRetrySection(stage: Stage, output: JsonObject): string[] {
-  if (stage !== "investigate" || !arrayField(output.blocking_questions).length) return [];
+function normalizedQuestions(output: JsonObject): NormalizedQuestion[] {
   return [
-    "",
-    "### Next Human Action",
-    "Answer the blocking questions, then add `git-vibe:investigate` to rerun investigation before implementation approval.",
+    ...questionItems(output.blocking_questions, true),
+    ...questionItems(output.questions, false),
   ];
+}
+
+function questionItems(value: unknown, blocking: boolean): NormalizedQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => normalizeQuestion(item, blocking))
+    .filter((item): item is NormalizedQuestion => item !== undefined);
+}
+
+function normalizeQuestion(item: unknown, blocking: boolean): NormalizedQuestion | undefined {
+  if (typeof item === "string") {
+    const question = item.trim();
+    return question ? { blocking, options: [], question } : undefined;
+  }
+  if (!item || typeof item !== "object") return undefined;
+  const fields = item as Record<string, unknown>;
+  const question = textField(fields.question);
+  if (!question) return undefined;
+  return { blocking, options: stringItems(fields.options).slice(0, 4), question };
 }
 
 function linkReferences(links: StageResultLink[]): string[] {
   return links.filter((link) => link.url).map((link) => `${link.label}: ${link.url}`);
 }
 
-function arrayField(value: unknown): string[] {
+function stringItems(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item).trim()).filter(Boolean);
 }
@@ -236,10 +168,6 @@ function textField(value: unknown): string {
 
 function inlineCode(value: string): string {
   return `\`${value.replaceAll("`", "'")}\``;
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
 }
 
 function cleanLines(lines: string[]): string[] {

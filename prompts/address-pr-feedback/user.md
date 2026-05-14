@@ -17,5 +17,6 @@ Remediate actionable pull request review feedback on the current branch and prod
 - `tests`: Exact checks run and their result. If not run, explain why.
 - `skipped_feedback`: Feedback not applied, with a reason such as obsolete, already fixed, unclear, out of scope, or needs maintainer decision.
 - `findings`: Summary of applied fixes and any remaining risks.
+- `questions`: Maintainer decisions required before feedback can be safely addressed, preferably as answerable question objects with up to four options.
 - `next_state`: Use `feedback-addressed` when completed or `blocked` when the branch should not be pushed.
   </required_fields_guidance>

@@ -13,6 +13,9 @@ outputs:
   indexes:
     description: JSON list of stage member indexes for workflow matrix fanout.
     value: ${{ steps.plan.outputs.indexes }}
+  labels:
+    description: JSON object mapping stage member indexes to display labels.
+    value: ${{ steps.plan.outputs.labels }}
   max-parallel:
     description: Maximum parallel member jobs.
     value: ${{ steps.plan.outputs.max-parallel }}

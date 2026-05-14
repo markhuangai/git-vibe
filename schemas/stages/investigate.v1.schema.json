@@ -3,6 +3,25 @@
   "$id": "investigate.v1",
   "type": "object",
   "additionalProperties": false,
+  "definitions": {
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "options"],
+      "properties": {
+        "question": { "type": "string" },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "questionItem": {
+      "oneOf": [{ "type": "string" }, { "$ref": "#/definitions/question" }]
+    }
+  },
   "required": [
     "stage",
     "status",
@@ -20,8 +39,11 @@
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
     "findings": { "type": "array", "items": { "type": "string" } },
-    "blocking_questions": { "type": "array", "items": { "type": "string" } },
-    "questions": { "type": "array", "items": { "type": "string" } },
+    "blocking_questions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/questionItem" }
+    },
+    "questions": { "type": "array", "items": { "$ref": "#/definitions/questionItem" } },
     "implementation_plan": { "type": "array", "items": { "type": "string" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },

@@ -3,6 +3,25 @@
   "$id": "validate.v1",
   "type": "object",
   "additionalProperties": false,
+  "definitions": {
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "options"],
+      "properties": {
+        "question": { "type": "string" },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "questionItem": {
+      "oneOf": [{ "type": "string" }, { "$ref": "#/definitions/question" }]
+    }
+  },
   "required": [
     "stage",
     "status",
@@ -22,7 +41,7 @@
     "working_capabilities": { "type": "array", "items": { "type": "string" } },
     "missing_capabilities": { "type": "array", "items": { "type": "string" } },
     "partial_capabilities": { "type": "array", "items": { "type": "string" } },
-    "questions": { "type": "array", "items": { "type": "string" } },
+    "questions": { "type": "array", "items": { "$ref": "#/definitions/questionItem" } },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
     "next_state": {

@@ -14,7 +14,7 @@ Refine a feature discussion into a maintainer-grade summary that can either beco
 <required_fields_guidance>
 
 - `findings`: Key product and technical observations backed by discussion comments or inspected repo context.
-- `questions`: Specific decisions needed before implementation issue creation.
+- `questions`: Specific decisions needed before implementation issue creation, preferably as answerable question objects with up to four options.
 - `issue_title` and `issue_body`: Include only when the discussion is ready or nearly ready for materialization.
 - `next_state`: Use `ready-for-materialization`, `needs-info`, or `blocked`.
   </required_fields_guidance>

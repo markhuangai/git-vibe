@@ -14,6 +14,7 @@ Draft pull request metadata for the implemented branch. GitVibe will create or u
 <required_fields_guidance>
 
 - `findings`: Facts discovered while preparing the PR, such as branch state, missing evidence, or notable review risks.
+- `questions`: Missing PR metadata or maintainer decisions that block PR creation, preferably as answerable question objects with up to four options.
 - `references`: Include the issue URL and any branch, commit, diff, or file references used.
 - `next_state`: Use `pr-draft-ready` when completed or `blocked` when PR creation should not proceed.
   </required_fields_guidance>

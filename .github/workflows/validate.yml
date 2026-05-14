@@ -116,6 +116,7 @@ jobs:
       GITVIBE_AI_ENV_JSON: ""
     outputs:
       indexes: ${{ steps.plan.outputs.indexes }}
+      labels: ${{ steps.plan.outputs.labels }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
     permissions:
@@ -141,6 +142,7 @@ jobs:
           stage: validate
 
   validate-members:
+    name: validate-members (${{ fromJSON(needs.plan-validate.outputs.labels || '{}')[format('{0}', matrix.index)] || matrix.index }})
     runs-on: ${{ inputs.runner }}
     needs: plan-validate
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
