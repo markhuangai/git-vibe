@@ -142,6 +142,10 @@ describe("GitVibe workflow wiring", () => {
         `${file} should invoke at least one checked-out GitVibe action`,
       ).toBeGreaterThan(0);
       for (const step of steps) {
+        if (step.uses === "./.git-vibe/actions/plan-stage") {
+          expect(step.env?.GITVIBE_AI_ENV_JSON, `${file} ${step.uses} omits AI env`).toBe("");
+          continue;
+        }
         expect(step.env, `${file} ${step.uses} receives AI env`).toMatchObject(aiEnv);
         expect(
           step.env?.GITVIBE_AI_API_KEY,
@@ -185,7 +189,9 @@ describe("GitVibe workflow wiring", () => {
       expect(workflow.env?.CLAUDE_CODE_OAUTH_TOKEN, `${file} omits old Claude env`).toBeUndefined();
     }
   });
+});
 
+describe("GitVibe workflow call wiring", () => {
   it("makes reusable workflows callable and manually dispatchable", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
