@@ -135,13 +135,13 @@ ai:
   stages:
     investigate:
       enabled: true
-      profile: local_proxy
+      role_group: review_gate
     summarize:
       enabled: true
       profile: local_proxy
     validate:
       enabled: true
-      profile: local_proxy
+      role_group: review_gate
     materialize:
       enabled: true
       profile: local_proxy
@@ -164,14 +164,14 @@ bug_investigation:
     enabled: false
     reaction: "+1"
     threshold: 6
-    dispatch: investigation-only
+    dispatch: investigate
 
 feature_refinement:
   community_trigger:
     enabled: false
     reaction: "+1"
     threshold: 10
-    dispatch: summarize
+    dispatch: summarize-and-validate
 
 analysis:
   author_weight_order:

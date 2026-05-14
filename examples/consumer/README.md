@@ -1,9 +1,10 @@
 # GitVibe Consumer Example
 
-Copy the `.github` directory from this folder into a repository that should use GitVibe.
+Copy the `.github` and `.git-vibe` directories from this folder into a repository that should use GitVibe.
 
 ```bash
 cp -R examples/consumer/.github /path/to/consumer-repo/.github
+cp -R examples/consumer/.git-vibe /path/to/consumer-repo/.git-vibe
 ```
 
 Then configure repository or organization secrets and variables as described in the root `README.md`.

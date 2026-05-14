@@ -10,6 +10,11 @@ export interface StageMatrixRow {
   role: string;
 }
 
+export interface StageWorkflowMatrixRow {
+  artifact: string;
+  index: number;
+}
+
 export interface StageExecutionPlan {
   matrix: { include: StageMatrixRow[] };
   maxParallel: number;
@@ -78,13 +83,43 @@ export function stageExecutionPlan(
   };
 }
 
-export function profileNamesForConfiguredStage(config: GitVibeConfig, stage: Stage): string[] {
-  const plan = stageExecutionPlan(config, stage);
+export function profileNamesForConfiguredStage(
+  config: GitVibeConfig,
+  stage: Stage,
+  cwd = process.cwd(),
+): string[] {
+  const plan = stageExecutionPlan(config, stage, cwd);
   const names = plan.matrix.include.map((row) => row.profile);
   if (plan.synthesizerProfile) names.push(plan.synthesizerProfile);
   const fallback = stringValue(stageConfigFor(config, stage).fallback_profile);
   if (plan.mode === "profile" && fallback) names.push(fallback);
   return [...new Set(names)];
+}
+
+export function stageWorkflowMatrix(plan: StageExecutionPlan): {
+  include: StageWorkflowMatrixRow[];
+} {
+  return {
+    include: plan.matrix.include.map((row) => ({
+      artifact: row.artifact,
+      index: row.index,
+    })),
+  };
+}
+
+export function matrixMemberRowForStage(
+  config: GitVibeConfig,
+  stage: Stage,
+  cwd: string,
+  index: number,
+): StageMatrixRow {
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error("GITVIBE_MEMBER_INDEX must be a non-negative integer.");
+  }
+  const plan = stageExecutionPlan(config, stage, cwd);
+  const row = plan.matrix.include.find((candidate) => candidate.index === index);
+  if (!row) throw new Error(`GITVIBE_MEMBER_INDEX ${index} is not configured for ${stage}.`);
+  return row;
 }
 
 export function singleProfileNamesForStage(config: GitVibeConfig, stage: Stage): string[] {

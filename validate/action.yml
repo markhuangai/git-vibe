@@ -41,8 +41,8 @@ inputs:
     description: Role markdown filename for matrix member execution.
     required: false
     default: ""
-  member-results-dir:
-    description: Directory containing downloaded matrix member result artifacts.
+  member-index:
+    description: Matrix member index used to resolve the configured role/profile pair.
     required: false
     default: ""
 
@@ -72,7 +72,9 @@ runs:
     - name: Set up configured AI CLI
       shell: bash
       env:
+        GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
         GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
+        GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" validate
     - id: run
       shell: bash
@@ -87,5 +89,5 @@ runs:
         GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
         GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
         GITVIBE_ROLE_NAME: ${{ inputs.role }}
-        GITVIBE_MEMBER_RESULTS_DIR: ${{ inputs.member-results-dir }}
+        GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" validate

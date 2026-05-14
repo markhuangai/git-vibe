@@ -104,7 +104,6 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
-      synthesizer-profile: ${{ steps.plan.outputs.synthesizer-profile }}
     permissions:
       contents: read
     steps:
@@ -164,8 +163,7 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           execution-mode: member
-          profile: ${{ matrix.profile }}
-          role: ${{ matrix.role }}
+          member-index: ${{ matrix.index }}
       - name: Upload investigation member result
         if: always()
         uses: actions/upload-artifact@v4
@@ -215,8 +213,6 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           execution-mode: finalizer
-          profile: ${{ needs.plan-investigate.outputs.synthesizer-profile }}
-          member-results-dir: ${{ runner.temp }}/git-vibe-investigate-members
       - name: Upload investigation result
         if: always()
         uses: actions/upload-artifact@v4

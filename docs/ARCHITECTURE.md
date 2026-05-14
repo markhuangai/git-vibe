@@ -138,25 +138,33 @@ event_delivery:
 
 ## Consumer Setup
 
-Consumer repositories do not clone GitVibe's internal action implementation. They copy a small starter `.github` folder and pin GitVibe's public reusable workflows to the `v1.0.0` release tag.
+Consumer repositories do not clone GitVibe's internal action implementation.
+They copy small starter `.github` and `.git-vibe` folders and pin GitVibe's
+public reusable workflows to the `v1.0.0` release tag.
 
 Copy source:
 
 ```text
 examples/consumer/.github
+examples/consumer/.git-vibe
 ```
 
 Copy destination:
 
 ```text
 <consumer-repo>/.github
+<consumer-repo>/.git-vibe
 ```
 
 Starter files:
 
 - `.github/git-vibe.yml`: repository-specific GitVibe config.
+- `.git-vibe/role-group/*.md`: role definitions used by configured role groups.
 - `.github/workflows/investigate.yml`: wrapper for investigation-only runs.
 - `.github/workflows/develop.yml`: wrapper for full implementation runs.
+- `.github/workflows/materialize.yml`: wrapper for Discussion-to-issue materialization.
+- `.github/workflows/summarize.yml`: wrapper for Discussion summarization.
+- `.github/workflows/validate.yml`: wrapper for issue or Discussion validation.
 - `.github/workflows/address-feedback.yml`: wrapper for PR feedback investigation, conditional remediation, and review.
 
 The wrapper workflows call reusable workflows such as:

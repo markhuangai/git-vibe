@@ -4,7 +4,7 @@ import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "../config.js";
-import { stageExecutionPlan } from "../role-groups.js";
+import { stageExecutionPlan, stageWorkflowMatrix } from "../role-groups.js";
 import { parseStage } from "../../shared/stages.js";
 
 export interface PlanStageRuntime {
@@ -47,11 +47,9 @@ function writeOutputs(
   appendFile: (path: string, content: string) => void,
 ): void {
   if (!env.GITHUB_OUTPUT) return;
-  writeOutput(env.GITHUB_OUTPUT, "matrix", JSON.stringify(plan.matrix), appendFile);
+  writeOutput(env.GITHUB_OUTPUT, "matrix", JSON.stringify(stageWorkflowMatrix(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
-  writeOutput(env.GITHUB_OUTPUT, "role-group", plan.roleGroup || "", appendFile);
-  writeOutput(env.GITHUB_OUTPUT, "synthesizer-profile", plan.synthesizerProfile || "", appendFile);
 }
 
 function writeOutput(

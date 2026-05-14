@@ -16,12 +16,6 @@ outputs:
   mode:
     description: Stage execution mode.
     value: ${{ steps.plan.outputs.mode }}
-  role-group:
-    description: Selected role group name.
-    value: ${{ steps.plan.outputs.role-group }}
-  synthesizer-profile:
-    description: Profile used for role group synthesis.
-    value: ${{ steps.plan.outputs.synthesizer-profile }}
 
 runs:
   using: composite

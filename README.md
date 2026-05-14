@@ -51,7 +51,7 @@ AI output, and writes routine GitHub state changes with deterministic code.
 | Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria with a label, then approve materialization |
 | AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                           |
 | Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                         |
-| Consumer repositories should stay small         | Copy a tiny `.github` starter and call reusable workflows from `markhuangai/git-vibe`                               |
+| Consumer repositories should stay small         | Copy tiny `.github` and `.git-vibe` starters and call reusable workflows from `markhuangai/git-vibe`                |
 
 ## Pipeline at a glance
 
@@ -126,10 +126,12 @@ Run this from the repository that should use GitVibe:
 
 ```bash
 cp -R /path/to/git-vibe/examples/consumer/.github /path/to/your-repo/.github
+cp -R /path/to/git-vibe/examples/consumer/.git-vibe /path/to/your-repo/.git-vibe
 ```
 
-Copy only `examples/consumer/.github`. Do not copy GitVibe's internal action
-folders such as `investigate/`, `implement/`, `app/`, or `src/`.
+Copy only `examples/consumer/.github` and `examples/consumer/.git-vibe`. Do not
+copy GitVibe's internal action folders such as `investigate/`, `implement/`,
+`app/`, or `src/`.
 
 ### 2. Configure the consumer repo
 
@@ -334,11 +336,11 @@ ai:
           profile: local_proxy
   stages:
     investigate:
-      profile: local_proxy
+      role_group: review_gate
     summarize:
       profile: local_proxy
     validate:
-      profile: local_proxy
+      role_group: review_gate
     materialize:
       profile: local_proxy
     implement:
