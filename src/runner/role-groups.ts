@@ -107,6 +107,10 @@ export function stageWorkflowMatrix(plan: StageExecutionPlan): {
   };
 }
 
+export function stageWorkflowIndexes(plan: StageExecutionPlan): number[] {
+  return plan.matrix.include.map((row) => row.index);
+}
+
 export function matrixMemberRowForStage(
   config: GitVibeConfig,
   stage: Stage,

@@ -103,7 +103,7 @@ jobs:
     env:
       GITVIBE_AI_ENV_JSON: ""
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
+      indexes: ${{ steps.plan.outputs.indexes }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
     permissions:
@@ -135,8 +135,9 @@ jobs:
     continue-on-error: true
     strategy:
       fail-fast: false
-      max-parallel: ${{ fromJSON(needs.plan-summarize.outputs.max-parallel) }}
-      matrix: ${{ fromJSON(needs.plan-summarize.outputs.matrix) }}
+      max-parallel: ${{ fromJSON(needs.plan-summarize.outputs.max-parallel || '1') }}
+      matrix:
+        index: ${{ fromJSON(needs.plan-summarize.outputs.indexes || '[0]') }}
     permissions:
       contents: read
       discussions: read
@@ -169,7 +170,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: git-vibe-summarize-member-${{ matrix.index }}
           path: ${{ runner.temp }}/git-vibe-summarize-result.json
           if-no-files-found: ignore
 
