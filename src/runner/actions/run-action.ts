@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 
 import { appendFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { loadConfig } from "../config.js";
 import { runStage } from "../stage-runner.js";
 import { isInvestigationReady } from "../stage-publishing.js";
 import { redactLogText } from "../logging.js";
+import { matrixMemberRowForStage } from "../role-groups.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
-import type { RunnerOptions, StageRunResult } from "../../shared/types.js";
+import type { RunnerOptions, Stage, StageRunResult } from "../../shared/types.js";
 
 export interface ActionRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -30,14 +32,19 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     const stage = parseStage(argv[0]);
     const token = requiredEnv(env, "GITVIBE_GITHUB_TOKEN");
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
+    const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
     const target = readTargetInputs(stage, env);
     const maxTurns = numberEnv(env, "GITVIBE_MAX_TURNS", 90);
     const executionMode = executionModeEnv(env);
-    const profileName = envValue(env, "GITVIBE_PROFILE_NAME") || undefined;
-    const memberResultsDir = envValue(env, "GITVIBE_MEMBER_RESULTS_DIR") || undefined;
-    validateExecutionModeInputs(executionMode, profileName, memberResultsDir);
+    const memberResultsDir = memberResultsDirFor({ cwd, env, executionMode, stage });
+    const profileSelection = executionProfileSelection({
+      cwd,
+      env,
+      executionMode,
+      stage,
+    });
     const result = await (runtime.runStage || runStage)({
-      cwd: env.GITHUB_WORKSPACE || runtime.cwd || process.cwd(),
+      cwd,
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
       executionMode,
       failOnNotReady: envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true",
@@ -46,9 +53,9 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       memberResultsDir,
       maxTurns,
       prNumber: target.prNumber,
-      profileName,
+      profileName: profileSelection.profileName,
       repository,
-      roleName: envValue(env, "GITVIBE_ROLE_NAME") || undefined,
+      roleName: profileSelection.roleName,
       sourceComment: parseSourceComment(envValue(env, "GITVIBE_SOURCE_COMMENT")),
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
@@ -131,6 +138,17 @@ function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number): numb
   return value;
 }
 
+function optionalIntegerEnv(env: NodeJS.ProcessEnv, name: string): number | undefined {
+  const rawValue = envValue(env, name);
+  if (!rawValue) return undefined;
+
+  const value = Number(rawValue);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  return value;
+}
+
 function executionModeEnv(env: NodeJS.ProcessEnv): RunnerOptions["executionMode"] {
   const value = envValue(env, "GITVIBE_EXECUTION_MODE") || "standard";
   if (value === "standard" || value === "member" || value === "finalizer") {
@@ -139,17 +157,39 @@ function executionModeEnv(env: NodeJS.ProcessEnv): RunnerOptions["executionMode"
   throw new Error("GITVIBE_EXECUTION_MODE must be standard, member, or finalizer.");
 }
 
-function validateExecutionModeInputs(
-  executionMode: RunnerOptions["executionMode"],
-  profileName: string | undefined,
-  memberResultsDir: string | undefined,
-): void {
-  if (executionMode === "member" && !profileName) {
-    throw new Error("GITVIBE_PROFILE_NAME is required for member execution.");
+function executionProfileSelection(options: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  executionMode: RunnerOptions["executionMode"];
+  stage: Stage;
+}): { profileName?: string; roleName?: string } {
+  const profileName = envValue(options.env, "GITVIBE_PROFILE_NAME") || undefined;
+  const roleName = envValue(options.env, "GITVIBE_ROLE_NAME") || undefined;
+  if (options.executionMode !== "member" || profileName) return { profileName, roleName };
+
+  const memberIndex = optionalIntegerEnv(options.env, "GITVIBE_MEMBER_INDEX");
+  if (memberIndex === undefined) {
+    throw new Error(
+      "GITVIBE_PROFILE_NAME or GITVIBE_MEMBER_INDEX is required for member execution.",
+    );
   }
-  if (executionMode === "finalizer" && !memberResultsDir) {
-    throw new Error("GITVIBE_MEMBER_RESULTS_DIR is required for finalizer execution.");
-  }
+  const row = matrixMemberRowForStage(
+    loadConfig(options.cwd),
+    options.stage,
+    options.cwd,
+    memberIndex,
+  );
+  return { profileName: row.profile, roleName: row.role || undefined };
+}
+
+function memberResultsDirFor(options: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  executionMode: RunnerOptions["executionMode"];
+  stage: Stage;
+}): string | undefined {
+  if (options.executionMode !== "finalizer") return undefined;
+  return join(options.env.RUNNER_TEMP || options.cwd, `git-vibe-${options.stage}-members`);
 }
 
 function workflowRunUrl(env: NodeJS.ProcessEnv): string | undefined {

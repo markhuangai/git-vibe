@@ -37,7 +37,6 @@ ai:
     codex_cli:
       enabled: false
       adapter: cli-codex
-      command: codex exec
       # Key inside GITVIBE_AI_ENV_JSON. Stores compact auth.json contents.
       auth_json:
         from_bundle: CODEX_AUTH_JSON
@@ -48,7 +47,6 @@ ai:
     claude_code:
       enabled: false
       adapter: cli-claude-code
-      command: claude -p
       # Key inside GITVIBE_AI_ENV_JSON. Stores the Claude Code OAuth access token.
       env:
         CLAUDE_CODE_OAUTH_TOKEN:
@@ -56,6 +54,17 @@ ai:
       model: opus
       reasoning:
         effort: xhigh
+  role_groups:
+    review_gate:
+      synthesizer: local_proxy
+      parallel: 2
+      roles:
+        - role: correctness.md
+          profile: local_proxy
+        - role: security.md
+          profile: local_proxy
+        - role: maintainability.md
+          profile: local_proxy
   budgets:
     default_timeout_minutes: 60
     implementation_timeout_minutes: 120
@@ -66,14 +75,20 @@ ai:
     feedback_max_turns: 120
   stages:
     investigate:
-      profile: local_proxy
-      fallback_profile: codex_cli
+      role_group: review_gate
     summarize:
       profile: local_proxy
+    validate:
+      role_group: review_gate
+    materialize:
+      profile: local_proxy
     review-matrix:
-      profiles:
-        - local_proxy
+      role_group: review_gate
     implement:
+      profile: local_proxy
+    create-pr:
+      profile: local_proxy
+    address-pr-feedback:
       profile: local_proxy
 
 bug_investigation:
@@ -84,7 +99,7 @@ bug_investigation:
     threshold: 6
     eligible_labels:
       - git-vibe:bug
-    dispatch: investigation-only
+    dispatch: investigate
 
 feature_refinement:
   community_trigger:

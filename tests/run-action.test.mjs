@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { isDirectRun, runAction } from "../src/runner/actions/run-action.ts";
 
@@ -82,6 +85,38 @@ describe("GitVibe action launcher", () => {
     ]);
   });
 });
+
+function roleGroupWorkspace() {
+  const cwd = mkdtempSync(join(tmpdir(), "git-vibe-run-action-"));
+  mkdirSync(join(cwd, ".github"), { recursive: true });
+  mkdirSync(join(cwd, ".git-vibe", "role-group"), { recursive: true });
+  writeFileSync(
+    join(cwd, ".github", "git-vibe.yml"),
+    [
+      "ai:",
+      "  profiles:",
+      "    local_proxy: {}",
+      "    codex_cli: {}",
+      "  role_groups:",
+      "    review_gate:",
+      "      synthesizer: local_proxy",
+      "      roles:",
+      "        - role: security.md",
+      "          profile: local_proxy",
+      "        - role: maintainability.md",
+      "          profile: codex_cli",
+      "  stages:",
+      "    validate:",
+      "      role_group: review_gate",
+    ].join("\n"),
+  );
+  writeFileSync(join(cwd, ".git-vibe", "role-group", "security.md"), "Review security.");
+  writeFileSync(
+    join(cwd, ".git-vibe", "role-group", "maintainability.md"),
+    "Review maintainability.",
+  );
+  return cwd;
+}
 
 describe("GitVibe action launcher investigation readiness", () => {
   it("fails an investigation action when not-ready gating is enabled", async () => {
@@ -186,17 +221,74 @@ describe("GitVibe action launcher validation", () => {
         error,
       }),
     ).resolves.toBe(1);
-    expect(error).toHaveBeenCalledWith("GITVIBE_PROFILE_NAME is required for member execution.");
+    expect(error).toHaveBeenCalledWith(
+      "GITVIBE_PROFILE_NAME or GITVIBE_MEMBER_INDEX is required for member execution.",
+    );
+  });
+});
+
+describe("GitVibe action launcher member routing", () => {
+  it("derives the finalizer member result directory from the stage", async () => {
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "Validated",
+      parsedOutput: {},
+      schemaId: "validate.v1",
+      status: "completed",
+      summary: "Done",
+      validationErrors: [],
+    });
 
     await expect(
       runAction({
-        argv: ["investigate"],
-        env: { ...baseEnv, GITVIBE_EXECUTION_MODE: "finalizer" },
-        error,
+        argv: ["validate"],
+        cwd: "/repo",
+        env: {
+          ...baseEnv,
+          GITVIBE_EXECUTION_MODE: "finalizer",
+          RUNNER_TEMP: "/tmp/git-vibe-runner",
+        },
+        runStage,
       }),
-    ).resolves.toBe(1);
-    expect(error).toHaveBeenCalledWith(
-      "GITVIBE_MEMBER_RESULTS_DIR is required for finalizer execution.",
+    ).resolves.toBe(0);
+
+    expect(runStage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionMode: "finalizer",
+        memberResultsDir: join("/tmp/git-vibe-runner", "git-vibe-validate-members"),
+      }),
+    );
+  });
+
+  it("resolves member profile and role from the configured matrix index", async () => {
+    const cwd = roleGroupWorkspace();
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "Validated",
+      parsedOutput: {},
+      schemaId: "validate.v1",
+      status: "completed",
+      summary: "Done",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        argv: ["validate"],
+        cwd,
+        env: {
+          ...baseEnv,
+          GITVIBE_EXECUTION_MODE: "member",
+          GITVIBE_MEMBER_INDEX: "1",
+        },
+        runStage,
+      }),
+    ).resolves.toBe(0);
+
+    expect(runStage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionMode: "member",
+        profileName: "codex_cli",
+        roleName: "maintainability.md",
+      }),
     );
   });
 });

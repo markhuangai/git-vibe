@@ -516,7 +516,6 @@ describe("GitVibe develop workflow", () => {
       with: expect.objectContaining({
         "execution-mode": "finalizer",
         "fail-on-blocked": "true",
-        "member-results-dir": "${{ runner.temp }}/git-vibe-review-matrix-members",
       }),
     });
     expect(reviewChangesRequired).toMatchObject({
@@ -585,7 +584,6 @@ describe("GitVibe address feedback workflow", () => {
       with: expect.objectContaining({
         "execution-mode": "finalizer",
         "fail-on-blocked": "true",
-        "member-results-dir": "${{ runner.temp }}/git-vibe-review-matrix-members",
         "pr-number": "${{ inputs.pr-number }}",
       }),
     });

@@ -315,7 +315,7 @@ bug_investigation:
     enabled: true
     reaction: "+1"
     threshold: 6
-    dispatch: investigation-only
+    dispatch: investigate
 ```
 
 ## Feature Refinement Flow
@@ -365,7 +365,7 @@ feature_refinement:
     enabled: true
     reaction: "+1"
     threshold: 10
-    dispatch: summarize
+    dispatch: summarize-and-validate
 ```
 
 ## PR Feedback Loop

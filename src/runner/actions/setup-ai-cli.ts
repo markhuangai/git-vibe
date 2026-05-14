@@ -5,15 +5,15 @@ import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  activeProfileByName,
-  adapterName,
-  profileNamesForStage,
-  stageConfigFor,
-} from "../ai-config.js";
+import { activeProfileByName, adapterName, stageConfigFor } from "../ai-config.js";
 import { loadConfig } from "../config.js";
+import {
+  matrixMemberRowForStage,
+  profileNamesForConfiguredStage,
+  stageExecutionPlan,
+} from "../role-groups.js";
 import { parseStage } from "../../shared/stages.js";
-import type { GitVibeConfig, Stage } from "../../shared/types.js";
+import type { GitVibeConfig, RunnerOptions, Stage } from "../../shared/types.js";
 
 interface SetupAiCliRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -46,8 +46,14 @@ export function setupAiCli(runtime: SetupAiCliRuntime = {}): number {
 
   try {
     const stage = parseStage(argv[0]);
-    const config = loadConfig(env.GITHUB_WORKSPACE || runtime.cwd || process.cwd());
-    const adapters = cliAdaptersForStage(config, stage, envValue(env, "GITVIBE_PROFILE_NAME"));
+    const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
+    const config = loadConfig(cwd);
+    const adapters = cliAdaptersForStage(config, stage, {
+      cwd,
+      executionMode: executionModeEnv(env),
+      memberIndex: optionalIntegerEnv(env, "GITVIBE_MEMBER_INDEX"),
+      profileName: envValue(env, "GITVIBE_PROFILE_NAME"),
+    });
 
     if (adapters.length === 0) {
       log(`${stage} does not require AI CLI setup.`);
@@ -69,17 +75,49 @@ export function setupAiCli(runtime: SetupAiCliRuntime = {}): number {
 export function cliAdaptersForStage(
   config: GitVibeConfig,
   stage: Stage,
-  profileName?: string,
+  selection:
+    | string
+    | {
+        cwd?: string;
+        executionMode?: RunnerOptions["executionMode"];
+        memberIndex?: number;
+        profileName?: string;
+      } = {},
 ): string[] {
   const stageConfig = stageConfigFor(config, stage);
   if (stageConfig.enabled === false) return [];
 
-  const profileNames = profileName ? [profileName] : profileNamesForStage(config, stage);
+  const options = typeof selection === "string" ? { profileName: selection } : selection;
+  const profileNames = selectedProfileNames(config, stage, options);
   const adapters = profileNames
     .map((profileName) => adapterName(activeProfileByName(config, profileName)))
     .filter((adapter) => cliAdapters.has(adapter));
 
   return [...new Set(adapters)];
+}
+
+function selectedProfileNames(
+  config: GitVibeConfig,
+  stage: Stage,
+  options: {
+    cwd?: string;
+    executionMode?: RunnerOptions["executionMode"];
+    memberIndex?: number;
+    profileName?: string;
+  },
+): string[] {
+  if (options.profileName) return [options.profileName];
+  if (options.memberIndex !== undefined) {
+    return [
+      matrixMemberRowForStage(config, stage, options.cwd || process.cwd(), options.memberIndex)
+        .profile,
+    ];
+  }
+  if (options.executionMode === "finalizer") {
+    const plan = stageExecutionPlan(config, stage, options.cwd || process.cwd());
+    return plan.mode === "role-group" && plan.synthesizerProfile ? [plan.synthesizerProfile] : [];
+  }
+  return profileNamesForConfiguredStage(config, stage, options.cwd);
 }
 
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {
@@ -224,6 +262,22 @@ function firstLine(output: Buffer | string): string | undefined {
 function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
   const value = env[name]?.trim();
   return value || undefined;
+}
+
+function optionalIntegerEnv(env: NodeJS.ProcessEnv, name: string): number | undefined {
+  const value = envValue(env, name);
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  return parsed;
+}
+
+function executionModeEnv(env: NodeJS.ProcessEnv): RunnerOptions["executionMode"] {
+  const value = envValue(env, "GITVIBE_EXECUTION_MODE") || "standard";
+  if (value === "standard" || value === "member" || value === "finalizer") return value;
+  throw new Error("GITVIBE_EXECUTION_MODE must be standard, member, or finalizer.");
 }
 
 function runnerTemp(env: NodeJS.ProcessEnv): string {

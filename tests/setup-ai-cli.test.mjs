@@ -50,6 +50,40 @@ describe("GitVibe AI CLI setup", () => {
     ]);
     expect(cliAdaptersForStage(config, "summarize")).toEqual([]);
   });
+
+  it("selects a CLI adapter from a role-group member index", () => {
+    const cwd = configuredRoleGroupWorkspace();
+    const env = runtimeEnv(cwd);
+    /** @type {CommandCall[]} */
+    const calls = [];
+
+    const code = setupAiCli({
+      argv: ["validate"],
+      env: { ...env, GITVIBE_EXECUTION_MODE: "member", GITVIBE_MEMBER_INDEX: "1" },
+      execFileSync: execMock(calls, ["claude"]),
+      log: () => undefined,
+    });
+
+    expect(code).toBe(0);
+    expectCommand(calls, "curl", [
+      "-fsSL",
+      "https://claude.ai/install.sh",
+      "-o",
+      join(env.RUNNER_TEMP, "git-vibe-cli", "claude-code-install.sh"),
+    ]);
+    expect(
+      cliAdaptersForStage(configWithRoleGroupProfiles(), "validate", {
+        cwd,
+        memberIndex: 0,
+      }),
+    ).toEqual(["cli-codex"]);
+    expect(
+      cliAdaptersForStage(configWithRoleGroupProfiles(), "validate", {
+        cwd,
+        executionMode: "finalizer",
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("GitVibe AI CLI setup Codex installer", () => {
@@ -295,6 +329,61 @@ ai:
     validate:
       profile: claude_code
 `;
+}
+
+function configWithRoleGroupProfiles() {
+  return {
+    ai: {
+      profiles: {
+        claude_code: { adapter: "cli-claude-code" },
+        codex_cli: { adapter: "cli-codex" },
+        local_proxy: { adapter: "ai-sdk-agentool" },
+      },
+      role_groups: {
+        review_gate: {
+          roles: [
+            { profile: "codex_cli", role: "security.md" },
+            { profile: "claude_code", role: "maintainability.md" },
+          ],
+          synthesizer: "local_proxy",
+        },
+      },
+      stages: {
+        validate: { role_group: "review_gate" },
+      },
+    },
+  };
+}
+
+function configuredRoleGroupWorkspace() {
+  const cwd = configuredWorkspace(`
+ai:
+  profiles:
+    claude_code:
+      adapter: cli-claude-code
+    codex_cli:
+      adapter: cli-codex
+    local_proxy:
+      adapter: ai-sdk-agentool
+  role_groups:
+    review_gate:
+      synthesizer: local_proxy
+      roles:
+        - role: security.md
+          profile: codex_cli
+        - role: maintainability.md
+          profile: claude_code
+  stages:
+    validate:
+      role_group: review_gate
+`);
+  mkdirSync(join(cwd, ".git-vibe", "role-group"), { recursive: true });
+  writeFileSync(join(cwd, ".git-vibe", "role-group", "security.md"), "Check security.");
+  writeFileSync(
+    join(cwd, ".git-vibe", "role-group", "maintainability.md"),
+    "Check maintainability.",
+  );
+  return cwd;
 }
 
 /**

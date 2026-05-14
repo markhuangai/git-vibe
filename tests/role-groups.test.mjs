@@ -7,11 +7,13 @@ import { describe, expect, it } from "vitest";
 import { isDirectRun, planStage } from "../src/runner/actions/plan-stage.ts";
 import {
   loadMatrixStageResults,
+  matrixMemberRowForStage,
   matrixResultMetadata,
   profileNamesForConfiguredStage,
   readRoleDefinition,
   singleProfileNamesForStage,
   stageExecutionPlan,
+  stageWorkflowMatrix,
   synthesisPromptAddition,
   synthesizerSystemAddition,
 } from "../src/runner/role-groups.ts";
@@ -35,6 +37,16 @@ describe("role group stage planning", () => {
         role: "security.md",
       },
     ]);
+    expect(stageWorkflowMatrix(plan)).toEqual({
+      include: [{ artifact: "git-vibe-review-matrix-member-0", index: 0 }],
+    });
+    expect(matrixMemberRowForStage(roleGroupConfig(), "review-matrix", cwd, 0)).toMatchObject({
+      profile: "reviewer",
+      role: "security.md",
+    });
+    expect(() => matrixMemberRowForStage(roleGroupConfig(), "review-matrix", cwd, 1)).toThrow(
+      "GITVIBE_MEMBER_INDEX 1 is not configured for review-matrix.",
+    );
 
     cleanupWorkspace(cwd);
   });
@@ -286,6 +298,11 @@ describe("plan-stage action", () => {
     expect(code).toBe(0);
     expect(readFileSync(output, "utf8")).toContain("mode<<GITVIBE_OUTPUT\nrole-group");
     expect(readFileSync(output, "utf8")).toContain("git-vibe-review-matrix-member-0");
+    expect(readFileSync(output, "utf8")).toContain(
+      'matrix<<GITVIBE_OUTPUT\n{"include":[{"artifact":"git-vibe-review-matrix-member-0","index":0}]}',
+    );
+    expect(readFileSync(output, "utf8")).not.toContain("security.md");
+    expect(readFileSync(output, "utf8")).not.toContain("reviewer");
 
     cleanupWorkspace(cwd);
   });

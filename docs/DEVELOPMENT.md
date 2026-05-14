@@ -8,7 +8,11 @@
 - `docs/AI.md`: context assembly, AI stage contracts, provider strategy, and tool policy.
 - `.github/git-vibe.example.yml`: starter config for consumer repositories.
 - `examples/consumer/.github`: copyable starter config and wrapper workflows for consumer repositories.
+- `examples/consumer/.git-vibe`: copyable role-group definitions referenced by the consumer starter config.
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
+- `.github/workflows/summarize.yml`: reusable Discussion summarization pipeline.
+- `.github/workflows/validate.yml`: reusable issue or Discussion validation pipeline.
+- `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.
 - `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
 - `.github/workflows/release.yml`: admin-only manual release workflow that runs from `main`, creates GitHub releases, and promotes the existing GHCR app image to the release tag.
