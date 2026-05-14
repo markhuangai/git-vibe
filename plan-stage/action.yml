@@ -10,6 +10,9 @@ outputs:
   matrix:
     description: JSON matrix for stage member jobs.
     value: ${{ steps.plan.outputs.matrix }}
+  indexes:
+    description: JSON list of stage member indexes for workflow matrix fanout.
+    value: ${{ steps.plan.outputs.indexes }}
   max-parallel:
     description: Maximum parallel member jobs.
     value: ${{ steps.plan.outputs.max-parallel }}

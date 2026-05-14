@@ -4,7 +4,7 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
+ * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
@@ -505,9 +505,14 @@ describe("GitVibe develop workflow", () => {
       "continue-on-error": true,
       needs: "plan-review-matrix",
       strategy: expect.objectContaining({
-        "max-parallel": "${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel) }}",
+        "max-parallel": "${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel || '1') }}",
+        matrix: {
+          index: "${{ fromJSON(needs.plan-review-matrix.outputs.indexes || '[0]') }}",
+        },
       }),
     });
+    expect(planReview?.outputs).toHaveProperty("indexes", "${{ steps.plan.outputs.indexes }}");
+    expect(planReview?.outputs).not.toHaveProperty("matrix");
     expect(reviewMatrix).toMatchObject({
       if: "always() && needs.plan-review-matrix.result == 'success'",
       needs: ["plan-review-matrix", "review-matrix-members"],
@@ -576,9 +581,13 @@ describe("GitVibe address feedback workflow", () => {
       "continue-on-error": true,
       needs: "plan-review-matrix",
       strategy: expect.objectContaining({
-        matrix: "${{ fromJSON(needs.plan-review-matrix.outputs.matrix) }}",
+        matrix: {
+          index: "${{ fromJSON(needs.plan-review-matrix.outputs.indexes || '[0]') }}",
+        },
       }),
     });
+    expect(planReview?.outputs).toHaveProperty("indexes", "${{ steps.plan.outputs.indexes }}");
+    expect(planReview?.outputs).not.toHaveProperty("matrix");
     expect(review).toMatchObject({
       if: "always() && needs.plan-review-matrix.result == 'success'",
       needs: ["plan-review-matrix", "review-matrix-members"],

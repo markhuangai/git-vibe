@@ -207,7 +207,7 @@ jobs:
     env:
       GITVIBE_AI_ENV_JSON: ""
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
+      indexes: ${{ steps.plan.outputs.indexes }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
     permissions:
@@ -239,8 +239,9 @@ jobs:
     continue-on-error: true
     strategy:
       fail-fast: false
-      max-parallel: ${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel) }}
-      matrix: ${{ fromJSON(needs.plan-review-matrix.outputs.matrix) }}
+      max-parallel: ${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel || '1') }}
+      matrix:
+        index: ${{ fromJSON(needs.plan-review-matrix.outputs.indexes || '[0]') }}
     permissions:
       contents: read
       issues: read
@@ -274,7 +275,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: git-vibe-review-matrix-member-${{ matrix.index }}
           path: ${{ runner.temp }}/git-vibe-review-matrix-result.json
           if-no-files-found: ignore
 

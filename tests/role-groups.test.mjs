@@ -13,6 +13,7 @@ import {
   readRoleDefinition,
   singleProfileNamesForStage,
   stageExecutionPlan,
+  stageWorkflowIndexes,
   stageWorkflowMatrix,
   synthesisPromptAddition,
   synthesizerSystemAddition,
@@ -40,6 +41,7 @@ describe("role group stage planning", () => {
     expect(stageWorkflowMatrix(plan)).toEqual({
       include: [{ artifact: "git-vibe-review-matrix-member-0", index: 0 }],
     });
+    expect(stageWorkflowIndexes(plan)).toEqual([0]);
     expect(matrixMemberRowForStage(roleGroupConfig(), "review-matrix", cwd, 0)).toMatchObject({
       profile: "reviewer",
       role: "security.md",
@@ -298,6 +300,10 @@ describe("plan-stage action", () => {
     expect(code).toBe(0);
     expect(readFileSync(output, "utf8")).toContain("mode<<GITVIBE_OUTPUT\nrole-group");
     expect(readFileSync(output, "utf8")).toContain("git-vibe-review-matrix-member-0");
+    expect(readFileSync(output, "utf8")).toContain("indexes<<GITVIBE_OUTPUT\n[0]");
+    expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
+      "value: ${{ steps.plan.outputs.indexes }}",
+    );
     expect(readFileSync(output, "utf8")).toContain(
       'matrix<<GITVIBE_OUTPUT\n{"include":[{"artifact":"git-vibe-review-matrix-member-0","index":0}]}',
     );
