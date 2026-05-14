@@ -4,7 +4,7 @@ import { runAiStage, type RunAiStageOptions } from "./ai.js";
 import { loadConfig } from "./config.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
 import { GitHubClient } from "../shared/github.js";
-import { withStageHandoffs, writeStageResultFile } from "./handoffs.js";
+import { withStageHandoffs, writeStageResultFile, writeStageResultSummary } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger, summarizeError } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
@@ -548,18 +548,25 @@ async function stageRunResult({
     validationErrors: [],
   };
   const contextDir = process.env.RUNNER_TEMP || options.cwd;
+  const metadata =
+    options.executionMode === "member"
+      ? matrixResultMetadata({
+          profileName: options.profileName,
+          result,
+          roleName: options.roleName,
+        })
+      : undefined;
   result.resultFile = writeStageResultFile({
     directory: contextDir,
-    metadata:
-      options.executionMode === "member"
-        ? matrixResultMetadata({
-            profileName: options.profileName,
-            result,
-            roleName: options.roleName,
-          })
-        : undefined,
+    metadata,
     result,
     stage: options.stage,
+  });
+  writeStageResultSummary({
+    metadata,
+    result,
+    stage: options.stage,
+    summaryPath: process.env.GITHUB_STEP_SUMMARY,
   });
   logger.event("result.persisted", { file: `git-vibe-${options.stage}-result.json` });
   return result;

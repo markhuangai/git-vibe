@@ -45,7 +45,7 @@ describe("role group stage planning", () => {
     });
     expect(stageWorkflowIndexes(plan)).toEqual([0]);
     expect(stageWorkflowLabels(plan)).toEqual({
-      0: "model=gpt-test role=security.md",
+      0: "security - reviewer",
     });
     expect(matrixMemberRowForStage(roleGroupConfig(), "review-matrix", cwd, 0)).toMatchObject({
       model: "gpt-test",
@@ -75,7 +75,7 @@ describe("role group stage planning", () => {
     ).toThrow("ai.stages.implement.role_group is only supported for read-only stages");
   });
 
-  it("labels workflow members from provider models with profile fallback", () => {
+  it("labels workflow members from roles and profiles", () => {
     const cwd = roleWorkspace({
       "correctness.md": "Review correctness.",
       "maintainability.md": "Review maintainability.",
@@ -108,9 +108,9 @@ describe("role group stage planning", () => {
     );
 
     expect(stageWorkflowLabels(plan)).toEqual({
-      0: "model=provider-model role=security.md",
-      1: "model=fallback_profile role=maintainability.md",
-      2: "model=provider_no_model role=correctness.md",
+      0: "security - provider_profile",
+      1: "maintainability - fallback_profile",
+      2: "correctness - provider_no_model",
     });
 
     cleanupWorkspace(cwd);
@@ -357,9 +357,7 @@ describe("plan-stage action", () => {
     expect(outputContent).toContain("mode<<GITVIBE_OUTPUT\nrole-group");
     expect(outputContent).toContain("git-vibe-review-matrix-member-0");
     expect(outputContent).toContain("indexes<<GITVIBE_OUTPUT\n[0]");
-    expect(outputContent).toContain(
-      'labels<<GITVIBE_OUTPUT\n{"0":"model=gpt-test role=security.md"}',
-    );
+    expect(outputContent).toContain('labels<<GITVIBE_OUTPUT\n{"0":"security - reviewer"}');
     expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
       "value: ${{ steps.plan.outputs.indexes }}",
     );

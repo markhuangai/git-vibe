@@ -191,13 +191,6 @@ jobs:
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
           handoff-dir: ${{ runner.temp }}/git-vibe-feedback-handoff
-      - name: Upload feedback remediation result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-vibe-pr-feedback-remediation-${{ inputs.pr-number }}
-          path: ${{ runner.temp }}/git-vibe-address-pr-feedback-result.json
-          if-no-files-found: ignore
 
   plan-review-matrix:
     runs-on: ${{ inputs.runner }}
@@ -234,7 +227,7 @@ jobs:
           stage: review-matrix
 
   review-matrix-members:
-    name: review-matrix-members (${{ fromJSON(needs.plan-review-matrix.outputs.labels || '{}')[format('{0}', matrix.index)] || matrix.index }})
+    name: ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-review-matrix
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}

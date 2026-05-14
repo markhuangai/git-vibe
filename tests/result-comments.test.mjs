@@ -42,9 +42,7 @@ describe("stage result comments", () => {
     expect(body).toContain("**Next state:** `pr-draft-ready`");
     expect(body).toContain("Validation finished.");
     expect(body).toContain("### Next Action\nContinue with `pr-draft-ready`.");
-    expect(body).toContain(
-      "Full details are in the stage result artifact: `git-vibe-create-pr-result.json`.",
-    );
+    expect(body).toContain("Full details are in the workflow run summary.");
     expect(body).toContain("Pull request #22: https://github.com/example/repo/pull/22");
     expect(body).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(body).not.toContain("### Details");
@@ -148,9 +146,7 @@ describe("pull request feedback result comments", () => {
     expect(body).toContain("## GitVibe PR Feedback Investigation");
     expect(body).toContain("Open PR feedback requires code changes.");
     expect(body).toContain("### Next Action\nContinue with `fixes-required`.");
-    expect(body).toContain(
-      "Full details are in the stage result artifact: `git-vibe-investigate-result.json`.",
-    );
+    expect(body).toContain("Full details are in the workflow run summary.");
     expect(body).not.toContain("### Feedback Items");
     expect(body).not.toContain("review-comment-1");
     expect(body).not.toContain("### Skipped Feedback");
@@ -199,9 +195,7 @@ describe("compact stage result comments", () => {
 
     expect(body).toContain("## GitVibe Validation");
     expect(body).toContain("Validation finished.");
-    expect(body).toContain(
-      "Full details are in the stage result artifact: `git-vibe-validate-result.json`.",
-    );
+    expect(body).toContain("Full details are in the workflow run summary.");
     expect(body).not.toContain("### Capability Status");
     expect(body).not.toContain("### Key Findings");
     expect(body).not.toContain("### Details");

@@ -130,7 +130,7 @@ jobs:
           stage: summarize
 
   summarize-members:
-    name: summarize-members (${{ fromJSON(needs.plan-summarize.outputs.labels || '{}')[format('{0}', matrix.index)] || matrix.index }})
+    name: ${{ fromJSON(needs.plan-summarize.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-summarize
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
@@ -216,10 +216,3 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           execution-mode: finalizer
-      - name: Upload summary result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-vibe-summary-${{ inputs.discussion-number }}
-          path: ${{ runner.temp }}/git-vibe-summarize-result.json
-          if-no-files-found: ignore

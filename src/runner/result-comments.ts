@@ -118,9 +118,7 @@ function compactNextActionSection(output: JsonObject, hasQuestions: boolean): st
 
 function resultSection(options: StageResultCommentOptions): string[] {
   const references = [
-    `Full details are in the stage result artifact: ${inlineCode(
-      `git-vibe-${options.stage}-result.json`,
-    )}.`,
+    "Full details are in the workflow run summary.",
     ...linkReferences(options.links || []),
     options.workflowRunUrl ? `Workflow run: ${options.workflowRunUrl}` : "",
   ].filter(Boolean);

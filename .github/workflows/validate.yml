@@ -142,7 +142,7 @@ jobs:
           stage: validate
 
   validate-members:
-    name: validate-members (${{ fromJSON(needs.plan-validate.outputs.labels || '{}')[format('{0}', matrix.index)] || matrix.index }})
+    name: ${{ fromJSON(needs.plan-validate.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-validate
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
@@ -232,10 +232,3 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           execution-mode: finalizer
-      - name: Upload validation result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-vibe-validation-${{ github.run_id }}
-          path: ${{ runner.temp }}/git-vibe-validate-result.json
-          if-no-files-found: ignore

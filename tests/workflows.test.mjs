@@ -5,7 +5,7 @@ import { parse } from "yaml";
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
  * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
- * @typedef {{ env?: Record<string, string>, if?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
@@ -418,40 +418,53 @@ describe("GitVibe workflow write permissions", () => {
     });
   });
 
-  it("uploads full stage result artifacts for compact standalone comments", () => {
+  it("keeps full final results in run summaries instead of standalone artifacts", () => {
     expect(
       readWorkflow(".github/workflows/investigate.yml").jobs?.investigate?.steps?.find(
         (step) => step.name === "Upload investigation result",
       ),
-    ).toMatchObject({
-      if: "always()",
-      uses: "actions/upload-artifact@v4",
-      with: expect.objectContaining({
-        path: "${{ runner.temp }}/git-vibe-investigate-result.json",
-      }),
-    });
+    ).toBeUndefined();
     expect(
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.steps?.find(
         (step) => step.name === "Upload validation result",
       ),
-    ).toMatchObject({
-      if: "always()",
-      uses: "actions/upload-artifact@v4",
-      with: expect.objectContaining({
-        path: "${{ runner.temp }}/git-vibe-validate-result.json",
-      }),
-    });
+    ).toBeUndefined();
     expect(
       readWorkflow(".github/workflows/summarize.yml").jobs?.summarize?.steps?.find(
         (step) => step.name === "Upload summary result",
       ),
-    ).toMatchObject({
-      if: "always()",
-      uses: "actions/upload-artifact@v4",
-      with: expect.objectContaining({
-        path: "${{ runner.temp }}/git-vibe-summarize-result.json",
-      }),
-    });
+    ).toBeUndefined();
+    expect(
+      readWorkflow(".github/workflows/develop.yml").jobs?.["review-matrix"]?.steps?.find(
+        (step) => step.name === "Upload review handoff",
+      ),
+    ).toBeUndefined();
+    expect(
+      readWorkflow(".github/workflows/address-feedback.yml").jobs?.[
+        "address-feedback"
+      ]?.steps?.find((step) => step.name === "Upload feedback remediation result"),
+    ).toBeUndefined();
+  });
+});
+
+describe("GitVibe matrix workflow labels", () => {
+  it("names member jobs with role-profile labels", () => {
+    const cases = [
+      [".github/workflows/address-feedback.yml", "review-matrix-members", "plan-review-matrix"],
+      [".github/workflows/develop.yml", "review-matrix-members", "plan-review-matrix"],
+      [".github/workflows/investigate.yml", "investigate-members", "plan-investigate"],
+      [".github/workflows/summarize.yml", "summarize-members", "plan-summarize"],
+      [".github/workflows/validate.yml", "validate-members", "plan-validate"],
+    ];
+
+    for (const [file, job, plan] of cases) {
+      const expected = [
+        "${{ fromJSON(needs.",
+        plan,
+        ".outputs.labels)[format('{0}', matrix.index)] }}",
+      ].join("");
+      expect(readWorkflow(file).jobs?.[job]?.name).toBe(expected);
+    }
   });
 });
 
@@ -663,11 +676,7 @@ describe("GitVibe app deployment boundary", () => {
   });
 });
 
-/**
- * @param {Workflow} workflow
- * @param {(uses: string) => boolean} matchesUse
- * @returns {SimulatedStep[]}
- */
+/** @param {Workflow} workflow @param {(uses: string) => boolean} matchesUse @returns {SimulatedStep[]} */
 function gitVibeActionSteps(workflow, matchesUse) {
   return Object.values(workflow.jobs || {}).flatMap((job) =>
     (job.steps || [])
@@ -680,20 +689,12 @@ function gitVibeActionSteps(workflow, matchesUse) {
   );
 }
 
-/**
- * @param {Workflow} workflow
- * @param {string} jobName
- * @param {string} stepName
- * @returns {WorkflowStep | undefined}
- */
+/** @param {Workflow} workflow @param {string} jobName @param {string} stepName @returns {WorkflowStep | undefined} */
 function workflowStep(workflow, jobName, stepName) {
   return workflow.jobs?.[jobName]?.steps?.find((step) => step.name === stepName);
 }
 
-/**
- * @param {string} file
- * @returns {Workflow}
- */
+/** @param {string} file @returns {Workflow} */
 function readWorkflow(file) {
   return /** @type {Workflow} */ (parse(readFileSync(file, "utf8")));
 }
