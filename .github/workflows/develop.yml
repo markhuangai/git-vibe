@@ -144,12 +144,13 @@ on:
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
-  GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
   implement:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     permissions:
       contents: write
       issues: write
@@ -249,6 +250,8 @@ jobs:
     runs-on: ${{ inputs.runner }}
     needs: plan-review-matrix
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -300,6 +303,8 @@ jobs:
       - review-matrix-members
     if: always() && needs.plan-review-matrix.result == 'success'
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     outputs:
       next-state: ${{ steps.review.outputs.next-state }}
       result-file: ${{ steps.review.outputs.result-file }}
@@ -362,6 +367,8 @@ jobs:
     needs: review-matrix
     if: needs.review-matrix.outputs.next-state == 'review-passed'
     timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     permissions:
       contents: write
       issues: write

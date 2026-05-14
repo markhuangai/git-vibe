@@ -94,7 +94,6 @@ on:
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
-  GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 
 jobs:
   plan-investigate:
@@ -134,6 +133,8 @@ jobs:
     runs-on: ${{ inputs.runner }}
     needs: plan-investigate
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -184,6 +185,8 @@ jobs:
       - investigate-members
     if: always() && needs.plan-investigate.result == 'success'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     permissions:
       contents: read
       issues: write

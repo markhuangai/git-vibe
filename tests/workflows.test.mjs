@@ -13,6 +13,12 @@ import { parse } from "yaml";
 const aiEnv = {
   GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
 };
+const legacyAiEnvNames = [
+  "GITVIBE_AI_API_KEY",
+  "GITVIBE_AI_BASE_URL",
+  "CODEX_AUTH_JSON",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+];
 
 const reusableWorkflows = [
   ".github/workflows/address-feedback.yml",
@@ -132,7 +138,7 @@ describe("GitVibe workflow run names", () => {
 });
 
 describe("GitVibe workflow wiring", () => {
-  it("passes AI environment into reusable action source runs", () => {
+  it("passes AI environment only into reusable AI action source runs", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
       const steps = gitVibeActionSteps(workflow, (uses) => uses.startsWith("./.git-vibe/actions/"));
@@ -146,23 +152,17 @@ describe("GitVibe workflow wiring", () => {
           expect(step.env?.GITVIBE_AI_ENV_JSON, `${file} ${step.uses} omits AI env`).toBe("");
           continue;
         }
+        if (step.uses === "./.git-vibe/actions/mark-blocked") {
+          expect(
+            step.env?.GITVIBE_AI_ENV_JSON,
+            `${file} ${step.uses} omits AI env`,
+          ).toBeUndefined();
+          continue;
+        }
         expect(step.env, `${file} ${step.uses} receives AI env`).toMatchObject(aiEnv);
-        expect(
-          step.env?.GITVIBE_AI_API_KEY,
-          `${file} ${step.uses} omits old AI key`,
-        ).toBeUndefined();
-        expect(
-          step.env?.GITVIBE_AI_BASE_URL,
-          `${file} ${step.uses} omits old AI base URL`,
-        ).toBeUndefined();
-        expect(
-          step.env?.CODEX_AUTH_JSON,
-          `${file} ${step.uses} omits old Codex auth`,
-        ).toBeUndefined();
-        expect(
-          step.env?.CLAUDE_CODE_OAUTH_TOKEN,
-          `${file} ${step.uses} omits old Claude auth`,
-        ).toBeUndefined();
+        for (const name of legacyAiEnvNames) {
+          expect(step.env?.[name], `${file} ${step.uses} omits ${name}`).toBeUndefined();
+        }
       }
     }
   });
@@ -180,13 +180,13 @@ describe("GitVibe workflow wiring", () => {
         workflowCall?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
         `${file} omits old Claude auth`,
       ).toBeUndefined();
-      expect(workflow.env?.GITVIBE_AI_API_KEY, `${file} omits old AI key env`).toBeUndefined();
+      for (const name of legacyAiEnvNames) {
+        expect(workflow.env?.[name], `${file} omits ${name} at workflow scope`).toBeUndefined();
+      }
       expect(
-        workflow.env?.GITVIBE_AI_BASE_URL,
-        `${file} omits old AI base URL env`,
+        workflow.env?.GITVIBE_AI_ENV_JSON,
+        `${file} omits AI bundle at workflow scope`,
       ).toBeUndefined();
-      expect(workflow.env?.CODEX_AUTH_JSON, `${file} omits old Codex env`).toBeUndefined();
-      expect(workflow.env?.CLAUDE_CODE_OAUTH_TOKEN, `${file} omits old Claude env`).toBeUndefined();
     }
   });
 });
