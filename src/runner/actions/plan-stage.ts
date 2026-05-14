@@ -4,7 +4,12 @@ import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "../config.js";
-import { stageExecutionPlan, stageWorkflowIndexes, stageWorkflowMatrix } from "../role-groups.js";
+import {
+  stageExecutionPlan,
+  stageWorkflowIndexes,
+  stageWorkflowLabels,
+  stageWorkflowMatrix,
+} from "../role-groups.js";
 import { parseStage } from "../../shared/stages.js";
 
 export interface PlanStageRuntime {
@@ -49,6 +54,7 @@ function writeOutputs(
   if (!env.GITHUB_OUTPUT) return;
   writeOutput(env.GITHUB_OUTPUT, "matrix", JSON.stringify(stageWorkflowMatrix(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "indexes", JSON.stringify(stageWorkflowIndexes(plan)), appendFile);
+  writeOutput(env.GITHUB_OUTPUT, "labels", JSON.stringify(stageWorkflowLabels(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
 }

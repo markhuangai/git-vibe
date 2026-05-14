@@ -61,16 +61,7 @@ describe("Claude Code CLI adapter", () => {
       type: "result",
     };
     mockReadableClaudeStream(result);
-    const schema = {
-      additionalProperties: false,
-      properties: {
-        stage: { type: "string" },
-        status: { type: "string" },
-        questions: { items: { type: "string" }, type: "array" },
-      },
-      required: ["stage", "status"],
-      type: "object",
-    };
+    const schema = structuredQuestionSchema();
 
     await expect(runAiStage({ ...validateStageOptions(claudeCodeConfig()), schema })).resolves.toBe(
       '{"stage":"validate","status":"completed"}',
@@ -422,6 +413,35 @@ function mockChildProcess({
 
 function jsonSchemaFrom(args) {
   return args[args.indexOf("--json-schema") + 1];
+}
+
+function structuredQuestionSchema() {
+  return {
+    additionalProperties: false,
+    definitions: {
+      question: {
+        additionalProperties: false,
+        properties: {
+          options: { items: { type: "string" }, maxItems: 4, minItems: 1, type: "array" },
+          question: { type: "string" },
+        },
+        required: ["question", "options"],
+        type: "object",
+      },
+    },
+    properties: {
+      stage: { type: "string" },
+      status: { type: "string" },
+      questions: {
+        items: {
+          oneOf: [{ type: "string" }, { $ref: "#/definitions/question" }],
+        },
+        type: "array",
+      },
+    },
+    required: ["stage", "status"],
+    type: "object",
+  };
 }
 
 function validateStageOptions(config) {

@@ -19,7 +19,7 @@ Validate whether the issue is ready for implementation. This is a gate: weak or 
 - `working_capabilities`: Behaviors proven by supplied context or inspected source.
 - `missing_capabilities`: Required behaviors that are not implemented.
 - `partial_capabilities`: Behaviors that exist but are incomplete, ambiguous, or only work for some GitHub surfaces.
-- `questions`: Missing decisions or facts required before implementation.
+- `questions`: Missing decisions or facts required before implementation, preferably as answerable question objects with up to four options.
 - `proposed_labels`: Labels that would help route the issue, only when evidence supports them.
 - `next_state`: Use `ready-for-implementation`, `needs-info`, or `blocked`.
   </required_fields_guidance>
