@@ -37,5 +37,5 @@
 - Do not include comments or trailing commas.
 - Use arrays for array fields, even when empty.
 - Use concise strings. Prefer paths, URLs, commands, and concrete facts over generic descriptions.
-- For `questions` and `blocking_questions`, use objects like `{"question":"Which scope should be implemented?","options":["Only the current issue","All linked issues","Open a follow-up issue"]}` when options are useful. Use at most four options and group questions so a maintainer can answer in one reply.
+- For `questions` and `blocking_questions`, use objects like `{"question":"Which scope should be implemented?","options":["Only the current issue","All linked issues","Open a follow-up issue"]}` when options are useful. Use at most four options, do not include a generic "other" option, and group questions so a maintainer can answer in one reply.
   </json_rules>
