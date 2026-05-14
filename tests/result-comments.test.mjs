@@ -80,14 +80,14 @@ describe("stage result comments", () => {
     expect(body).toContain(
       "1. [Blocking] Which source should define required validation commands?",
     );
-    expect(body).toContain(
-      "Options: Use .github/git-vibe.yml; Use package scripts; Use AGENTS.md; Use workflow defaults; or provide additional context.",
-    );
+    expect(body).toContain("   A. Use .github/git-vibe.yml");
+    expect(body).toContain("   B. Use package scripts");
+    expect(body).toContain("   C. Use AGENTS.md");
+    expect(body).toContain("   D. Use workflow defaults");
     expect(body).toContain("2. Confirm whether the compact comment copy is acceptable.");
-    expect(body).toContain("Options: Provide additional context.");
     expect(body).not.toContain("Use a new config file");
     expect(body).toContain(
-      "### Next Action\nReply with answers or selected options for every question in one comment.",
+      "### Next Action\nReply in one comment with question numbers and option letters, or write your own answer for any question.",
     );
     expect(body).not.toContain("### Blocking Questions");
   });
@@ -116,7 +116,8 @@ describe("stage result comment fallbacks", () => {
     expect(body).not.toContain("**Next state:**");
     expect(body).toContain("No summary provided.");
     expect(body).toContain("1. Which fallback should be shown?");
-    expect(body).toContain("Options: Provide additional context.");
+    expect(body).not.toContain("Options:");
+    expect(body).not.toContain("A. Provide additional context");
     expect(body).not.toContain("Ignored");
     expect(body).not.toContain("Empty link:");
   });

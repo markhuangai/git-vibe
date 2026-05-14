@@ -97,10 +97,10 @@ function questionsSection(questions: NormalizedQuestion[]): string[] {
 function questionLines(question: NormalizedQuestion, index: number): string[] {
   const prefix = question.blocking ? "[Blocking] " : "";
   const options = question.options.slice(0, 4);
-  const optionsLine = options.length
-    ? `   Options: ${options.join("; ")}; or provide additional context.`
-    : "   Options: Provide additional context.";
-  return [`${index + 1}. ${prefix}${question.question}`, optionsLine];
+  return [
+    `${index + 1}. ${prefix}${question.question}`,
+    ...options.map((option, optionIndex) => `   ${optionLetter(optionIndex)}. ${option}`),
+  ];
 }
 
 function compactNextActionSection(output: JsonObject, hasQuestions: boolean): string[] {
@@ -108,7 +108,7 @@ function compactNextActionSection(output: JsonObject, hasQuestions: boolean): st
     return [
       "",
       "### Next Action",
-      "Reply with answers or selected options for every question in one comment.",
+      "Reply in one comment with question numbers and option letters, or write your own answer for any question.",
     ];
   }
   const nextState = textField(output.next_state);
@@ -158,6 +158,10 @@ function linkReferences(links: StageResultLink[]): string[] {
 function stringItems(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function optionLetter(index: number): string {
+  return String.fromCharCode(65 + index);
 }
 
 function textField(value: unknown): string {
