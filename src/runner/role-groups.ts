@@ -116,9 +116,14 @@ export function stageWorkflowLabels(plan: StageExecutionPlan): Record<string, st
   return Object.fromEntries(
     plan.matrix.include.map((row) => [
       String(row.index),
-      `model=${row.model || row.profile} role=${row.role || "default"}`,
+      `${workflowRoleLabel(row.role)} - ${row.profile}`,
     ]),
   );
+}
+
+function workflowRoleLabel(role: string): string {
+  if (!role) return "default";
+  return basename(role).replace(/\.[^.]+$/, "") || "default";
 }
 
 export function matrixMemberRowForStage(

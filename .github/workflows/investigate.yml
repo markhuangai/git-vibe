@@ -130,7 +130,7 @@ jobs:
           stage: investigate
 
   investigate-members:
-    name: investigate-members (${{ fromJSON(needs.plan-investigate.outputs.labels || '{}')[format('{0}', matrix.index)] || matrix.index }})
+    name: ${{ fromJSON(needs.plan-investigate.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-investigate
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
@@ -218,10 +218,3 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           execution-mode: finalizer
-      - name: Upload investigation result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-vibe-investigation-${{ inputs.issue-number }}
-          path: ${{ runner.temp }}/git-vibe-investigate-result.json
-          if-no-files-found: ignore

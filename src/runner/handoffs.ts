@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseStage } from "../shared/stages.js";
 import type {
@@ -40,6 +40,16 @@ export function writeStageResultFile(options: {
     ),
   );
   return file;
+}
+
+export function writeStageResultSummary(options: {
+  metadata?: JsonObject;
+  result: StageRunResult;
+  stage: Stage;
+  summaryPath?: string;
+}): void {
+  if (!options.summaryPath) return;
+  appendFileSync(options.summaryPath, `${renderStageResultSummary(options)}\n`);
 }
 
 function loadStageHandoffs(handoffDir?: string): StageHandoff[] {
@@ -114,6 +124,39 @@ function stageHandoff(stage: Stage, result: StageRunResult): StageHandoff {
     status: result.status,
     summary: result.summary,
   };
+}
+
+function renderStageResultSummary(options: {
+  metadata?: JsonObject;
+  result: StageRunResult;
+  stage: Stage;
+}): string {
+  const role = stringField(options.metadata?.role);
+  const profile = stringField(options.metadata?.profile);
+  return [
+    `## GitVibe ${options.stage} result`,
+    "",
+    `- Status: \`${inlineCodeValue(options.result.status)}\``,
+    `- Schema: \`${inlineCodeValue(options.result.schemaId)}\``,
+    ...(role ? [`- Role: \`${inlineCodeValue(role)}\``] : []),
+    ...(profile ? [`- Profile: \`${inlineCodeValue(profile)}\``] : []),
+    "",
+    options.result.summary,
+    "",
+    "### GitHub Comment",
+    "",
+    options.result.commentBody,
+    "",
+    "### Structured Output",
+    "",
+    "````json",
+    JSON.stringify(options.result.parsedOutput, null, 2),
+    "````",
+  ].join("\n");
+}
+
+function inlineCodeValue(value: string): string {
+  return value.replaceAll("`", "'");
 }
 
 function uniqueHandoffs(handoffs: StageHandoff[]): StageHandoff[] {

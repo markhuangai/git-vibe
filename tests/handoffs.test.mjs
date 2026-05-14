@@ -7,6 +7,7 @@ import {
   stageResultCommentHandoffs,
   withStageHandoffs,
   writeStageResultFile,
+  writeStageResultSummary,
 } from "../src/runner/handoffs.ts";
 
 describe("stage handoff helpers", () => {
@@ -50,6 +51,31 @@ describe("stage handoff helpers", () => {
         summary: "Investigated.",
       }),
     ]);
+  });
+
+  it("writes full stage details to the GitHub step summary", () => {
+    const directory = mkdtempSync(join(tmpdir(), "git-vibe-summary-"));
+    const summaryPath = join(directory, "summary.md");
+    writeStageResultSummary({
+      metadata: { profile: "reviewer", role: "security.md" },
+      result: {
+        commentBody: "Compact GitHub comment",
+        parsedOutput: { findings: ["src/runner/stage-runner.ts: evidence"], status: "completed" },
+        schemaId: "validate.v1",
+        status: "completed",
+        summary: "Validated.",
+        validationErrors: [],
+      },
+      stage: "validate",
+      summaryPath,
+    });
+
+    const summary = readFileSync(summaryPath, "utf8");
+    expect(summary).toContain("## GitVibe validate result");
+    expect(summary).toContain("- Role: `security.md`");
+    expect(summary).toContain("- Profile: `reviewer`");
+    expect(summary).toContain("Compact GitHub comment");
+    expect(summary).toContain('"findings": [');
   });
 });
 
