@@ -3,7 +3,7 @@
 `git-vibe-setup` installs this starter into a consumer repository:
 
 ```bash
-npx --package=@git-vibe/app git-vibe-setup
+npx --package=git-vibe-setup git-vibe-setup
 ```
 
 The installer copies `.github` and `.git-vibe`, rewrites reusable workflow refs

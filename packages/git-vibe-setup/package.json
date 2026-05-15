@@ -1,0 +1,25 @@
+{
+  "name": "git-vibe-setup",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "git-vibe-setup": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "check": "prettier --check . && eslint . && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

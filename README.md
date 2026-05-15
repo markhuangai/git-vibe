@@ -125,7 +125,7 @@ iterations.
 Run this from the repository that should use GitVibe:
 
 ```bash
-npx --package=@git-vibe/app git-vibe-setup
+npx --package=git-vibe-setup git-vibe-setup
 ```
 
 `git-vibe-setup` fetches the latest stable `markhuangai/git-vibe` release,

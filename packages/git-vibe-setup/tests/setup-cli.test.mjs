@@ -8,13 +8,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { existingFilesError, installFiles, pinWorkflowReleaseRefs } from "../src/setup/install.ts";
-import { runSetup, setupCli } from "../src/setup/cli.ts";
-import { latestStableReleaseTag, selectLatestStableRelease } from "../src/setup/releases.ts";
+import { runSetup, setupCli } from "../src/cli.ts";
+import { existingFilesError, installFiles, pinWorkflowReleaseRefs } from "../src/install.ts";
+import { latestStableReleaseTag, selectLatestStableRelease } from "../src/releases.ts";
 
-const repositoryRoot = process.cwd();
+const repositoryRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 /** @type {string[]} */
 const temporaryDirectories = [];
 
@@ -28,14 +29,9 @@ describe("git-vibe-setup", () => {
   it("exposes the setup executable and ships the consumer starter assets", () => {
     const packageJson = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
 
-    expect(packageJson.bin["git-vibe-setup"]).toBe("./dist/setup/cli.js");
-    expect(packageJson.files).toEqual(
-      expect.arrayContaining([
-        "examples/consumer/.github",
-        "examples/consumer/.git-vibe",
-        "examples/consumer/GITVIBE_AI_ENV_JSON.example.json",
-      ]),
-    );
+    expect(packageJson.name).toBe("git-vibe-setup");
+    expect(packageJson.bin["git-vibe-setup"]).toBe("./dist/cli.js");
+    expect(packageJson.files).toEqual(expect.arrayContaining(["templates"]));
   });
 });
 
@@ -64,7 +60,7 @@ describe("git-vibe-setup installation", () => {
     expect(existsSync(join(cwd, ".git-vibe", "role-group", "correctness.md"))).toBe(true);
 
     const installedWorkflows = workflowNames(join(cwd, ".github"));
-    const exampleWorkflows = workflowNames(join(repositoryRoot, "examples", "consumer", ".github"));
+    const exampleWorkflows = workflowNames(join(repositoryRoot, "templates", ".github"));
     expect(installedWorkflows).toEqual(exampleWorkflows);
 
     for (const name of installedWorkflows) {
@@ -338,7 +334,7 @@ function workflowNames(directory) {
   return readdirSync(join(directory, "workflows")).sort();
 }
 
-/** @param {Partial<import("../src/setup/releases.ts").GitHubRelease>} overrides */
+/** @param {Partial<import("../src/releases.ts").GitHubRelease>} overrides */
 function release(overrides = {}) {
   return {
     created_at: "2026-05-10T00:00:00Z",
@@ -350,7 +346,7 @@ function release(overrides = {}) {
   };
 }
 
-/** @param {import("../src/setup/releases.ts").GitHubRelease[]} data */
+/** @param {import("../src/releases.ts").GitHubRelease[]} data */
 function fetchOk(data) {
   return async () =>
     new globalThis.Response(JSON.stringify(data), {
@@ -359,7 +355,7 @@ function fetchOk(data) {
     });
 }
 
-/** @param {import("../src/setup/releases.ts").GitHubRelease[][]} pages */
+/** @param {import("../src/releases.ts").GitHubRelease[][]} pages */
 function fetchPages(pages) {
   /** @param {string | URL | globalThis.Request} url */
   return async (url) => {

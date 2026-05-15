@@ -72,11 +72,11 @@ export function pinWorkflowReleaseRefs(content: string, releaseTag: string): str
 function installSources(repositoryRoot: string): InstallSource[] {
   return [
     {
-      sourceDirectory: join(repositoryRoot, "examples", "consumer", ".github"),
+      sourceDirectory: join(repositoryRoot, "templates", ".github"),
       targetDirectory: ".github",
     },
     {
-      sourceDirectory: join(repositoryRoot, "examples", "consumer", ".git-vibe"),
+      sourceDirectory: join(repositoryRoot, "templates", ".git-vibe"),
       targetDirectory: ".git-vibe",
     },
   ];

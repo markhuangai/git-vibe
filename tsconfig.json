@@ -13,6 +13,12 @@
     "target": "ES2024",
     "types": ["node", "vitest"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.mjs", "tests/**/*.mjs"],
+  "include": [
+    "src/**/*.ts",
+    "packages/*/src/**/*.ts",
+    "packages/*/tests/**/*.mjs",
+    "scripts/**/*.mjs",
+    "tests/**/*.mjs"
+  ],
   "exclude": ["coverage", "dist", "node_modules"]
 }
