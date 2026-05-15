@@ -120,18 +120,27 @@ iterations.
 
 ## Quick Start
 
-### 1. Copy the consumer starter
+### 1. Install the consumer starter
 
 Run this from the repository that should use GitVibe:
 
 ```bash
-cp -R /path/to/git-vibe/examples/consumer/.github /path/to/your-repo/.github
-cp -R /path/to/git-vibe/examples/consumer/.git-vibe /path/to/your-repo/.git-vibe
+npx --package=@git-vibe/app git-vibe-setup
 ```
 
-Copy only `examples/consumer/.github` and `examples/consumer/.git-vibe`. Do not
-copy GitVibe's internal action folders such as `investigate/`, `implement/`,
-`app/`, or `src/`.
+`git-vibe-setup` fetches the latest stable `markhuangai/git-vibe` release,
+copies the consumer starter from this repository, pins generated reusable
+workflow refs to that release tag, and stops without writing if any target file
+already exists.
+
+It creates:
+
+- `.github/git-vibe.yml`
+- `.github/workflows/*.yml`
+- `.git-vibe/role-group/*.md`
+
+The installer is local-only. It does not authenticate to GitHub, create
+commits, open pull requests, or write secrets and variables for you.
 
 ### 2. Configure the consumer repo
 
@@ -146,7 +155,7 @@ The starter workflows call the public reusable workflow namespace:
 ```yaml
 jobs:
   develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1.0.0
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@<latest-stable-tag>
 ```
 
 Reusable workflows operate on the repository where the workflow run starts
@@ -157,6 +166,9 @@ input.
 
 Secrets belong in GitHub repository or organization secrets, not in
 `.github/git-vibe.yml`.
+
+`git-vibe-setup` prints this list after it writes files. It does not collect or
+store secret values.
 
 | Name                   | Required | Purpose                                                                     |
 | ---------------------- | -------- | --------------------------------------------------------------------------- |

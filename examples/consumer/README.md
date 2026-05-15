@@ -1,13 +1,20 @@
 # GitVibe Consumer Example
 
-Copy the `.github` and `.git-vibe` directories from this folder into a repository that should use GitVibe.
+`git-vibe-setup` installs this starter into a consumer repository:
 
 ```bash
-cp -R examples/consumer/.github /path/to/consumer-repo/.github
-cp -R examples/consumer/.git-vibe /path/to/consumer-repo/.git-vibe
+npx --package=@git-vibe/app git-vibe-setup
 ```
 
-Then configure repository or organization secrets and variables as described in the root `README.md`.
+The installer copies `.github` and `.git-vibe`, rewrites reusable workflow refs
+to the latest stable GitVibe release tag, and fails closed if GitHub release
+lookup or target-file validation cannot complete before writing.
+
+It will not overwrite existing target files. Remove any existing GitVibe starter
+files before running setup again.
+
+Then configure repository or organization secrets and variables as described in
+the root `README.md`.
 
 Use `GITVIBE_AI_ENV_JSON.example.json` as the shape for the
 `GITVIBE_AI_ENV_JSON` secret. Do not commit real token values.
