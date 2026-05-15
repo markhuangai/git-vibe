@@ -45,13 +45,13 @@ It listens to repository webhooks, verifies who is allowed to act, dispatches
 reusable GitHub workflows, runs stage-specific AI workers, validates structured
 AI output, and writes routine GitHub state changes with deterministic code.
 
-| GitHub problem                                  | GitVibe answer                                                                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then apply the protected approval label  |
-| Feature requests become scattered issue threads | Start in Discussions, summarize the thread, validate acceptance criteria with a label, then approve materialization |
-| AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                           |
-| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                         |
-| Consumer repositories should stay small         | Copy tiny `.github` and `.git-vibe` starters and call reusable workflows from `markhuangai/git-vibe`                |
+| GitHub problem                                  | GitVibe answer                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then apply the protected approval label |
+| Feature requests become scattered issue threads | Start in Discussions, validate acceptance criteria, decompose the work, then approve materialization               |
+| AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                          |
+| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                        |
+| Consumer repositories should stay small         | Copy tiny `.github` and `.git-vibe` starters and call reusable workflows from `markhuangai/git-vibe`               |
 
 ## Pipeline at a glance
 
@@ -82,10 +82,9 @@ authority. Maintainers stay in control of approval and release decisions.
 | Workflow               | Use it for                                                    | Writes code?                           |
 | ---------------------- | ------------------------------------------------------------- | -------------------------------------- |
 | `investigate.yml`      | Bug investigation and likely-root-cause analysis              | No                                     |
-| `summarize.yml`        | Feature discussion summary and open-question extraction       | No                                     |
 | `validate.yml`         | Check whether maintainer context is coherent and actionable   | No                                     |
 | `decompose.yml`        | Create a read-only story-unit plan for a validated Discussion | No                                     |
-| `materialize.yml`      | Convert a validated Discussion into an implementation issue   | No                                     |
+| `materialize.yml`      | Convert a decomposed Discussion into an implementation issue  | No                                     |
 | `develop.yml`          | Investigate, implement, review, and create or update a PR     | Yes, on `git-vibe/{root-issue}`        |
 | `address-feedback.yml` | Investigate PR feedback, apply required fixes, then review    | Conditional, on the existing PR branch |
 | `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner           | No repo changes                        |
@@ -266,7 +265,6 @@ Use `/git-vibe` for the remaining comment-triggered workflows:
 | Command                      | Typical surface           | Effect                                                        |
 | ---------------------------- | ------------------------- | ------------------------------------------------------------- |
 | `/git-vibe investigate`      | Bug issue                 | Runs investigation-only analysis and posts findings/questions |
-| `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
 | `/git-vibe address-feedback` | Pull request conversation | Investigates open PR feedback and fixes only actionable items |
 
 Use protected labels for investigation, validation, decomposition, and approval transitions:
@@ -339,8 +337,6 @@ ai:
   stages:
     investigate:
       role_group: review_gate
-    summarize:
-      profile: local_proxy
     validate:
       role_group: review_gate
     decompose:
@@ -453,8 +449,8 @@ jobs:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
 ```
 
-For source-repo testing, dispatch `investigate.yml`, `summarize.yml`,
-`validate.yml`, `decompose.yml`, `materialize.yml`, `develop.yml`, or
+For source-repo testing, dispatch `investigate.yml`, `validate.yml`,
+`decompose.yml`, `materialize.yml`, `develop.yml`, or
 `address-feedback.yml` directly. Leave `action-repository` and `action-ref`
 empty to test the current repository and ref.
 

@@ -141,9 +141,6 @@ ai:
     investigate:
       enabled: true
       role_group: review_gate
-    summarize:
-      enabled: true
-      profile: local_proxy
     validate:
       enabled: true
       role_group: review_gate
@@ -173,13 +170,6 @@ bug_investigation:
     reaction: "+1"
     threshold: 6
     dispatch: investigate
-
-feature_refinement:
-  community_trigger:
-    enabled: false
-    reaction: "+1"
-    threshold: 10
-    dispatch: summarize-and-validate
 
 analysis:
   author_weight_order:

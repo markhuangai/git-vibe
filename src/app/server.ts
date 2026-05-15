@@ -372,30 +372,6 @@ async function handleDiscussionComment(options: WebhookContext): Promise<void> {
   if (!parsed) return;
   await requireTrustedActor(options);
 
-  if (parsed.command === "summarize") {
-    const workflow = "summarize.yml";
-    const acknowledged = await acknowledgeCommand(options);
-    const dispatch = await dispatchWorkflow(
-      options,
-      workflow,
-      commandInputs(
-        options,
-        { "discussion-number": String(options.payload.discussion?.number || "") },
-        "discussion-comment",
-      ),
-    );
-    if (!acknowledged)
-      await postQueuedWorkflowComment(options, {
-        artifact: "discussion",
-        number: String(options.payload.discussion?.number || ""),
-        reason: commandReason(parsed.raw),
-        workflow,
-        ref: dispatch.ref,
-        workflowRunUrl: dispatch.html_url,
-      });
-    return;
-  }
-
   options.log(`recognized command but no dispatch rule matched: ${parsed.raw}`);
 }
 

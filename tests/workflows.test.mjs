@@ -26,7 +26,6 @@ const reusableWorkflows = [
   ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
-  ".github/workflows/summarize.yml",
   ".github/workflows/validate.yml",
 ];
 
@@ -36,7 +35,6 @@ const consumerWorkflows = [
   "examples/consumer/.github/workflows/develop.yml",
   "examples/consumer/.github/workflows/investigate.yml",
   "examples/consumer/.github/workflows/materialize.yml",
-  "examples/consumer/.github/workflows/summarize.yml",
   "examples/consumer/.github/workflows/validate.yml",
 ];
 
@@ -50,14 +48,12 @@ const actionFiles = [
   "materialize/action.yml",
   "plan-stage/action.yml",
   "review-matrix/action.yml",
-  "summarize/action.yml",
   "validate/action.yml",
 ];
 
 const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
   { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
-  { file: ".github/workflows/summarize.yml", stage: "summarize", artifact: "Discussion" },
   { file: ".github/workflows/decompose.yml", stage: "decompose", artifact: "Discussion" },
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
@@ -67,11 +63,6 @@ const workflowRunNameSpecs = [
     file: "examples/consumer/.github/workflows/validate.yml",
     stage: "validate",
     multiArtifact: true,
-  },
-  {
-    file: "examples/consumer/.github/workflows/summarize.yml",
-    stage: "summarize",
-    artifact: "Discussion",
   },
   {
     file: "examples/consumer/.github/workflows/decompose.yml",
@@ -99,14 +90,12 @@ const workflowRunNameSpecs = [
 const workflowStaticNames = {
   ".github/workflows/release.yml": "GitVibe release",
   ".github/workflows/validate.yml": "GitVibe validate",
-  ".github/workflows/summarize.yml": "GitVibe summarize",
   ".github/workflows/decompose.yml": "GitVibe decompose",
   ".github/workflows/materialize.yml": "GitVibe materialize",
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
-  "examples/consumer/.github/workflows/summarize.yml": "GitVibe summarize",
   "examples/consumer/.github/workflows/decompose.yml": "GitVibe decompose",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
   "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
@@ -412,11 +401,6 @@ describe("GitVibe workflow numeric inputs", () => {
 describe("GitVibe workflow write permissions", () => {
   it("grants write permissions where stage result comments are published", () => {
     expect(
-      readWorkflow(".github/workflows/summarize.yml").jobs?.summarize?.permissions,
-    ).toMatchObject({
-      discussions: "write",
-    });
-    expect(
       readWorkflow(".github/workflows/decompose.yml").jobs?.decompose?.permissions,
     ).toMatchObject({
       discussions: "write",
@@ -443,11 +427,6 @@ describe("GitVibe workflow write permissions", () => {
     expect(
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.steps?.find(
         (step) => step.name === "Upload validation result",
-      ),
-    ).toBeUndefined();
-    expect(
-      readWorkflow(".github/workflows/summarize.yml").jobs?.summarize?.steps?.find(
-        (step) => step.name === "Upload summary result",
       ),
     ).toBeUndefined();
     expect(

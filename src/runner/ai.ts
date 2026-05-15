@@ -406,7 +406,7 @@ function responseMessages(result: AiResult): ModelMessage[] {
 function structuredOutputContinuationInstruction(error: unknown): string {
   return [
     "The primary stage turn budget is exhausted or the previous final output was not schema-valid.",
-    "Stop repository work now. Summarize the completed work and return the required structured result.",
+    "Stop repository work now. Describe the completed work and return the required structured result.",
     "Call output_validator with the exact final JSON. If validation fails, fix every reported error and call output_validator again.",
     `Previous validation error: ${summarizeError(error)}`,
   ].join("\n");

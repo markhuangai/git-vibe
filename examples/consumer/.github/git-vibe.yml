@@ -76,8 +76,6 @@ ai:
   stages:
     investigate:
       role_group: review_gate
-    summarize:
-      profile: local_proxy
     validate:
       role_group: review_gate
     decompose:
@@ -102,13 +100,6 @@ bug_investigation:
     eligible_labels:
       - git-vibe:bug
     dispatch: investigate
-
-feature_refinement:
-  community_trigger:
-    enabled: false
-    reaction: "+1"
-    threshold: 10
-    dispatch: summarize-and-validate
 
 tests:
   commands: []

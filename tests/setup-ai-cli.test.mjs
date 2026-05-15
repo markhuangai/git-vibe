@@ -28,10 +28,6 @@ describe("GitVibe AI CLI setup", () => {
             fallback_profile: "codex_cli",
             profile: "local_proxy",
           },
-          summarize: {
-            enabled: false,
-            profile: "codex_cli",
-          },
           validate: {
             profile: "codex_cli",
           },
@@ -48,7 +44,6 @@ describe("GitVibe AI CLI setup", () => {
     expect(cliAdaptersForStage(config, "review-matrix", "claude_code")).toEqual([
       "cli-claude-code",
     ]);
-    expect(cliAdaptersForStage(config, "summarize")).toEqual([]);
   });
 
   it("selects a CLI adapter from a role-group member index", () => {

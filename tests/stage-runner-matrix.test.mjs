@@ -191,16 +191,17 @@ describe("stage runner matrix finalizer execution", () => {
   });
 
   it("synthesizes role-group member outputs into one final stage result", async () => {
-    const cwd = await workspace(roleGroupConfig("summarize"));
+    const cwd = await workspace(roleGroupConfig("validate"));
     writeRole(cwd, "security.md", "Focus on token boundaries.");
     const resultsDir = join(cwd, "member-results");
     mkdirSync(resultsDir);
-    writeFileSync(join(resultsDir, "git-vibe-summarize-result.json"), memberResult("summarize"));
-    process.env.GITVIBE_DISCUSSION_NUMBER = "5";
-    generateText.mockResolvedValueOnce(aiResult("summarize"));
+    writeFileSync(join(resultsDir, "git-vibe-validate-result.json"), memberResult("validate"));
+    generateText.mockResolvedValueOnce(aiResult("validate"));
     globalThis.fetch = fetchMock([
-      discussionResponse(),
-      graphqlResponse({ addDiscussionComment: { comment: { id: "comment", url: "url" } } }),
+      issueResponse(),
+      commentsResponse([]),
+      response(200, {}),
+      response(200, {}),
     ]);
 
     const result = await runStage({
@@ -212,7 +213,7 @@ describe("stage runner matrix finalizer execution", () => {
       memberResultsDir: resultsDir,
       prNumber: "",
       repository: "example/repo",
-      stage: "summarize",
+      stage: "validate",
       stageTimeoutMinutes: 1,
       token: "token",
     });
@@ -317,7 +318,8 @@ function aiResult(stage) {
 }
 
 function nextStateForStage(stage) {
-  return stage === "summarize" ? "ready-for-materialization" : "review-passed";
+  if (stage === "validate") return "ready-for-implementation";
+  return "review-passed";
 }
 
 const commentsResponse = (comments) => response(200, comments);
@@ -330,26 +332,6 @@ const issueResponse = () =>
     title: "Issue title",
     user: { login: "octocat" },
   });
-
-function discussionResponse() {
-  return graphqlResponse({
-    repository: {
-      discussion: {
-        author: { login: "octocat" },
-        body: "Discussion body",
-        comments: { nodes: [] },
-        createdAt: "2026-01-02T00:00:00Z",
-        id: "discussion-id",
-        title: "Discussion title",
-        url: "https://github.com/example/repo/discussions/5",
-      },
-    },
-  });
-}
-
-function graphqlResponse(data) {
-  return response(200, { data });
-}
 
 function fetchMock(responses) {
   return vi.fn(async () => responses.shift() || response(200, {}));

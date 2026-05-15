@@ -160,7 +160,7 @@ describe("GitVibe action launcher validation", () => {
 
     await expect(
       runAction({
-        argv: ["summarize"],
+        argv: ["decompose"],
         env: baseEnv,
         error,
       }),
@@ -335,6 +335,17 @@ describe("GitVibe action launcher target validation", () => {
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith(
       "GITVIBE_ISSUE_NUMBER or GITVIBE_DISCUSSION_NUMBER is required for validate.",
+    );
+
+    await expect(
+      runAction({
+        argv: ["review-matrix"],
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for review-matrix.",
     );
 
     await expect(

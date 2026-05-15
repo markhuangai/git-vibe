@@ -8,13 +8,6 @@ export const stageDefinitions: Record<Stage, StageDefinition> = {
     target: "issue",
     tools: ["read", "grep", "glob", "diff", "web-fetch", "web-search"],
   },
-  summarize: {
-    promptDir: "summarize",
-    schemaFile: "summarize.v1.schema.json",
-    schemaId: "summarize.v1",
-    target: "discussion",
-    tools: ["read", "grep", "glob", "web-fetch", "web-search"],
-  },
   validate: {
     promptDir: "validate",
     schemaFile: "validate.v1.schema.json",

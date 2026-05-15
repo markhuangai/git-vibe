@@ -220,7 +220,7 @@ function output() {
     findings: [],
     next_state: "ready-for-materialization",
     references: [],
-    stage: "summarize",
+    stage: "materialize",
     status: "completed",
     summary: "Result summary.",
   };
@@ -248,7 +248,7 @@ function runner(overrides = {}) {
     maxTurns: 2,
     prNumber: "12",
     repository: "example/repo",
-    stage: "summarize",
+    stage: "materialize",
     stageTimeoutMinutes: 1,
     token: "token",
     ...overrides,

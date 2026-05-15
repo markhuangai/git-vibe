@@ -103,10 +103,7 @@ function readTargetInputs(
   if (stage === "investigate" && !issueNumber && !prNumber) {
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for investigate.");
   }
-  if (
-    (stage === "summarize" || stage === "decompose" || stage === "materialize") &&
-    !discussionNumber
-  ) {
+  if ((stage === "decompose" || stage === "materialize") && !discussionNumber) {
     throw new Error("GITVIBE_DISCUSSION_NUMBER is required for this stage.");
   }
   if (stage === "validate" && !issueNumber && !discussionNumber) {
@@ -120,7 +117,6 @@ function readTargetInputs(
       "address-pr-feedback",
       "investigate",
       "review-matrix",
-      "summarize",
       "decompose",
       "materialize",
       "validate",

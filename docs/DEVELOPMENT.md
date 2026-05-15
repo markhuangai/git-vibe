@@ -10,7 +10,6 @@
 - `examples/consumer/.github`: copyable starter config and wrapper workflows for consumer repositories.
 - `examples/consumer/.git-vibe`: copyable role-group definitions referenced by the consumer starter config.
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
-- `.github/workflows/summarize.yml`: reusable Discussion summarization pipeline.
 - `.github/workflows/validate.yml`: reusable issue or Discussion validation pipeline.
 - `.github/workflows/decompose.yml`: reusable validated Discussion decomposition pipeline.
 - `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.

@@ -191,12 +191,12 @@ describe("stage runner discussion context selection", () => {
         maxTurns: 2,
         prNumber: "",
         repository: "example/repo",
-        stage: "summarize",
+        stage: "materialize",
         stageTimeoutMinutes: 1,
         token: "token",
       }),
     ).resolves.toMatchObject({
-      parsedOutput: { comment_body: "GitVibe dry run for summarize on discussion #5." },
+      parsedOutput: { comment_body: "GitVibe dry run for materialize on discussion #5." },
     });
   });
 });

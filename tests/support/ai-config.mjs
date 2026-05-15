@@ -13,8 +13,6 @@ function testAiConfigYaml(extraAi = "") {
   stages:
     investigate:
       profile: test
-    summarize:
-      profile: test
     validate:
       profile: test
     decompose:

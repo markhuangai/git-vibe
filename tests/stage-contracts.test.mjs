@@ -32,10 +32,9 @@ describe("stage contracts", () => {
       "investigate",
       "materialize",
       "review-matrix",
-      "summarize",
       "validate",
     ]);
-    expect(parseStage("summarize")).toBe("summarize");
+    expect(parseStage("decompose")).toBe("decompose");
     expect(() => parseStage("unknown")).toThrow("Unknown GitVibe action stage");
   });
 
@@ -164,7 +163,7 @@ describe("stage prompt standards guidance", () => {
       "Include the applicable repository standards and validation checks",
     );
     expect(prompts.prompt).toContain(
-      "Summarize the repo rules and required checks that matter for the implementation",
+      "Describe the repo rules and required checks that matter for the implementation",
     );
   });
 

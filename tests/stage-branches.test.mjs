@@ -18,7 +18,7 @@ describe("stage branch helpers", () => {
     expect(issueBranchForStage("review-matrix", prContext)).toBe("feature");
     expect(branchForWriteStage("address-pr-feedback", prContext)).toBe("feature");
     expect(issueBranchForStage("implement", issueContext)).toBe("git-vibe/12");
-    expect(issueBranchForStage("summarize", issueContext)).toBeUndefined();
+    expect(issueBranchForStage("validate", issueContext)).toBeUndefined();
   });
 
   it("blocks unsafe pull request heads with schema-shaped output", () => {

@@ -117,7 +117,7 @@ describe("AI usage telemetry", () => {
 function mockUsageResult({ stepUsage, totalUsage }) {
   generateText.mockImplementationOnce(async (request) => {
     request.onStepFinish({ finishReason: "stop", toolCalls: [], usage: stepUsage });
-    const content = '{"stage":"summarize","status":"completed"}';
+    const content = '{"stage":"investigate","status":"completed"}';
     return {
       steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
       text: content,

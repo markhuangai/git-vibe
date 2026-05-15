@@ -39,9 +39,9 @@ afterEach(() => {
 
 describe("AI SDK prompt caching", () => {
   it("enables Anthropic cache control by default while preserving explicit options", async () => {
-    mockCompletedText("summarize");
+    mockCompletedText("validate");
 
-    await runAiStage(stageOptions(anthropicConfig(), "summarize"));
+    await runAiStage(stageOptions(anthropicConfig(), "validate"));
 
     expect(generateText.mock.calls[0][0].providerOptions).toMatchObject({
       anthropic: {
@@ -88,7 +88,7 @@ function mockCompletedText(stage) {
     comment_body: "Done.",
     findings: [],
     implementation_plan: [],
-    next_state: stage === "summarize" ? "ready-for-materialization" : "ready-for-implementation",
+    next_state: "ready-for-implementation",
     questions: [],
     references: [],
     stage,
@@ -128,7 +128,7 @@ function anthropicConfig() {
           provider_options: { anthropic: { effort: "high" } },
         },
       },
-      stages: { summarize: { profile: "anthropic" } },
+      stages: { validate: { profile: "anthropic" } },
     },
   };
 }

@@ -7,7 +7,7 @@ Prepare a pull request draft for deterministic GitVibe code to create or update.
 ## Scope
 
 - Use the deterministic GitVibe branch from the stage contract, then derive the title, body, references, and reviewer-facing notes from the issue, branch state, and inspected changes.
-- Summarize implemented behavior, tests, known risks, and traceability to the original artifact.
+- Describe implemented behavior, tests, known risks, and traceability to the original artifact.
 - Do not merge, approve, assign reviewers, push commits, or claim CI has passed unless the evidence is present.
 - If the branch or implementation evidence is missing, block instead of drafting a misleading PR.
 

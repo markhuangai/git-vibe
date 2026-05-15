@@ -6,7 +6,7 @@ describe("stage dry-run contracts", () => {
     expect(stageContract("implement", context("issue"))).toContain(
       "GitVibe has already prepared branch git-vibe/12",
     );
-    expect(stageContract("summarize", context("discussion"))).not.toContain("prepared branch");
+    expect(stageContract("validate", context("discussion"))).not.toContain("prepared branch");
   });
 
   it("renders decompose and pull-request investigation dry-run output", () => {
@@ -46,7 +46,7 @@ describe("stage dry-run contracts", () => {
 
   it("omits empty artifact URLs from dry-run references", () => {
     const output = JSON.parse(
-      dryRunContent("summarize", context("discussion", { url: "" }), logger()),
+      dryRunContent("materialize", context("discussion", { url: "" }), logger()),
     );
 
     expect(output.references).toEqual([]);

@@ -2,7 +2,7 @@
 
 ## Context Assembly And Analysis
 
-All investigation, summarization, validation, and refinement runs must build context from the full GitHub conversation, not just the initial description.
+All investigation, validation, decomposition, materialization, and refinement runs must build context from the full GitHub conversation, not just the initial description.
 
 ```mermaid
 flowchart TD
@@ -12,7 +12,7 @@ flowchart TD
   D --> E[Attach parent/thread references]
   E --> F[Classify author authority]
   F --> G[Weighted analysis prompt]
-  G --> H[Summary, questions, validation, or implementation brief]
+  G --> H[Questions, validation, decomposition, or implementation brief]
 ```
 
 Context assembly rules:
@@ -27,7 +27,7 @@ Context assembly rules:
 - Weight analysis by authority: admin/owner/maintain > write/collaborator/member > contributor > first-time contributor/guest/none.
 - When repository permission and `author_association` disagree, repository permission is stronger for approval and command authorization; `author_association` remains useful analysis metadata.
 
-The same context assembly and weighted analysis pipeline applies to bug investigation, feature discussion refinement, validation, and PR feedback handling.
+The same context assembly and weighted analysis pipeline applies to bug investigation, feature discussion validation, decomposition, materialization, and PR feedback handling.
 
 ## Stage Contracts
 
@@ -58,15 +58,17 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                   | Repository scope                    | Output                                                                       | May advance state                                                   |
-| ----------------------- | ----------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                             | No, except safe labels if configured                                |
-| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan  | No code changes                                                     |
-| Feature refinement      | Repo snapshot and discussion thread | Summary, proposed behavior, open questions, risks, acceptance criteria draft | No issue creation without protected approval                        |
-| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                              | May mark ready only if policy allows                                |
-| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                 | May create/update branch, not merge                                 |
-| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                         | May create `gvi:review-fix` issue follow-ups or PR feedback retries |
-| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                     | May update PR branch, not approve/merge                             |
+| Stage                   | Repository scope                    | Output                                                                      | May advance state                                                   |
+| ----------------------- | ----------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                            | No, except safe labels if configured                                |
+| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan | No code changes                                                     |
+| Feature validation      | Repo snapshot and discussion thread | Findings, contradictions, open questions, and readiness decision            | May mark ready for decomposition only if policy allows              |
+| Feature decomposition   | Repo snapshot and discussion thread | Story units, dependencies, acceptance criteria, and review guidance         | No issue creation without protected approval                        |
+| Materialization         | Accepted decomposed discussion      | Implementation issue title and body                                         | May create a labeled implementation issue                           |
+| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                             | May mark ready only if policy allows                                |
+| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                | May create/update branch, not merge                                 |
+| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                        | May create `gvi:review-fix` issue follow-ups or PR feedback retries |
+| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                    | May update PR branch, not approve/merge                             |
 
 AI result envelope:
 
@@ -110,7 +112,7 @@ Repository prompt addition paths:
 - `.git-vibe/prompts/<stage>/system.md`: appended to the rendered system prompt for that stage.
 - `.git-vibe/prompts/<stage>/user.md`: appended to the rendered user prompt for that stage.
 
-The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `decompose`, `materialize`, `summarize`, `validate`).
+The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `decompose`, `materialize`, `validate`).
 
 When an addition file exists, GitVibe appends its contents inside an explicit `<repository_prompt_addition>` XML section after the bundled GitVibe-controlled prompt content. The XML section makes clear that the content is repository-provided additive prompt text. GitVibe does not emit the XML section when the matching file is missing or empty.
 
@@ -208,7 +210,7 @@ Role definitions live in `.git-vibe/role-group/*.md`. A role group entry pairs a
 role markdown file with the exact profile that should run it. The synthesizer
 profile merges successful role outputs into the same final stage schema that
 single-profile execution returns. `role_group` is allowed only for read-only
-stages: `investigate`, `summarize`, `validate`, `decompose`, and `review-matrix`.
+stages: `investigate`, `validate`, `decompose`, and `review-matrix`.
 
 Normalized reasoning config:
 

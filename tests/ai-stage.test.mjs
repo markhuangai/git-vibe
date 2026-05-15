@@ -375,8 +375,8 @@ describe("AI stage runner provider failures", () => {
         prompt: "Prompt",
         schema: {},
         schemaId: "schema",
-        stage: "summarize",
-        stageDefinition: stageDefinitions.summarize,
+        stage: "validate",
+        stageDefinition: stageDefinitions.validate,
         system: "System",
       }),
     ).rejects.toThrow("AI response did not call output_validator");
@@ -580,7 +580,7 @@ describe("AI stage runner telemetry edge cases", () => {
       request.experimental_onToolCallFinish(undefined);
       request.experimental_onToolCallFinish({ success: false });
       request.onStepFinish(undefined);
-      return aiTextResult("summarize");
+      return aiTextResult("validate");
     });
 
     await expect(
@@ -596,7 +596,7 @@ describe("AI stage runner telemetry edge cases", () => {
         stageDefinition: { tools: ["bash-readonly"] },
         system: "System",
       }),
-    ).resolves.toBe('{"stage":"summarize","status":"completed"}');
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
 
     expect(createOpenAI).toHaveBeenCalledWith(expect.objectContaining({ baseURL: undefined }));
     expect(logger.event).toHaveBeenCalledWith("ai.tool.start", { tool: "<unknown>" });
@@ -672,7 +672,7 @@ function anthropicConfig() {
           },
         },
       },
-      stages: { summarize: { profile: "claude" } },
+      stages: { validate: { profile: "claude" } },
     },
   };
 }

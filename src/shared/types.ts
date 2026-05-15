@@ -1,6 +1,5 @@
 export type Stage =
   | "investigate"
-  | "summarize"
   | "validate"
   | "decompose"
   | "materialize"

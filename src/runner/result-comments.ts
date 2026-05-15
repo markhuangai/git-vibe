@@ -22,7 +22,6 @@ const stageTitles: Record<Stage, string> = {
   investigate: "Investigation",
   materialize: "Implementation Issue",
   "review-matrix": "Review Matrix",
-  summarize: "Discussion Summary",
   validate: "Validation",
 };
 

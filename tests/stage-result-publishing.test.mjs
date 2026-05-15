@@ -77,38 +77,6 @@ describe("stage result publishing", () => {
     expect(commentBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["gvi:ready-for-approval"]);
   });
-
-  it("publishes summarize results back to the source discussion", async () => {
-    const cwd = await workspace();
-    process.env.GITVIBE_DISCUSSION_NUMBER = "5";
-    generateText.mockResolvedValueOnce(aiResult(summarizeOutput()));
-    const fetch = fetchMock([
-      discussionResponse(),
-      graphqlResponse({ addDiscussionComment: { comment: { id: "comment", url: "url" } } }),
-    ]);
-    globalThis.fetch = fetch;
-
-    await runStage({
-      cwd,
-      dryRun: false,
-      issueNumber: "",
-      maxTurns: 2,
-      prNumber: "",
-      repository: "example/repo",
-      sourceComment: {
-        kind: "discussion-comment",
-        nodeId: "discussion-command-comment",
-      },
-      stage: "summarize",
-      stageTimeoutMinutes: 1,
-      token: "token",
-    });
-
-    const variables = JSON.parse(fetch.mock.calls[1][1].body).variables;
-    expect(variables.discussionId).toBe("discussion-id");
-    expect(variables.replyToId).toBe("discussion-command-comment");
-    expect(variables.body).toContain("## GitVibe Discussion Summary");
-  });
 });
 
 describe("decompose result publishing", () => {
@@ -300,19 +268,6 @@ function validateOutput() {
     stage: "validate",
     status: "completed",
     summary: "Validation complete.",
-  };
-}
-
-function summarizeOutput() {
-  return {
-    assumptions: [],
-    comment_body: "Summarized discussion.",
-    findings: ["Users want the full product flow."],
-    next_state: "ready-for-materialization",
-    references: [],
-    stage: "summarize",
-    status: "completed",
-    summary: "Discussion is ready.",
   };
 }
 
