@@ -5,6 +5,11 @@ import { parse } from "yaml";
 describe("GitVibe matrix workflow labels", () => {
   it("names member jobs with role-profile labels", () => {
     const cases = [
+      [
+        ".github/workflows/address-feedback.yml",
+        "investigate-feedback-members",
+        "plan-investigate-feedback",
+      ],
       [".github/workflows/address-feedback.yml", "review-matrix-members", "plan-review-matrix"],
       [".github/workflows/develop.yml", "review-matrix-members", "plan-review-matrix"],
       [".github/workflows/investigate.yml", "investigate-members", "plan-investigate"],
