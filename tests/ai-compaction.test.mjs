@@ -343,10 +343,16 @@ function codexAuthJson(label) {
     tokens: {
       access_token: `access-${label}`,
       account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
-      id_token: `header.${label}.signature`,
+      id_token: validIdToken(label),
       refresh_token: `refresh-${label}`,
     },
   })}\n`;
+}
+
+function validIdToken(label) {
+  return ["header", label, "signature"]
+    .map((part) => Buffer.from(part).toString("base64url"))
+    .join(".");
 }
 
 function mockCodexOutput(content) {

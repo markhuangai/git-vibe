@@ -72,6 +72,7 @@ export async function runCodexCliStage({
   await writeBackCodexAuth({
     auth: codexEnv.auth,
     github: options.github,
+    invalidAuth: "skip",
     logger: options.logger,
   });
 

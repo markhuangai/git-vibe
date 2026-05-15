@@ -88,6 +88,55 @@ describe("Codex CLI auth preflight", () => {
   });
 });
 
+describe("Codex CLI auth write-back boundaries", () => {
+  it("does not persist post-run auth that Codex cannot parse", async () => {
+    const client = await githubClientWithPublicKey();
+    const logger = { event: vi.fn() };
+    spawn.mockImplementationOnce(() => mockChildProcess({ stdout: "Logged in\n" }));
+    spawn.mockImplementationOnce((_command, args, childOptions) =>
+      mockChildProcess({
+        onInput: () => {
+          writeFileSync(join(childOptions.env.CODEX_HOME, "auth.json"), invalidCodexAuthJson());
+          writeFileSync(outputPathFrom(args), '{"stage":"validate","status":"completed"}');
+        },
+        stdout: "codex event\n",
+      }),
+    );
+
+    await expect(
+      runCodexCliStage({
+        options: {
+          config: {},
+          cwd: process.cwd(),
+          github: { client, repository: "example/repo", token: "token" },
+          logger,
+          maxTurns: 1,
+          prompt: "Prompt",
+          schema: {},
+          schemaId: "schema",
+          stage: "validate",
+          stageDefinition: stageDefinitions.validate,
+          system: "System",
+        },
+        profile: {
+          adapter: "cli-codex",
+          auth_json: { from_bundle: "CODEX_AUTH_JSON" },
+          model: "gpt-5.5",
+        },
+        profileName: "codex_cli",
+      }),
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
+
+    expect(client.request).not.toHaveBeenCalled();
+    expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON)).toEqual({
+      CODEX_AUTH_JSON: codexAuthJson("old"),
+    });
+    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.writeback.skip", {
+      reason: "invalid-refreshed-auth",
+    });
+  });
+});
+
 function codexAuthJson(label) {
   return `${JSON.stringify({
     auth_mode: "chatgpt",
@@ -95,10 +144,27 @@ function codexAuthJson(label) {
     tokens: {
       access_token: `access-${label}`,
       account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
-      id_token: `header.${label}.signature`,
+      id_token: validIdToken(label),
       refresh_token: `refresh-${label}`,
     },
   })}\n`;
+}
+
+function invalidCodexAuthJson() {
+  return `${JSON.stringify({
+    auth_mode: "chatgpt",
+    tokens: {
+      access_token: "access-refreshed",
+      id_token: "header.refreshed.signature",
+      refresh_token: "refresh-refreshed",
+    },
+  })}\n`;
+}
+
+function validIdToken(label) {
+  return ["header", label, "signature"]
+    .map((part) => Buffer.from(part).toString("base64url"))
+    .join(".");
 }
 
 async function githubClientWithPublicKey() {
