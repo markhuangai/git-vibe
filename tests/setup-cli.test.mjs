@@ -233,6 +233,30 @@ describe("stable release selection", () => {
     expect(releaseTag).toBe("v1.3.0");
   });
 
+  it("checks later release pages before reporting that no stable release exists", async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) =>
+      release({
+        draft: index % 2 === 0,
+        prerelease: index % 2 === 1,
+        published_at: `2026-05-${String(14 - Math.floor(index / 10)).padStart(2, "0")}T00:00:00Z`,
+        tag_name: `v9.0.0-${index}`,
+      }),
+    );
+    const fetchImpl = vi.fn(
+      fetchPages([
+        firstPage,
+        [release({ published_at: "2026-05-01T00:00:00Z", tag_name: "v1.2.3" })],
+      ]),
+    );
+
+    await expect(latestStableReleaseTag(fetchImpl)).resolves.toBe("v1.2.3");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0][0]).toContain("page=1");
+    expect(fetchImpl.mock.calls[0][0]).toContain("per_page=100");
+    expect(fetchImpl.mock.calls[1][0]).toContain("page=2");
+    expect(fetchImpl.mock.calls[1][0]).toContain("per_page=100");
+  });
+
   it("fails closed when the release request throws or returns invalid JSON", async () => {
     await expect(
       latestStableReleaseTag(async () => Promise.reject(new Error("offline"))),
@@ -320,4 +344,17 @@ function fetchOk(data) {
       headers: { "content-type": "application/json" },
       status: 200,
     });
+}
+
+/** @param {import("../src/setup/releases.ts").GitHubRelease[][]} pages */
+function fetchPages(pages) {
+  /** @param {string | URL | globalThis.Request} url */
+  return async (url) => {
+    const page = Number(new URL(String(url)).searchParams.get("page") || "1");
+    const data = pages[page - 1] || [];
+    return new globalThis.Response(JSON.stringify(data), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
 }

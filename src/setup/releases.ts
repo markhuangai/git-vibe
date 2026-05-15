@@ -9,6 +9,7 @@ export interface GitHubRelease {
 export class ReleaseLookupError extends Error {}
 
 const releasesUrl = "https://api.github.com/repos/markhuangai/git-vibe/releases";
+const releasesPerPage = 100;
 
 export async function latestStableReleaseTag(fetchImpl: typeof fetch = fetch): Promise<string> {
   const releases = await fetchReleases(fetchImpl);
@@ -29,10 +30,21 @@ export function selectLatestStableRelease(releases: GitHubRelease[]): GitHubRele
 }
 
 async function fetchReleases(fetchImpl: typeof fetch): Promise<GitHubRelease[]> {
+  const releases: GitHubRelease[] = [];
+
+  for (let page = 1; ; page += 1) {
+    const data = await fetchReleasePage(fetchImpl, page);
+    releases.push(...data);
+
+    if (data.length < releasesPerPage) return releases;
+  }
+}
+
+async function fetchReleasePage(fetchImpl: typeof fetch, page: number): Promise<GitHubRelease[]> {
   let response: Response;
 
   try {
-    response = await fetchImpl(releasesUrl, {
+    response = await fetchImpl(releasePageUrl(page), {
       headers: {
         accept: "application/vnd.github+json",
         "user-agent": "git-vibe-setup",
@@ -51,6 +63,13 @@ async function fetchReleases(fetchImpl: typeof fetch): Promise<GitHubRelease[]> 
   } catch {
     throw unavailableReleaseError();
   }
+}
+
+function releasePageUrl(page: number): string {
+  const url = new URL(releasesUrl);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(releasesPerPage));
+  return url.toString();
 }
 
 function compareReleaseFreshness(left: GitHubRelease, right: GitHubRelease): number {
