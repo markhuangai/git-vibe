@@ -530,20 +530,44 @@ describe("GitVibe develop workflow", () => {
 describe("GitVibe address feedback workflow", () => {
   it("investigates before conditionally implementing and reviewing PR feedback", () => {
     const workflow = readWorkflow(".github/workflows/address-feedback.yml");
+    const investigateMembers = workflow.jobs?.["investigate-feedback-members"];
     const investigate = workflow.jobs?.["investigate-feedback"];
     const address = workflow.jobs?.["address-feedback"];
     const planReview = workflow.jobs?.["plan-review-matrix"];
     const reviewMembers = workflow.jobs?.["review-matrix-members"];
     const review = workflow.jobs?.["review-matrix"];
 
+    expect(investigateMembers).toMatchObject({
+      "continue-on-error": true,
+      needs: "plan-investigate-feedback",
+      strategy: expect.objectContaining({
+        matrix: {
+          index: "${{ fromJSON(needs.plan-investigate-feedback.outputs.indexes || '[0]') }}",
+        },
+      }),
+    });
+    expect(
+      investigateMembers?.steps?.find((step) => step.uses === "./.git-vibe/actions/investigate"),
+    ).toMatchObject({
+      with: expect.objectContaining({
+        "execution-mode": "member",
+        "member-index": "${{ matrix.index }}",
+        "pr-number": "${{ inputs.pr-number }}",
+      }),
+    });
     expect(investigate?.outputs).toMatchObject({
       "next-state": "${{ steps.investigate.outputs.next-state }}",
+    });
+    expect(investigate).toMatchObject({
+      if: "always() && needs.plan-investigate-feedback.result == 'success'",
+      needs: ["plan-investigate-feedback", "investigate-feedback-members"],
     });
     expect(
       investigate?.steps?.find((step) => step.uses === "./.git-vibe/actions/investigate"),
     ).toMatchObject({
       id: "investigate",
       with: expect.objectContaining({
+        "execution-mode": "finalizer",
         "fail-on-blocked": "true",
         "pr-number": "${{ inputs.pr-number }}",
       }),
