@@ -3,7 +3,7 @@ name: GitVibe app deploy
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - Dockerfile
       - docker-compose.yml
