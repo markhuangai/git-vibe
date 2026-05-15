@@ -17,6 +17,8 @@ function testAiConfigYaml(extraAi = "") {
       profile: test
     validate:
       profile: test
+    decompose:
+      profile: test
     materialize:
       profile: test
     implement:

@@ -2,13 +2,38 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   addDiscussionComment,
+  addDiscussionLabel,
   closeDiscussion,
   deleteDiscussionComment,
   discussionComments,
+  discussionLabels,
   removeDiscussionLabel,
 } from "../src/shared/discussions.ts";
 
 describe("discussion label helpers", () => {
+  it("adds labels with the resolved label node ID", async () => {
+    const client = createClient();
+
+    await addDiscussionLabel({
+      client,
+      discussionId: "discussion-node",
+      label: "gvi:decomposing",
+      repository: "example/repo",
+      token: "token",
+    });
+
+    expect(client.graphql).toHaveBeenCalledWith(
+      expect.stringContaining("GitVibeDiscussionLabelId"),
+      { label: "gvi:decomposing", name: "repo", owner: "example" },
+      "token",
+    );
+    expect(client.graphql).toHaveBeenCalledWith(
+      expect.stringContaining("GitVibeAddDiscussionLabel"),
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      "token",
+    );
+  });
+
   it("removes labels with the supplied label node ID", async () => {
     const client = createClient();
 
@@ -131,6 +156,24 @@ describe("discussion comment helpers", () => {
   });
 });
 
+describe("discussion label listing", () => {
+  it("returns discussion label names", async () => {
+    const client = createClient();
+
+    await expect(
+      discussionLabels({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual(["gvi:validated", "git-vibe:decompose"]);
+  });
+
+  it("returns an empty label list when labels are unavailable", async () => {
+    const client = createClient({ missingDiscussionLabels: true });
+
+    await expect(
+      discussionLabels({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual([]);
+  });
+});
+
 function createClient(options = {}) {
   return {
     graphql: vi.fn(async (query) => {
@@ -160,6 +203,19 @@ function createClient(options = {}) {
             },
           },
         };
+      }
+      if (query.includes("GitVibeDiscussionLabels")) {
+        if (options.missingDiscussionLabels) return { node: null };
+        return {
+          node: {
+            labels: {
+              nodes: [{ name: "gvi:validated" }, { name: "git-vibe:decompose" }],
+            },
+          },
+        };
+      }
+      if (query.includes("GitVibeAddDiscussionLabel")) {
+        return { addLabelsToLabelable: { clientMutationId: null } };
       }
       return {};
     }),

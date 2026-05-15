@@ -22,6 +22,13 @@ export const stageDefinitions: Record<Stage, StageDefinition> = {
     target: "issue",
     tools: ["read", "grep", "glob", "web-fetch", "web-search"],
   },
+  decompose: {
+    promptDir: "decompose",
+    schemaFile: "decompose.v1.schema.json",
+    schemaId: "decompose.v1",
+    target: "discussion",
+    tools: ["read", "grep", "glob"],
+  },
   materialize: {
     promptDir: "materialize",
     schemaFile: "materialize.v1.schema.json",

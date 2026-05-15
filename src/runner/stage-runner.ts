@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { runAiStage, type RunAiStageOptions } from "./ai.js";
 import { loadConfig } from "./config.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
+import { blockUnvalidatedDecompose } from "./decompose-gate.js";
 import { GitHubClient } from "../shared/github.js";
 import { withStageHandoffs, writeStageResultFile, writeStageResultSummary } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
@@ -68,6 +69,14 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
+  const unvalidatedDecomposeResult = await blockUnvalidatedDecompose({
+    buildResult: (content) => stageRunResult({ content, context, definition, logger, options }),
+    client,
+    context,
+    logger,
+    runner: options,
+  });
+  if (unvalidatedDecomposeResult) return unvalidatedDecomposeResult;
   const transientComments = await publishStageStart({ client, context, logger, options });
   const blockedResult = await blockUnsafePullRequestHead({
     client,

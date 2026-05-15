@@ -169,6 +169,15 @@ describe("GitVibe action launcher validation", () => {
 
     await expect(
       runAction({
+        argv: ["decompose"],
+        env: baseEnv,
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith("GITVIBE_DISCUSSION_NUMBER is required for this stage.");
+
+    await expect(
+      runAction({
         argv: ["validate"],
         env: {
           GITHUB_REPOSITORY: "example/repo",

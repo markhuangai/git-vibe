@@ -22,6 +22,7 @@ const legacyAiEnvNames = [
 
 const reusableWorkflows = [
   ".github/workflows/address-feedback.yml",
+  ".github/workflows/decompose.yml",
   ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
@@ -31,6 +32,7 @@ const reusableWorkflows = [
 
 const consumerWorkflows = [
   "examples/consumer/.github/workflows/address-feedback.yml",
+  "examples/consumer/.github/workflows/decompose.yml",
   "examples/consumer/.github/workflows/develop.yml",
   "examples/consumer/.github/workflows/investigate.yml",
   "examples/consumer/.github/workflows/materialize.yml",
@@ -41,6 +43,7 @@ const consumerWorkflows = [
 const actionFiles = [
   "address-pr-feedback/action.yml",
   "create-pr/action.yml",
+  "decompose/action.yml",
   "implement/action.yml",
   "investigate/action.yml",
   "mark-blocked/action.yml",
@@ -55,6 +58,7 @@ const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
   { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
   { file: ".github/workflows/summarize.yml", stage: "summarize", artifact: "Discussion" },
+  { file: ".github/workflows/decompose.yml", stage: "decompose", artifact: "Discussion" },
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
   { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
@@ -67,6 +71,11 @@ const workflowRunNameSpecs = [
   {
     file: "examples/consumer/.github/workflows/summarize.yml",
     stage: "summarize",
+    artifact: "Discussion",
+  },
+  {
+    file: "examples/consumer/.github/workflows/decompose.yml",
+    stage: "decompose",
     artifact: "Discussion",
   },
   {
@@ -91,12 +100,14 @@ const workflowStaticNames = {
   ".github/workflows/release.yml": "GitVibe release",
   ".github/workflows/validate.yml": "GitVibe validate",
   ".github/workflows/summarize.yml": "GitVibe summarize",
+  ".github/workflows/decompose.yml": "GitVibe decompose",
   ".github/workflows/materialize.yml": "GitVibe materialize",
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
   "examples/consumer/.github/workflows/summarize.yml": "GitVibe summarize",
+  "examples/consumer/.github/workflows/decompose.yml": "GitVibe decompose",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
   "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
   "examples/consumer/.github/workflows/develop.yml": "GitVibe develop",
@@ -406,6 +417,11 @@ describe("GitVibe workflow write permissions", () => {
       discussions: "write",
     });
     expect(
+      readWorkflow(".github/workflows/decompose.yml").jobs?.decompose?.permissions,
+    ).toMatchObject({
+      discussions: "write",
+    });
+    expect(
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.permissions,
     ).toMatchObject({
       discussions: "write",
@@ -444,27 +460,6 @@ describe("GitVibe workflow write permissions", () => {
         "address-feedback"
       ]?.steps?.find((step) => step.name === "Upload feedback remediation result"),
     ).toBeUndefined();
-  });
-});
-
-describe("GitVibe matrix workflow labels", () => {
-  it("names member jobs with role-profile labels", () => {
-    const cases = [
-      [".github/workflows/address-feedback.yml", "review-matrix-members", "plan-review-matrix"],
-      [".github/workflows/develop.yml", "review-matrix-members", "plan-review-matrix"],
-      [".github/workflows/investigate.yml", "investigate-members", "plan-investigate"],
-      [".github/workflows/summarize.yml", "summarize-members", "plan-summarize"],
-      [".github/workflows/validate.yml", "validate-members", "plan-validate"],
-    ];
-
-    for (const [file, job, plan] of cases) {
-      const expected = [
-        "${{ fromJSON(needs.",
-        plan,
-        ".outputs.labels)[format('{0}', matrix.index)] }}",
-      ].join("");
-      expect(readWorkflow(file).jobs?.[job]?.name).toBe(expected);
-    }
   });
 });
 

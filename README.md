@@ -79,15 +79,16 @@ authority. Maintainers stay in control of approval and release decisions.
 
 ## Workflows
 
-| Workflow               | Use it for                                                  | Writes code?                           |
-| ---------------------- | ----------------------------------------------------------- | -------------------------------------- |
-| `investigate.yml`      | Bug investigation and likely-root-cause analysis            | No                                     |
-| `summarize.yml`        | Feature discussion summary and open-question extraction     | No                                     |
-| `validate.yml`         | Check whether maintainer context is coherent and actionable | No                                     |
-| `materialize.yml`      | Convert a validated Discussion into an implementation issue | No                                     |
-| `develop.yml`          | Investigate, implement, review, and create or update a PR   | Yes, on `git-vibe/{root-issue}`        |
-| `address-feedback.yml` | Investigate PR feedback, apply required fixes, then review  | Conditional, on the existing PR branch |
-| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner         | No repo changes                        |
+| Workflow               | Use it for                                                    | Writes code?                           |
+| ---------------------- | ------------------------------------------------------------- | -------------------------------------- |
+| `investigate.yml`      | Bug investigation and likely-root-cause analysis              | No                                     |
+| `summarize.yml`        | Feature discussion summary and open-question extraction       | No                                     |
+| `validate.yml`         | Check whether maintainer context is coherent and actionable   | No                                     |
+| `decompose.yml`        | Create a read-only story-unit plan for a validated Discussion | No                                     |
+| `materialize.yml`      | Convert a validated Discussion into an implementation issue   | No                                     |
+| `develop.yml`          | Investigate, implement, review, and create or update a PR     | Yes, on `git-vibe/{root-issue}`        |
+| `address-feedback.yml` | Investigate PR feedback, apply required fixes, then review    | Conditional, on the existing PR branch |
+| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner           | No repo changes                        |
 
 The reusable workflows install Node `22` and pnpm `10.33.3` before building the
 source-backed composite actions. Each composite action then reads
@@ -268,14 +269,15 @@ Use `/git-vibe` for the remaining comment-triggered workflows:
 | `/git-vibe summarize`        | Feature Discussion        | Summarizes the full conversation and open questions           |
 | `/git-vibe address-feedback` | Pull request conversation | Investigates open PR feedback and fixes only actionable items |
 
-Use protected labels for investigation, validation, and approval transitions:
+Use protected labels for investigation, validation, decomposition, and approval transitions:
 
 | Label                  | Typical surface      | Effect                                                                         |
 | ---------------------- | -------------------- | ------------------------------------------------------------------------------ |
 | `git-vibe:investigate` | Bug issue            | Runs investigation, then GitVibe replaces the trigger with `gvi:investigating` |
 | `git-vibe:validate`    | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                        |
+| `git-vibe:decompose`   | Feature Discussion   | Posts a story-unit decomposition after `gvi:validated`                         |
 | `git-vibe:approved`    | Implementation issue | Dispatches the development pipeline                                            |
-| `git-vibe:approved`    | Feature Discussion   | Dispatches materialization, which creates an issue and closes the Discussion   |
+| `git-vibe:approved`    | Feature Discussion   | Dispatches materialization after `gvi:decomposed`                              |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
@@ -341,6 +343,8 @@ ai:
       profile: local_proxy
     validate:
       role_group: review_gate
+    decompose:
+      profile: local_proxy
     materialize:
       profile: local_proxy
     implement:
@@ -450,9 +454,9 @@ jobs:
 ```
 
 For source-repo testing, dispatch `investigate.yml`, `summarize.yml`,
-`validate.yml`, `materialize.yml`, `develop.yml`, or `address-feedback.yml`
-directly. Leave `action-repository` and `action-ref` empty to test the current
-repository and ref.
+`validate.yml`, `decompose.yml`, `materialize.yml`, `develop.yml`, or
+`address-feedback.yml` directly. Leave `action-repository` and `action-ref`
+empty to test the current repository and ref.
 
 ## Development
 

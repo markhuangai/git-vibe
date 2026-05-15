@@ -5,6 +5,7 @@ import {
   createApp,
   createClient,
   discussionCommentBodies,
+  discussionLabelAdds,
   discussionLabelRemovals,
   repositoryPayload,
   requestBodies,
@@ -245,7 +246,7 @@ describe("GitVibe app server discussion labels", () => {
     ]);
   });
 
-  it("dispatches trusted discussion validation and materialization labels", async () => {
+  it("dispatches trusted discussion validation and marks validation in progress", async () => {
     const client = createClient({ permission: { permission: "write" } });
     const app = createApp({ client });
 
@@ -256,6 +257,81 @@ describe("GitVibe app server discussion labels", () => {
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
+
+    expect(requestPaths(client, "POST")).toEqual(
+      expect.arrayContaining(["/repos/example/repo/actions/workflows/validate.yml/dispatches"]),
+    );
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({ inputs: { "discussion-number": "5" } }),
+    ]);
+    expect(discussionLabelAdds(client)).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+    expect(discussionLabelRemovals(client)).toEqual([
+      { discussionId: "discussion-node", labelIds: ["validate-label-node"] },
+    ]);
+    expect(discussionCommentBodies(client).join("\n")).toContain("validate.yml");
+    expect(discussionCommentBodies(client).join("\n")).toContain(
+      "Workflow run: https://github.com/example/repo/actions/runs/1",
+    );
+  });
+});
+
+describe("GitVibe app server discussion decomposition labels", () => {
+  it("blocks discussion decomposition until validation has completed", async () => {
+    const client = createClient({ permission: { permission: "write" } });
+    const app = createApp({ client });
+
+    await app.handleWebhook("discussion", {
+      action: "labeled",
+      discussion: { node_id: "discussion-node", number: 5 },
+      label: { name: gitVibeLabels.decompose.name, node_id: "decompose-label-node" },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(discussionLabelRemovals(client)).toEqual([
+      { discussionId: "discussion-node", labelIds: ["decompose-label-node"] },
+    ]);
+    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed validation yet");
+  });
+
+  it("dispatches trusted discussion decomposition after validation", async () => {
+    const client = createClient({
+      discussionLabels: [gitVibeLabels.validated.name],
+      permission: { permission: "write" },
+    });
+    const app = createApp({ client });
+
+    await app.handleWebhook("discussion", {
+      action: "labeled",
+      discussion: { node_id: "discussion-node", number: 5 },
+      label: { name: gitVibeLabels.decompose.name, node_id: "decompose-label-node" },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestPaths(client, "POST")).toContain(
+      "/repos/example/repo/actions/workflows/decompose.yml/dispatches",
+    );
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({ inputs: { "discussion-number": "5" } }),
+    ]);
+    expect(discussionLabelAdds(client)).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+    expect(discussionLabelRemovals(client)).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["decompose-label-node"] },
+    ]);
+    expect(discussionCommentBodies(client).join("\n")).toContain("decompose.yml");
+  });
+
+  it("blocks discussion approval until decomposition has completed", async () => {
+    const client = createClient({ permission: { permission: "write" } });
+    const app = createApp({ client });
+
     await app.handleWebhook("discussion", {
       action: "labeled",
       discussion: { node_id: "discussion-node", number: 5 },
@@ -264,24 +340,35 @@ describe("GitVibe app server discussion labels", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(requestPaths(client, "POST")).toEqual(
-      expect.arrayContaining([
-        "/repos/example/repo/actions/workflows/validate.yml/dispatches",
-        "/repos/example/repo/actions/workflows/materialize.yml/dispatches",
-      ]),
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(discussionLabelRemovals(client)).toEqual([
+      { discussionId: "discussion-node", labelIds: ["approved-label-node"] },
+    ]);
+    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed decomposition yet");
+  });
+
+  it("dispatches trusted discussion materialization after decomposition", async () => {
+    const client = createClient({
+      discussionLabels: [gitVibeLabels.decomposed.name],
+      permission: { permission: "write" },
+    });
+    const app = createApp({ client });
+
+    await app.handleWebhook("discussion", {
+      action: "labeled",
+      discussion: { node_id: "discussion-node", number: 5 },
+      label: { name: gitVibeLabels.approved.name, node_id: "approved-label-node" },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestPaths(client, "POST")).toContain(
+      "/repos/example/repo/actions/workflows/materialize.yml/dispatches",
     );
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({ inputs: { "discussion-number": "5" } }),
-      expect.objectContaining({ inputs: { "discussion-number": "5" } }),
     ]);
-    expect(discussionLabelRemovals(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["validate-label-node"] },
-    ]);
-    expect(discussionCommentBodies(client).join("\n")).toContain("validate.yml");
     expect(discussionCommentBodies(client).join("\n")).toContain("materialize.yml");
-    expect(discussionCommentBodies(client).join("\n")).toContain(
-      "Workflow run: https://github.com/example/repo/actions/runs/1",
-    );
   });
 });
 

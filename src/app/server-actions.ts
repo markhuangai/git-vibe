@@ -1,8 +1,10 @@
 import { gitVibeBaseBranchVariable } from "../shared/config.js";
 import {
   addDiscussionComment,
+  addDiscussionLabel,
   deleteDiscussionComment,
   discussionComments,
+  discussionLabels,
   removeDiscussionLabel,
 } from "../shared/discussions.js";
 import {
@@ -30,7 +32,7 @@ import {
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import type { IntakeComment } from "./intake.js";
 import { removeIssueLabel } from "./labels.js";
-import type { WebhookPayload } from "./server.js";
+import type { WebhookPayload } from "./types.js";
 
 export interface WebhookActionContext {
   client: GitHubClient;
@@ -196,7 +198,23 @@ export async function removeDiscussionLabelFromPayload(
     client: options.client,
     discussionId,
     label,
-    labelId: labelNodeId(options.payload.label),
+    labelId: options.payload.label?.name === label ? labelNodeId(options.payload.label) : undefined,
+    repository: `${options.owner}/${options.repo}`,
+    token: options.token,
+  });
+}
+
+export async function addDiscussionLabelFromPayload(
+  options: WebhookActionContext,
+  label: string,
+): Promise<void> {
+  const discussionId = discussionNodeId(options.payload.discussion);
+  if (!discussionId) throw new Error("missing discussion node_id for label addition");
+
+  await addDiscussionLabel({
+    client: options.client,
+    discussionId,
+    label,
     repository: `${options.owner}/${options.repo}`,
     token: options.token,
   });
@@ -224,6 +242,25 @@ export function labelReason(label: string): string {
 export function issueHasLabel(issue: WebhookPayload["issue"], label: string): boolean {
   const labelNames = new Set(equivalentGitVibeLabelNames(label));
   return Boolean(issue?.labels?.some((item) => item.name && labelNames.has(item.name)));
+}
+
+export async function discussionHasLabel(
+  options: WebhookActionContext,
+  label: string,
+): Promise<boolean> {
+  const labelNames = new Set(equivalentGitVibeLabelNames(label));
+  if (discussionPayloadLabels(options.payload.discussion).some((name) => labelNames.has(name))) {
+    return true;
+  }
+
+  const discussionId = discussionNodeId(options.payload.discussion);
+  if (!discussionId) return false;
+  const labels = await discussionLabels({
+    client: options.client,
+    discussionId,
+    token: options.token,
+  });
+  return labels.some((name) => labelNames.has(name));
 }
 
 export async function acknowledgeCommand(options: WebhookActionContext): Promise<boolean> {
@@ -378,6 +415,14 @@ export function approvalRequiresInvestigationBody(label: string): string {
   return `GitVibe removed \`${label}\` because this issue has not completed investigation yet. Add \`${gitVibeLabels.investigate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.investigating.name}\` and then \`${gitVibeLabels.investigated.name}\` when the investigation is ready for implementation.`;
 }
 
+export function approvalRequiresDecompositionBody(label: string): string {
+  return `GitVibe removed \`${label}\` because this discussion has not completed decomposition yet. Add \`${gitVibeLabels.decompose.name}\` after validation; GitVibe will replace it with \`${gitVibeLabels.decomposing.name}\` and then \`${gitVibeLabels.decomposed.name}\` when the decomposition is ready for materialization.`;
+}
+
+export function decomposeRequiresValidationBody(label: string): string {
+  return `GitVibe removed \`${label}\` because this discussion has not completed validation yet. Add \`${gitVibeLabels.validate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.validating.name}\` and then \`${gitVibeLabels.validated.name}\` when validation is ready for decomposition.`;
+}
+
 async function updateSourceIssueLabels(
   options: WebhookActionContext,
   issueNumbers: string[],
@@ -449,6 +494,13 @@ function sourceCommentFromPayload(
     nodeId: commandCommentNodeId(comment),
     url: comment.html_url || comment.url,
   };
+}
+
+function discussionPayloadLabels(discussion: WebhookPayload["discussion"]): string[] {
+  return (discussion?.labels || []).flatMap((label) => {
+    const name = label.name?.trim();
+    return name ? [name] : [];
+  });
 }
 
 interface QueuedWorkflowComment {

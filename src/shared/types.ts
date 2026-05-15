@@ -2,6 +2,7 @@ export type Stage =
   | "investigate"
   | "summarize"
   | "validate"
+  | "decompose"
   | "materialize"
   | "implement"
   | "review-matrix"
@@ -87,6 +88,7 @@ export interface ContextPacket {
   artifact: {
     body: string;
     id?: string;
+    labels?: string[];
     number: string;
     title: string;
     type: "issue" | "discussion" | "pull-request";

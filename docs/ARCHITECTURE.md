@@ -163,6 +163,7 @@ Starter files:
 - `.github/workflows/investigate.yml`: wrapper for investigation-only runs.
 - `.github/workflows/develop.yml`: wrapper for full implementation runs.
 - `.github/workflows/materialize.yml`: wrapper for Discussion-to-issue materialization.
+- `.github/workflows/decompose.yml`: wrapper for validated Discussion decomposition.
 - `.github/workflows/summarize.yml`: wrapper for Discussion summarization.
 - `.github/workflows/validate.yml`: wrapper for issue or Discussion validation.
 - `.github/workflows/address-feedback.yml`: wrapper for PR feedback investigation, conditional remediation, and review.

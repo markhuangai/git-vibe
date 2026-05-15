@@ -18,6 +18,10 @@ export interface DiscussionCommentNode {
   url: string;
 }
 
+export interface DiscussionLabelNode {
+  name: string;
+}
+
 export interface DiscussionSetupCheck {
   categoryName: string;
   categorySlug: string;
@@ -113,6 +117,25 @@ export async function deleteDiscussionComment(options: {
   );
 }
 
+export async function addDiscussionLabel(options: {
+  client: GitHubClient;
+  discussionId: string;
+  label: string;
+  labelId?: string;
+  repository: string;
+  token: string;
+}): Promise<void> {
+  const labelId = options.labelId || (await discussionLabelId(options));
+  await options.client.graphql(
+    addDiscussionLabelMutation,
+    {
+      discussionId: options.discussionId,
+      labelIds: [labelId],
+    },
+    options.token,
+  );
+}
+
 export async function removeDiscussionLabel(options: {
   client: GitHubClient;
   discussionId: string;
@@ -130,6 +153,21 @@ export async function removeDiscussionLabel(options: {
     },
     options.token,
   );
+}
+
+export async function discussionLabels(options: {
+  client: GitHubClient;
+  discussionId: string;
+  token: string;
+}): Promise<string[]> {
+  const result = await options.client.graphql<DiscussionLabelsResult>(
+    discussionLabelsQuery,
+    { discussionId: options.discussionId },
+    options.token,
+  );
+  const discussion = result.node;
+  if (!discussion?.labels?.nodes) return [];
+  return discussion.labels.nodes.map((label) => label.name.trim()).filter(Boolean);
 }
 
 export async function closeDiscussion(options: {
@@ -239,6 +277,12 @@ interface DiscussionCommentsResult {
   } | null;
 }
 
+interface DiscussionLabelsResult {
+  node?: {
+    labels?: { nodes: DiscussionLabelNode[] };
+  } | null;
+}
+
 interface DiscussionLabelIdResult {
   repository?: {
     label?: {
@@ -328,12 +372,34 @@ const deleteDiscussionCommentMutation = `
   }
 `;
 
+const discussionLabelsQuery = `
+  query GitVibeDiscussionLabels($discussionId: ID!) {
+    node(id: $discussionId) {
+      ... on Discussion {
+        labels(first: 100) {
+          nodes {
+            name
+          }
+        }
+      }
+    }
+  }
+`;
+
 const discussionLabelIdQuery = `
   query GitVibeDiscussionLabelId($label: String!, $name: String!, $owner: String!) {
     repository(owner: $owner, name: $name) {
       label(name: $label) {
         id
       }
+    }
+  }
+`;
+
+const addDiscussionLabelMutation = `
+  mutation GitVibeAddDiscussionLabel($discussionId: ID!, $labelIds: [ID!]!) {
+    addLabelsToLabelable(input: { labelableId: $discussionId, labelIds: $labelIds }) {
+      clientMutationId
     }
   }
 `;

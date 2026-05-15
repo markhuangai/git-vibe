@@ -12,6 +12,7 @@
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
 - `.github/workflows/summarize.yml`: reusable Discussion summarization pipeline.
 - `.github/workflows/validate.yml`: reusable issue or Discussion validation pipeline.
+- `.github/workflows/decompose.yml`: reusable validated Discussion decomposition pipeline.
 - `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.
 - `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.

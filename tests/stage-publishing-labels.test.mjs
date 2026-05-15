@@ -152,6 +152,47 @@ describe("stage label investigation blocking", () => {
   });
 });
 
+describe("discussion stage label transitions", () => {
+  it("marks validated discussions after successful validation", async () => {
+    const client = createClient();
+
+    await applyStageLabelTransition({
+      client,
+      context: context("discussion"),
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "ready-for-implementation", stage: "validate" },
+      runner: runner({ stage: "validate" }),
+    });
+
+    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+
+  it("marks decomposed discussions after successful decomposition", async () => {
+    const client = createClient();
+
+    await applyStageLabelTransition({
+      client,
+      context: context("discussion"),
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "ready-for-materialization", stage: "decompose" },
+      runner: runner({ stage: "decompose" }),
+    });
+
+    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toHaveLength(5);
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+});
+
 /**
  * @param {ContextPacket["artifact"]["type"]} type
  * @returns {ContextPacket}
@@ -160,6 +201,7 @@ function context(type) {
   return {
     artifact: {
       body: "Body",
+      id: type === "discussion" ? "discussion-node" : undefined,
       number: "12",
       title: "Title",
       type,
@@ -217,7 +259,12 @@ function runner(overrides = {}) {
 function createClient() {
   return /** @type {MockGitHubClient} */ ({
     apiBaseUrl: "https://api.github.test",
-    graphql: vi.fn(async () => ({})),
+    graphql: vi.fn(async (query) => {
+      if (query.includes("GitVibeDiscussionLabelId")) {
+        return { repository: { label: { id: "resolved-label-node" } } };
+      }
+      return {};
+    }),
     request: vi.fn(
       /**
        * @param {any} _request
@@ -227,6 +274,19 @@ function createClient() {
     ),
     retryBaseDelayMs: 0,
   });
+}
+
+/**
+ * @param {MockGitHubClient} client
+ * @param {string} operation
+ * @returns {any[]}
+ */
+function discussionLabelMutations(client, operation) {
+  const variables = [];
+  for (const call of client.graphql.mock.calls) {
+    if (call[0].includes(operation)) variables.push(call[1]);
+  }
+  return variables;
 }
 
 function createLogger() {

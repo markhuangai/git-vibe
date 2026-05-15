@@ -110,7 +110,7 @@ Repository prompt addition paths:
 - `.git-vibe/prompts/<stage>/system.md`: appended to the rendered system prompt for that stage.
 - `.git-vibe/prompts/<stage>/user.md`: appended to the rendered user prompt for that stage.
 
-The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `materialize`, `summarize`, `validate`).
+The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `decompose`, `materialize`, `summarize`, `validate`).
 
 When an addition file exists, GitVibe appends its contents inside an explicit `<repository_prompt_addition>` XML section after the bundled GitVibe-controlled prompt content. The XML section makes clear that the content is repository-provided additive prompt text. GitVibe does not emit the XML section when the matching file is missing or empty.
 
@@ -208,7 +208,7 @@ Role definitions live in `.git-vibe/role-group/*.md`. A role group entry pairs a
 role markdown file with the exact profile that should run it. The synthesizer
 profile merges successful role outputs into the same final stage schema that
 single-profile execution returns. `role_group` is allowed only for read-only
-stages: `investigate`, `summarize`, `validate`, and `review-matrix`.
+stages: `investigate`, `summarize`, `validate`, `decompose`, and `review-matrix`.
 
 Normalized reasoning config:
 

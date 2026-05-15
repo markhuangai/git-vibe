@@ -307,6 +307,7 @@ export async function buildDiscussionContext(options: {
     artifact: {
       body: discussion.body || "",
       id: discussion.id,
+      labels: (discussion.labels?.nodes || []).map((label) => label.name),
       number: options.discussionNumber,
       title: discussion.title || "",
       type: "discussion",
@@ -378,6 +379,7 @@ interface DiscussionNode {
   body?: string;
   createdAt?: string;
   id: string;
+  labels?: { nodes: Array<{ name: string }> };
   replies?: { nodes: DiscussionNode[] };
   title?: string;
   url?: string;
@@ -442,6 +444,11 @@ const discussionQuery = `
         createdAt
         url
         author { login }
+        labels(first: 100) {
+          nodes {
+            name
+          }
+        }
         comments(first: 100) {
           nodes {
             id

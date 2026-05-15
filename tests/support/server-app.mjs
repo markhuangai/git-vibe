@@ -16,99 +16,120 @@ export function createApp(options = {}) {
 }
 
 export function createClient(options = {}) {
-  const categories = options.categories || [{ id: "ideas", name: "Ideas", slug: "ideas" }];
   let workflowDispatchAttempts = 0;
-  const client = {
-    graphql: vi.fn(async (query, _variables) => {
-      if (query.includes("GitVibeDiscussionCategories")) {
-        return { repository: { discussionCategories: { nodes: categories }, id: "repo-id" } };
-      }
-      if (query.includes("GitVibeAddReaction")) {
-        if (options.reactionError) throw options.reactionError;
-        return { addReaction: { reaction: { content: "ROCKET" } } };
-      }
-      if (query.includes("GitVibeAddDiscussionComment")) {
-        return { addDiscussionComment: { comment: { id: "comment-id", url: "comment-url" } } };
-      }
-      if (query.includes("GitVibeDiscussionComments")) {
-        return { node: { comments: { nodes: options.discussionComments || [] } } };
-      }
-      if (query.includes("GitVibeDeleteDiscussionComment")) {
-        return { deleteDiscussionComment: { clientMutationId: null } };
-      }
-      if (query.includes("GitVibeRemoveDiscussionLabel")) {
-        if (options.discussionLabelRemovalError) throw options.discussionLabelRemovalError;
-        return { removeLabelsFromLabelable: { clientMutationId: null } };
-      }
-      if (query.includes("GitVibeDiscussionLabelId")) {
-        return { repository: { label: { id: "resolved-label-node" } } };
-      }
-      return {
-        createDiscussion: {
-          discussion: {
-            id: "discussion-id",
-            number: 7,
-            url: "https://github.com/example/repo/discussions/7",
-          },
-        },
-      };
-    }),
+  return {
+    graphql: vi.fn(async (query, _variables) => graphqlResponseFor(query, options)),
     request: vi.fn(async (request) => {
-      if (request.path.includes("/collaborators/")) {
-        const permission = options.permission || { permission: "write" };
-        if (permission instanceof Error) throw permission;
-        return permission;
-      }
-      if (request.method === "GET" && request.path.includes("/comments?")) {
-        if (options.commentsError) throw options.commentsError;
-        return options.comments || [];
-      }
-      if (request.method === "GET" && request.path.includes("/actions/variables/")) {
-        if (options.baseBranchVariableError) throw options.baseBranchVariableError;
-        if (options.baseBranchVariable !== undefined) {
-          return { name: "GITVIBE_BASE_BRANCH", value: options.baseBranchVariable };
-        }
-        throw new Error("GitHub API GET actions variable failed: 404");
-      }
-      if (request.method === "GET" && request.path === "/repos/example/repo") {
-        return { default_branch: options.defaultBranch || "main" };
-      }
-      if (request.method === "GET" && request.path.includes("/pulls/")) {
-        return { body: options.pullRequestBody || "" };
-      }
-      if (request.method === "POST" && request.path.endsWith("/labels")) {
-        if (options.labelError) throw options.labelError;
-        return {};
-      }
       if (request.method === "POST" && request.path.includes("/actions/workflows/")) {
         workflowDispatchAttempts += 1;
-        if (workflowDispatchAttempts <= (options.workflowDispatchErrorCount || 0)) {
-          throw options.workflowDispatchError;
-        }
-        return (
-          options.workflowDispatchResponse || {
-            html_url: "https://github.com/example/repo/actions/runs/1",
-            run_url: "https://api.github.com/repos/example/repo/actions/runs/1",
-            workflow_run_id: 1,
-          }
-        );
+        return workflowDispatchResponse(options, workflowDispatchAttempts);
       }
-      if (request.method === "POST" && request.path.includes("/issues/")) {
-        if (request.path.includes("/comments") && options.issueCommentError) {
-          throw options.issueCommentError;
-        }
-        return {};
-      }
-      if (request.method === "PATCH" && request.path.includes("/issues/")) return {};
-      if (request.method === "DELETE" && request.path.includes("/labels/")) {
-        if (options.labelRemovalError) throw options.labelRemovalError;
-        return {};
-      }
-      if (request.method === "DELETE" && request.path.includes("/comments/")) return {};
-      throw new Error(`unexpected request ${request.method} ${request.path}`);
+      return requestResponseFor(request, options);
     }),
   };
-  return client;
+}
+
+function graphqlResponseFor(query, options) {
+  const categories = options.categories || [{ id: "ideas", name: "Ideas", slug: "ideas" }];
+  if (query.includes("GitVibeDiscussionCategories")) {
+    return { repository: { discussionCategories: { nodes: categories }, id: "repo-id" } };
+  }
+  if (query.includes("GitVibeAddReaction")) {
+    if (options.reactionError) throw options.reactionError;
+    return { addReaction: { reaction: { content: "ROCKET" } } };
+  }
+  if (query.includes("GitVibeAddDiscussionComment")) {
+    return { addDiscussionComment: { comment: { id: "comment-id", url: "comment-url" } } };
+  }
+  if (query.includes("GitVibeDiscussionComments")) {
+    return { node: { comments: { nodes: options.discussionComments || [] } } };
+  }
+  if (query.includes("GitVibeDiscussionLabels")) {
+    return {
+      node: { labels: { nodes: (options.discussionLabels || []).map((name) => ({ name })) } },
+    };
+  }
+  if (query.includes("GitVibeDeleteDiscussionComment")) {
+    return { deleteDiscussionComment: { clientMutationId: null } };
+  }
+  if (query.includes("GitVibeAddDiscussionLabel")) {
+    return { addLabelsToLabelable: { clientMutationId: null } };
+  }
+  if (query.includes("GitVibeRemoveDiscussionLabel")) {
+    if (options.discussionLabelRemovalError) throw options.discussionLabelRemovalError;
+    return { removeLabelsFromLabelable: { clientMutationId: null } };
+  }
+  if (query.includes("GitVibeDiscussionLabelId")) {
+    return { repository: { label: { id: "resolved-label-node" } } };
+  }
+  return {
+    createDiscussion: {
+      discussion: {
+        id: "discussion-id",
+        number: 7,
+        url: "https://github.com/example/repo/discussions/7",
+      },
+    },
+  };
+}
+
+function requestResponseFor(request, options) {
+  if (request.path.includes("/collaborators/")) {
+    const permission = options.permission || { permission: "write" };
+    if (permission instanceof Error) throw permission;
+    return permission;
+  }
+  if (request.method === "GET" && request.path.includes("/comments?")) {
+    if (options.commentsError) throw options.commentsError;
+    return options.comments || [];
+  }
+  if (request.method === "GET" && request.path.includes("/actions/variables/")) {
+    if (options.baseBranchVariableError) throw options.baseBranchVariableError;
+    if (options.baseBranchVariable !== undefined) {
+      return { name: "GITVIBE_BASE_BRANCH", value: options.baseBranchVariable };
+    }
+    throw new Error("GitHub API GET actions variable failed: 404");
+  }
+  if (request.method === "GET" && request.path === "/repos/example/repo") {
+    return { default_branch: options.defaultBranch || "main" };
+  }
+  if (request.method === "GET" && request.path.includes("/pulls/")) {
+    return { body: options.pullRequestBody || "" };
+  }
+  if (request.method === "POST" && request.path.endsWith("/labels")) {
+    if (options.labelError) throw options.labelError;
+    return {};
+  }
+  if (request.method === "POST" && request.path.includes("/issues/")) {
+    if (request.path.includes("/comments") && options.issueCommentError) {
+      throw options.issueCommentError;
+    }
+    return {};
+  }
+  if (request.method === "PATCH" && request.path.includes("/issues/")) {
+    return {};
+  }
+  if (request.method === "DELETE" && request.path.includes("/labels/")) {
+    if (options.labelRemovalError) throw options.labelRemovalError;
+    return {};
+  }
+  if (request.method === "DELETE" && request.path.includes("/comments/")) {
+    return {};
+  }
+  throw new Error(`unexpected request ${request.method} ${request.path}`);
+}
+
+function workflowDispatchResponse(options, workflowDispatchAttempts) {
+  if (workflowDispatchAttempts <= (options.workflowDispatchErrorCount || 0)) {
+    throw options.workflowDispatchError;
+  }
+  return (
+    options.workflowDispatchResponse || {
+      html_url: "https://github.com/example/repo/actions/runs/1",
+      run_url: "https://api.github.com/repos/example/repo/actions/runs/1",
+      workflow_run_id: 1,
+    }
+  );
 }
 
 export function featureIssue() {
@@ -165,6 +186,12 @@ export function discussionCommentBodies(client) {
 export function discussionLabelRemovals(client) {
   return client.graphql.mock.calls
     .filter(([query]) => query.includes("GitVibeRemoveDiscussionLabel"))
+    .map(([, variables]) => variables);
+}
+
+export function discussionLabelAdds(client) {
+  return client.graphql.mock.calls
+    .filter(([query]) => query.includes("GitVibeAddDiscussionLabel"))
     .map(([, variables]) => variables);
 }
 
