@@ -11,6 +11,11 @@ import {
   workflowRunIdFromUrl,
   type TransientStatusScope,
 } from "../shared/status-comments.js";
+import { cleanupPriorDecomposeResultComments } from "./decompose-results.js";
+import {
+  applyDiscussionStageLabelTransition,
+  applyDiscussionStageStartLabelTransition,
+} from "./stage-discussion-labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import type { StageLogger } from "./logging.js";
 import {
@@ -42,6 +47,7 @@ const staleTransientStatusCommentAgeMs = 30 * 60 * 1000;
 
 export async function publishStageResultComment(options: StagePublishingOptions): Promise<void> {
   await cleanupStageStatusComments(options);
+  await cleanupPriorDecomposeResultComments(options);
   const body = renderStageResultComment({
     context: options.context,
     links: options.links,
@@ -75,7 +81,10 @@ export async function publishStageStartComment(
 }
 
 export async function applyStageLabelTransition(options: StagePublishingOptions): Promise<void> {
-  if (options.context.artifact.type === "discussion") return;
+  if (options.context.artifact.type === "discussion") {
+    await applyDiscussionStageLabelTransition(options);
+    return;
+  }
   if (options.runner.stage === "investigate" && options.context.artifact.type !== "pull-request") {
     await applyInvestigationLabelTransition(options);
     return;
@@ -90,7 +99,10 @@ export async function applyStageLabelTransition(options: StagePublishingOptions)
 export async function applyStageStartLabelTransition(
   options: Omit<StagePublishingOptions, "parsedOutput">,
 ): Promise<void> {
-  if (options.context.artifact.type === "discussion") return;
+  if (options.context.artifact.type === "discussion") {
+    await applyDiscussionStageStartLabelTransition(options);
+    return;
+  }
   const label = labelForStageStart(options.context, options.runner);
   if (!label) return;
 
@@ -641,20 +653,6 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function flatReplyBody(body: string, source: SourceComment | undefined): string {
-  if (!source?.url) return body;
-  if (isThreadedSource(source)) return body;
-  return `${body}\n\n---\nIn reply to: ${source.url}`;
-}
-
-function isPullRequestReviewReply(source: SourceComment | undefined): boolean {
-  return Boolean(source?.kind === "pull-request-review-comment" && source.id);
-}
-
-function isThreadedSource(source: SourceComment): boolean {
-  return source.kind === "discussion-comment";
-}
-
 function isReadyForApproval(value: unknown): boolean {
   const state = String(value || "")
     .trim()
@@ -667,4 +665,18 @@ function isReadyForApproval(value: unknown): boolean {
     state === "ready-for-implementation" ||
     state.includes("ready-for-approval")
   );
+}
+
+function flatReplyBody(body: string, source: SourceComment | undefined): string {
+  if (!source?.url) return body;
+  if (isThreadedSource(source)) return body;
+  return `${body}\n\n---\nIn reply to: ${source.url}`;
+}
+
+function isPullRequestReviewReply(source: SourceComment | undefined): boolean {
+  return Boolean(source?.kind === "pull-request-review-comment" && source.id);
+}
+
+function isThreadedSource(source: SourceComment): boolean {
+  return source.kind === "discussion-comment";
 }

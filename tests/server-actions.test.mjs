@@ -231,7 +231,7 @@ describe("server action discussion and issue labels", () => {
     const context = actionContext({
       payload: {
         discussion: { node_id: "discussion-node", number: 3 },
-        label: { id: "label-node" },
+        label: { id: "label-node", name: "git-vibe:approved" },
       },
     });
 

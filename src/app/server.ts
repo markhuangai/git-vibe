@@ -24,7 +24,9 @@ import { ensureGitVibeLabels, isProtectedGitVibeLabel, removeIssueLabel } from "
 import { parseCommand } from "./commands.js";
 import {
   acknowledgeCommand,
+  addDiscussionLabelFromPayload,
   addIssueLabel,
+  approvalRequiresDecompositionBody,
   approvalRequiresInvestigationBody,
   closeIssue,
   commandInputs,
@@ -32,7 +34,9 @@ import {
   commandWorkflow,
   createDiscussionComment,
   createIssueComment,
+  decomposeRequiresValidationBody,
   dispatchWorkflow,
+  discussionHasLabel,
   handleManagedReviewFixLabel,
   internalLabelRejectionBody,
   issueComments,
@@ -55,41 +59,7 @@ import {
   toHttpError,
   verifyGitHubSignature,
 } from "./server-http.js";
-
-export interface WebhookPayload {
-  action?: string;
-  comment?: {
-    body?: string;
-    html_url?: string;
-    id?: number | string;
-    node_id?: string;
-    nodeId?: string;
-    url?: string;
-  };
-  discussion?: { id?: string; node_id?: string; nodeId?: string; number?: number | string };
-  issue?: {
-    body?: string | null;
-    html_url?: string;
-    labels?: Array<{ name?: string }>;
-    number?: number | string;
-    pull_request?: unknown;
-    title?: string;
-    user?: { login?: string };
-  };
-  label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
-  pull_request?: { body?: string | null; merged?: boolean; number?: number | string };
-  review?: {
-    body?: string;
-    html_url?: string;
-    id?: number | string;
-    node_id?: string;
-    nodeId?: string;
-    state?: string;
-    url?: string;
-  };
-  repository?: { name: string; owner: { login: string } };
-  sender?: { login?: string; type?: string };
-}
+import type { WebhookPayload } from "./types.js";
 
 export interface GitVibeApp {
   handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void>;
@@ -555,6 +525,7 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
     const dispatch = await dispatchWorkflow(options, "validate.yml", {
       "discussion-number": discussionNumber,
     });
+    await addDiscussionLabelFromPayload(options, gitVibeLabels.validating.name);
     await postQueuedWorkflowComment(options, {
       artifact: "discussion",
       number: discussionNumber,
@@ -567,7 +538,37 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
+  if (label === gitVibeLabels.decompose.name) {
+    if (!(await discussionHasLabel(options, gitVibeLabels.validated.name))) {
+      await removeDiscussionLabelFromPayload(options, label);
+      await createDiscussionComment(options, decomposeRequiresValidationBody(label));
+      return;
+    }
+
+    const dispatch = await dispatchWorkflow(options, "decompose.yml", {
+      "discussion-number": discussionNumber,
+    });
+    await addDiscussionLabelFromPayload(options, gitVibeLabels.decomposing.name);
+    await removeDiscussionLabelBestEffort(options, gitVibeLabels.decomposed.name);
+    await postQueuedWorkflowComment(options, {
+      artifact: "discussion",
+      number: discussionNumber,
+      reason: labelReason(label),
+      workflow: "decompose.yml",
+      ref: dispatch.ref,
+      workflowRunUrl: dispatch.html_url,
+    });
+    await removeDiscussionLabelBestEffort(options, label);
+    return;
+  }
+
   if (label === gitVibeLabels.approved.name) {
+    if (!(await discussionHasLabel(options, gitVibeLabels.decomposed.name))) {
+      await removeDiscussionLabelFromPayload(options, label);
+      await createDiscussionComment(options, approvalRequiresDecompositionBody(label));
+      return;
+    }
+
     const dispatch = await dispatchWorkflow(options, "materialize.yml", {
       "discussion-number": discussionNumber,
     });

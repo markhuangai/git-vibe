@@ -1,0 +1,40 @@
+export interface WebhookPayload {
+  action?: string;
+  comment?: {
+    body?: string;
+    html_url?: string;
+    id?: number | string;
+    node_id?: string;
+    nodeId?: string;
+    url?: string;
+  };
+  discussion?: {
+    id?: string;
+    labels?: Array<{ name?: string }>;
+    node_id?: string;
+    nodeId?: string;
+    number?: number | string;
+  };
+  issue?: {
+    body?: string | null;
+    html_url?: string;
+    labels?: Array<{ name?: string }>;
+    number?: number | string;
+    pull_request?: unknown;
+    title?: string;
+    user?: { login?: string };
+  };
+  label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
+  pull_request?: { body?: string | null; merged?: boolean; number?: number | string };
+  review?: {
+    body?: string;
+    html_url?: string;
+    id?: number | string;
+    node_id?: string;
+    nodeId?: string;
+    state?: string;
+    url?: string;
+  };
+  repository?: { name: string; owner: { login: string } };
+  sender?: { login?: string; type?: string };
+}

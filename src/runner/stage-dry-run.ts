@@ -45,6 +45,24 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
     };
   }
 
+  if (stage === "decompose") {
+    return {
+      ...base,
+      story_units: [
+        {
+          acceptance_criteria: ["Dry-run acceptance criteria."],
+          background: `Dry-run story unit for ${context.artifact.url}`,
+          backpressure_commands: [],
+          blocked_by: [],
+          parallel_group: "default",
+          requirements: ["Dry-run requirement."],
+          review_guidelines: ["Verify the dry-run output shape."],
+          title: `Dry-run story for ${context.artifact.title}`,
+        },
+      ],
+    };
+  }
+
   if (stage === "investigate" && context.artifact.type === "pull-request") {
     return {
       ...base,
@@ -87,6 +105,7 @@ function dryRunNextState(stage: string): string {
   const nextStates: Record<string, string> = {
     "address-pr-feedback": "feedback-addressed",
     "create-pr": "pr-draft-ready",
+    decompose: "ready-for-materialization",
     implement: "changes-ready-for-commit",
     investigate: "needs-info",
     materialize: "implementation-issue-ready",

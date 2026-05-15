@@ -15,6 +15,21 @@ export const gitVibeLabels = {
     description: "GitVibe is blocked by missing or contradictory information.",
     name: "gvi:blocked",
   },
+  decompose: {
+    color: "C5DEF5",
+    description: "Trusted actor requested GitVibe discussion decomposition automation.",
+    name: "git-vibe:decompose",
+  },
+  decomposed: {
+    color: "0E8A16",
+    description: "GitVibe posted a validated decomposition plan for this discussion.",
+    name: "gvi:decomposed",
+  },
+  decomposing: {
+    color: "1D76DB",
+    description: "GitVibe is decomposing a validated discussion.",
+    name: "gvi:decomposing",
+  },
   inProgress: {
     color: "FBCA04",
     description: "GitVibe implementation is in progress.",
@@ -70,10 +85,22 @@ export const gitVibeLabels = {
     description: "Trusted actor requested GitVibe validation automation.",
     name: "git-vibe:validate",
   },
+  validated: {
+    color: "0E8A16",
+    description: "GitVibe validation completed and discussion decomposition is allowed.",
+    name: "gvi:validated",
+  },
+  validating: {
+    color: "1D76DB",
+    description: "GitVibe is validating an issue or discussion.",
+    name: "gvi:validating",
+  },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
 export const gitVibeLegacyLabelAliases = {
   blocked: "git-vibe:blocked",
+  decomposed: "git-vibe:decomposed",
+  decomposing: "git-vibe:decomposing",
   inProgress: "git-vibe:in-progress",
   investigated: "git-vibe:investigated",
   investigating: "git-vibe:investigating",
@@ -83,6 +110,8 @@ export const gitVibeLegacyLabelAliases = {
   prOpened: "git-vibe:pr-opened",
   readyForApproval: "git-vibe:ready-for-approval",
   story: "git-vibe:story",
+  validated: "git-vibe:validated",
+  validating: "git-vibe:validating",
 } as const satisfies Partial<Record<keyof typeof gitVibeLabels, string>>;
 
 export const gitVibeInternalLabels = {

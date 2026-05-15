@@ -20,6 +20,11 @@ labels:
   pr_approved: gvi:pr-approved
   pr_merged: gvi:pr-merged
   validate: git-vibe:validate
+  validating: gvi:validating
+  validated: gvi:validated
+  decompose: git-vibe:decompose
+  decomposing: gvi:decomposing
+  decomposed: gvi:decomposed
 
 commands:
   prefix: /git-vibe
@@ -152,6 +157,9 @@ ai:
     validate:
       enabled: true
       role_group: swarm
+    decompose:
+      enabled: true
+      profile: codex_5.5_high
     materialize:
       enabled: true
       profile: codex_5.5_high

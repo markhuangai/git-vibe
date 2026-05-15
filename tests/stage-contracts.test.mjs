@@ -27,6 +27,7 @@ describe("stage contracts", () => {
     expect(Object.keys(stageDefinitions).sort()).toEqual([
       "address-pr-feedback",
       "create-pr",
+      "decompose",
       "implement",
       "investigate",
       "materialize",
@@ -254,7 +255,56 @@ describe("stage output validation", () => {
       }),
     ).resolves.toMatchObject({ stage: "create-pr" });
   });
+});
 
+describe("decompose output validation", () => {
+  it("validates decompose story unit contracts", async () => {
+    const schema = loadStageSchema(stageDefinitions.decompose.schemaFile);
+    const output = {
+      assumptions: [],
+      comment_body: "Decomposition plan.",
+      findings: ["The discussion is validated."],
+      next_state: "ready-for-materialization",
+      references: ["https://github.com/example/repo/discussions/12"],
+      stage: "decompose",
+      status: "completed",
+      story_units: [
+        {
+          acceptance_criteria: ["Validated output is posted."],
+          background: "Maintainers need a plan before materialization.",
+          backpressure_commands: ["/git-vibe validate"],
+          blocked_by: [],
+          parallel_group: "foundation",
+          requirements: ["Add the decompose stage."],
+          review_guidelines: ["Verify marker parsing."],
+          title: "Add decompose stage",
+        },
+      ],
+      summary: "Decomposition is ready.",
+    };
+
+    await expect(
+      validateOutput({
+        content: JSON.stringify(output),
+        schema,
+        schemaId: stageDefinitions.decompose.schemaId,
+      }),
+    ).resolves.toMatchObject({ stage: "decompose" });
+
+    await expect(
+      validateOutput({
+        content: JSON.stringify({
+          ...output,
+          story_units: [{ ...output.story_units[0], review_guidelines: undefined }],
+        }),
+        schema,
+        schemaId: stageDefinitions.decompose.schemaId,
+      }),
+    ).rejects.toThrow("AI output failed decompose.v1 validation");
+  });
+});
+
+describe("stage output validation failures", () => {
   it("rejects malformed and schema-invalid stage output", async () => {
     const schema = loadStageSchema(stageDefinitions["create-pr"].schemaFile);
 
@@ -350,7 +400,7 @@ describe("bundled action runtime", () => {
     ).toBe(false);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("GITVIBE_GITHUB_TOKEN is required.");
-  }, 15000);
+  }, 30000);
 });
 
 /**

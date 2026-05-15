@@ -34,7 +34,13 @@ export interface MatrixStageResult {
   summary: string;
 }
 
-const roleGroupStages = new Set<Stage>(["investigate", "review-matrix", "summarize", "validate"]);
+const roleGroupStages = new Set<Stage>([
+  "decompose",
+  "investigate",
+  "review-matrix",
+  "summarize",
+  "validate",
+]);
 const writeOrPublishStages = new Set<Stage>([
   "address-pr-feedback",
   "create-pr",
