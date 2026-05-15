@@ -4,12 +4,13 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/git-vibe-setup/package.json ./packages/git-vibe-setup/package.json
 RUN corepack pnpm install --frozen-lockfile
 
 COPY . .
 RUN corepack pnpm build:app
-RUN corepack pnpm prune --prod --ignore-scripts
+RUN CI=true corepack pnpm prune --prod --ignore-scripts
 
 FROM node:22-bookworm-slim AS runtime
 
