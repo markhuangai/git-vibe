@@ -21,7 +21,7 @@ on:
 
 jobs:
   decompose:
-    uses: markhuangai/git-vibe/.github/workflows/decompose.yml@v1.0.0
+    uses: markhuangai/git-vibe/.github/workflows/decompose.yml@v2
     with:
       discussion-number: ${{ inputs.discussion-number }}
       runner: ubuntu-latest

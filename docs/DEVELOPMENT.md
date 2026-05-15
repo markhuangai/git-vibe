@@ -16,7 +16,7 @@
 - `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
 - `.github/workflows/release.yml`: admin-only manual release workflow that runs from `main`, creates GitHub releases, and promotes the existing GHCR app image to the release tag.
-- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to the pinned `markhuangai/git-vibe@v1.0.0` release.
+- Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to the pinned `markhuangai/git-vibe@v2` release.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
@@ -107,7 +107,7 @@ validation.
 
 ## Assumptions
 
-- v1 is self-host first.
+- The current release is self-host first.
 - `markhuangai/git-vibe` is the public action/workflow repository.
 - `.github/git-vibe.yml` is the consumer repo config file.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.

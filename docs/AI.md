@@ -125,7 +125,7 @@ Rules:
 
 ## Provider Strategy
 
-- v1 should implement `ai-sdk-agentool` using Vercel AI SDK, `agentool` 1.4.x, provider SDKs, and Zod schemas.
+- Provider execution uses `ai-sdk-agentool` with Vercel AI SDK, `agentool` 1.4.x, provider SDKs, and Zod schemas.
 - Provider support should include OpenAI, Anthropic, and OpenAI-compatible custom endpoints through the same config shape.
 - Additional providers should be added behind the same adapter contract, not by changing workflow stages.
 - External apps such as Codex, Claude, and Copilot are mention partners. GitVibe may invoke them with configured comments and ingest their visible replies, but GitVibe should not depend on private third-party state or assume they respond to bot mentions.

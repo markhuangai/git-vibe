@@ -133,7 +133,7 @@ on:
         description: GitVibe action source ref.
         required: false
         type: string
-        default: v1.0.0
+        default: v2
     secrets:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.
