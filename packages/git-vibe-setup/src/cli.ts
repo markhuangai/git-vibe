@@ -45,7 +45,7 @@ export async function setupCli(runtime: SetupCliRuntime = {}): Promise<number> {
 }
 
 function packageRoot(): string {
-  return fileURLToPath(new URL("../../", import.meta.url));
+  return fileURLToPath(new URL("../", import.meta.url));
 }
 
 /* c8 ignore start */

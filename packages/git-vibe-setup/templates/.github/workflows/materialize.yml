@@ -1,0 +1,34 @@
+name: GitVibe materialize
+run-name: "[git-vibe][materialize]: Discussion #${{ inputs.discussion-number }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      discussion-number:
+        description: Discussion number to materialize.
+        required: true
+        type: string
+      dry-run:
+        description: Validate without writing to GitHub.
+        required: false
+        type: boolean
+        default: false
+      source-comment:
+        description: JSON source comment metadata for replying to command comments.
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  materialize:
+    uses: markhuangai/git-vibe/.github/workflows/materialize.yml@v1.0.0
+    with:
+      discussion-number: ${{ inputs.discussion-number }}
+      runner: ubuntu-latest
+      timeout_minutes: 60
+      max_turns: 90
+      dry-run: ${{ inputs.dry-run }}
+      source-comment: ${{ inputs.source-comment }}
+    secrets:
+      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
