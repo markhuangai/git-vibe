@@ -110,7 +110,6 @@ function dryRunNextState(stage: string): string {
     investigate: "needs-info",
     materialize: "implementation-issue-ready",
     "review-matrix": "review-passed",
-    summarize: "ready-for-materialization",
     validate: "ready-for-implementation",
   };
   return nextStates[stage] || "blocked";

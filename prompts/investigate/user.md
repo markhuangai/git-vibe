@@ -21,7 +21,7 @@ Investigate the reported bug and produce a triage-quality result. The result sho
 - `blocking_questions`: Specific maintainer decisions or missing facts that must be answered before implementation can start, preferably as answerable question objects with up to four options.
 - `questions`: Non-blocking uncertainties or follow-up details that do not materially change the implementation plan, preferably as answerable question objects with up to four options.
 - `implementation_plan`: When the issue is ready for implementation, list concrete implementation steps for the next agent. Include the applicable repository standards and validation checks the implementer must honor or run, then name target files, functions, tests, workflow files, or schemas when evidence supports them. Do not include speculative code. Leave this empty when blocking questions remain.
-- `comment_body`: Summarize the repo rules and required checks that matter for the implementation so they are visible in the issue comment and handoff.
+- `comment_body`: Describe the repo rules and required checks that matter for the implementation so they are visible in the issue comment and handoff.
 - `proposed_labels`: Useful triage labels only when justified by the evidence.
 - `next_state`: For issue artifacts, use `needs-info`, `ready-for-validation`, `ready-for-implementation`, or `blocked`.
   </required_fields_guidance>

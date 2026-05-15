@@ -18,7 +18,7 @@ describe("decompose validation gate", () => {
         client: createClient(),
         context: context({ labels: [] }),
         logger: logger(),
-        runner: runner({ stage: "summarize" }),
+        runner: runner({ stage: "validate" }),
       }),
     ).resolves.toBeUndefined();
     await expect(
@@ -133,7 +133,7 @@ describe("decompose result cleanup", () => {
       client,
       context: context({ timeline: [decomposeComment("old-1", "12")] }),
       logger: logger(),
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "validate" }),
     });
     await expect(
       cleanupPriorDecomposeResultComments({
@@ -301,14 +301,14 @@ describe("discussion stage label ready states", () => {
       client,
       context: context(),
       logger: logger(),
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "materialize" }),
     });
     await applyDiscussionStageLabelTransition({
       client,
       context: context(),
       logger: logger(),
       parsedOutput: { status: "completed" },
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "materialize" }),
     });
 
     expect(client.graphql).not.toHaveBeenCalled();

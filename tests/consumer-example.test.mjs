@@ -13,7 +13,6 @@ import { stageExecutionPlan } from "../src/runner/role-groups.ts";
 const consumerRoot = join(process.cwd(), "examples", "consumer");
 const roleGroupStages = /** @type {Stage[]} */ (["investigate", "validate", "review-matrix"]);
 const profileStages = /** @type {Stage[]} */ ([
-  "summarize",
   "decompose",
   "materialize",
   "implement",

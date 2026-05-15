@@ -12,10 +12,13 @@ stateDiagram-v2
   Intake --> ConvertedDiscussion: feature submitted as issue
   ConvertedDiscussion --> StoryDiscussion: create discussion, link issue, close issue
 
-  StoryDiscussion --> Refinement: summarize command or validate label
-  Refinement --> NeedsAnswers: open questions found
-  NeedsAnswers --> Refinement: replies plus validate label
-  Refinement --> ImplementationIssue: no blockers plus approved label
+  StoryDiscussion --> FeatureValidation: validate label
+  FeatureValidation --> NeedsAnswers: open questions found
+  NeedsAnswers --> FeatureValidation: replies plus validate label
+  FeatureValidation --> Decomposition: ready, add decompose label
+  Decomposition --> NeedsAnswers: blocked, post questions
+  Decomposition --> ReadyToMaterialize: plan posted, add decomposed label
+  ReadyToMaterialize --> ImplementationIssue: approved label dispatches materialize
 
   BugIssue --> WaitingForBugInvestigation: default state, no AI work
   WaitingForBugInvestigation --> BugInvestigation: investigate command, investigate label, or reaction threshold
@@ -61,7 +64,7 @@ stateDiagram-v2
   GitVibe status comments for the same artifact before posting the next running
   or result comment.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
-- Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation and summary generation; it must never start code changes.
+- Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation; it must never start code changes.
 - GitVibe never auto-merges and never approves its own pull requests.
 - External agents are optional mention partners. GitVibe may post commands like `@codex review` or `@claude ...` only after admin/collaborator opt-in or explicit config.
 
@@ -76,7 +79,6 @@ Consumer config lives at:
 Initial commands:
 
 ```text
-/git-vibe summarize
 /git-vibe investigate
 /git-vibe address-feedback
 ```
@@ -257,7 +259,7 @@ or updates the pull request for the full issue chain.
 ## Bug Investigation Flow
 
 Bug reports have a separate investigation-only path before implementation. The
-goal is to let AI help summarize reproduction evidence, likely affected code,
+goal is to let AI help capture reproduction evidence, likely affected code,
 suspected root cause, missing information, and expected behavior questions
 without changing code.
 
@@ -335,23 +337,13 @@ sequenceDiagram
   participant Community as Community
   participant Disc as Feature Discussion
   participant App as GitVibe Server
-  participant AI as Summary, Validation, and Decomposition Pipeline
+  participant AI as Validation, Decomposition, and Materialization Pipeline
   participant Maint as Admin or Collaborator
   participant Issue as Implementation Issue
 
   Community->>Disc: Open and discuss feature request
   Note over Disc,App: GitVibe reads body, comments, replies, reactions, and author authority
 
-  alt maintainer command
-    Maint->>Disc: /git-vibe summarize
-  else configured community threshold
-    Community->>Disc: Discussion reaches configured +1 threshold
-  end
-
-  App->>AI: Dispatch summarize workflow
-  AI->>Disc: Post summary, proposed behavior, open questions, and risks
-
-  Maint->>Disc: Provide clarifications
   Maint->>Disc: Apply git-vibe:validate label
   App->>AI: Dispatch validation workflow
   AI->>Disc: Confirm actionable state or request more answers
@@ -362,22 +354,9 @@ sequenceDiagram
 
   Maint->>Disc: Apply git-vibe:approved label
   App->>AI: Dispatch materialize workflow
-  App->>Issue: Create implementation issue with backlinks and accepted summary
+  App->>Issue: Create implementation issue with backlinks and accepted decomposition
   App->>Disc: Link implementation issue
   App->>Disc: Close resolved Discussion
-```
-
-Community-triggered feature refinement is optional and configurable. It may automatically start summarization for high-signal discussions, but it must not validate, create implementation issues, or start coding without admin/collaborator approval.
-
-Example config shape:
-
-```yaml
-feature_refinement:
-  community_trigger:
-    enabled: true
-    reaction: "+1"
-    threshold: 10
-    dispatch: summarize-and-validate
 ```
 
 ## PR Feedback Loop

@@ -194,28 +194,14 @@ describe("GitVibe app server command dispatch", () => {
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
-    await app.handleWebhook("discussion_comment", {
-      action: "created",
-      comment: { body: "/git-vibe summarize", node_id: "discussion-summarize-comment" },
-      discussion: { node_id: "discussion-node", number: 5 },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
-
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({ inputs: expect.objectContaining({ "issue-number": "2" }) }),
       expect.objectContaining({ inputs: expect.objectContaining({ "pr-number": "3" }) }),
-      expect.objectContaining({ inputs: expect.objectContaining({ "discussion-number": "5" }) }),
     ]);
-    expect(sourceCommentKinds(client)).toEqual([
-      "issue-comment",
-      "pull-request-comment",
-      "discussion-comment",
-    ]);
+    expect(sourceCommentKinds(client)).toEqual(["issue-comment", "pull-request-comment"]);
     expect(reactionVariables(client)).toEqual([
       { content: "ROCKET", subjectId: "issue-investigate-comment" },
       { content: "ROCKET", subjectId: "pr-feedback-comment" },
-      { content: "ROCKET", subjectId: "discussion-summarize-comment" },
     ]);
     expect(requestBodies(client, "POST", "/issues/2/comments")).toEqual([]);
     expect(requestBodies(client, "POST", "/issues/3/comments")).toEqual([]);
@@ -229,17 +215,17 @@ describe("GitVibe app server command edge cases", () => {
     const client = createClient({ reactionError: new Error("reaction unavailable") });
     const app = createApp({ client, log });
 
-    await app.handleWebhook("discussion_comment", {
+    await app.handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "/git-vibe summarize", node_id: "discussion-summarize-comment" },
-      discussion: { node_id: "discussion-node", number: 6 },
+      comment: { body: "/git-vibe investigate", node_id: "issue-investigate-comment" },
+      issue: { number: 6 },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({ "discussion-number": "6" }),
+        inputs: expect.objectContaining({ "issue-number": "6" }),
         ref: "main",
         return_run_details: true,
       }),
@@ -247,8 +233,10 @@ describe("GitVibe app server command edge cases", () => {
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("command acknowledgement failed: reaction unavailable"),
     );
-    expect(discussionCommentBodies(client).at(-1)).toContain("summarize.yml");
-    expect(discussionCommentBodies(client).at(-1)).toContain(
+    expect(requestBodies(client, "POST", "/issues/6/comments").at(-1).body).toContain(
+      "investigate.yml",
+    );
+    expect(requestBodies(client, "POST", "/issues/6/comments").at(-1).body).toContain(
       "Workflow run: https://github.com/example/repo/actions/runs/1",
     );
   });
@@ -279,7 +267,7 @@ describe("GitVibe app server command edge cases", () => {
     const client = createClient();
     await createApp({ client, log }).handleWebhook("issue_comment", {
       action: "created",
-      comment: { body: "/git-vibe summarize" },
+      comment: { body: "/git-vibe validate" },
       issue: { number: 3, pull_request: {} },
       repository: repositoryPayload(),
       sender: { login: "maintainer" },

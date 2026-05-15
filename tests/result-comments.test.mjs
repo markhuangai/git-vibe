@@ -128,7 +128,7 @@ describe("decompose result comments", () => {
     const body = renderStageResultComment({
       context: context("discussion"),
       parsedOutput: { next_state: "ready-for-materialization", status: "completed" },
-      stage: "summarize",
+      stage: "materialize",
     });
 
     expect(parseDecomposeResultMarker(body)).toBeUndefined();
@@ -186,7 +186,7 @@ describe("stage result comment fallbacks", () => {
         status: 123,
         summary: 123,
       },
-      stage: "summarize",
+      stage: "materialize",
     });
 
     expect(body).toContain("**Status:** `completed`");

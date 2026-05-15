@@ -306,7 +306,7 @@ describe("pull request feedback investigation labels", () => {
  */
 function options(overrides = {}) {
   const { dryRun, options: explicitRunner, runner: runnerValue, ...rest } = overrides;
-  const runnerOptions = { ...(explicitRunner || runnerValue || runner({ stage: "summarize" })) };
+  const runnerOptions = { ...(explicitRunner || runnerValue || runner({ stage: "validate" })) };
   if (typeof dryRun === "boolean") runnerOptions.dryRun = dryRun;
 
   return /** @type {ApplyOptions} */ ({
@@ -356,7 +356,7 @@ function runner(overrides = {}) {
     maxTurns: 2,
     prNumber: "12",
     repository: "example/repo",
-    stage: "summarize",
+    stage: "validate",
     stageTimeoutMinutes: 1,
     token: "token",
     ...overrides,

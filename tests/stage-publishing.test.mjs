@@ -25,7 +25,7 @@ describe("stage publishing helpers", () => {
       context: context("discussion"),
       logger,
       parsedOutput: output(),
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "validate" }),
     });
 
     expect(client.graphql).not.toHaveBeenCalled();
@@ -148,7 +148,7 @@ describe("stage publishing helpers", () => {
       },
       logger: createLogger(),
       parsedOutput: output(),
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "validate" }),
     });
 
     expect(client.graphql).toHaveBeenCalledWith(
@@ -177,7 +177,7 @@ describe("stage publishing discussion replies", () => {
       parsedOutput: output(),
       runner: runner({
         sourceComment: { kind: "discussion-comment", nodeId: "command-reply" },
-        stage: "summarize",
+        stage: "validate",
       }),
     });
 
@@ -336,7 +336,7 @@ describe("stage publishing discussion status cleanup", () => {
               artifact: "discussion",
               number: "12",
               run: "99",
-              stage: "summarize",
+              stage: "validate",
             }),
             author: "git-vibe",
             createdAt: "2026-01-01T00:00:00Z",
@@ -349,7 +349,7 @@ describe("stage publishing discussion status cleanup", () => {
       logger: createLogger(),
       parsedOutput: output(),
       runner: runner({
-        stage: "summarize",
+        stage: "validate",
         workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
       }),
     });
@@ -488,21 +488,21 @@ describe("stage label publishing helpers", () => {
       context: context("discussion"),
       logger: createLogger(),
       parsedOutput: output(),
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "materialize" }),
     });
     await applyStageLabelTransition({
       client,
       context: context("issue"),
       logger: createLogger(),
       parsedOutput: output(),
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "materialize" }),
     });
     await applyStageLabelTransition({
       client,
       context: context("issue"),
       logger: createLogger(),
       parsedOutput: { ...output(), status: "blocked" },
-      runner: runner({ stage: "summarize" }),
+      runner: runner({ stage: "materialize" }),
     });
     await applyStageLabelTransition({
       client,
@@ -597,7 +597,7 @@ function output() {
     findings: [],
     next_state: "ready-for-materialization",
     references: [],
-    stage: "summarize",
+    stage: "materialize",
     status: "completed",
     summary: "Result summary.",
   };
@@ -625,7 +625,7 @@ function runner(overrides = {}) {
     maxTurns: 2,
     prNumber: "12",
     repository: "example/repo",
-    stage: "summarize",
+    stage: "materialize",
     stageTimeoutMinutes: 1,
     token: "token",
     ...overrides,

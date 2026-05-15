@@ -151,9 +151,6 @@ ai:
     investigate:
       enabled: true
       role_group: swarm
-    summarize:
-      enabled: true
-      profile: codex_5.5_high
     validate:
       enabled: true
       role_group: swarm
@@ -183,10 +180,3 @@ bug_investigation:
     reaction: "+1"
     threshold: 6
     dispatch: investigation-only
-
-feature_refinement:
-  community_trigger:
-    enabled: false
-    reaction: "+1"
-    threshold: 10
-    dispatch: summarize
