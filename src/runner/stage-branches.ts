@@ -89,6 +89,10 @@ export function blockedPullRequestHeadOutput(
   stage: RunnerOptions["stage"],
   reason: string,
 ): JsonObject {
+  const question = {
+    options: ["Update the pull request to use a branch in this repository."],
+    question: reason,
+  };
   const base = {
     assumptions: [],
     comment_body: reason,
@@ -102,7 +106,7 @@ export function blockedPullRequestHeadOutput(
   if (stage === "investigate") {
     return {
       ...base,
-      blocking_questions: [reason],
+      blocking_questions: [question],
       feedback_items: [],
       implementation_plan: [],
       questions: [],

@@ -35,7 +35,12 @@ describe("stage branch helpers", () => {
     );
     expect(pullRequestHeadBlockReason(runner("implement"), forkHead)).toBeUndefined();
     expect(blockedPullRequestHeadOutput("investigate", "blocked")).toMatchObject({
-      blocking_questions: ["blocked"],
+      blocking_questions: [
+        {
+          options: ["Update the pull request to use a branch in this repository."],
+          question: "blocked",
+        },
+      ],
       feedback_items: [],
       next_state: "blocked",
       stage: "investigate",

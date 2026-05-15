@@ -115,7 +115,12 @@ describe("stage runner matrix member execution", () => {
       }),
     ).resolves.toMatchObject({
       parsedOutput: {
-        blocking_questions: [expect.stringContaining("No investigate matrix member results")],
+        blocking_questions: [
+          {
+            options: ["Rerun the stage after matrix member results are available."],
+            question: expect.stringContaining("No investigate matrix member results"),
+          },
+        ],
         implementation_plan: [],
         questions: [],
       },

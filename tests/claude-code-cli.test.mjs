@@ -418,23 +418,18 @@ function jsonSchemaFrom(args) {
 function structuredQuestionSchema() {
   return {
     additionalProperties: false,
-    definitions: {
-      question: {
-        additionalProperties: false,
-        properties: {
-          options: { items: { type: "string" }, maxItems: 4, minItems: 1, type: "array" },
-          question: { type: "string" },
-        },
-        required: ["question", "options"],
-        type: "object",
-      },
-    },
     properties: {
       stage: { type: "string" },
       status: { type: "string" },
       questions: {
         items: {
-          oneOf: [{ type: "string" }, { $ref: "#/definitions/question" }],
+          additionalProperties: false,
+          properties: {
+            options: { items: { type: "string" }, maxItems: 4, minItems: 1, type: "array" },
+            question: { type: "string" },
+          },
+          required: ["question", "options"],
+          type: "object",
         },
         type: "array",
       },

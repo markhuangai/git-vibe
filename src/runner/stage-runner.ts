@@ -578,6 +578,10 @@ function zeroMatrixResultsOutput(options: {
   options: RunnerOptions;
 }): JsonObject {
   const reason = `No ${options.options.stage} matrix member results were available for synthesis. Expected ${options.expected}.`;
+  const question = {
+    options: ["Rerun the stage after matrix member results are available."],
+    question: reason,
+  };
   const base = {
     assumptions: [],
     comment_body: reason,
@@ -591,7 +595,7 @@ function zeroMatrixResultsOutput(options: {
     summary: reason,
   };
   if (options.options.stage === "investigate") {
-    return { ...base, blocking_questions: [reason], implementation_plan: [], questions: [] };
+    return { ...base, blocking_questions: [question], implementation_plan: [], questions: [] };
   }
   return base;
 }
