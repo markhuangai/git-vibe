@@ -50,6 +50,7 @@ export function prepareCodexEnv(options: {
 export async function writeBackCodexAuth(options: {
   auth: PreparedCodexAuth | undefined;
   github: CodexAuthWritebackGitHub | undefined;
+  invalidAuth?: "skip" | "throw";
   logger?: StageLogger;
 }): Promise<void> {
   if (!options.auth) return;
@@ -63,6 +64,12 @@ export async function writeBackCodexAuth(options: {
       bundle_key: options.auth.bundleKey,
       reason: error instanceof Error ? error.message : String(error),
     });
+    if (options.invalidAuth === "skip") {
+      options.logger?.event("codex.auth_json.writeback.skip", {
+        reason: "invalid-refreshed-auth",
+      });
+      return;
+    }
     throw error;
   }
   options.logger?.event("codex.auth_json.validation.done", {
@@ -194,7 +201,11 @@ function requiredString(value: unknown, path: string): string {
 
 function jwtShaped(value: string): boolean {
   const parts = value.split(".");
-  return parts.length === 3 && parts.every((part) => part.length > 0);
+  return parts.length === 3 && parts.every((part) => base64UrlJwtSegment(part));
+}
+
+function base64UrlJwtSegment(value: string): boolean {
+  return /^[A-Za-z0-9_-]+={0,2}$/.test(value) && value.length % 4 !== 1;
 }
 
 async function updateRepositorySecret(options: {

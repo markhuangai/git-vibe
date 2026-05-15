@@ -123,6 +123,7 @@ describe("pull request review-fix dispatch boundaries", () => {
   });
 
   it("falls back when PR review-fix workflow dispatch cannot return run details", async () => {
+    delete process.env.GITVIBE_BASE_BRANCH;
     let dispatchAttempts = 0;
     const client = recordingClient((request) => {
       if (request.method === "GET" && request.path === "/repos/example/repo") {

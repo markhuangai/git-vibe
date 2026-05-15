@@ -132,7 +132,7 @@ const invalidCodexAuthCases = [
     "missing auth mode",
     JSON.stringify({
       tokens: {
-        id_token: "header.refreshed.signature",
+        id_token: validIdToken("refreshed"),
         refresh_token: "refresh-refreshed",
       },
     }),
@@ -176,7 +176,7 @@ const invalidCodexAuthCases = [
       auth_mode: "chatgpt",
       tokens: {
         access_token: "access-refreshed",
-        id_token: "header.refreshed.signature",
+        id_token: validIdToken("refreshed"),
       },
     }),
     "Codex auth.json tokens.refresh_token is required for chatgpt auth.",
@@ -192,7 +192,7 @@ const invalidCodexAuthCases = [
       auth_mode: "chatgpt",
       tokens: {
         access_token: " ",
-        id_token: "header.refreshed.signature",
+        id_token: validIdToken("refreshed"),
         refresh_token: "refresh-refreshed",
       },
     }),
@@ -231,6 +231,43 @@ describe("Codex auth write-back validation", () => {
       await expectInvalidRefreshedAuth(authJson, message);
     },
   );
+
+  it("skips invalid refreshed auth when write-back is best effort", async () => {
+    const prepared = prepare();
+    const originalBundle = process.env.GITVIBE_AI_ENV_JSON;
+    writeFileSync(
+      prepared.auth.authPath,
+      JSON.stringify({
+        auth_mode: "chatgpt",
+        tokens: {
+          access_token: "access-refreshed",
+          id_token: "header.refreshed.signature",
+          refresh_token: "refresh-refreshed",
+        },
+      }),
+    );
+    const client = await githubClientWithPublicKey();
+    const logger = { event: vi.fn() };
+
+    await expect(
+      writeBackCodexAuth({
+        auth: prepared.auth,
+        github: { client, repository: "example/repo", token: "token" },
+        invalidAuth: "skip",
+        logger,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(client.request).not.toHaveBeenCalled();
+    expect(process.env.GITVIBE_AI_ENV_JSON).toBe(originalBundle);
+    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.validation.failed", {
+      bundle_key: "CODEX_AUTH_JSON",
+      reason: expect.stringContaining("Codex auth.json tokens.id_token must be JWT-shaped."),
+    });
+    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.writeback.skip", {
+      reason: "invalid-refreshed-auth",
+    });
+  });
 });
 
 function prepare() {
@@ -251,10 +288,16 @@ function codexAuthJson(label) {
     tokens: {
       access_token: `access-${label}`,
       account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
-      id_token: `header.${label}.signature`,
+      id_token: validIdToken(label),
       refresh_token: `refresh-${label}`,
     },
   })}\n`;
+}
+
+function validIdToken(label) {
+  return ["header", label, "signature"]
+    .map((part) => Buffer.from(part).toString("base64url"))
+    .join(".");
 }
 
 function eventIndex(logger, eventName) {
