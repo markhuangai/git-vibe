@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { existingFilesError, installFiles } from "../src/setup/install.ts";
+import { existingFilesError, installFiles, pinWorkflowReleaseRefs } from "../src/setup/install.ts";
 import { runSetup, setupCli } from "../src/setup/cli.ts";
 import { latestStableReleaseTag, selectLatestStableRelease } from "../src/setup/releases.ts";
 
@@ -311,6 +311,19 @@ describe("installation rollback", () => {
 
   it("reports absolute paths when relative rendering is empty", () => {
     expect(existingFilesError([repositoryRoot], repositoryRoot).message).toContain(repositoryRoot);
+  });
+});
+
+describe("workflow ref pinning", () => {
+  it("preserves dollar sequences in the release tag", () => {
+    const pinned = pinWorkflowReleaseRefs(
+      "uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1\n",
+      "release-$1-${tag}",
+    );
+
+    expect(pinned).toContain(
+      "uses: markhuangai/git-vibe/.github/workflows/develop.yml@release-$1-${tag}",
+    );
   });
 });
 

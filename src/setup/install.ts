@@ -65,7 +65,7 @@ export function existingFilesError(paths: string[], cwd: string): Error {
 export function pinWorkflowReleaseRefs(content: string, releaseTag: string): string {
   return content.replace(
     /(uses:\s*markhuangai\/git-vibe\/\.github\/workflows\/[^\s@]+)@[^\s]+/g,
-    `$1@${releaseTag}`,
+    (_match, workflowReference) => `${workflowReference}@${releaseTag}`,
   );
 }
 
