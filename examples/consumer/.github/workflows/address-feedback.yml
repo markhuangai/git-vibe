@@ -21,7 +21,7 @@ on:
 
 jobs:
   address-feedback:
-    uses: markhuangai/git-vibe/.github/workflows/address-feedback.yml@v1.0.0
+    uses: markhuangai/git-vibe/.github/workflows/address-feedback.yml@v2
     with:
       pr-number: ${{ inputs.pr-number }}
       runner: ubuntu-latest

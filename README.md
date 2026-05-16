@@ -441,7 +441,7 @@ Detailed docs:
 ```yaml
 steps:
   - uses: actions/checkout@v4
-  - uses: markhuangai/git-vibe/investigate@v1.0.0
+  - uses: markhuangai/git-vibe/investigate@v2
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
@@ -452,7 +452,7 @@ steps:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1.0.0
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v2
     with:
       issue-number: "123"
       runner: docker-runner

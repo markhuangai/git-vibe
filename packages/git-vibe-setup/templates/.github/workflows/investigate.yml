@@ -21,7 +21,7 @@ on:
 
 jobs:
   investigate:
-    uses: markhuangai/git-vibe/.github/workflows/investigate.yml@v1.0.0
+    uses: markhuangai/git-vibe/.github/workflows/investigate.yml@v2
     with:
       issue-number: ${{ inputs.issue-number }}
       runner: ubuntu-latest
