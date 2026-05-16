@@ -122,11 +122,11 @@ ai:
         effort: max
   role_groups:
     swarm:
-      synthesizer: local_proxy
+      synthesizer: codex_5.5_high
       parallel: 3
       roles:
         - role: correctness.md
-          profile: codex_5.5_high
+          profile: local_proxy
         - role: security.md
           profile: local_proxy
         - role: maintainability.md
