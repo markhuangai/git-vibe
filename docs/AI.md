@@ -208,9 +208,10 @@ ai:
 
 Role definitions live in `.git-vibe/role-group/*.md`. A role group entry pairs a
 role markdown file with the exact profile that should run it. The synthesizer
-profile merges successful role outputs into the same final stage schema that
-single-profile execution returns. `role_group` is allowed only for read-only
-stages: `investigate`, `validate`, `decompose`, and `review-matrix`.
+profile receives the configured role definitions and successful role outputs,
+can inspect repository and GitHub context, and returns the same final stage
+schema that single-profile execution returns. `role_group` is allowed only for
+read-only stages: `investigate`, `validate`, `decompose`, and `review-matrix`.
 
 Normalized reasoning config:
 

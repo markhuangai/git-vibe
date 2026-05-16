@@ -234,8 +234,9 @@ flowchart TD
 
 Review matrix role groups are configured through `ai.role_groups`. Each role
 entry pairs a `.git-vibe/role-group/*.md` role definition with the AI profile
-that runs it, and the configured synthesizer profile merges successful role
-outputs into one final `review-matrix.v1` result.
+that runs it. The configured synthesizer profile receives the role definitions
+and successful role outputs, can inspect repository context, and returns one
+final `review-matrix.v1` result.
 
 The implementation stage has an inner validation repair loop. GitVibe runs the
 configured `tests.commands` mechanically after the AI returns JSON. If a command

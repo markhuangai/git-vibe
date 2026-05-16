@@ -189,7 +189,9 @@ describe("stage runner matrix finalizer execution", () => {
     });
     expect(generateText).not.toHaveBeenCalled();
   });
+});
 
+describe("stage runner matrix finalizer synthesis", () => {
   it("synthesizes role-group member outputs into one final stage result", async () => {
     const cwd = await workspace(roleGroupConfig("validate"));
     writeRole(cwd, "security.md", "Focus on token boundaries.");
@@ -220,7 +222,14 @@ describe("stage runner matrix finalizer execution", () => {
 
     expect(result.summary).toBe("Synthesized.");
     expect(generateText.mock.calls[0][0].prompt).toContain("<role_group_results>");
+    expect(generateText.mock.calls[0][0].prompt).toContain('"configured_members"');
+    expect(generateText.mock.calls[0][0].prompt).toContain(
+      '"role_definition": "Focus on token boundaries."',
+    );
     expect(generateText.mock.calls[0][0].system).toContain("<role_group_synthesizer>");
+    expect(generateText.mock.calls[0][0].system).toContain(
+      "Inspect the repository and GitHub context",
+    );
   });
 });
 

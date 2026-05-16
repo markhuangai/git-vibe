@@ -298,6 +298,15 @@ describe("role group result loading", () => {
     const prompt = synthesisPromptAddition({
       expected: 2,
       failed: 1,
+      members: [
+        {
+          artifact: "git-vibe-review-matrix-member-0",
+          index: 0,
+          profile: "reviewer",
+          role: "security.md",
+          roleDefinition: "Focus on token boundaries.",
+        },
+      ],
       results: [
         {
           parsedOutput: { findings: ["src/app.ts:1 bug"], stage: "review-matrix" },
@@ -316,6 +325,8 @@ describe("role group result loading", () => {
     expect(prompt).toContain("<role_group_results>");
     expect(prompt).toContain('"successful_results": 1');
     expect(prompt).toContain('"failed_results": 1');
+    expect(prompt).toContain('"configured_members"');
+    expect(prompt).toContain('"role_definition": "Focus on token boundaries."');
     expect(prompt).toContain("security.md");
   });
 });

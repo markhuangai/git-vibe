@@ -15,6 +15,7 @@ import {
   loadMatrixStageResults,
   matrixResultMetadata,
   readRoleDefinition,
+  roleGroupSynthesisMembers,
   stageExecutionPlan,
   synthesisPromptAddition,
   synthesizerSystemAddition,
@@ -496,6 +497,7 @@ async function runMatrixFinalizerResult({
     synthesisPromptAddition({
       expected,
       failed,
+      members: roleGroupSynthesisMembers(options.cwd, plan),
       results,
       roleGroup: plan.roleGroup,
       stage: options.stage,
