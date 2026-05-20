@@ -82,7 +82,7 @@ export const gitVibeLabels = {
   },
   validated: {
     color: "0E8A16",
-    description: "GitVibe validation completed and discussion decomposition is allowed.",
+    description: "GitVibe validation completed and materialization is allowed.",
     name: "gvi:validated",
   },
   validating: {
