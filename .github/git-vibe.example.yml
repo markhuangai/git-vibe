@@ -17,6 +17,8 @@ labels:
   investigated: gvi:investigated
   ready_for_approval: gvi:ready-for-approval
   approved: git-vibe:approved
+  review: git-vibe:review
+  reviewing: gvi:reviewing
   in_progress: gvi:in-progress
   blocked: gvi:blocked
   pr_opened: gvi:pr-opened

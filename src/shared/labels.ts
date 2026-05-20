@@ -75,6 +75,16 @@ export const gitVibeLabels = {
     description: "GitVibe believes the issue is ready for approval.",
     name: "gvi:ready-for-approval",
   },
+  review: {
+    color: "C5DEF5",
+    description: "Trusted actor requested GitVibe pull request review automation.",
+    name: "git-vibe:review",
+  },
+  reviewing: {
+    color: "1D76DB",
+    description: "GitVibe is reviewing a pull request.",
+    name: "gvi:reviewing",
+  },
   story: {
     color: "5319E7",
     description: "Implementation issue materialized from a GitVibe discussion.",
@@ -109,6 +119,7 @@ export const gitVibeLegacyLabelAliases = {
   prMerged: "git-vibe:pr-merged",
   prOpened: "git-vibe:pr-opened",
   readyForApproval: "git-vibe:ready-for-approval",
+  reviewing: "git-vibe:reviewing",
   story: "git-vibe:story",
   validated: "git-vibe:validated",
   validating: "git-vibe:validating",

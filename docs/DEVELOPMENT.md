@@ -13,15 +13,16 @@
 - `.github/workflows/validate.yml`: reusable issue or Discussion validation pipeline.
 - `.github/workflows/decompose.yml`: reusable validated Discussion decomposition pipeline.
 - `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.
-- `.github/workflows/develop.yml`: reusable end-to-end development pipeline.
-- `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline.
+- `.github/workflows/develop.yml`: reusable issue development pipeline that implements, creates or updates a PR, then reviews it.
+- `.github/workflows/review.yml`: reusable pull request review pipeline.
+- `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline that updates the existing PR branch before review when fixes are required.
 - `.github/workflows/release.yml`: admin-only manual release workflow that runs from `main`, creates GitHub releases, and promotes the existing GHCR app image to the release tag.
 - Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to the pinned `markhuangai/git-vibe@v2` release.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
 - `src/runner/actions/run-action.ts`: single-stage runner entry point built by composite actions before execution.
-- `src/runner`: config loading, context assembly, prompt rendering, schema validation, stage execution, result publishing, and `ai-sdk-agentool` integration.
+- `src/runner`: config loading, context assembly, prompt rendering, schema validation, stage execution, shared branch-update writes, result publishing, and `ai-sdk-agentool` integration.
 - `src/shared`: shared GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both the app and runner.
 - `package.json`: single package and lockfile for app, runner, and shared code. Runtime release separation is handled by source boundaries, Docker build output, and workflow path filters rather than package splitting.
 - `prompts/`: versioned system and user prompt templates.
@@ -111,6 +112,6 @@ validation.
 - `markhuangai/git-vibe` is the public action/workflow repository.
 - `.github/git-vibe.yml` is the consumer repo config file.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
-- `gvi:` labels are internal runtime labels. Do not add them manually in tests, docs, or examples; `gvi:review-fix` additionally requires a matching hidden marker with `kind=issue` or `kind=pull-request`.
+- `gvi:` labels are internal runtime labels. Do not add them manually in tests, docs, or examples; issue-level `gvi:review-fix` additionally requires a matching hidden marker with `kind=issue`. PR feedback retries use hidden retry markers but do not add `gvi:review-fix` to the PR.
 - Approval uses protected labels, not commands or reactions. Reactions may only be used as an optional community signal to start investigation-only bug review.
 - External Codex, Claude, and Copilot integrations are optional GitHub-visible mention partners.

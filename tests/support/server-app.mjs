@@ -93,6 +93,16 @@ function requestResponseFor(request, options) {
   if (request.method === "GET" && request.path === "/repos/example/repo") {
     return { default_branch: options.defaultBranch || "main" };
   }
+  if (request.method === "GET" && request.path.includes("/contents/.github/git-vibe.yml")) {
+    if (options.configContent !== undefined) {
+      return {
+        content: Buffer.from(options.configContent).toString("base64"),
+        encoding: "base64",
+        type: "file",
+      };
+    }
+    throw new Error("GitHub API GET contents failed: 404");
+  }
   if (request.method === "GET" && request.path.includes("/pulls/")) {
     return { body: options.pullRequestBody || "" };
   }

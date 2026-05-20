@@ -58,17 +58,17 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                   | Repository scope                    | Output                                                                      | May advance state                                                   |
-| ----------------------- | ----------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                            | No, except safe labels if configured                                |
-| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan | No code changes                                                     |
-| Feature validation      | Repo snapshot and discussion thread | Findings, contradictions, open questions, and readiness decision            | May mark ready for decomposition only if policy allows              |
-| Feature decomposition   | Repo snapshot and discussion thread | Story units, dependencies, acceptance criteria, and review guidance         | No issue creation without protected approval                        |
-| Materialization         | Accepted decomposed discussion      | Implementation issue title and body                                         | May create a labeled implementation issue                           |
-| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                             | May mark ready only if policy allows                                |
-| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                | May create/update branch, not merge                                 |
-| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                        | May create `gvi:review-fix` issue follow-ups or PR feedback retries |
-| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                    | May update PR branch, not approve/merge                             |
+| Stage                   | Repository scope                     | Output                                                                      | May advance state                                                 |
+| ----------------------- | ------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Triage classification   | Issue/discussion context             | Suggested type, labels, confidence, missing info                            | No, except safe labels if configured                              |
+| Bug investigation       | Repo snapshot and issue timeline     | Findings, suspected areas, blocking questions, concrete implementation plan | No code changes                                                   |
+| Feature validation      | Repo snapshot and discussion thread  | Findings, contradictions, open questions, and readiness decision            | May mark ready for decomposition only if policy allows            |
+| Feature decomposition   | Repo snapshot and discussion thread  | Story units, dependencies, acceptance criteria, and review guidance         | No issue creation without protected approval                      |
+| Materialization         | Accepted decomposed discussion       | Implementation issue title and body                                         | May create a labeled implementation issue                         |
+| Validation              | Repo snapshot and accepted context   | Pass/fail, contradictions, implementation brief                             | May mark ready only if policy allows                              |
+| Implementation          | `git-vibe/{root-issue}` branch       | Commits, test output, implementation summary                                | Uses branch-update engine; may update issue branch, not merge     |
+| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes                        | May mark a PR ready or blocked, and may queue PR feedback retries |
+| PR feedback remediation | Existing PR branch                   | Fix commits or skipped-comment rationale                                    | Uses branch-update engine; may update PR branch, not create PR    |
 
 AI result envelope:
 
@@ -93,7 +93,10 @@ AI result envelope:
 
 - AI cannot authorize itself. Approval, merge, protected-label acceptance, and release decisions always require admin/collaborator authority.
 - Non-write stages may publish deterministic comments and label transitions, but GitVibe applies branch and file mutations only for write stages.
-- Implementation and feedback stages run on isolated branches and may use the configured repository PAT only for deterministic GitHub writes performed by GitVibe code.
+- Implementation and feedback stages share deterministic branch-update mechanics
+  for validation, commit, and push. Implementation targets
+  `git-vibe/{root-issue}`; PR feedback targets the existing PR head branch and
+  must not create a new PR.
 - GitHub writes are deterministic code operations. AI returns a structured result envelope; GitVibe validates it, renders comments, updates labels, links artifacts, and dispatches workflows.
 - Every AI comment should include a concise summary, concrete evidence/references, unresolved questions, and the next expected human action.
 - Investigation can hand off to implementation only when `next_state` is `ready-for-implementation`, `blocking_questions` is empty, and `implementation_plan` is non-empty. Blocking maintainer decisions must not be hidden in general `questions`.

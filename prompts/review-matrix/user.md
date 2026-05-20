@@ -1,5 +1,5 @@
 <stage_goal>
-Review the proposed change before PR creation or merge preparation. Report only validated issues that matter for correctness, tests, security, regressions, or maintainability.
+Review the proposed pull request or merge-preparation change. Report only validated issues that matter for correctness, tests, security, regressions, or maintainability.
 </stage_goal>
 
 <review_matrix>
@@ -26,5 +26,5 @@ Review the proposed change before PR creation or merge preparation. Report only 
 - `tests`: Review-relevant checks observed or recommended.
 - `findings`: Blocking issues only, ordered by severity.
 - `questions`: Maintainer decisions required before code can continue, preferably as answerable question objects with up to four options.
-- `next_state`: Use `review-passed` when the branch can proceed to PR creation, `changes-required` when implementation must address evidence-backed findings before PR creation, or `blocked` when automation must stop.
+- `next_state`: Use `review-passed` when the PR can proceed to approval, `changes-required` when implementation must address evidence-backed findings before the PR is ready for approval, or `blocked` when automation must stop.
   </required_fields_guidance>

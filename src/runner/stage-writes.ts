@@ -55,6 +55,8 @@ type DeterministicWriteOptions = {
   transientComments: PublishedArtifactComment[];
 };
 
+type BranchUpdateMode = "issue-implementation" | "pr-feedback-remediation";
+
 export async function applyDeterministicWrites(
   options: DeterministicWriteOptions,
 ): Promise<StageRunResult> {
@@ -151,51 +153,19 @@ async function publishReadOnlyResult(options: DeterministicWriteOptions): Promis
 }
 
 async function applyWriteStage(options: DeterministicWriteOptions): Promise<StageRunResult> {
-  if (options.options.stage === "implement") return transitionAndCommit(options);
+  if (options.options.stage === "implement")
+    return applyBranchUpdate(options, "issue-implementation");
   if (options.options.stage === "materialize")
     await createImplementationIssue({ ...options, parsedOutput: options.result.parsedOutput });
-  if (options.options.stage === "create-pr") await publishPullRequestUpdate(options);
-  if (options.options.stage === "address-pr-feedback") return addressPullRequestFeedback(options);
+  if (options.options.stage === "create-pr") return publishPullRequestUpdate(options);
+  if (options.options.stage === "address-pr-feedback")
+    return applyBranchUpdate(options, "pr-feedback-remediation");
   return options.result;
 }
 
-async function transitionAndCommit(options: DeterministicWriteOptions): Promise<StageRunResult> {
-  await applyStageLabelTransition({
-    ...options,
-    parsedOutput: options.result.parsedOutput,
-    runner: options.options,
-  });
-  return commitImplementation(options);
-}
-
-async function publishPullRequestUpdate(options: DeterministicWriteOptions): Promise<void> {
-  const pullRequest = await createPullRequest({
-    ...options,
-    baseBranch: options.runnerBaseBranch,
-    parsedOutput: options.result.parsedOutput,
-  });
-  await markPullRequestReadyForApproval({
-    client: options.client,
-    logger: options.logger,
-    pullRequest,
-    runner: options.options,
-  });
-  await publishStageResultComment({
-    ...options,
-    links: pullRequestLinks(pullRequest),
-    parsedOutput: options.result.parsedOutput,
-    runner: options.options,
-    transientComments: options.transientComments,
-  });
-  await applyStageLabelTransition({
-    ...options,
-    parsedOutput: options.result.parsedOutput,
-    runner: options.options,
-  });
-}
-
-async function addressPullRequestFeedback(
+async function applyBranchUpdate(
   options: DeterministicWriteOptions,
+  mode: BranchUpdateMode,
 ): Promise<StageRunResult> {
   await applyStageLabelTransition({
     ...options,
@@ -203,13 +173,37 @@ async function addressPullRequestFeedback(
     runner: options.options,
   });
   const result = await commitImplementation(options);
-  if (result.status === "completed")
+  if (mode === "pr-feedback-remediation" && result.status === "completed")
     await publishStageResultComment({
       ...options,
       parsedOutput: result.parsedOutput,
       runner: options.options,
       transientComments: options.transientComments,
     });
+  return result;
+}
+
+async function publishPullRequestUpdate(
+  options: DeterministicWriteOptions,
+): Promise<StageRunResult> {
+  const pullRequest = await createPullRequest({
+    ...options,
+    baseBranch: options.runnerBaseBranch,
+    parsedOutput: options.result.parsedOutput,
+  });
+  const result = resultWithPullRequest(options.result, pullRequest);
+  await publishStageResultComment({
+    ...options,
+    links: pullRequestLinks(pullRequest),
+    parsedOutput: result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+  await applyStageLabelTransition({
+    ...options,
+    parsedOutput: result.parsedOutput,
+    runner: options.options,
+  });
   return result;
 }
 
@@ -570,31 +564,18 @@ function pullRequestLinks(pullRequest: { html_url?: string; number?: number }): 
   return [{ label: `Pull request${suffix}`, url: pullRequest.html_url }];
 }
 
-async function markPullRequestReadyForApproval(options: {
-  client: GitHubClient;
-  logger: StageLogger;
-  pullRequest: { number?: number };
-  runner: RunnerOptions;
-}): Promise<void> {
-  if (!options.pullRequest.number) {
-    options.logger.event("github.pr.label.skip", { reason: "missing-pr-number" });
-    return;
-  }
-  const { owner, repo } = splitRepository(options.runner.repository);
-  options.logger.event("github.pr.label.start", {
-    label: gitVibeLabels.readyForApproval.name,
-    pull_request: String(options.pullRequest.number),
-  });
-  await options.client.request({
-    body: { labels: [gitVibeLabels.readyForApproval.name] },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/issues/${options.pullRequest.number}/labels`,
-    token: options.runner.token,
-  });
-  options.logger.event("github.pr.label.done", {
-    label: gitVibeLabels.readyForApproval.name,
-    pull_request: String(options.pullRequest.number),
-  });
+function resultWithPullRequest(
+  result: StageRunResult,
+  pullRequest: { html_url?: string; number?: number },
+): StageRunResult {
+  return {
+    ...result,
+    parsedOutput: {
+      ...result.parsedOutput,
+      pr_number: pullRequest.number ? String(pullRequest.number) : "",
+      pr_url: pullRequest.html_url || "",
+    },
+  };
 }
 
 async function addRunnerIssueLabel(options: {

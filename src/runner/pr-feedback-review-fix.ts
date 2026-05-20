@@ -1,6 +1,5 @@
-import { baseBranchFromEnv } from "../shared/config.js";
+import { baseBranchFromEnv, stageEnabled } from "../shared/config.js";
 import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
-import { gitVibeInternalLabels } from "../shared/labels.js";
 import {
   pullRequestReviewFixFromBody,
   pullRequestReviewFixMarker,
@@ -44,6 +43,7 @@ export async function maybeHandlePullRequestReviewFixRequired(options: {
 
 async function handlePullRequestReviewFixRequired(options: {
   client: GitHubClient;
+  config: GitVibeConfig;
   context: ContextPacket;
   logger: StageLogger;
   result: StageRunResult;
@@ -64,7 +64,6 @@ async function handlePullRequestReviewFixRequired(options: {
 
   const depth = nextPullRequestReviewFixDepth(options.context);
   if (depth > maxPullRequestReviewFixIterations) {
-    await addPullRequestReviewFixLabel(options);
     options.logger.event("github.workflow.dispatch.skip", {
       depth,
       max_depth: maxPullRequestReviewFixIterations,
@@ -73,13 +72,20 @@ async function handlePullRequestReviewFixRequired(options: {
     return blockedPullRequestReviewFixResult({ ...options, depth });
   }
 
+  if (!stageEnabled(options.config, "address-pr-feedback")) {
+    options.logger.event("github.workflow.dispatch.skip", {
+      reason: "address-pr-feedback-disabled",
+      workflow: "address-feedback.yml",
+    });
+    return options.result;
+  }
+
   const dispatch = await dispatchAddressFeedbackWorkflow({ ...options, depth });
   await createPullRequestReviewFixComment({
     ...options,
     depth,
     workflowRunUrl: dispatch.html_url,
   });
-  await addPullRequestReviewFixLabel(options);
   return options.result;
 }
 
@@ -159,20 +165,6 @@ async function createPullRequestReviewFixComment(options: {
     },
     method: "POST",
     path: `/repos/${owner}/${repo}/issues/${options.context.artifact.number}/comments`,
-    token: options.runner.token,
-  });
-}
-
-async function addPullRequestReviewFixLabel(options: {
-  client: GitHubClient;
-  context: ContextPacket;
-  runner: RunnerOptions;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.runner.repository);
-  await options.client.request({
-    body: { labels: [gitVibeInternalLabels.reviewFix.name] },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/issues/${options.context.artifact.number}/labels`,
     token: options.runner.token,
   });
 }

@@ -1,4 +1,9 @@
-import { gitVibeBaseBranchVariable } from "../shared/config.js";
+import {
+  gitVibeBaseBranchVariable,
+  gitVibeConfigPath,
+  parseGitVibeConfig,
+  stageEnabled,
+} from "../shared/config.js";
 import {
   addDiscussionComment,
   addDiscussionLabel,
@@ -30,6 +35,7 @@ import {
   reviewFixTraceFromBody,
 } from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
+import type { GitVibeConfig, Stage } from "../shared/types.js";
 import type { IntakeComment } from "./intake.js";
 import { removeIssueLabel } from "./labels.js";
 import type { WebhookPayload } from "./types.js";
@@ -134,6 +140,37 @@ export async function dispatchWorkflow(
     token: options.token,
   });
   return { ref };
+}
+
+export async function repositoryStageEnabled(
+  options: WebhookActionContext,
+  stage: Stage,
+): Promise<boolean> {
+  return stageEnabled(await repositoryGitVibeConfig(options), stage);
+}
+
+async function repositoryGitVibeConfig(options: WebhookActionContext): Promise<GitVibeConfig> {
+  try {
+    const file = await options.client.request<{
+      content?: string;
+      encoding?: string;
+      type?: string;
+    }>({
+      method: "GET",
+      path: `/repos/${options.owner}/${options.repo}/contents/${gitVibeConfigPath}`,
+      token: options.token,
+    });
+    if (file.type && file.type !== "file") {
+      throw new Error(`${gitVibeConfigPath} must be a file.`);
+    }
+    if (file.encoding && file.encoding !== "base64") {
+      throw new Error(`${gitVibeConfigPath} must be returned as base64 content.`);
+    }
+    return parseGitVibeConfig(Buffer.from(file.content || "", "base64").toString("utf8"));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return {};
+    throw error;
+  }
 }
 
 export function commandInputs(
@@ -409,10 +446,6 @@ export function protectedLabelRejectionBody(options: WebhookActionContext, label
 
 export function internalLabelRejectionBody(label: string): string {
   return `GitVibe removed \`${label}\` because \`gvi:\` labels are internal runtime labels and must only be applied by GitVibe with a valid hidden marker.`;
-}
-
-export function approvalRequiresInvestigationBody(label: string): string {
-  return `GitVibe removed \`${label}\` because this issue has not completed investigation yet. Add \`${gitVibeLabels.investigate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.investigating.name}\` and then \`${gitVibeLabels.investigated.name}\` when the investigation is ready for implementation.`;
 }
 
 export function approvalRequiresDecompositionBody(label: string): string {

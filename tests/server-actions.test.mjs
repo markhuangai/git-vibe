@@ -346,9 +346,6 @@ describe("server action formatting helpers", () => {
       "@alice",
     );
     expect(actions.internalLabelRejectionBody("gvi:internal")).toContain("internal");
-    expect(actions.approvalRequiresInvestigationBody("git-vibe:approved")).toContain(
-      "git-vibe:investigate",
-    );
   });
 });
 

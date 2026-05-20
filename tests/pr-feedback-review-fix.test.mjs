@@ -28,7 +28,10 @@ describe("pull request review-fix retries", () => {
 
     expect(
       requestBodiesFor(client, "POST", "/issues/22/labels").map((body) => body.labels),
-    ).toEqual(expect.arrayContaining([["gvi:blocked"], ["gvi:review-fix"]]));
+    ).toEqual(expect.arrayContaining([["gvi:blocked"]]));
+    expect(
+      requestBodiesFor(client, "POST", "/issues/22/labels").map((body) => body.labels),
+    ).not.toContainEqual(["gvi:review-fix"]);
     expect(
       requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches")[0],
     ).toEqual({
@@ -77,10 +80,38 @@ describe("pull request review-fix retries", () => {
     ).toEqual([]);
     expect(
       requestBodiesFor(client, "POST", "/issues/22/labels").map((body) => body.labels),
-    ).toEqual(expect.arrayContaining([["gvi:blocked"], ["gvi:review-fix"]]));
+    ).toEqual(expect.arrayContaining([["gvi:blocked"]]));
     expect(logger.event).toHaveBeenCalledWith(
       "github.workflow.dispatch.skip",
       expect.objectContaining({ depth: 4, reason: "pr-review-fix-depth" }),
+    );
+  });
+});
+
+describe("pull request review-fix config gates", () => {
+  it("leaves a blocked review result without queuing feedback when feedback automation is disabled", async () => {
+    const client = recordingClient();
+    const logger = fakeLogger();
+
+    await expect(
+      maybeHandlePullRequestReviewFixRequired({
+        client,
+        config: { ai: { stages: { "address-pr-feedback": { enabled: false } } } },
+        context: contextWithPullRequest(),
+        logger,
+        result: stageResult({ next_state: "changes-required" }),
+        runner: runnerOptions(),
+        transientComments: [],
+      }),
+    ).resolves.toMatchObject({ status: "completed" });
+
+    expect(
+      requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches"),
+    ).toEqual([]);
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")).toHaveLength(1);
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.workflow.dispatch.skip",
+      expect.objectContaining({ reason: "address-pr-feedback-disabled" }),
     );
   });
 });

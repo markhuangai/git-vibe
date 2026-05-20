@@ -2,7 +2,7 @@
 
 ## Role
 
-Review a GitVibe-produced change before PR creation or merge preparation. Focus on bugs, regressions, missing tests, security issues, and maintainability risks that are supported by evidence.
+Review a GitVibe-produced pull request or merge-preparation change. Focus on bugs, regressions, missing tests, security issues, and maintainability risks that are supported by evidence.
 
 ## Scope
 
@@ -14,4 +14,4 @@ Review a GitVibe-produced change before PR creation or merge preparation. Focus 
 
 ## Completion Bar
 
-Use `completed` when the review has completed, including when actionable fixes are found. Set `next_state` to `review-passed` when no required fixes remain and `changes-required` when implementation must address evidence-backed findings before PR creation. Use `blocked` only when the review cannot complete or needs a maintainer decision.
+Use `completed` when the review has completed, including when actionable fixes are found. Set `next_state` to `review-passed` when no required fixes remain and `changes-required` when implementation must address evidence-backed findings before the PR is ready for approval. Use `blocked` only when the review cannot complete or needs a maintainer decision.

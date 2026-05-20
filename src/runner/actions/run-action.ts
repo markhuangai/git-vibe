@@ -219,6 +219,12 @@ function writeOutputs(
       appendFile,
     );
   }
+  if (result.schemaId === "create-pr.v1") {
+    const prNumber = stringOutput(result.parsedOutput.pr_number);
+    const prUrl = stringOutput(result.parsedOutput.pr_url);
+    if (prNumber) writeOutput(env.GITHUB_OUTPUT, "pr-number", prNumber, appendFile);
+    if (prUrl) writeOutput(env.GITHUB_OUTPUT, "pr-url", prUrl, appendFile);
+  }
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
 }

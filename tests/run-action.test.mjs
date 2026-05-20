@@ -86,6 +86,43 @@ describe("GitVibe action launcher", () => {
   });
 });
 
+describe("GitVibe create-pr action outputs", () => {
+  it("writes pull request outputs for create-pr", async () => {
+    const appendFile = vi.fn();
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "PR body",
+      parsedOutput: {
+        next_state: "pr-draft-ready",
+        pr_number: "22",
+        pr_url: "https://github.com/example/repo/pull/22",
+      },
+      schemaId: "create-pr.v1",
+      status: "completed",
+      summary: "Created PR",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        appendFile,
+        argv: ["create-pr"],
+        cwd: "/repo",
+        env: { ...baseEnv, GITHUB_OUTPUT: "/tmp/output" },
+        runStage,
+      }),
+    ).resolves.toBe(0);
+
+    expect(appendFile.mock.calls.map((call) => call[1])).toEqual([
+      "summary<<GITVIBE_OUTPUT\nCreated PR\nGITVIBE_OUTPUT\n",
+      "status<<GITVIBE_OUTPUT\ncompleted\nGITVIBE_OUTPUT\n",
+      "comment-body<<GITVIBE_OUTPUT\nPR body\nGITVIBE_OUTPUT\n",
+      "next-state<<GITVIBE_OUTPUT\npr-draft-ready\nGITVIBE_OUTPUT\n",
+      "pr-number<<GITVIBE_OUTPUT\n22\nGITVIBE_OUTPUT\n",
+      "pr-url<<GITVIBE_OUTPUT\nhttps://github.com/example/repo/pull/22\nGITVIBE_OUTPUT\n",
+    ]);
+  });
+});
+
 function roleGroupWorkspace() {
   const cwd = mkdtempSync(join(tmpdir(), "git-vibe-run-action-"));
   mkdirSync(join(cwd, ".github"), { recursive: true });

@@ -212,9 +212,51 @@ jobs:
           issue-number: ${{ inputs.issue-number }}
           dry-run: ${{ inputs.dry-run }}
 
-  plan-review-matrix:
+  create-pr:
     runs-on: ${{ inputs.runner }}
     needs: implement
+    timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
+    env:
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+    outputs:
+      pr-number: ${{ steps.create.outputs.pr-number }}
+      pr-url: ${{ steps.create.outputs.pr-url }}
+      summary: ${{ steps.create.outputs.summary }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action-repository || github.repository }}
+          ref: ${{ inputs.action-ref || github.ref_name }}
+          path: .git-vibe/actions
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: create
+        uses: ./.git-vibe/actions/create-pr
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          issue-number: ${{ inputs.issue-number }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
+          max-turns: 20
+          dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}
+
+  plan-review-matrix:
+    runs-on: ${{ inputs.runner }}
+    needs: create-pr
+    if: needs.create-pr.outputs.pr-number != ''
     timeout-minutes: 10
     env:
       GITVIBE_AI_ENV_JSON: ""
@@ -248,7 +290,10 @@ jobs:
   review-matrix-members:
     name: ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
-    needs: plan-review-matrix
+    needs:
+      - create-pr
+      - plan-review-matrix
+    if: needs.create-pr.outputs.pr-number != '' && needs.plan-review-matrix.result == 'success'
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
@@ -281,7 +326,7 @@ jobs:
         uses: ./.git-vibe/actions/review-matrix
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-          issue-number: ${{ inputs.issue-number }}
+          pr-number: ${{ needs.create-pr.outputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
@@ -299,9 +344,10 @@ jobs:
   review-matrix:
     runs-on: ${{ inputs.runner }}
     needs:
+      - create-pr
       - plan-review-matrix
       - review-matrix-members
-    if: always() && needs.plan-review-matrix.result == 'success'
+    if: always() && needs.create-pr.outputs.pr-number != '' && needs.plan-review-matrix.result == 'success'
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
@@ -340,61 +386,10 @@ jobs:
         uses: ./.git-vibe/actions/review-matrix
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-          issue-number: ${{ inputs.issue-number }}
+          pr-number: ${{ needs.create-pr.outputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
           execution-mode: finalizer
-
-  review-changes-required:
-    runs-on: ${{ inputs.runner }}
-    needs: review-matrix
-    if: needs.review-matrix.outputs.next-state == 'changes-required'
-    timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
-    permissions:
-      contents: read
-    steps:
-      - name: Stop before PR creation
-        shell: bash
-        run: |
-          echo "::error::Review matrix requested implementation changes. PR creation is skipped until a follow-up implementation run addresses the review handoff."
-          exit 1
-
-  create-pr:
-    runs-on: ${{ inputs.runner }}
-    needs: review-matrix
-    if: needs.review-matrix.outputs.next-state == 'review-passed'
-    timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
-    env:
-      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-      - name: Checkout GitVibe action source
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.action-repository || github.repository }}
-          ref: ${{ inputs.action-ref || github.ref_name }}
-          path: .git-vibe/actions
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.3
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: ./.git-vibe/actions/create-pr
-        with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
-          issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
-          max-turns: 20
-          dry-run: ${{ inputs.dry-run }}
-          source-comment: ${{ inputs.source-comment }}

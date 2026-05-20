@@ -186,6 +186,24 @@ describe("stage prompt standards guidance", () => {
       "repository standards or validation requirements discovered before or while coding",
     );
   });
+
+  it("guides review-matrix toward PR approval readiness", () => {
+    const schema = loadStageSchema(stageDefinitions["review-matrix"].schemaFile);
+    const prompts = renderPrompts({
+      context: {
+        ...baseContext,
+        artifact: { ...baseContext.artifact, type: "pull-request" },
+      },
+      outputSchema: schema,
+      promptDir: stageDefinitions["review-matrix"].promptDir,
+      repositoryContext: "## main",
+      stageContract: "Review pull request #123.",
+    });
+
+    expect(prompts.system).toContain("pull request or merge-preparation change");
+    expect(prompts.prompt).toContain("PR can proceed to approval");
+    expect(prompts.prompt).not.toContain("before PR creation");
+  });
 });
 
 describe("stage prompt assets", () => {

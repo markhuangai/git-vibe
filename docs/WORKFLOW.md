@@ -3,46 +3,45 @@
 ## Lifecycle
 
 ```mermaid
-stateDiagram-v2
-  [*] --> Intake
+flowchart TD
+  Intake([Issue, Discussion, or PR]) --> Route{Request path}
 
-  Intake --> BugIssue: bug report
-  Intake --> StoryDiscussion: feature or story request
+  Route --> Bug[Bug issue]
+  Bug --> Investigate[Investigate]
+  Investigate --> BugReady{Ready?}
+  BugReady -->|needs context| BugQuestions[Maintainer answers]
+  BugQuestions --> Investigate
+  BugReady -->|ready| ImplementationIssue[Implementation issue]
 
-  Intake --> ConvertedDiscussion: feature submitted as issue
-  ConvertedDiscussion --> StoryDiscussion: create discussion, link issue, close issue
+  Route --> Feature[Feature or story]
+  Feature --> Discuss[Discussion]
+  Discuss --> Validate[Validate]
+  Validate --> Decompose[Decompose]
+  Decompose --> Materialize[Materialize issue]
+  Materialize --> ImplementationIssue
 
-  StoryDiscussion --> FeatureValidation: validate label
-  FeatureValidation --> NeedsAnswers: open questions found
-  NeedsAnswers --> FeatureValidation: replies plus validate label
-  FeatureValidation --> Decomposition: ready, add decompose label
-  Decomposition --> NeedsAnswers: blocked, post questions
-  Decomposition --> ReadyToMaterialize: plan posted, add decomposed label
-  ReadyToMaterialize --> ImplementationIssue: approved label dispatches materialize
+  ImplementationIssue --> Approval{Implement enabled?}
+  Approval -->|yes| Develop[develop.yml]
+  Develop --> DevEngine[Shared development engine: validate, commit, push]
+  Approval -->|no| LocalCLI[Local CLI implementation]
+  LocalCLI --> ManualPR[Open PR manually]
 
-  BugIssue --> WaitingForBugInvestigation: default state, no AI work
-  WaitingForBugInvestigation --> BugInvestigation: investigate command, investigate label, or reaction threshold
-  BugInvestigation --> BugNeedsContext: not ready, post findings, add blocked label
-  BugNeedsContext --> BugInvestigation: answers plus investigate label
-  BugInvestigation --> ImplementationIssue: ready, add investigated label
-
-  ImplementationIssue --> Development: protected approved label after investigation
-  ReviewFixIssue --> Development: internal review-fix marker
-
-  Development --> Implementation: branch, commits, validation passes
-  Implementation --> ReviewMatrix: validation passes
-  ReviewMatrix --> ReviewFixIssue: changes required, create internal sub-issue
-  ReviewMatrix --> PullRequest: review passed, create or update PR
-  PullRequest --> FeedbackInvestigation: trusted changes-requested review or address-feedback command
-  FeedbackInvestigation --> PullRequest: no fixes needed, replies posted, ready-for-approval restored
-  FeedbackInvestigation --> FeedbackImplementation: actionable fixes required
-  FeedbackInvestigation --> FeedbackBlocked: maintainer answer required
-  FeedbackImplementation --> FeedbackReviewMatrix: fixes pushed
-  FeedbackReviewMatrix --> PullRequest: review passed, ready-for-approval restored
-  FeedbackReviewMatrix --> FeedbackBlocked: changes still required
-  PullRequest --> HumanMerge: admin or collaborator merges
-
-  HumanMerge --> [*]
+  Route --> ExistingPR[Existing PR]
+  DevEngine -->|issue branch| CreatedPR[Create or update PR]
+  DevEngine -->|PR head branch| UpdatePRBranch[Update existing PR branch]
+  CreatedPR --> Review[review.yml or review matrix]
+  ManualPR --> Review
+  ExistingPR --> Review
+  Review --> ReviewResult{Review result}
+  ReviewResult -->|passed| Ready[Ready for human approval]
+  ReviewResult -->|changes required| Feedback[address-feedback.yml]
+  Ready --> HumanReview[Human review]
+  HumanReview -->|approved and merged| Merged([Merged])
+  HumanReview -->|changes requested| Feedback
+  Feedback --> FeedbackInvestigation[Investigate PR feedback]
+  FeedbackInvestigation -->|no fixes needed| Ready
+  FeedbackInvestigation -->|fixes required| DevEngine
+  UpdatePRBranch --> Review
 ```
 
 ## Key Behavior
@@ -51,6 +50,13 @@ stateDiagram-v2
 - New bug issues do not automatically start AI work by default.
 - Bug fixing is always gated: investigate first, post findings, ask for expected behavior, then approve implementation after `gvi:investigated` is present.
 - If `git-vibe:approved` is added to an issue before `gvi:investigated`, GitVibe removes `git-vibe:approved` and comments with the required investigation step.
+- If `ai.stages.implement.enabled` is `false`, GitVibe removes
+  `git-vibe:approved` from investigated issues and leaves the ticket available
+  for local CLI implementation.
+- Issue implementation and PR feedback remediation share the same deterministic
+  branch-update engine: validate, stage, commit, and push. They differ in
+  orchestration and branch target: implementation uses `git-vibe/{root-issue}`;
+  feedback remediation uses the existing PR head branch and never creates a PR.
 - If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
@@ -109,26 +115,29 @@ flowchart TD
   Investigated -->|issue labeled git-vibe:approved, dispatch develop.yml| Develop["develop.yml"]
   Develop -->|implement stage| InProgress["gvi:in-progress"]
 
-  InProgress -->|create-pr completed| PrOpened["gvi:pr-opened"]
-  PrOpened -->|remove| InProgressRemoved["gvi:in-progress + gvi:investigated"]
-  PrOpened -->|add label to PR| PrReady["PR gvi:ready-for-approval"]
+  InProgress -->|create-pr completed| PrOpened["Source issue gvi:pr-opened"]
+  PrOpened -->|cleanup source issue| SourceCleanup["Remove source gvi:in-progress + gvi:investigated"]
+  PrOpened -->|auto PR review| PrReviewStart["Start PR review"]
+  PrReviewLabel["PR labeled git-vibe:review"] -->|dispatch review.yml, remove trigger and stale state| PrReviewStart
+  PrReviewStart --> PrReviewing["PR gvi:reviewing"]
+  PrReviewing -->|review-matrix passed| PrReady["PR gvi:ready-for-approval"]
+  PrReviewing -->|review-matrix changes required| PrBlocked["PR gvi:blocked"]
 
-  PrFeedback["address-feedback or trusted changes-requested review"] -->|remove ready, add| PrInvestigating["PR gvi:investigating"]
+  PrReady -->|trusted changes-requested review| PrFeedback["address-feedback.yml"]
+  PrBlocked -->|manual or retry feedback| PrFeedback
+  PrFeedback -->|investigate PR feedback| PrInvestigating["PR gvi:investigating"]
   PrInvestigating -->|no fixes needed, reply to feedback| PrReady
   PrInvestigating -->|fixes required| PrInvestigated["PR gvi:investigated"]
-  PrInvestigating -->|questions or unsafe feedback| PrBlocked["PR gvi:blocked"]
-  PrInvestigated -->|feedback implementation starts| PrInProgress["PR gvi:in-progress"]
-  PrInProgress -->|review-matrix passed, remove investigated| PrReady
-  PrInProgress -->|review-matrix changes required| PrBlocked
+  PrInvestigating -->|questions or unsafe feedback| PrBlocked
+  PrInvestigated -->|update existing PR branch| PrInProgress["PR gvi:in-progress"]
+  PrInProgress -->|review starts| PrReviewing
 
-  PrApprovedEvent["Trusted PR approval submitted"] -->|add to PR| PrApproved["PR gvi:pr-approved"]
-  PrApprovedEvent -->|remove stale source label| ApprovalCleanup["git-vibe:approved"]
+  PrReady -->|trusted PR approval submitted| PrApproved["PR gvi:pr-approved"]
+  PrReady -->|approval cleanup| ApprovalCleanup["Remove source git-vibe:approved"]
 
   PrMergedEvent["GitVibe PR merged"] -->|remove ready, add to PR| PrApproved
-  PrMergedEvent -->|add to source issue| PrMerged["gvi:pr-merged"]
-  PrMergedEvent -->|remove stale source labels| MergeCleanup["git-vibe:approved + gvi:pr-opened + gvi:pr-approved"]
-
-  ReviewMatrix["review-matrix requires fixes"] -->|create issue or PR marker and| ReviewFix["gvi:review-fix"]
+  PrMergedEvent -->|add to source issue| PrMerged["Source issue gvi:pr-merged"]
+  PrMergedEvent -->|cleanup source issue| MergeCleanup["Remove source git-vibe:approved + gvi:pr-opened + gvi:pr-approved"]
 ```
 
 Active public trigger labels:
@@ -138,6 +147,7 @@ git-vibe:validate
 git-vibe:decompose
 git-vibe:investigate
 git-vibe:approved
+git-vibe:review
 ```
 
 Active internal runtime labels:
@@ -152,6 +162,7 @@ gvi:decomposed
 gvi:decomposing
 gvi:investigated
 gvi:investigating
+gvi:reviewing
 gvi:blocked
 gvi:in-progress
 gvi:pr-opened
@@ -192,44 +203,49 @@ verify the webhook sender on every relevant label event before dispatching
 automation. If an unauthorized actor adds a protected `git-vibe:*` or `gvi:*`
 label, GitVibe removes the label, posts an audit comment, and does not start the
 pipeline. Known `gvi:*` runtime labels never dispatch workflows from label
-events. If anyone adds `gvi:review-fix` without a valid GitVibe hidden marker,
-GitVibe removes it. Issue follow-ups use `kind=issue`; pull request feedback
-retries use `kind=pull-request`.
+events. If anyone adds `gvi:review-fix` without a valid GitVibe issue hidden
+marker, GitVibe removes it. Issue follow-ups use `kind=issue`; pull request
+feedback retries use hidden `kind=pull-request` markers for retry depth but do
+not add `gvi:review-fix` to the PR.
 
 ## Pipeline
 
 ```mermaid
 flowchart TD
   subgraph ParentRun[Develop run for current issue]
-    A[Investigated approved issue or review-fix issue] --> E[Implement job using issue timeline]
+    A[Investigated approved issue] --> E[Implement job using issue timeline]
     E --> F[Run configured validation]
     F --> G{Validation passes?}
     G -->|no| H[Repair implementation attempt]
     H --> F
-    G -->|yes| I[Commit and push root branch]
-    I --> J[Plan review-matrix stage]
+    G -->|yes| I[Commit and push issue branch]
+    I --> R[Create or update PR]
+    R --> J[Plan PR review-matrix stage]
     J --> K[Run member job or role-group member jobs]
-    K --> L[Finalizer validates one review result]
+    K --> L[Finalizer validates one PR review result]
     L --> M{Review result}
-    M -->|changes required| N[Create internal review-fix issue with details]
-    N --> O[Comment on parent and link sub-issue]
-    O --> P[Dispatch new develop run]
-    P --> Q[Fail current run before PR creation]
-    M -->|review passed| R[Create or update PR]
-    R --> S[Wait for human review]
+    M -->|changes required| N[Post review result and mark PR blocked]
+    M -->|review passed| S[Mark PR ready for approval]
+    N --> T[Maintainer or feedback automation addresses PR]
+    S --> U[Wait for human review]
   end
 
-  subgraph FollowUpRun[Next develop run for review-fix issue]
-    T[Review-fix issue] --> U[Implement fixes on existing root branch]
-    U --> V[Plan review-matrix stage]
-    V --> W[Run member job or role-group member jobs]
-    W --> X[Finalizer validates one review result]
-    X --> Y{Review result}
-    Y -->|changes required| Z[Create next review-fix issue and fail run]
-    Y -->|review passed| AA[Create or update PR for issue chain]
+  subgraph FeedbackRun[Address feedback run for existing PR]
+    P[Trusted changes-requested review or command] --> Q[Investigate PR feedback]
+    Q -->|fixes required| AA[Update existing PR branch]
+    AA --> AB[Run PR review-matrix]
+    Q -->|no fixes needed| S
+    AB --> Z
   end
 
-  P -. starts .-> T
+  subgraph ManualReview[Standalone PR review run]
+    V[PR labeled git-vibe:review] --> W[Dispatch review.yml]
+    W --> X[Remove stale ready or blocked state and add gvi:reviewing]
+    X --> Y[Run PR review-matrix]
+    Y --> Z{Review result}
+    Z -->|changes required| N
+    Z -->|review passed| S
+  end
 ```
 
 Review matrix role groups are configured through `ai.role_groups`. Each role
@@ -246,16 +262,13 @@ attempt before any commit is created. `validation_repair_attempts` is scoped to
 one implementation run, and each repair attempt gets
 `validation_repair_max_turns` turns for adapters that support turn limits.
 
-The review matrix is a separate gate after implementation. Review findings must
-be evidence-backed required fixes; speculative or over-engineering suggestions
-are non-blocking. When review returns `changes-required`, GitVibe posts a brief
-comment on the current issue, creates a `gvi:review-fix` issue containing the
-detailed review findings, links it as a native sub-issue, and dispatches another
-development run, then the current run fails before PR creation. Review-fix runs
-start at implementation, checkout the existing root implementation branch when
-their hidden marker names one, and implement only the required review fixes.
-When a review-fix run eventually returns `review-passed`, that later run creates
-or updates the pull request for the full issue chain.
+The review matrix is a separate PR-scoped gate after implementation and PR
+creation. Review findings must be evidence-backed required fixes; speculative or
+over-engineering suggestions are non-blocking. When review returns
+`changes-required`, GitVibe posts the review result on the pull request and
+marks the PR `gvi:blocked`. When review returns `review-passed`, GitVibe removes
+stale blocked/reviewing state and marks the PR `gvi:ready-for-approval`.
+Maintainers can rerun review on any PR by applying `git-vibe:review`.
 
 ## Bug Investigation Flow
 
@@ -280,6 +293,9 @@ comments with the required investigation step. The later `develop.yml`
 implementation run reads the posted investigation result from the issue
 timeline. Human-facing investigation and validation comments stay concise; full
 structured stage output remains available in the workflow result artifact.
+When `ai.stages.implement.enabled` is `false`, issue approval does not dispatch
+`develop.yml`; GitVibe removes the approval label and leaves the issue ready for
+local CLI work.
 
 ```mermaid
 sequenceDiagram
@@ -307,7 +323,11 @@ sequenceDiagram
     AI->>Issue: Post ready investigation and implementation plan
     App->>Issue: Remove gvi:investigating and add gvi:investigated
     Maint->>Issue: Apply git-vibe:approved label
-    App->>AI: Dispatch develop workflow
+    alt implementation automation enabled
+      App->>AI: Dispatch develop workflow
+    else implementation automation disabled
+      App->>Issue: Remove approval and explain local CLI path
+    end
   else investigation is blocked
     App->>Issue: Add gvi:blocked and remove gvi:investigating
     Maint->>Issue: Answer blocking questions
@@ -360,13 +380,47 @@ sequenceDiagram
   App->>Disc: Close resolved Discussion
 ```
 
+## PR Review Flow
+
+Pull request review can start automatically after `develop.yml` creates or
+updates a PR, or manually when a trusted actor applies `git-vibe:review` to an
+existing PR. The review workflow is read-only against the repository checkout;
+GitVibe writes only labels and review result comments.
+
+```mermaid
+sequenceDiagram
+  participant M as Admin or Collaborator
+  participant PR as Pull Request
+  participant App as GitVibe Server
+  participant WF as Review Workflow
+  participant Review as Review Matrix
+
+  alt automatic after GitVibe PR creation
+    WF->>PR: Add gvi:reviewing
+  else manual review label
+    M->>PR: Apply git-vibe:review
+    PR->>App: Label webhook
+    App->>App: Validate actor permission
+    App->>WF: Dispatch review.yml
+    App->>PR: Remove git-vibe:review and stale ready or blocked labels
+    App->>PR: Add gvi:reviewing
+  end
+  WF->>Review: Plan members, run member job(s), finalize one result
+  alt Review passes
+    WF->>PR: Remove gvi:reviewing and gvi:blocked, add gvi:ready-for-approval
+  else Changes required
+    WF->>PR: Post review result, remove gvi:reviewing, add gvi:blocked
+  end
+```
+
 ## PR Feedback Loop
 
-Pull request feedback remediation is a separate single-stage workflow, not the
-full `develop.yml` implementation, review-matrix, and PR creation sequence. It
-adds PR conversation and review-thread context, checks out the existing PR
-branch, applies actionable feedback, pushes fix commits, and posts a completion
-summary back to the triggering surface.
+Pull request feedback remediation is separate from the initial `develop.yml`
+implementation and standalone `review.yml` review flows. It adds PR conversation
+and review-thread context, checks out the existing PR branch, applies actionable
+feedback, pushes fix commits, and posts a completion summary back to the
+triggering surface. The coding step uses the same branch-update engine as issue
+implementation, but it never creates or replaces the pull request.
 
 ```mermaid
 sequenceDiagram
@@ -389,10 +443,10 @@ sequenceDiagram
     Agent->>PR: Push fixes to the existing PR head branch
     WF->>Agent: Plan review-matrix, run member job(s), and finalize one result
     alt Review passes
-      WF->>PR: Remove gvi:review-fix and add gvi:ready-for-approval
+      WF->>PR: Remove blocked/reviewing state and add gvi:ready-for-approval
     else Review still requires changes
-      WF->>PR: Post review result, add gvi:blocked and gvi:review-fix
-      WF->>App: Queue another address-feedback.yml run, max 3
+      WF->>PR: Post review result and add gvi:blocked
+      WF->>App: Queue another address-feedback.yml run when enabled, max 3
     end
   else No fixes needed
     WF->>PR: Restore gvi:ready-for-approval without implementation
@@ -417,11 +471,13 @@ GitVibe must make every generated artifact discoverable from the others.
 - When a discussion becomes an implementation issue, the issue body links the source discussion, the issue gets `gvi:story`, and the discussion gets a comment linking the implementation issue.
 - Webhook-triggered command workflows carry `source-comment` metadata so result comments can target the triggering surface. Discussions use threaded replies; issue, pull request conversation, and submitted-review triggers use flat comments with an explicit source link. Pull request review-comment replies remain supported for existing metadata.
 - When the app dispatches automation from a comment command, a successful `rocket` reaction is the acknowledgement and GitVibe does not also post a queued comment. Protected label dispatches, trusted review dispatches, and failed command reactions still use queued comments with hidden metadata and the exact workflow run URL when GitHub returns it. When a runner stage actually starts, the runner posts a running comment containing the workflow run URL and a hidden metadata marker for the stage and source artifact. These queued/running comments are transient: GitVibe deletes matching prior transient status comments and keeps durable result, traceability, investigation, and validation comments.
-- Implementation branches use the deterministic format `git-vibe/{root-issue-number}`. Review-fix issues carry a hidden marker that points back to the root branch.
+- Implementation branches use the deterministic format
+  `git-vibe/{root-issue-number}`. PR feedback remediation does not create an
+  issue branch; it pushes to the existing same-repository PR head branch.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
-- When a pull request is opened by GitVibe, the source issue gets `gvi:pr-opened`, stale source `gvi:in-progress`, `gvi:investigated`, and `gvi:ready-for-approval` labels are removed, and the PR gets `gvi:ready-for-approval`.
-- During PR feedback handling, the PR owns one active workflow-state label at a time among `gvi:investigating`, `gvi:investigated`, `gvi:in-progress`, `gvi:blocked`, and `gvi:ready-for-approval`; the source issue remains at `gvi:pr-opened`.
-- When PR feedback review still returns `changes-required`, the PR gets a durable review-matrix result comment, `gvi:blocked`, and PR-scoped `gvi:review-fix`; GitVibe queues another `address-feedback.yml` run until the PR has three review-fix markers.
+- When a pull request is opened by GitVibe, the source issue gets `gvi:pr-opened`, stale source `gvi:in-progress`, `gvi:investigated`, and `gvi:ready-for-approval` labels are removed, and PR-scoped review starts before the PR is marked ready.
+- During PR review and feedback handling, the PR owns one active workflow-state label at a time among `gvi:reviewing`, `gvi:investigating`, `gvi:investigated`, `gvi:in-progress`, `gvi:blocked`, and `gvi:ready-for-approval`; the source issue remains at `gvi:pr-opened`.
+- When PR feedback review still returns `changes-required`, the PR gets a durable review-matrix result comment and `gvi:blocked`; GitVibe queues another `address-feedback.yml` run when feedback automation is enabled, until the PR has three retry markers.
 - When a trusted reviewer approves a GitVibe pull request, the PR gets `gvi:pr-approved`, PR `gvi:ready-for-approval` is removed, and stale source `git-vibe:approved` is removed.
 - When a GitVibe pull request is merged before default-branch closure, the PR gets `gvi:pr-approved`, PR `gvi:ready-for-approval` is removed, the source issue gets `gvi:pr-merged`, and stale source workflow state labels are removed.
 - The source issue gets a comment linking the PR and latest workflow run.

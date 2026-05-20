@@ -29,6 +29,12 @@ outputs:
   summary:
     description: Short stage summary.
     value: ${{ steps.run.outputs.summary }}
+  pr-number:
+    description: Pull request number that was created or updated.
+    value: ${{ steps.run.outputs.pr-number }}
+  pr-url:
+    description: Pull request URL that was created or updated.
+    value: ${{ steps.run.outputs.pr-url }}
 
 runs:
   using: composite

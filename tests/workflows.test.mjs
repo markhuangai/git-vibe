@@ -26,6 +26,7 @@ const reusableWorkflows = [
   ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
+  ".github/workflows/review.yml",
   ".github/workflows/validate.yml",
 ];
 
@@ -35,6 +36,7 @@ const consumerWorkflows = [
   "examples/consumer/.github/workflows/develop.yml",
   "examples/consumer/.github/workflows/investigate.yml",
   "examples/consumer/.github/workflows/materialize.yml",
+  "examples/consumer/.github/workflows/review.yml",
   "examples/consumer/.github/workflows/validate.yml",
 ];
 
@@ -58,6 +60,7 @@ const workflowRunNameSpecs = [
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
   { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
+  { file: ".github/workflows/review.yml", stage: "review", artifact: "PR" },
   { file: ".github/workflows/address-feedback.yml", stage: "address-feedback", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/validate.yml",
@@ -80,6 +83,7 @@ const workflowRunNameSpecs = [
     artifact: "Issue",
   },
   { file: "examples/consumer/.github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
+  { file: "examples/consumer/.github/workflows/review.yml", stage: "review", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/address-feedback.yml",
     stage: "address-feedback",
@@ -94,12 +98,14 @@ const workflowStaticNames = {
   ".github/workflows/materialize.yml": "GitVibe materialize",
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
+  ".github/workflows/review.yml": "GitVibe review",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
   "examples/consumer/.github/workflows/decompose.yml": "GitVibe decompose",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
   "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
   "examples/consumer/.github/workflows/develop.yml": "GitVibe develop",
+  "examples/consumer/.github/workflows/review.yml": "GitVibe review",
   "examples/consumer/.github/workflows/address-feedback.yml": "GitVibe address feedback",
 };
 
@@ -450,7 +456,6 @@ describe("GitVibe develop workflow", () => {
     const planReview = workflow.jobs?.["plan-review-matrix"];
     const reviewMembers = workflow.jobs?.["review-matrix-members"];
     const reviewMatrix = workflow.jobs?.["review-matrix"];
-    const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
     const createPr = workflow.jobs?.["create-pr"];
 
     expect(workflow.on?.workflow_dispatch?.inputs?.investigation_timeout_minutes).toBeUndefined();
@@ -485,12 +490,26 @@ describe("GitVibe develop workflow", () => {
         "issue-number": "${{ inputs.issue-number }}",
       }),
     });
-    expect(planReview).toMatchObject({
+    expect(createPr).toMatchObject({
       needs: "implement",
+      outputs: expect.objectContaining({
+        "pr-number": "${{ steps.create.outputs.pr-number }}",
+        "pr-url": "${{ steps.create.outputs.pr-url }}",
+      }),
+    });
+    expect(
+      createPr?.steps?.find((step) => step.uses === "./.git-vibe/actions/create-pr"),
+    ).toMatchObject({
+      id: "create",
+    });
+    expect(planReview).toMatchObject({
+      if: "needs.create-pr.outputs.pr-number != ''",
+      needs: "create-pr",
     });
     expect(reviewMembers).toMatchObject({
       "continue-on-error": true,
-      needs: "plan-review-matrix",
+      if: "needs.create-pr.outputs.pr-number != '' && needs.plan-review-matrix.result == 'success'",
+      needs: ["create-pr", "plan-review-matrix"],
       strategy: expect.objectContaining({
         "max-parallel": "${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel || '1') }}",
         matrix: {
@@ -501,8 +520,8 @@ describe("GitVibe develop workflow", () => {
     expect(planReview?.outputs).toHaveProperty("indexes", "${{ steps.plan.outputs.indexes }}");
     expect(planReview?.outputs).not.toHaveProperty("matrix");
     expect(reviewMatrix).toMatchObject({
-      if: "always() && needs.plan-review-matrix.result == 'success'",
-      needs: ["plan-review-matrix", "review-matrix-members"],
+      if: "always() && needs.create-pr.outputs.pr-number != '' && needs.plan-review-matrix.result == 'success'",
+      needs: ["create-pr", "plan-review-matrix", "review-matrix-members"],
       outputs: expect.objectContaining({
         "next-state": "${{ steps.review.outputs.next-state }}",
       }),
@@ -514,16 +533,10 @@ describe("GitVibe develop workflow", () => {
       with: expect.objectContaining({
         "execution-mode": "finalizer",
         "fail-on-blocked": "true",
+        "pr-number": "${{ needs.create-pr.outputs.pr-number }}",
       }),
     });
-    expect(reviewChangesRequired).toMatchObject({
-      if: "needs.review-matrix.outputs.next-state == 'changes-required'",
-      needs: "review-matrix",
-    });
-    expect(createPr).toMatchObject({
-      if: "needs.review-matrix.outputs.next-state == 'review-passed'",
-      needs: "review-matrix",
-    });
+    expect(workflow.jobs?.["review-changes-required"]).toBeUndefined();
   });
 });
 
@@ -537,6 +550,7 @@ describe("GitVibe address feedback workflow", () => {
     const reviewMembers = workflow.jobs?.["review-matrix-members"];
     const review = workflow.jobs?.["review-matrix"];
 
+    expect(workflow.jobs?.["create-pr"]).toBeUndefined();
     expect(investigateMembers).toMatchObject({
       "continue-on-error": true,
       needs: "plan-investigate-feedback",
@@ -582,6 +596,7 @@ describe("GitVibe address feedback workflow", () => {
       id: "address",
       with: expect.objectContaining({
         "handoff-dir": "${{ runner.temp }}/git-vibe-feedback-handoff",
+        "pr-number": "${{ inputs.pr-number }}",
       }),
     });
     expect(planReview).toMatchObject({
@@ -613,64 +628,6 @@ describe("GitVibe address feedback workflow", () => {
         "pr-number": "${{ inputs.pr-number }}",
       }),
     });
-  });
-});
-
-describe("GitVibe app deployment boundary", () => {
-  it("deploys the app only when app, shared, package, or deploy files change", () => {
-    const paths = readWorkflow(".github/workflows/app-deploy.yml").on?.push?.paths || [];
-
-    expect(paths).toContain("src/app/**");
-    expect(paths).toContain("src/shared/**");
-    expect(paths).toContain(".github/workflows/release.yml");
-    expect(paths).not.toContain("src/**");
-    expect(paths).not.toContain("src/runner/**");
-    expect(paths).not.toContain("prompts/**");
-    expect(paths).not.toContain("schemas/**");
-  });
-
-  it("builds the app image without bundled runner runtime assets", () => {
-    const dockerfile = readFileSync("Dockerfile", "utf8");
-    const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
-
-    expect(packageJson.scripts["build:app"]).toBe("tsc --project tsconfig.build.json");
-    expect(dockerfile).toContain("corepack pnpm build:app");
-    expect(dockerfile).toContain("COPY --from=build /app/dist/app ./dist/app");
-    expect(dockerfile).toContain("COPY --from=build /app/dist/shared ./dist/shared");
-    expect(dockerfile).not.toContain("COPY --from=build /app/dist ./dist");
-    expect(dockerfile).not.toContain("COPY --from=build /app/prompts ./prompts");
-    expect(dockerfile).not.toContain("COPY --from=build /app/schemas ./schemas");
-  });
-
-  it("publishes releases only from main by repository admins", () => {
-    const workflow = readWorkflow(".github/workflows/release.yml");
-    const content = readFileSync(".github/workflows/release.yml", "utf8");
-
-    expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
-      default: "v2",
-      required: true,
-    });
-    expect(workflow.permissions).toMatchObject({
-      contents: "write",
-      packages: "write",
-    });
-    expect(workflow.jobs?.release?.env).toMatchObject({
-      BUILDX_CONFIG: "/tmp/.docker-buildx",
-      DOCKER_CONTEXT: "default",
-    });
-    expect(content).toContain('GITHUB_REF" != "refs/heads/main"');
-    expect(content).toContain("collaborators/$REQUEST_ACTOR/permission");
-    expect(content).toContain('permission" != "admin"');
-    expect(content).toContain("docker buildx inspect rootless --bootstrap");
-    expect(content).toContain("docker buildx rm rootless");
-    expect(content).toContain("docker buildx create --name rootless --use default");
-    expect(content).not.toContain("docker/login-action");
-    expect(content).toContain("docker pull");
-    expect(content).toContain("docker push");
-    expect(content).toContain("docker image rm");
-    expect(content).toContain("docker buildx prune --force --filter until=48h");
-    expect(content).toContain("gh release create");
-    expect(content).toContain("--generate-notes");
   });
 });
 

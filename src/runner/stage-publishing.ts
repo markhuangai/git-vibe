@@ -561,6 +561,9 @@ function labelForStageStart(context: ContextPacket, runner: RunnerOptions): stri
   if (context.artifact.type === "issue" && runner.stage === "implement") {
     return gitVibeLabels.inProgress.name;
   }
+  if (context.artifact.type === "pull-request" && runner.stage === "review-matrix") {
+    return gitVibeLabels.reviewing.name;
+  }
   return undefined;
 }
 
@@ -571,6 +574,7 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
       ? [
           gitVibeLabels.investigating.name,
           gitVibeLabels.inProgress.name,
+          gitVibeLabels.reviewing.name,
           gitVibeLabels.approved.name,
           gitVibeLabels.readyForApproval.name,
         ]
@@ -581,6 +585,7 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
       ? [
           gitVibeLabels.blocked.name,
           gitVibeLabels.investigating.name,
+          gitVibeLabels.reviewing.name,
           gitVibeLabels.readyForApproval.name,
         ]
       : [gitVibeLabels.investigating.name];
@@ -601,6 +606,19 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
           gitVibeLabels.investigated.name,
           gitVibeLabels.inProgress.name,
           gitVibeLabels.investigating.name,
+          gitVibeLabels.reviewing.name,
+          gitVibeInternalLabels.reviewFix.name,
+        ]
+      : [];
+  }
+  if (label === gitVibeLabels.reviewing.name) {
+    return isPullRequest
+      ? [
+          gitVibeLabels.blocked.name,
+          gitVibeLabels.inProgress.name,
+          gitVibeLabels.investigated.name,
+          gitVibeLabels.investigating.name,
+          gitVibeLabels.readyForApproval.name,
           gitVibeInternalLabels.reviewFix.name,
         ]
       : [];

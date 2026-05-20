@@ -172,22 +172,22 @@ describe("stage deterministic GitHub writes", () => {
     expect(closeDiscussion).toHaveBeenCalledTimes(1);
   });
 
-  it("creates or updates pull requests and manages ready-for-approval labels", async () => {
+  it("creates or updates pull requests and exposes pull request outputs", async () => {
     const updateClient = createClient([
       [{ number: 7 }],
       { html_url: "https://github.com/example/repo/pull/7", number: 7 },
-      {},
     ]);
-    await applyDeterministicWrites(
+    const updatedResult = await applyDeterministicWrites(
       options({ client: updateClient, runner: runner({ stage: "create-pr" }) }),
     );
 
     expect(updateClient.request).toHaveBeenCalledWith(
       expect.objectContaining({ method: "PATCH", path: "/repos/example/repo/pulls/7" }),
     );
-    expect(updateClient.request).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/repos/example/repo/issues/7/labels" }),
-    );
+    expect(updatedResult.parsedOutput).toMatchObject({
+      pr_number: "7",
+      pr_url: "https://github.com/example/repo/pull/7",
+    });
 
     const createClientWithoutNumber = createClient([
       [],
@@ -204,6 +204,39 @@ describe("stage deterministic GitHub writes", () => {
 });
 
 describe("stage deterministic git commits", () => {
+  it("uses the shared branch update path for issue implementation", async () => {
+    await applyDeterministicWrites(options({ runner: runner({ stage: "implement" }) }));
+
+    expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
+    expect(branchForWriteStage).toHaveBeenCalledWith(
+      "implement",
+      expect.objectContaining({ artifact: expect.objectContaining({ type: "issue" }) }),
+    );
+    expect(publishStageResultComment).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared branch update path for pull request feedback remediation", async () => {
+    const client = createClient();
+
+    await applyDeterministicWrites(
+      options({
+        client,
+        context: context("pull-request", {
+          pullRequestHead: { branch: "feature", repository: "example/repo" },
+        }),
+        runner: runner({ stage: "address-pr-feedback" }),
+      }),
+    );
+
+    expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
+    expect(branchForWriteStage).toHaveBeenCalledWith(
+      "address-pr-feedback",
+      expect.objectContaining({ artifact: expect.objectContaining({ type: "pull-request" }) }),
+    );
+    expect(publishStageResultComment).toHaveBeenCalledTimes(1);
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
   it("commits only after validation succeeds and changed files are staged", async () => {
     execFileSync.mockImplementation((command, args) => {
       const joined = `${command} ${args.join(" ")}`;

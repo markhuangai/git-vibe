@@ -1,5 +1,5 @@
 name: GitVibe review matrix
-description: Run GitVibe's configured review matrix before PR creation.
+description: Run GitVibe's configured review matrix for an issue or pull request.
 
 inputs:
   token:

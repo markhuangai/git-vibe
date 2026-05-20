@@ -27,7 +27,6 @@ import {
   addDiscussionLabelFromPayload,
   addIssueLabel,
   approvalRequiresDecompositionBody,
-  approvalRequiresInvestigationBody,
   closeIssue,
   commandInputs,
   commandReason,
@@ -40,7 +39,6 @@ import {
   handleManagedReviewFixLabel,
   internalLabelRejectionBody,
   issueComments,
-  issueHasLabel,
   labelReason,
   markPullRequestApproved,
   markPullRequestMerged,
@@ -51,6 +49,8 @@ import {
   removeDiscussionLabelFromPayload,
   sourceReviewInput,
 } from "./server-actions.js";
+import { handleApprovedIssueLabel } from "./approval-labels.js";
+import { handleReviewPullRequestLabel } from "./review-labels.js";
 import {
   firstHeader,
   readBody,
@@ -399,23 +399,13 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (label === gitVibeLabels.approved.name) {
-    if (!issueHasLabel(options.payload.issue, gitVibeLabels.investigated.name)) {
-      await removeIssueLabel({
-        client: options.client,
-        issueNumber,
-        label,
-        owner: options.owner,
-        repo: options.repo,
-        token: options.token,
-      });
-      await createIssueComment(options, issueNumber, approvalRequiresInvestigationBody(label));
-      return;
-    }
+  if (label === gitVibeLabels.review.name) {
+    await handleReviewPullRequestLabel(options, issueNumber, label);
+    return;
+  }
 
-    await dispatchWorkflow(options, "develop.yml", {
-      "issue-number": issueNumber,
-    });
+  if (label === gitVibeLabels.approved.name) {
+    await handleApprovedIssueLabel(options, issueNumber, label);
     return;
   }
 

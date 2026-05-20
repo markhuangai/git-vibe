@@ -25,7 +25,7 @@ Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runne
 GitVibe uses one package and one lockfile, but source is separated by runtime ownership:
 
 - `src/app`: webhook server and repository orchestration logic that ships in the self-hosted Docker image.
-- `src/runner`: reusable action runtime, AI stage execution, context assembly, prompt/schema handling, branch writes, PR creation, and result comments.
+- `src/runner`: reusable action runtime, AI stage execution, context assembly, prompt/schema handling, shared branch-update writes, PR creation, and result comments.
 - `src/shared`: GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both app and runner.
 
 The Docker image builds only app/shared output. Composite actions build the runner bundle on the GitHub runner before executing a stage. Runner-only changes should not deploy the app unless they also change shared code, package metadata, Docker/deploy files, or app code.
@@ -78,7 +78,7 @@ Use `GITHUB_TOKEN` only for simple read operations. Use the self-hosted server's
 
 The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes and must never log or render the token.
 
-Webhook dispatch includes serialized source metadata when automation came from an issue comment, Discussion comment, pull request conversation comment, or submitted pull request review. Runner publishing uses that metadata to choose Discussion `replyToId` or flat issue/PR comments with a source link. Pull request review-comment replies remain supported for existing metadata, but automatic feedback remediation is triggered by trusted `changes_requested` review submissions rather than individual review-comment webhooks.
+Webhook dispatch includes serialized source metadata when automation came from an issue comment, Discussion comment, pull request conversation comment, or submitted pull request review. Runner publishing uses that metadata to choose Discussion `replyToId` or flat issue/PR comments with a source link. Pull request review-comment replies remain supported for existing metadata, but automatic feedback remediation is triggered by trusted `changes_requested` review submissions rather than individual review-comment webhooks. Protected PR review labels dispatch `review.yml`, then the server removes stale PR state and marks the PR `gvi:reviewing`.
 
 Supported workflow auth modes:
 
@@ -162,10 +162,17 @@ Starter files:
 - `.git-vibe/role-group/*.md`: role definitions used by configured role groups.
 - `.github/workflows/investigate.yml`: wrapper for investigation-only runs.
 - `.github/workflows/develop.yml`: wrapper for full implementation runs.
+- `.github/workflows/review.yml`: wrapper for existing pull request review.
 - `.github/workflows/materialize.yml`: wrapper for Discussion-to-issue materialization.
 - `.github/workflows/decompose.yml`: wrapper for validated Discussion decomposition.
 - `.github/workflows/validate.yml`: wrapper for issue or Discussion validation.
 - `.github/workflows/address-feedback.yml`: wrapper for PR feedback investigation, conditional remediation, and review.
+
+`develop.yml` and `address-feedback.yml` remain separate orchestrators. They
+share runner-level branch-update mechanics for validation, commit, and push, but
+`develop.yml` publishes a pull request from the issue branch while
+`address-feedback.yml` updates the existing PR head branch and then reruns PR
+review.
 
 The wrapper workflows call reusable workflows such as:
 

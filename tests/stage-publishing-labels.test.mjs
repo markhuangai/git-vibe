@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyStageLabelTransition } from "../src/runner/stage-publishing.ts";
+import {
+  applyStageLabelTransition,
+  applyStageStartLabelTransition,
+} from "../src/runner/stage-publishing.ts";
 
 /**
  * @typedef {import("../src/shared/github.ts").GitHubClient & { graphql: any; request: any }} MockGitHubClient
@@ -8,6 +11,31 @@ import { applyStageLabelTransition } from "../src/runner/stage-publishing.ts";
  */
 
 describe("stage label PR feedback transitions", () => {
+  it("marks pull request review running when review starts", async () => {
+    const client = createClient();
+
+    await applyStageStartLabelTransition({
+      client,
+      context: context("pull-request"),
+      logger: createLogger(),
+      runner: runner({ stage: "review-matrix" }),
+    });
+
+    expect(
+      requestCalls(client)
+        .filter((request) => request.method === "POST")
+        .map((request) => request.body.labels[0]),
+    ).toEqual(["gvi:reviewing"]);
+    expect(requestCalls(client).map((request) => request.path)).toEqual(
+      expect.arrayContaining([
+        "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
+      ]),
+    );
+  });
+
   it("moves pull request labels through investigation and review", async () => {
     const client = createClient();
     const prContext = context("pull-request");

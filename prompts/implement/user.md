@@ -14,6 +14,10 @@ Implement the approved issue in the working tree with focused code and test chan
 - Reuse existing utilities, conventions, workflows, and test style.
 - Add or update tests for changed behavior unless there is a concrete reason not to.
 - Run focused checks first, then broader checks when the change scope justifies them.
+- Stay scoped to implementing the issue branch. GitVibe's deterministic
+  branch-update engine handles validation, commit, and push after your JSON is
+  accepted; do not create, update, approve, or merge pull requests from this
+  stage.
 - Preserve unrelated local changes. Do not revert or reformat unrelated files.
   </implementation_process>
 
