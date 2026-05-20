@@ -7,6 +7,7 @@ import {
   discussionCommentBodies,
   discussionLabelAdds,
   discussionLabelRemovals,
+  reactionVariables,
   repositoryPayload,
   requestBodies,
   requestPaths,
@@ -421,58 +422,8 @@ describe("GitVibe app server discussion labels", () => {
   });
 });
 
-describe("GitVibe app server discussion decomposition labels", () => {
-  it("blocks discussion decomposition until validation has completed", async () => {
-    const client = createClient({ permission: { permission: "write" } });
-    const app = createApp({ client });
-
-    await app.handleWebhook("discussion", {
-      action: "labeled",
-      discussion: { node_id: "discussion-node", number: 5 },
-      label: { name: gitVibeLabels.decompose.name, node_id: "decompose-label-node" },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
-
-    expect(workflowDispatches(client)).toEqual([]);
-    expect(discussionLabelRemovals(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["decompose-label-node"] },
-    ]);
-    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed validation yet");
-  });
-
-  it("dispatches trusted discussion decomposition after validation", async () => {
-    const client = createClient({
-      discussionLabels: [gitVibeLabels.validated.name],
-      permission: { permission: "write" },
-    });
-    const app = createApp({ client });
-
-    await app.handleWebhook("discussion", {
-      action: "labeled",
-      discussion: { node_id: "discussion-node", number: 5 },
-      label: { name: gitVibeLabels.decompose.name, node_id: "decompose-label-node" },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
-
-    expect(requestPaths(client, "POST")).toContain(
-      "/repos/example/repo/actions/workflows/decompose.yml/dispatches",
-    );
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({ inputs: { "discussion-number": "5" } }),
-    ]);
-    expect(discussionLabelAdds(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-    ]);
-    expect(discussionLabelRemovals(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["decompose-label-node"] },
-    ]);
-    expect(discussionCommentBodies(client).join("\n")).toContain("decompose.yml");
-  });
-
-  it("blocks discussion approval until decomposition has completed", async () => {
+describe("GitVibe app server discussion materialization labels", () => {
+  it("blocks discussion approval until validation has completed", async () => {
     const client = createClient({ permission: { permission: "write" } });
     const app = createApp({ client });
 
@@ -488,12 +439,12 @@ describe("GitVibe app server discussion decomposition labels", () => {
     expect(discussionLabelRemovals(client)).toEqual([
       { discussionId: "discussion-node", labelIds: ["approved-label-node"] },
     ]);
-    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed decomposition yet");
+    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed validation yet");
   });
 
-  it("dispatches trusted discussion materialization after decomposition", async () => {
+  it("dispatches trusted discussion materialization after validation", async () => {
     const client = createClient({
-      discussionLabels: [gitVibeLabels.decomposed.name],
+      discussionLabels: [gitVibeLabels.validated.name],
       permission: { permission: "write" },
     });
     const app = createApp({ client });
@@ -513,6 +464,42 @@ describe("GitVibe app server discussion decomposition labels", () => {
       expect.objectContaining({ inputs: { "discussion-number": "5" } }),
     ]);
     expect(discussionCommentBodies(client).join("\n")).toContain("materialize.yml");
+  });
+
+  it("dispatches trusted discussion materialization commands after validation", async () => {
+    const client = createClient({
+      discussionLabels: [gitVibeLabels.validated.name],
+      permission: { permission: "write" },
+    });
+    const app = createApp({ client });
+
+    await app.handleWebhook("discussion_comment", {
+      action: "created",
+      comment: {
+        body: "/git-vibe materialize split the story into 5 issues since it is too big",
+        node_id: "discussion-command-node",
+      },
+      discussion: { node_id: "discussion-node", number: 5 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestPaths(client, "POST")).toContain(
+      "/repos/example/repo/actions/workflows/materialize.yml/dispatches",
+    );
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: expect.objectContaining({ "discussion-number": "5" }),
+      }),
+    ]);
+    expect(JSON.parse(workflowDispatches(client)[0].inputs["source-comment"])).toMatchObject({
+      body: "/git-vibe materialize split the story into 5 issues since it is too big",
+      kind: "discussion-comment",
+      nodeId: "discussion-command-node",
+    });
+    expect(reactionVariables(client)).toEqual([
+      { content: "ROCKET", subjectId: "discussion-command-node" },
+    ]);
   });
 });
 

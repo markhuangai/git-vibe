@@ -42,7 +42,7 @@ export interface RoleGroupSynthesisMember {
   roleDefinition: string;
 }
 
-const roleGroupStages = new Set<Stage>(["decompose", "investigate", "review-matrix", "validate"]);
+const roleGroupStages = new Set<Stage>(["investigate", "review-matrix", "validate"]);
 const writeOrPublishStages = new Set<Stage>([
   "address-pr-feedback",
   "create-pr",

@@ -197,7 +197,7 @@ describe("GitVibe action launcher validation", () => {
 
     await expect(
       runAction({
-        argv: ["decompose"],
+        argv: ["materialize"],
         env: baseEnv,
         error,
       }),
@@ -206,7 +206,7 @@ describe("GitVibe action launcher validation", () => {
 
     await expect(
       runAction({
-        argv: ["decompose"],
+        argv: ["materialize"],
         env: baseEnv,
         error,
       }),

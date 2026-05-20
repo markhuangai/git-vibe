@@ -40,24 +40,16 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
   if (stage === "materialize") {
     return {
       ...base,
-      issue_body: `Dry-run implementation issue for ${context.artifact.url}`,
-      issue_title: `GitVibe dry run: ${context.artifact.title}`,
-    };
-  }
-
-  if (stage === "decompose") {
-    return {
-      ...base,
-      story_units: [
+      issues: [
         {
           acceptance_criteria: ["Dry-run acceptance criteria."],
-          background: `Dry-run story unit for ${context.artifact.url}`,
+          background: `Dry-run implementation issue for ${context.artifact.url}`,
           backpressure_commands: [],
           blocked_by: [],
           parallel_group: "default",
           requirements: ["Dry-run requirement."],
           review_guidelines: ["Verify the dry-run output shape."],
-          title: `Dry-run story for ${context.artifact.title}`,
+          title: `GitVibe dry run: ${context.artifact.title}`,
         },
       ],
     };
@@ -105,10 +97,9 @@ function dryRunNextState(stage: string): string {
   const nextStates: Record<string, string> = {
     "address-pr-feedback": "feedback-addressed",
     "create-pr": "pr-draft-ready",
-    decompose: "ready-for-materialization",
     implement: "changes-ready-for-commit",
     investigate: "needs-info",
-    materialize: "implementation-issue-ready",
+    materialize: "implementation-issues-ready",
     "review-matrix": "review-passed",
     validate: "ready-for-implementation",
   };

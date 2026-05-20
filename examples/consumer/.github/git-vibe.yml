@@ -78,8 +78,6 @@ ai:
       role_group: review_gate
     validate:
       role_group: review_gate
-    decompose:
-      profile: local_proxy
     materialize:
       profile: local_proxy
     review-matrix:

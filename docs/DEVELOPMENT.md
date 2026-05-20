@@ -11,7 +11,6 @@
 - `examples/consumer/.git-vibe`: copyable role-group definitions referenced by the consumer starter config.
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
 - `.github/workflows/validate.yml`: reusable issue or Discussion validation pipeline.
-- `.github/workflows/decompose.yml`: reusable validated Discussion decomposition pipeline.
 - `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.
 - `.github/workflows/develop.yml`: reusable issue development pipeline that implements, creates or updates a PR, then reviews it.
 - `.github/workflows/review.yml`: reusable pull request review pipeline.

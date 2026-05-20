@@ -58,17 +58,16 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                   | Repository scope                     | Output                                                                      | May advance state                                                 |
-| ----------------------- | ------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Triage classification   | Issue/discussion context             | Suggested type, labels, confidence, missing info                            | No, except safe labels if configured                              |
-| Bug investigation       | Repo snapshot and issue timeline     | Findings, suspected areas, blocking questions, concrete implementation plan | No code changes                                                   |
-| Feature validation      | Repo snapshot and discussion thread  | Findings, contradictions, open questions, and readiness decision            | May mark ready for decomposition only if policy allows            |
-| Feature decomposition   | Repo snapshot and discussion thread  | Story units, dependencies, acceptance criteria, and review guidance         | No issue creation without protected approval                      |
-| Materialization         | Accepted decomposed discussion       | Implementation issue title and body                                         | May create a labeled implementation issue                         |
-| Validation              | Repo snapshot and accepted context   | Pass/fail, contradictions, implementation brief                             | May mark ready only if policy allows                              |
-| Implementation          | `git-vibe/{root-issue}` branch       | Commits, test output, implementation summary                                | Uses branch-update engine; may update issue branch, not merge     |
-| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes                        | May mark a PR ready or blocked, and may queue PR feedback retries |
-| PR feedback remediation | Existing PR branch                   | Fix commits or skipped-comment rationale                                    | Uses branch-update engine; may update PR branch, not create PR    |
+| Stage                   | Repository scope                     | Output                                                                                  | May advance state                                                 |
+| ----------------------- | ------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Triage classification   | Issue/discussion context             | Suggested type, labels, confidence, missing info                                        | No, except safe labels if configured                              |
+| Bug investigation       | Repo snapshot and issue timeline     | Findings, suspected areas, blocking questions, concrete implementation plan             | No code changes                                                   |
+| Feature validation      | Repo snapshot and discussion thread  | Findings, contradictions, open questions, and readiness decision                        | May mark ready for materialization only if policy allows          |
+| Materialization         | Accepted validated discussion        | Implementation issue drafts with dependencies, acceptance criteria, and review guidance | May create labeled implementation issues                          |
+| Validation              | Repo snapshot and accepted context   | Pass/fail, contradictions, implementation brief                                         | May mark ready only if policy allows                              |
+| Implementation          | `git-vibe/{root-issue}` branch       | Commits, test output, implementation summary                                            | Uses branch-update engine; may update issue branch, not merge     |
+| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes                                    | May mark a PR ready or blocked, and may queue PR feedback retries |
+| PR feedback remediation | Existing PR branch                   | Fix commits or skipped-comment rationale                                                | Uses branch-update engine; may update PR branch, not create PR    |
 
 AI result envelope:
 
@@ -115,7 +114,7 @@ Repository prompt addition paths:
 - `.git-vibe/prompts/<stage>/system.md`: appended to the rendered system prompt for that stage.
 - `.git-vibe/prompts/<stage>/user.md`: appended to the rendered user prompt for that stage.
 
-The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `decompose`, `materialize`, `validate`).
+The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `materialize`, `validate`).
 
 When an addition file exists, GitVibe appends its contents inside an explicit `<repository_prompt_addition>` XML section after the bundled GitVibe-controlled prompt content. The XML section makes clear that the content is repository-provided additive prompt text. GitVibe does not emit the XML section when the matching file is missing or empty.
 
@@ -214,7 +213,7 @@ role markdown file with the exact profile that should run it. The synthesizer
 profile receives the configured role definitions and successful role outputs,
 can inspect repository and GitHub context, and returns the same final stage
 schema that single-profile execution returns. `role_group` is allowed only for
-read-only stages: `investigate`, `validate`, `decompose`, and `review-matrix`.
+read-only stages: `investigate`, `validate`, and `review-matrix`.
 
 Normalized reasoning config:
 

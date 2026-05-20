@@ -9,21 +9,16 @@ describe("stage dry-run contracts", () => {
     expect(stageContract("validate", context("discussion"))).not.toContain("prepared branch");
   });
 
-  it("renders decompose and pull-request investigation dry-run output", () => {
+  it("renders pull-request investigation dry-run output", () => {
     const log = logger();
-    const decompose = JSON.parse(dryRunContent("decompose", context("discussion"), log));
     const investigatePr = JSON.parse(dryRunContent("investigate", context("pull-request"), log));
 
-    expect(decompose).toMatchObject({
-      next_state: "ready-for-materialization",
-      story_units: [{ parallel_group: "default" }],
-    });
     expect(investigatePr).toMatchObject({
       feedback_items: [],
       next_state: "no-fixes-needed",
       questions: [],
     });
-    expect(log.event).toHaveBeenCalledTimes(2);
+    expect(log.event).toHaveBeenCalledTimes(1);
   });
 
   it("renders specialized dry-run output for write and discussion stages", () => {
@@ -35,7 +30,8 @@ describe("stage dry-run contracts", () => {
     const investigateIssue = JSON.parse(dryRunContent("investigate", context("issue"), log));
 
     expect(createPr).toMatchObject({ branch: "git-vibe/12" });
-    expect(materialize.issue_title).toBe("GitVibe dry run: Discussion title");
+    expect(materialize.issues[0].title).toBe("GitVibe dry run: Discussion title");
+    expect(materialize.issues[0].parallel_group).toBe("default");
     expect(implement.tests).toEqual([]);
     expect(feedback).toMatchObject({ skipped_feedback: [], tests: [] });
     expect(investigateIssue).toMatchObject({

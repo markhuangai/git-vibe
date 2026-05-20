@@ -11,7 +11,6 @@ import {
   workflowRunIdFromUrl,
   type TransientStatusScope,
 } from "../shared/status-comments.js";
-import { cleanupPriorDecomposeResultComments } from "./decompose-results.js";
 import {
   applyDiscussionStageLabelTransition,
   applyDiscussionStageStartLabelTransition,
@@ -47,7 +46,6 @@ const staleTransientStatusCommentAgeMs = 30 * 60 * 1000;
 
 export async function publishStageResultComment(options: StagePublishingOptions): Promise<void> {
   await cleanupStageStatusComments(options);
-  await cleanupPriorDecomposeResultComments(options);
   const body = renderStageResultComment({
     context: options.context,
     links: options.links,

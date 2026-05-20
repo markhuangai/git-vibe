@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
-import { parseDecomposeJson } from "../src/runner/result-comments.ts";
 
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
@@ -76,71 +75,6 @@ describe("stage result publishing", () => {
     expect(commentBody).toContain("<!-- git-vibe:stage-result stage=validate");
     expect(commentBody).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(JSON.parse(fetch.mock.calls[4][1].body).labels).toEqual(["gvi:ready-for-approval"]);
-  });
-});
-
-describe("decompose result publishing", () => {
-  it("publishes decompose results, deletes prior decompose results, and marks decomposed", async () => {
-    const cwd = await workspace();
-    process.env.GITVIBE_DISCUSSION_NUMBER = "5";
-    generateText.mockResolvedValueOnce(aiResult(decomposeOutput()));
-    const fetch = fetchMock([
-      discussionResponse({
-        comments: [priorDecomposeComment()],
-        labels: ["gvi:validated"],
-      }),
-    ]);
-    globalThis.fetch = fetch;
-
-    await runStage({
-      cwd,
-      dryRun: false,
-      issueNumber: "",
-      maxTurns: 2,
-      prNumber: "",
-      repository: "example/repo",
-      stage: "decompose",
-      stageTimeoutMinutes: 1,
-      token: "token",
-    });
-
-    const deletedIds = graphqlVariables(fetch, "GitVibeDeleteDiscussionComment").map(
-      (variables) => variables.id,
-    );
-    const commentBody = graphqlVariables(fetch, "GitVibeAddDiscussionComment").at(-1).body;
-    const resolvedLabels = graphqlVariables(fetch, "GitVibeDiscussionLabelId").map(
-      (variables) => variables.label,
-    );
-    expect(deletedIds).toEqual(["old-decompose-comment"]);
-    expect(commentBody).toContain("<!-- git-vibe:decompose-result");
-    expect(parseDecomposeJson(commentBody)).toMatchObject({ stage: "decompose" });
-    expect(resolvedLabels).toContain("gvi:decomposing");
-    expect(resolvedLabels).toContain("gvi:decomposed");
-  });
-
-  it("blocks decompose when the discussion is not validated", async () => {
-    const cwd = await workspace();
-    process.env.GITVIBE_DISCUSSION_NUMBER = "5";
-    const fetch = fetchMock([discussionResponse({ labels: [] })]);
-    globalThis.fetch = fetch;
-
-    const result = await runStage({
-      cwd,
-      dryRun: false,
-      issueNumber: "",
-      maxTurns: 2,
-      prNumber: "",
-      repository: "example/repo",
-      stage: "decompose",
-      stageTimeoutMinutes: 1,
-      token: "token",
-    });
-
-    const commentBody = graphqlVariables(fetch, "GitVibeAddDiscussionComment").at(-1).body;
-    expect(result.status).toBe("blocked");
-    expect(generateText).not.toHaveBeenCalled();
-    expect(commentBody).toContain("has not completed validation");
-    expect(commentBody).not.toContain("git-vibe:decompose-result");
   });
 });
 
@@ -286,42 +220,6 @@ function feedbackOutput() {
   };
 }
 
-function decomposeOutput() {
-  return {
-    assumptions: [],
-    comment_body: "Decomposition details.",
-    findings: ["The discussion is validated."],
-    next_state: "ready-for-materialization",
-    references: ["https://github.com/example/repo/discussions/5"],
-    stage: "decompose",
-    status: "completed",
-    story_units: [
-      {
-        acceptance_criteria: ["The decompose result is posted."],
-        background: "Maintainers need a plan.",
-        backpressure_commands: [],
-        blocked_by: [],
-        parallel_group: "foundation",
-        requirements: ["Add the decompose stage."],
-        review_guidelines: ["Verify marker parsing."],
-        title: "Add decompose stage",
-      },
-    ],
-    summary: "Decomposition ready.",
-  };
-}
-
-function priorDecomposeComment() {
-  return {
-    author: { login: "git-vibe" },
-    body: "<!-- git-vibe:decompose-result artifact=discussion number=5 schema=decompose.v1 -->\nold",
-    createdAt: "2026-01-03T00:00:00Z",
-    id: "old-decompose-comment",
-    replies: { nodes: [] },
-    url: "https://github.com/example/repo/discussions/5#discussioncomment-old",
-  };
-}
-
 /**
  * @param {any[]} responses
  */
@@ -435,46 +333,10 @@ function pullRequestResponse(branch) {
 }
 
 /**
- * @param {{ comments?: any[], labels?: string[] }} [options]
- */
-function discussionResponse(options = {}) {
-  return graphqlResponse({
-    repository: {
-      discussion: {
-        author: { login: "octocat" },
-        body: "Discussion body",
-        comments: { nodes: options.comments || [] },
-        createdAt: "2026-01-02T00:00:00Z",
-        id: "discussion-id",
-        labels: { nodes: (options.labels || []).map((name) => ({ name })) },
-        title: "Discussion title",
-        url: "https://github.com/example/repo/discussions/5",
-      },
-    },
-  });
-}
-
-/**
  * @param {Record<string, unknown>} data
  */
 function graphqlResponse(data) {
   return response(200, { data });
-}
-
-/**
- * @param {any} fetch
- * @param {string} operation
- * @returns {any[]}
- */
-function graphqlVariables(fetch, operation) {
-  const variables = [];
-  for (const call of fetch.mock.calls) {
-    const [url, init] = call;
-    if (!String(url).endsWith("/graphql")) continue;
-    if (!String(JSON.parse(String(init?.body || "{}")).query || "").includes(operation)) continue;
-    variables.push(JSON.parse(String(init.body)).variables);
-  }
-  return variables;
 }
 
 /**

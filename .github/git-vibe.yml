@@ -24,9 +24,6 @@ labels:
   validate: git-vibe:validate
   validating: gvi:validating
   validated: gvi:validated
-  decompose: git-vibe:decompose
-  decomposing: gvi:decomposing
-  decomposed: gvi:decomposed
 
 commands:
   prefix: /git-vibe
@@ -61,7 +58,7 @@ ai:
       context_window_tokens: 200000
       provider:
         type: openai-compatible
-        model: qwen3.6-plus
+        model: kimi-k2.5
         base_url:
           from_bundle: GITVIBE_AI_BASE_URL
         api_key:
@@ -114,9 +111,9 @@ ai:
           from_bundle: GITVIBE_AI_API_KEY
         ANTHROPIC_BASE_URL:
           from_bundle: ANTHROPIC_BASE_URL
-        ANTHROPIC_DEFAULT_OPUS_MODEL: qwen3.6-plus
-        ANTHROPIC_DEFAULT_SONNET_MODEL: qwen3.6-plus
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: qwen3.6-plus
+        ANTHROPIC_DEFAULT_OPUS_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: kimi-k2.5
         ANTHROPIC_MODEL: opus
         CLAUDE_CODE_SUBAGENT_MODEL: opus
       model: opus
@@ -156,9 +153,6 @@ ai:
     validate:
       enabled: true
       role_group: swarm
-    decompose:
-      enabled: true
-      profile: codex_5.5_high
     materialize:
       enabled: true
       profile: codex_5.5_high

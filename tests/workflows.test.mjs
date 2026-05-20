@@ -22,7 +22,6 @@ const legacyAiEnvNames = [
 
 const reusableWorkflows = [
   ".github/workflows/address-feedback.yml",
-  ".github/workflows/decompose.yml",
   ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
@@ -32,7 +31,6 @@ const reusableWorkflows = [
 
 const consumerWorkflows = [
   "examples/consumer/.github/workflows/address-feedback.yml",
-  "examples/consumer/.github/workflows/decompose.yml",
   "examples/consumer/.github/workflows/develop.yml",
   "examples/consumer/.github/workflows/investigate.yml",
   "examples/consumer/.github/workflows/materialize.yml",
@@ -43,7 +41,6 @@ const consumerWorkflows = [
 const actionFiles = [
   "address-pr-feedback/action.yml",
   "create-pr/action.yml",
-  "decompose/action.yml",
   "implement/action.yml",
   "investigate/action.yml",
   "mark-blocked/action.yml",
@@ -56,7 +53,6 @@ const actionFiles = [
 const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
   { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
-  { file: ".github/workflows/decompose.yml", stage: "decompose", artifact: "Discussion" },
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
   { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
@@ -66,11 +62,6 @@ const workflowRunNameSpecs = [
     file: "examples/consumer/.github/workflows/validate.yml",
     stage: "validate",
     multiArtifact: true,
-  },
-  {
-    file: "examples/consumer/.github/workflows/decompose.yml",
-    stage: "decompose",
-    artifact: "Discussion",
   },
   {
     file: "examples/consumer/.github/workflows/materialize.yml",
@@ -94,14 +85,12 @@ const workflowRunNameSpecs = [
 const workflowStaticNames = {
   ".github/workflows/release.yml": "GitVibe release",
   ".github/workflows/validate.yml": "GitVibe validate",
-  ".github/workflows/decompose.yml": "GitVibe decompose",
   ".github/workflows/materialize.yml": "GitVibe materialize",
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
   ".github/workflows/review.yml": "GitVibe review",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
-  "examples/consumer/.github/workflows/decompose.yml": "GitVibe decompose",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
   "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
   "examples/consumer/.github/workflows/develop.yml": "GitVibe develop",
@@ -406,11 +395,6 @@ describe("GitVibe workflow numeric inputs", () => {
 
 describe("GitVibe workflow write permissions", () => {
   it("grants write permissions where stage result comments are published", () => {
-    expect(
-      readWorkflow(".github/workflows/decompose.yml").jobs?.decompose?.permissions,
-    ).toMatchObject({
-      discussions: "write",
-    });
     expect(
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.permissions,
     ).toMatchObject({

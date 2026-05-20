@@ -17,10 +17,9 @@ export interface StageResultCommentOptions {
 const stageTitles: Record<Stage, string> = {
   "address-pr-feedback": "PR Feedback Update",
   "create-pr": "Pull Request Update",
-  decompose: "Decomposition Plan",
   implement: "Implementation Update",
   investigate: "Investigation",
-  materialize: "Implementation Issue",
+  materialize: "Implementation Issues",
   "review-matrix": "Review Matrix",
   validate: "Validation",
 };
@@ -30,15 +29,6 @@ interface NormalizedQuestion {
   options: string[];
   question: string;
 }
-
-export interface DecomposeResultMarker {
-  artifact: "discussion";
-  number: string;
-  schema: string;
-}
-
-const decomposeJsonStartPattern =
-  /<!--\s*git-vibe:decompose-json(?<attributes>[^>]*)-->\s*(?:```json\s*)?(?<json>[\s\S]*?)(?:\s*```)?\s*<!--\s*\/git-vibe:decompose-json\s*-->/;
 
 export function renderStageStartComment(options: {
   context: ContextPacket;
@@ -63,8 +53,6 @@ export function renderStageStartComment(options: {
 }
 
 export function renderStageResultComment(options: StageResultCommentOptions): string {
-  if (isCompletedDecomposeResult(options)) return renderDecomposeResultComment(options);
-
   const output = options.parsedOutput;
   const questions = normalizedQuestions(output);
   const lines = [
@@ -83,82 +71,9 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
   return cleanLines(lines).join("\n");
 }
 
-export function parseDecomposeResultMarker(
-  body: string | null | undefined,
-): DecomposeResultMarker | undefined {
-  const marker = String(body || "").match(
-    /<!--\s*git-vibe:decompose-result(?<attributes>[^>]*)-->/,
-  );
-  if (!marker?.groups?.attributes) return undefined;
-  const attributes = markerAttributes(marker.groups.attributes);
-  if (attributes.artifact !== "discussion" || !attributes.number) return undefined;
-  return {
-    artifact: "discussion",
-    number: attributes.number,
-    schema: attributes.schema || "",
-  };
-}
-
-export function parseDecomposeJson(body: string | null | undefined): JsonObject | undefined {
-  const match = String(body || "").match(decomposeJsonStartPattern);
-  if (!match?.groups?.json) return undefined;
-  const parsed = JSON.parse(match.groups.json.trim()) as unknown;
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as JsonObject)
-    : undefined;
-}
-
-function isCompletedDecomposeResult(options: StageResultCommentOptions): boolean {
-  return (
-    options.stage === "decompose" &&
-    options.context.artifact.type === "discussion" &&
-    textField(options.parsedOutput.status) === "completed"
-  );
-}
-
-function renderDecomposeResultComment(options: StageResultCommentOptions): string {
-  const output = options.parsedOutput;
-  const lines = [
-    resultMarker(options),
-    decomposeResultMarker(options),
-    `## GitVibe ${stageTitle(options)}`,
-    "",
-    `**Status:** ${inlineCode(textField(output.status) || "completed")}`,
-    stateLine(output),
-    "",
-    textField(output.summary) || "No summary provided.",
-    "",
-    "### Story Units",
-    ...storyUnitLines(output.story_units),
-    "",
-    "### Machine Data",
-    decomposeJsonStartMarker(options),
-    "```json",
-    JSON.stringify(output, null, 2),
-    "```",
-    "<!-- /git-vibe:decompose-json -->",
-    ...resultSection(options),
-  ];
-
-  return cleanLines(lines).join("\n");
-}
-
 function resultMarker(options: StageResultCommentOptions): string {
   const artifact = options.context.artifact;
   return `<!-- git-vibe:stage-result stage=${options.stage} artifact=${artifact.type} number=${artifact.number} -->`;
-}
-
-function decomposeResultMarker(options: StageResultCommentOptions): string {
-  const artifact = options.context.artifact;
-  return `<!-- git-vibe:decompose-result artifact=discussion number=${artifact.number} schema=${stageSchema(options.stage)} -->`;
-}
-
-function decomposeJsonStartMarker(options: StageResultCommentOptions): string {
-  return `<!-- git-vibe:decompose-json schema=${stageSchema(options.stage)} -->`;
-}
-
-function stageSchema(stage: Stage): string {
-  return `${stage}.v1`;
 }
 
 function stageTitle(options: Pick<StageResultCommentOptions, "context" | "stage">): string {
@@ -209,32 +124,6 @@ function resultSection(options: StageResultCommentOptions): string[] {
   return ["", "### Result", ...references];
 }
 
-function storyUnitLines(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length === 0) return ["No story units returned."];
-  return value.flatMap((item, index) => storyUnitLine(item, index));
-}
-
-function storyUnitLine(item: unknown, index: number): string[] {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    return [`${index + 1}. Invalid story unit; see machine data.`];
-  }
-  const unit = item as JsonObject;
-  const title = textField(unit.title) || `Story ${index + 1}`;
-  const requirements = stringItems(unit.requirements).slice(0, 3);
-  const blockedBy = stringItems(unit.blocked_by);
-  const reviewGuidelines = stringItems(unit.review_guidelines).slice(0, 2);
-  const lines = [
-    `${index + 1}. ${title}`,
-    `   Parallel group: ${inlineCode(textField(unit.parallel_group) || "default")}`,
-    `   Blocked by: ${blockedBy.length ? blockedBy.join(", ") : "None"}`,
-  ];
-  if (requirements.length) lines.push(`   Requirements: ${requirements.join("; ")}`);
-  if (reviewGuidelines.length) {
-    lines.push(`   Review: ${reviewGuidelines.join("; ")}`);
-  }
-  return lines;
-}
-
 function normalizedQuestions(output: JsonObject): NormalizedQuestion[] {
   return [
     ...questionItems(output.blocking_questions, true),
@@ -272,15 +161,6 @@ function stringItems(value: unknown): string[] {
 
 function optionLetter(index: number): string {
   return String.fromCharCode(65 + index);
-}
-
-function markerAttributes(value: string): Record<string, string> {
-  const attributes: Record<string, string> = {};
-  for (const match of value.matchAll(/([a-zA-Z0-9_-]+)=("[^"]*"|[^\s"]+)/g)) {
-    const raw = match[2] || "";
-    attributes[match[1] || ""] = raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
-  }
-  return attributes;
 }
 
 function textField(value: unknown): string {

@@ -97,16 +97,15 @@ Active label flow:
 flowchart TD
   FeatureIssue["Feature issue opened"] -->|add| NeedsDiscussion["gvi:needs-discussion"]
   NeedsDiscussion -->|create linked discussion, comment, close issue| ClosedFeatureIssue["original feature issue closed"]
-  DiscussionDecompose["Validated discussion labeled git-vibe:decompose"] -->|dispatch decompose.yml| Decompose["decompose stage"]
-  Decompose -->|post plan, remove decomposing, add| Decomposed["gvi:decomposed"]
-  DiscussionApproved["Decomposed discussion labeled git-vibe:approved"] -->|dispatch materialize.yml| Materialize["materialize stage"]
-  Materialize -->|create implementation issue with| Story["gvi:story"]
-  Materialize -->|comment with implementation issue link, close discussion| ClosedDiscussion["source discussion closed"]
+  DiscussionApproved["Validated discussion labeled git-vibe:approved"] -->|dispatch materialize.yml| Materialize["materialize stage"]
+  Materialize -->|create implementation issues with| Story["gvi:story"]
+  Materialize -->|comment with implementation issue links, close discussion| ClosedDiscussion["source discussion closed"]
 
   IssueValidate["Issue labeled git-vibe:validate"] -->|dispatch validate.yml, remove trigger label| ValidateIssue["validate issue"]
   DiscussionValidate["Discussion labeled git-vibe:validate"] -->|dispatch validate.yml, remove trigger label| ValidateDiscussion["validate discussion"]
   ValidateIssue -->|ready for approval| ReadyForApproval["gvi:ready-for-approval"]
-  ValidateDiscussion -->|ready for decompose| ValidatedDiscussion["gvi:validated"]
+  ValidateDiscussion -->|ready for materialize| ValidatedDiscussion["gvi:validated"]
+  ValidatedDiscussion --> DiscussionApproved
 
   IssueInvestigate["Issue labeled git-vibe:investigate"] -->|dispatch investigate.yml, remove trigger, add| Investigating["gvi:investigating"]
   Investigating -->|ready investigation posted, remove investigating, add| Investigated["gvi:investigated"]
@@ -144,7 +143,6 @@ Active public trigger labels:
 
 ```text
 git-vibe:validate
-git-vibe:decompose
 git-vibe:investigate
 git-vibe:approved
 git-vibe:review
@@ -158,8 +156,6 @@ gvi:story
 gvi:ready-for-approval
 gvi:validated
 gvi:validating
-gvi:decomposed
-gvi:decomposing
 gvi:investigated
 gvi:investigating
 gvi:reviewing
@@ -358,7 +354,7 @@ sequenceDiagram
   participant Community as Community
   participant Disc as Feature Discussion
   participant App as GitVibe Server
-  participant AI as Validation, Decomposition, and Materialization Pipeline
+  participant AI as Validation and Materialization Pipeline
   participant Maint as Admin or Collaborator
   participant Issue as Implementation Issue
 
@@ -369,14 +365,10 @@ sequenceDiagram
   App->>AI: Dispatch validation workflow
   AI->>Disc: Confirm actionable state or request more answers
 
-  Maint->>Disc: Apply git-vibe:decompose label
-  App->>AI: Dispatch decompose workflow
-  AI->>Disc: Post one decomposition plan comment with embedded JSON
-
   Maint->>Disc: Apply git-vibe:approved label
   App->>AI: Dispatch materialize workflow
-  App->>Issue: Create implementation issue with backlinks and accepted decomposition
-  App->>Disc: Link implementation issue
+  App->>Issue: Create one or more implementation issues with backlinks and accepted scope
+  App->>Disc: Link implementation issues
   App->>Disc: Close resolved Discussion
 ```
 

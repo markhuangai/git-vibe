@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  parseDecomposeJson,
-  parseDecomposeResultMarker,
   renderStageResultComment,
   renderStageStartComment,
 } from "../src/runner/result-comments.ts";
@@ -92,81 +90,6 @@ describe("stage result comments", () => {
       "### Next Action\nReply in one comment with question numbers and option letters, or write your own answer for any question.",
     );
     expect(body).not.toContain("### Blocking Questions");
-  });
-});
-
-describe("decompose result comments", () => {
-  it("renders a stable marker and embedded JSON for completed decomposition", () => {
-    const output = decomposeOutput();
-    const body = renderStageResultComment({
-      context: context("discussion"),
-      parsedOutput: output,
-      stage: "decompose",
-      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
-    });
-
-    expect(body).toContain(
-      "<!-- git-vibe:stage-result stage=decompose artifact=discussion number=12 -->",
-    );
-    expect(body).toContain(
-      "<!-- git-vibe:decompose-result artifact=discussion number=12 schema=decompose.v1 -->",
-    );
-    expect(body).toContain("## GitVibe Decomposition Plan");
-    expect(body).toContain("### Story Units");
-    expect(body).toContain("1. Add decompose routing");
-    expect(body).toContain("### Machine Data");
-    expect(body).toContain("<!-- git-vibe:decompose-json schema=decompose.v1 -->");
-    expect(parseDecomposeResultMarker(body)).toEqual({
-      artifact: "discussion",
-      number: "12",
-      schema: "decompose.v1",
-    });
-    expect(parseDecomposeJson(body)).toEqual(output);
-  });
-
-  it("does not parse ordinary stage result comments as decompose results", () => {
-    const body = renderStageResultComment({
-      context: context("discussion"),
-      parsedOutput: { next_state: "ready-for-materialization", status: "completed" },
-      stage: "materialize",
-    });
-
-    expect(parseDecomposeResultMarker(body)).toBeUndefined();
-    expect(parseDecomposeJson(body)).toBeUndefined();
-  });
-
-  it("renders malformed and empty story units as visible fallbacks", () => {
-    const emptyBody = renderStageResultComment({
-      context: context("discussion"),
-      parsedOutput: { ...decomposeOutput(), story_units: [] },
-      stage: "decompose",
-    });
-    const malformedBody = renderStageResultComment({
-      context: context("discussion"),
-      parsedOutput: {
-        ...decomposeOutput(),
-        story_units: [
-          null,
-          {
-            acceptance_criteria: [],
-            background: "Background",
-            blocked_by: [],
-            parallel_group: "",
-            requirements: ["Requirement"],
-            review_guidelines: ["Review"],
-          },
-        ],
-      },
-      stage: "decompose",
-    });
-
-    expect(emptyBody).toContain("No story units returned.");
-    expect(malformedBody).toContain("1. Invalid story unit; see machine data.");
-    expect(malformedBody).toContain("2. Story 2");
-    expect(malformedBody).toContain("Parallel group: `default`");
-    expect(malformedBody).toContain("Blocked by: None");
-    expect(malformedBody).toContain("Requirements: Requirement");
-    expect(malformedBody).toContain("Review: Review");
   });
 });
 
@@ -330,30 +253,5 @@ function context(type) {
     generatedAt: "2026-01-01T00:00:00Z",
     repository: "example/repo",
     timeline: [],
-  };
-}
-
-function decomposeOutput() {
-  return {
-    assumptions: [],
-    comment_body: "Decompose validated discussion.",
-    findings: ["Validation accepted read-only decomposition."],
-    next_state: "ready-for-materialization",
-    references: ["https://github.com/example/repo/discussions/12"],
-    stage: "decompose",
-    status: "completed",
-    story_units: [
-      {
-        acceptance_criteria: ["Decompose label dispatches a workflow."],
-        background: "Maintainers need a read-only plan before materialization.",
-        backpressure_commands: ["/git-vibe validate"],
-        blocked_by: [],
-        parallel_group: "foundation",
-        requirements: ["Add label routing.", "Add runner schema."],
-        review_guidelines: ["Verify label gating tests."],
-        title: "Add decompose routing",
-      },
-    ],
-    summary: "Decomposition plan is ready.",
   };
 }

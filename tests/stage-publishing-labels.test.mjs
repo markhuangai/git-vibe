@@ -181,6 +181,27 @@ describe("stage label investigation blocking", () => {
 });
 
 describe("discussion stage label transitions", () => {
+  it("marks discussions as validating when validation starts", async () => {
+    const client = createClient();
+
+    await applyStageStartLabelTransition({
+      client,
+      context: context("discussion"),
+      logger: createLogger(),
+      runner: runner({ stage: "validate" }),
+    });
+
+    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+
   it("marks validated discussions after successful validation", async () => {
     const client = createClient();
 
@@ -203,29 +224,112 @@ describe("discussion stage label transitions", () => {
     ]);
   });
 
-  it("marks decomposed discussions after successful decomposition", async () => {
+  it("marks discussions blocked after validation does not reach approval readiness", async () => {
     const client = createClient();
 
     await applyStageLabelTransition({
       client,
       context: context("discussion"),
       logger: createLogger(),
-      parsedOutput: { ...output(), next_state: "ready-for-materialization", stage: "decompose" },
-      runner: runner({ stage: "decompose" }),
+      parsedOutput: { ...output(), next_state: "needs-info", stage: "validate" },
+      runner: runner({ stage: "validate" }),
     });
 
-    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toHaveLength(5);
+    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
     expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
     ]);
   });
 });
 
+describe("discussion stage label transition guards", () => {
+  it("skips discussion label changes without a discussion node id", async () => {
+    const client = createClient();
+    const logger = createLogger();
+
+    await applyStageLabelTransition({
+      client,
+      context: context("discussion", { id: undefined }),
+      logger,
+      parsedOutput: { ...output(), next_state: "ready-for-approval", stage: "validate" },
+      runner: runner({ stage: "validate" }),
+    });
+
+    expect(client.graphql).not.toHaveBeenCalled();
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.discussion.label.skip",
+      expect.objectContaining({ discussion: "12", reason: "missing-discussion-id" }),
+    );
+  });
+
+  it("ignores missing discussion labels while removing stale validation labels", async () => {
+    const client = createClient();
+    client.graphql = vi.fn(async (query) => {
+      if (query.includes("GitVibeDiscussionLabelId")) {
+        return { repository: { label: { id: "resolved-label-node" } } };
+      }
+      if (query.includes("GitVibeRemoveDiscussionLabel")) {
+        throw new Error("GitHub API DELETE label failed: 404");
+      }
+      return {};
+    });
+
+    await expect(
+      applyStageLabelTransition({
+        client,
+        context: context("discussion"),
+        logger: createLogger(),
+        parsedOutput: { ...output(), next_state: "ready-for-approval", stage: "validate" },
+        runner: runner({ stage: "validate" }),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+
+  it("logs and rethrows unexpected discussion label removal failures", async () => {
+    const client = createClient();
+    const logger = createLogger();
+    client.graphql = vi.fn(async (query) => {
+      if (query.includes("GitVibeDiscussionLabelId")) {
+        return { repository: { label: { id: "resolved-label-node" } } };
+      }
+      if (query.includes("GitVibeRemoveDiscussionLabel")) {
+        throw new Error("delete unavailable");
+      }
+      return {};
+    });
+
+    await expect(
+      applyStageLabelTransition({
+        client,
+        context: context("discussion"),
+        logger,
+        parsedOutput: { ...output(), next_state: "ready-for-approval", stage: "validate" },
+        runner: runner({ stage: "validate" }),
+      }),
+    ).rejects.toThrow("delete unavailable");
+
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.discussion.label.remove.failed",
+      expect.objectContaining({ error: "delete unavailable", label: "gvi:validating" }),
+    );
+  });
+});
+
 /**
  * @param {ContextPacket["artifact"]["type"]} type
+ * @param {Partial<ContextPacket["artifact"]>} [artifactOverrides]
  * @returns {ContextPacket}
  */
-function context(type) {
+function context(type, artifactOverrides = {}) {
   return {
     artifact: {
       body: "Body",
@@ -234,6 +338,7 @@ function context(type) {
       title: "Title",
       type,
       url: `https://github.com/example/repo/${type}s/12`,
+      ...artifactOverrides,
     },
     generatedAt: "2026-01-01T00:00:00Z",
     repository: "example/repo",

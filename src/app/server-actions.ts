@@ -448,12 +448,8 @@ export function internalLabelRejectionBody(label: string): string {
   return `GitVibe removed \`${label}\` because \`gvi:\` labels are internal runtime labels and must only be applied by GitVibe with a valid hidden marker.`;
 }
 
-export function approvalRequiresDecompositionBody(label: string): string {
-  return `GitVibe removed \`${label}\` because this discussion has not completed decomposition yet. Add \`${gitVibeLabels.decompose.name}\` after validation; GitVibe will replace it with \`${gitVibeLabels.decomposing.name}\` and then \`${gitVibeLabels.decomposed.name}\` when the decomposition is ready for materialization.`;
-}
-
-export function decomposeRequiresValidationBody(label: string): string {
-  return `GitVibe removed \`${label}\` because this discussion has not completed validation yet. Add \`${gitVibeLabels.validate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.validating.name}\` and then \`${gitVibeLabels.validated.name}\` when validation is ready for decomposition.`;
+export function materializeRequiresValidationBody(trigger: string): string {
+  return `GitVibe did not start materialization from ${trigger} because this discussion has not completed validation yet. Add \`${gitVibeLabels.validate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.validating.name}\` and then \`${gitVibeLabels.validated.name}\` when validation is ready for materialization.`;
 }
 
 async function updateSourceIssueLabels(

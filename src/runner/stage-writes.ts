@@ -1,9 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { testCommandsFor } from "./config.js";
-import { addDiscussionComment, closeDiscussion } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { equivalentGitVibeLabelNames, gitVibeLabels } from "../shared/labels.js";
-import { discussionReplyToId } from "./discussion-replies.js";
+import { createImplementationIssues } from "./materialize-issues.js";
 import {
   ensureGitIdentity,
   summarizeGitStatus,
@@ -28,7 +27,7 @@ import {
 import { branchForWriteStage, runnerBaseBranch, type BaseBranchState } from "./stage-branches.js";
 import { runValidationCommand, validationRepairAttemptsFor } from "./validation.js";
 import type { ValidationCommandFailure } from "./validation.js";
-import { implementationIssueBody, reviewFixTraceFromBody } from "../shared/traceability.js";
+import { reviewFixTraceFromBody } from "../shared/traceability.js";
 import { maybeHandlePullRequestReviewFixRequired } from "./pr-feedback-review-fix.js";
 import type {
   ContextPacket,
@@ -156,7 +155,7 @@ async function applyWriteStage(options: DeterministicWriteOptions): Promise<Stag
   if (options.options.stage === "implement")
     return applyBranchUpdate(options, "issue-implementation");
   if (options.options.stage === "materialize")
-    await createImplementationIssue({ ...options, parsedOutput: options.result.parsedOutput });
+    await createImplementationIssues({ ...options, parsedOutput: options.result.parsedOutput });
   if (options.options.stage === "create-pr") return publishPullRequestUpdate(options);
   if (options.options.stage === "address-pr-feedback")
     return applyBranchUpdate(options, "pr-feedback-remediation");
@@ -413,81 +412,6 @@ function runValidationCommands(config: GitVibeConfig, logger: StageLogger, cwd: 
   for (const command of testCommandsFor(config)) {
     logger.event("tests.run", { command });
     runValidationCommand(cwd, command);
-  }
-}
-
-async function createImplementationIssue({
-  client,
-  context,
-  logger,
-  options,
-  parsedOutput,
-}: {
-  client: GitHubClient;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-  parsedOutput: JsonObject;
-}): Promise<void> {
-  logger.event("token.use");
-  const { owner, repo } = splitRepository(options.repository);
-  logger.event("github.issue.create.start");
-  const issueBody = implementationIssueBody({
-    discussionNumber: context.artifact.number,
-    discussionUrl: context.artifact.url,
-    issueBody: String(parsedOutput.issue_body || ""),
-  });
-  const issue = await client.request<{ html_url?: string; number?: number }>({
-    body: {
-      body: issueBody,
-      labels: [gitVibeLabels.story.name],
-      title: String(parsedOutput.issue_title || `Implement: ${context.artifact.title}`),
-    },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/issues`,
-    token: options.token,
-  });
-  logger.event("github.issue.create.done", { number: issue.number, url: issue.html_url });
-  if (context.artifact.id && issue.html_url) {
-    logger.event("github.discussion.comment.start", { discussion: context.artifact.number });
-    await addDiscussionComment({
-      body: `GitVibe created implementation issue #${issue.number}: ${issue.html_url}`,
-      client,
-      discussionId: context.artifact.id,
-      replyToId: discussionReplyToId(options, context),
-      token: options.token,
-    });
-    logger.event("github.discussion.comment.done", { discussion: context.artifact.number });
-    await closeSourceDiscussion({
-      client,
-      discussionId: context.artifact.id,
-      logger,
-      number: context.artifact.number,
-      runner: options,
-    });
-  }
-}
-
-async function closeSourceDiscussion(options: {
-  client: GitHubClient;
-  discussionId: string;
-  logger: StageLogger;
-  number: string;
-  runner: RunnerOptions;
-}): Promise<void> {
-  options.logger.event("github.discussion.close.start", { discussion: options.number });
-  try {
-    await closeDiscussion({
-      client: options.client,
-      discussionId: options.discussionId,
-      token: options.runner.token,
-    });
-    options.logger.event("github.discussion.close.done", { discussion: options.number });
-  } catch (error) {
-    options.logger.event("github.discussion.close.failed", {
-      discussion: options.number,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 }
 

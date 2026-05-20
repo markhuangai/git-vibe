@@ -26,18 +26,6 @@ export async function applyDiscussionStageLabelTransition(
     });
     return;
   }
-
-  if (options.runner.stage === "decompose") {
-    const completed = String(options.parsedOutput.status || "completed") === "completed";
-    await applyDiscussionLabels(options, {
-      add: completed ? [gitVibeLabels.decomposed.name] : [gitVibeLabels.blocked.name],
-      remove: [
-        gitVibeLabels.decomposing.name,
-        gitVibeLabels.decompose.name,
-        completed ? gitVibeLabels.blocked.name : gitVibeLabels.decomposed.name,
-      ],
-    });
-  }
 }
 
 export async function applyDiscussionStageStartLabelTransition(
@@ -49,17 +37,6 @@ export async function applyDiscussionStageStartLabelTransition(
       remove: [gitVibeLabels.validated.name, gitVibeLabels.blocked.name],
     });
     return;
-  }
-
-  if (options.runner.stage === "decompose") {
-    await applyDiscussionLabels(options, {
-      add: [gitVibeLabels.decomposing.name],
-      remove: [
-        gitVibeLabels.decomposed.name,
-        gitVibeLabels.blocked.name,
-        gitVibeLabels.decompose.name,
-      ],
-    });
   }
 }
 

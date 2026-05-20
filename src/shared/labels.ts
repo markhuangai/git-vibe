@@ -15,21 +15,6 @@ export const gitVibeLabels = {
     description: "GitVibe is blocked by missing or contradictory information.",
     name: "gvi:blocked",
   },
-  decompose: {
-    color: "C5DEF5",
-    description: "Trusted actor requested GitVibe discussion decomposition automation.",
-    name: "git-vibe:decompose",
-  },
-  decomposed: {
-    color: "0E8A16",
-    description: "GitVibe posted a validated decomposition plan for this discussion.",
-    name: "gvi:decomposed",
-  },
-  decomposing: {
-    color: "1D76DB",
-    description: "GitVibe is decomposing a validated discussion.",
-    name: "gvi:decomposing",
-  },
   inProgress: {
     color: "FBCA04",
     description: "GitVibe implementation is in progress.",
@@ -109,8 +94,6 @@ export const gitVibeLabels = {
 
 export const gitVibeLegacyLabelAliases = {
   blocked: "git-vibe:blocked",
-  decomposed: "git-vibe:decomposed",
-  decomposing: "git-vibe:decomposing",
   inProgress: "git-vibe:in-progress",
   investigated: "git-vibe:investigated",
   investigating: "git-vibe:investigating",

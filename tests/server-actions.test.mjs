@@ -166,7 +166,7 @@ describe("server action queued discussion comments", () => {
     const context = actionContext({ payload: { discussion: { node_id: "discussion-node" } } });
     discussionComments.mockResolvedValueOnce([
       {
-        body: "<!-- git-vibe:workflow-queued workflow=decompose.yml artifact=discussion number=3 -->",
+        body: "<!-- git-vibe:workflow-queued workflow=materialize.yml artifact=discussion number=3 -->",
         id: "comment-node",
       },
       {
@@ -178,9 +178,9 @@ describe("server action queued discussion comments", () => {
     await actions.postQueuedWorkflowComment(context, {
       artifact: "discussion",
       number: "3",
-      reason: actions.labelReason("git-vibe:decompose"),
+      reason: actions.labelReason("git-vibe:approved"),
       ref: "main",
-      workflow: "decompose.yml",
+      workflow: "materialize.yml",
     });
 
     expect(deleteDiscussionComment).toHaveBeenCalledWith(
@@ -188,7 +188,7 @@ describe("server action queued discussion comments", () => {
     );
     expect(addDiscussionComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining("GitVibe queued `decompose.yml`"),
+        body: expect.stringContaining("GitVibe queued `materialize.yml`"),
         discussionId: "discussion-node",
       }),
     );
@@ -215,9 +215,9 @@ describe("server action queued discussion comments", () => {
     await actions.postQueuedWorkflowComment(context, {
       artifact: "discussion",
       number: "3",
-      reason: actions.labelReason("git-vibe:decompose"),
+      reason: actions.labelReason("git-vibe:approved"),
       ref: "main",
-      workflow: "decompose.yml",
+      workflow: "materialize.yml",
     });
 
     expect(discussionComments).not.toHaveBeenCalled();
