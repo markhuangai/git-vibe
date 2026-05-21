@@ -332,6 +332,11 @@ github_auth:
   token_secret: GITVIBE_GITHUB_TOKEN
 
 ai:
+  security:
+    web:
+      allowed_domains: []
+      # - github.com
+      # - "*.github.com"
   profiles:
     local_proxy:
       enabled: true

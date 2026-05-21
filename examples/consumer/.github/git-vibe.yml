@@ -14,6 +14,13 @@ github_auth:
   token_secret: GITVIBE_GITHUB_TOKEN
 
 ai:
+  security:
+    web:
+      # Default for public repositories: let AI search current GitHub project material only.
+      # Add domains only for websites the repository owner trusts AI to search and fetch.
+      allowed_domains: []
+      # - github.com
+      # - "*.github.com"
   default_profile: local_proxy
   profiles:
     local_proxy:

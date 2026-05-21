@@ -10,6 +10,7 @@ import {
   strictOutputSchema,
   stringValue,
 } from "./cli-adapter-utils.js";
+import { logCliWebPolicyNotice } from "./ai-web-policy.js";
 
 export async function runCodexCliStage({
   options,
@@ -45,6 +46,11 @@ export async function runCodexCliStage({
     model,
     profile: profileName,
     provider: "cli-codex",
+  });
+  logCliWebPolicyNotice({
+    adapter: "cli-codex",
+    config: options.config,
+    logger: options.logger,
   });
 
   const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });

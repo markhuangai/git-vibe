@@ -6,14 +6,14 @@ export const stageDefinitions: Record<Stage, StageDefinition> = {
     schemaFile: "investigate.v1.schema.json",
     schemaId: "investigate.v1",
     target: "issue",
-    tools: ["read", "grep", "glob", "diff", "web-fetch", "web-search"],
+    tools: ["read", "grep", "glob", "diff", "github-search", "web-fetch", "web-search"],
   },
   validate: {
     promptDir: "validate",
     schemaFile: "validate.v1.schema.json",
     schemaId: "validate.v1",
     target: "issue",
-    tools: ["read", "grep", "glob", "web-fetch", "web-search"],
+    tools: ["read", "grep", "glob", "github-search", "web-fetch", "web-search"],
   },
   materialize: {
     promptDir: "materialize",

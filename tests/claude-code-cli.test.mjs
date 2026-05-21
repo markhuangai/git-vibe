@@ -85,6 +85,7 @@ describe("Claude Code CLI adapter", () => {
     );
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--tools");
+    expect(args).toEqual(expect.arrayContaining(["--disallowedTools", "WebFetch,WebSearch"]));
     expect(JSON.parse(jsonSchemaFrom(args))).toEqual(
       expect.objectContaining({ required: ["stage", "status", "questions"] }),
     );
@@ -155,6 +156,7 @@ describe("Claude Code CLI adapter defaults", () => {
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
     expect(args).not.toContain("--tools");
+    expect(args).toEqual(expect.arrayContaining(["--disallowedTools", "WebFetch,WebSearch"]));
     expect(spawn.mock.calls[0][2].env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 

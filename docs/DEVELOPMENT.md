@@ -72,8 +72,9 @@ secret after successful CLI execution; the token in `GITVIBE_GITHUB_TOKEN` must
 include repository Actions secrets read/write permission for that path.
 In GitVibe stages, `cli-codex` runs `codex exec` with
 `--dangerously-bypass-approvals-and-sandbox`, `--output-schema`, and
-`--output-last-message`; stdout and stderr stream to the action log while the
-final message file supplies the structured result for validation.
+`--output-last-message`, and without `--search`; stdout and stderr stream to the
+action log while the final message file supplies the structured result for
+validation.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, prompts
@@ -81,10 +82,11 @@ Anthropic's native installer when the `claude` command is missing, prompts
 installation as a passed smoke test. It loads the first enabled
 `cli-claude-code` profile from `.github/git-vibe.yml` unless
 `GITVIBE_AI_SMOKE_CLAUDE_PROFILE` names a specific profile. `cli-claude-code`
-stages run `claude -p` with `--dangerously-skip-permissions`, `--output-format
-stream-json`, `--verbose`, and `--json-schema`. GitVibe does not pass stage
-`tools` as Claude Code allowed-tool settings; Claude Code owns its native
-agent/tool loop while running with skipped permissions. GitVibe also does not
+stages run `claude -p` with `--dangerously-skip-permissions`,
+`--disallowedTools WebFetch,WebSearch`, `--output-format stream-json`,
+`--verbose`, and `--json-schema`. GitVibe does not pass stage `tools` as Claude
+Code allowed-tool settings; Claude Code owns its native agent/tool loop while
+running with skipped permissions. GitVibe also does not
 set `--bare` unless a profile explicitly opts in with `bare: true`. Configure
 Claude OAuth and provider env through profile `env.<NAME>` mappings using either
 `{ from_bundle: KEY }` or literal strings. CLI adapter progress is rendered to

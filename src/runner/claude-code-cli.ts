@@ -10,6 +10,7 @@ import {
   strictOutputSchema,
   stringValue,
 } from "./cli-adapter-utils.js";
+import { logCliWebPolicyNotice } from "./ai-web-policy.js";
 import type { StageLogger } from "./logging.js";
 import { redactLogText } from "./logging.js";
 
@@ -41,6 +42,8 @@ export async function runClaudeCodeCliStage({
     "--system-prompt",
     options.system,
     "--no-session-persistence",
+    "--disallowedTools",
+    "WebFetch,WebSearch",
     ...claudeReasoningArgs(profile),
   ];
 
@@ -52,6 +55,11 @@ export async function runClaudeCodeCliStage({
   });
   logClaudePromptPreview(options.logger, options.stage, "system", options.system);
   logClaudePromptPreview(options.logger, options.stage, "user", options.prompt);
+  logCliWebPolicyNotice({
+    adapter: "cli-claude-code",
+    config: options.config,
+    logger: options.logger,
+  });
 
   const streamLogger = createClaudeStreamLogger(options.logger);
   const output = await runStreamingCommand({

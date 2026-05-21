@@ -51,6 +51,11 @@ tests:
     - pnpm check
 
 ai:
+  security:
+    web:
+      allowed_domains: []
+      # - github.com
+      # - "*.github.com"
   profiles:
     local_proxy:
       enabled: true

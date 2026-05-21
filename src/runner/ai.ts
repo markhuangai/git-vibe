@@ -9,8 +9,6 @@ import { createGrep } from "agentool/grep";
 import { createMultiEdit } from "agentool/multi-edit";
 import { createOutputValidator } from "agentool/output-validator";
 import { createRead } from "agentool/read";
-import { createWebFetch } from "agentool/web-fetch";
-import { createWebSearch } from "agentool/web-search";
 import { createWrite } from "agentool/write";
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import {
@@ -28,6 +26,9 @@ import { bundleValueFromSource } from "./cli-adapter-utils.js";
 import { runClaudeCodeCliStage } from "./claude-code-cli.js";
 import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexCliStage } from "./codex-cli.js";
+import { createGitHubSearch } from "./github-search.js";
+import { filterToolsForWebPolicy, webPolicyFor } from "./ai-web-policy.js";
+import { createAllowlistedWebFetch, createAllowlistedWebSearch } from "./ai-web-tools.js";
 import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
 import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
 import {
@@ -502,6 +503,7 @@ function createModel(
 
 function createTools(options: RunAiStageOptions): ToolSet {
   const cwd = options.cwd;
+  const webPolicy = webPolicyFor(options.config);
   const tools: ToolSet = {
     output_validator: createOutputValidator({
       schema: options.schema as never,
@@ -520,8 +522,9 @@ function createTools(options: RunAiStageOptions): ToolSet {
     if (toolName === "edit") tools.edit = createEdit({ cwd });
     if (toolName === "write") tools.write = createWrite({ cwd });
     if (toolName === "multi-edit") tools.multi_edit = createMultiEdit({ cwd });
-    if (toolName === "web-fetch") tools.web_fetch = createWebFetch();
-    if (toolName === "web-search") tools.web_search = createWebSearch();
+    if (toolName === "github-search") tools.github_search = createGitHubSearch(options);
+    if (toolName === "web-fetch") tools.web_fetch = createAllowlistedWebFetch(webPolicy);
+    if (toolName === "web-search") tools.web_search = createAllowlistedWebSearch(webPolicy);
   }
 
   return tools;
@@ -622,11 +625,25 @@ function toolsForStage(options: RunAiStageOptions): string[] {
         `AI tool override for ${options.stage} includes disallowed tools: ${disallowed.join(", ")}.`,
       );
     }
-    return options.toolOverride;
+    return filterToolsForWebPolicy({
+      config: options.config,
+      explicit: true,
+      logger: options.logger,
+      stage: options.stage,
+      tools: options.toolOverride,
+    });
   }
 
   const configuredTools = stageConfigFor(options.config, options.stage).tools;
-  if (configuredTools === undefined) return options.stageDefinition.tools;
+  if (configuredTools === undefined) {
+    return filterToolsForWebPolicy({
+      config: options.config,
+      explicit: false,
+      logger: options.logger,
+      stage: options.stage,
+      tools: options.stageDefinition.tools,
+    });
+  }
   if (!Array.isArray(configuredTools) || configuredTools.some((tool) => !stringValue(tool))) {
     throw new Error(`ai.stages.${options.stage}.tools must be a string array.`);
   }
@@ -639,7 +656,13 @@ function toolsForStage(options: RunAiStageOptions): string[] {
     );
   }
 
-  return tools;
+  return filterToolsForWebPolicy({
+    config: options.config,
+    explicit: true,
+    logger: options.logger,
+    stage: options.stage,
+    tools,
+  });
 }
 
 function toolAllowedForStage(tool: string, options: RunAiStageOptions): boolean {

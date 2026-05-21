@@ -59,6 +59,13 @@ tests:
   commands: []
 
 ai:
+  security:
+    web:
+      # Default for public repositories: let AI search current GitHub project material only.
+      # Add domains only for websites the repository owner trusts AI to search and fetch.
+      allowed_domains: []
+      # - github.com
+      # - "*.github.com"
   profiles:
     local_proxy:
       enabled: true
