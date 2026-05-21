@@ -96,15 +96,5 @@ ai:
     address-pr-feedback:
       profile: local_proxy
 
-bug_investigation:
-  auto_start_on_new_bug: false
-  community_trigger:
-    enabled: false
-    reaction: "+1"
-    threshold: 6
-    eligible_labels:
-      - git-vibe:bug
-    dispatch: investigate
-
 tests:
   commands: []

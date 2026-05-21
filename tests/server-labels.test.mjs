@@ -57,10 +57,7 @@ describe("GitVibe app server issue labels", () => {
       "/repos/example/repo/issues/9/labels/git-vibe%3Ainvestigate",
     );
     expect(requestPaths(client, "DELETE")).toEqual(
-      expect.arrayContaining([
-        "/repos/example/repo/issues/9/labels/gvi%3Ablocked",
-        "/repos/example/repo/issues/9/labels/git-vibe%3Ablocked",
-      ]),
+      expect.arrayContaining(["/repos/example/repo/issues/9/labels/gvi%3Ablocked"]),
     );
     expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
   });
@@ -109,7 +106,7 @@ describe("GitVibe app server issue approval labels", () => {
     expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
   });
 
-  it("accepts legacy investigated labels when approving in-flight issues", async () => {
+  it("rejects legacy investigated labels when approving in-flight issues", async () => {
     const client = createClient({ permission: { role_name: "maintain" } });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
@@ -122,14 +119,13 @@ describe("GitVibe app server issue approval labels", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({
-        inputs: { "issue-number": "9" },
-        ref: "main",
-        return_run_details: true,
-      }),
-    ]);
-    expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aapproved",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "has not completed investigation yet",
+    );
   });
 });
 
@@ -218,11 +214,8 @@ describe("GitVibe app server pull request review labels", () => {
       expect.arrayContaining([
         "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
         "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
         "/repos/example/repo/issues/12/labels/gvi%3Areviewing",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Areviewing",
         "/repos/example/repo/issues/12/labels/gvi%3Areview-fix",
       ]),
     );

@@ -303,9 +303,7 @@ describe("server action pull request labels", () => {
     expect(removeIssueLabel.mock.calls.map(([request]) => request)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ issueNumber: "5", label: "gvi:ready-for-approval" }),
-        expect.objectContaining({ issueNumber: "5", label: "git-vibe:ready-for-approval" }),
         expect.objectContaining({ issueNumber: "12", label: "gvi:pr-opened" }),
-        expect.objectContaining({ issueNumber: "12", label: "git-vibe:pr-opened" }),
       ]),
     );
   });
@@ -339,7 +337,7 @@ describe("server action formatting helpers", () => {
     ).toBe(true);
     expect(
       actions.issueHasLabel({ labels: [{ name: "git-vibe:investigated" }] }, "gvi:investigated"),
-    ).toBe(true);
+    ).toBe(false);
     expect(actions.issueHasLabel(undefined, "gvi:investigated")).toBe(false);
     expect(actions.labelReason("git-vibe:validate")).toContain("git-vibe:validate");
     expect(actions.protectedLabelRejectionBody(actionContext(), "git-vibe:approved")).toContain(

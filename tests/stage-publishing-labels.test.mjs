@@ -29,9 +29,7 @@ describe("stage label PR feedback transitions", () => {
     expect(requestCalls(client).map((request) => request.path)).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
       ]),
     );
   });
@@ -73,10 +71,6 @@ describe("stage label PR feedback transitions", () => {
         "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating",
         "/repos/example/repo/issues/12/labels/gvi%3Ain-progress",
         "/repos/example/repo/issues/12/labels/gvi%3Ainvestigated",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",
       ]),
     );
   });
@@ -96,7 +90,6 @@ describe("stage label investigation blocking", () => {
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress"],
       ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
       ["POST", "/repos/example/repo/issues/12/labels"],
     ]);
@@ -117,9 +110,7 @@ describe("stage label investigation blocking", () => {
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["POST", "/repos/example/repo/issues/12/labels"],
       ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
       ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress"],
     ]);
     expect(requestCalls(client)[0].body.labels).toEqual(["gvi:blocked"]);
   });
@@ -147,7 +138,7 @@ describe("stage label investigation blocking", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(client.request).toHaveBeenCalledTimes(5);
+    expect(client.request).toHaveBeenCalledTimes(3);
   });
 
   it("logs and rethrows unexpected investigating label removal failures", async () => {
@@ -194,8 +185,6 @@ describe("discussion stage label transitions", () => {
     expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
     ]);
     expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
@@ -216,8 +205,6 @@ describe("discussion stage label transitions", () => {
     expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
     ]);
     expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
@@ -236,8 +223,6 @@ describe("discussion stage label transitions", () => {
     });
 
     expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
       { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
     ]);

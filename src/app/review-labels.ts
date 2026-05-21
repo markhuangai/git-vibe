@@ -5,7 +5,7 @@ import {
   dispatchWorkflow,
   labelReason,
   postQueuedWorkflowComment,
-  removeEquivalentIssueLabelIfPresent,
+  removeIssueLabelIfPresent,
   type WebhookActionContext,
 } from "./server-actions.js";
 import { removeIssueLabel } from "./labels.js";
@@ -39,18 +39,10 @@ export async function handleReviewPullRequestLabel(
     repo: options.repo,
     token: options.token,
   });
-  await removeEquivalentIssueLabelIfPresent(
-    options,
-    issueNumber,
-    gitVibeLabels.readyForApproval.name,
-  );
-  await removeEquivalentIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
-  await removeEquivalentIssueLabelIfPresent(options, issueNumber, gitVibeLabels.reviewing.name);
-  await removeEquivalentIssueLabelIfPresent(
-    options,
-    issueNumber,
-    gitVibeInternalLabels.reviewFix.name,
-  );
+  await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.readyForApproval.name);
+  await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
+  await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.reviewing.name);
+  await removeIssueLabelIfPresent(options, issueNumber, gitVibeInternalLabels.reviewFix.name);
   await addIssueLabel(options, issueNumber, gitVibeLabels.reviewing.name);
   await postQueuedWorkflowComment(options, {
     artifact: "pull-request",

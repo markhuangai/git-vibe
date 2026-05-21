@@ -472,7 +472,6 @@ describe("stage start label publishing helpers", () => {
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
-      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating"],
       ["POST", "/repos/example/repo/issues/12/labels"],
     ]);
     expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:in-progress"]);
@@ -548,25 +547,13 @@ describe("stage label publishing helpers", () => {
       "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
-      "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigating",
-    );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
-    );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
-      "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/gvi%3Ain-progress",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
-      "/repos/example/repo/issues/12/labels/git-vibe%3Ain-progress",
-    );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/gvi%3Ainvestigated",
-    );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
-      "/repos/example/repo/issues/12/labels/git-vibe%3Ainvestigated",
     );
   });
 });

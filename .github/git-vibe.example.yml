@@ -165,35 +165,3 @@ ai:
     address-pr-feedback:
       enabled: true
       profile: local_proxy
-
-bug_investigation:
-  auto_start_on_new_bug: false
-  community_trigger:
-    enabled: false
-    reaction: "+1"
-    threshold: 6
-    dispatch: investigate
-
-analysis:
-  author_weight_order:
-    - admin
-    - maintain
-    - write
-    - collaborator
-    - member
-    - contributor
-    - first_time_contributor
-    - guest
-  include_reactions: true
-  chronological: true
-  preserve_thread_parents: true
-
-external_agents:
-  codex:
-    enabled: false
-    review_command: "@codex review"
-  claude:
-    enabled: false
-    review_command: "@claude review this plan or PR"
-  copilot:
-    enabled: false

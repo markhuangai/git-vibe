@@ -17,11 +17,7 @@ import {
   repositoryActionsVariable,
   repositoryDefaultBranch,
 } from "../shared/github.js";
-import {
-  equivalentGitVibeLabelNames,
-  gitVibeInternalLabels,
-  gitVibeLabels,
-} from "../shared/labels.js";
+import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
 import {
   matchesTransientStatusScope,
@@ -100,9 +96,7 @@ async function markPullRequestApprovalState(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<void> {
-  for (const label of equivalentGitVibeLabelNames(gitVibeLabels.readyForApproval.name)) {
-    await removeIssueLabelIfPresent(options, prNumber, label);
-  }
+  await removeIssueLabelIfPresent(options, prNumber, gitVibeLabels.readyForApproval.name);
   await addIssueLabel(options, prNumber, gitVibeLabels.prApproved.name);
 }
 
@@ -277,16 +271,14 @@ export function labelReason(label: string): string {
 }
 
 export function issueHasLabel(issue: WebhookPayload["issue"], label: string): boolean {
-  const labelNames = new Set(equivalentGitVibeLabelNames(label));
-  return Boolean(issue?.labels?.some((item) => item.name && labelNames.has(item.name)));
+  return Boolean(issue?.labels?.some((item) => item.name === label));
 }
 
 export async function discussionHasLabel(
   options: WebhookActionContext,
   label: string,
 ): Promise<boolean> {
-  const labelNames = new Set(equivalentGitVibeLabelNames(label));
-  if (discussionPayloadLabels(options.payload.discussion).some((name) => labelNames.has(name))) {
+  if (discussionPayloadLabels(options.payload.discussion).includes(label)) {
     return true;
   }
 
@@ -297,7 +289,7 @@ export async function discussionHasLabel(
     discussionId,
     token: options.token,
   });
-  return labels.some((name) => labelNames.has(name));
+  return labels.includes(label);
 }
 
 export async function acknowledgeCommand(options: WebhookActionContext): Promise<boolean> {
@@ -389,16 +381,6 @@ export async function removeIssueLabelIfPresent(
   }
 }
 
-export async function removeEquivalentIssueLabelIfPresent(
-  options: WebhookActionContext,
-  issueNumber: string,
-  label: string,
-): Promise<void> {
-  for (const equivalentLabel of equivalentGitVibeLabelNames(label)) {
-    await removeIssueLabelIfPresent(options, issueNumber, equivalentLabel);
-  }
-}
-
 export async function handleManagedReviewFixLabel(
   options: WebhookActionContext,
   issueNumber: string,
@@ -462,9 +444,7 @@ async function updateSourceIssueLabels(
       await addIssueLabel(options, issueNumber, label);
     }
     for (const label of change.remove) {
-      for (const equivalentLabel of equivalentGitVibeLabelNames(label)) {
-        await removeIssueLabelIfPresent(options, issueNumber, equivalentLabel);
-      }
+      await removeIssueLabelIfPresent(options, issueNumber, label);
     }
   }
 }

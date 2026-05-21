@@ -92,22 +92,6 @@ export const gitVibeLabels = {
   },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
-export const gitVibeLegacyLabelAliases = {
-  blocked: "git-vibe:blocked",
-  inProgress: "git-vibe:in-progress",
-  investigated: "git-vibe:investigated",
-  investigating: "git-vibe:investigating",
-  needsDiscussion: "git-vibe:needs-discussion",
-  prApproved: "git-vibe:pr-approved",
-  prMerged: "git-vibe:pr-merged",
-  prOpened: "git-vibe:pr-opened",
-  readyForApproval: "git-vibe:ready-for-approval",
-  reviewing: "git-vibe:reviewing",
-  story: "git-vibe:story",
-  validated: "git-vibe:validated",
-  validating: "git-vibe:validating",
-} as const satisfies Partial<Record<keyof typeof gitVibeLabels, string>>;
-
 export const gitVibeInternalLabels = {
   reviewFix: {
     color: "6F42C1",
@@ -126,18 +110,6 @@ const gitVibeRuntimeLabelNames: Set<string> = new Set(
     .filter((label) => label.name.startsWith("gvi:"))
     .map((label) => label.name),
 );
-const legacyByCanonicalLabelName: Map<string, string> = new Map(
-  Object.entries(gitVibeLegacyLabelAliases).map(([key, legacyName]) => [
-    gitVibeLabels[key as keyof typeof gitVibeLabels].name,
-    legacyName,
-  ]),
-);
-const canonicalByLegacyLabelName: Map<string, string> = new Map(
-  [...legacyByCanonicalLabelName.entries()].map(([canonicalName, legacyName]) => [
-    legacyName,
-    canonicalName,
-  ]),
-);
 
 export function isGitVibeLabel(name: string): boolean {
   return gitVibeLabelNames.has(name) || name.startsWith("git-vibe:") || name.startsWith("gvi:");
@@ -148,15 +120,5 @@ export function isInternalGitVibeLabel(name: string): boolean {
 }
 
 export function isGitVibeRuntimeLabel(name: string): boolean {
-  return gitVibeRuntimeLabelNames.has(canonicalGitVibeLabelName(name));
-}
-
-export function canonicalGitVibeLabelName(name: string): string {
-  return canonicalByLegacyLabelName.get(name) || name;
-}
-
-export function equivalentGitVibeLabelNames(name: string): string[] {
-  const canonicalName = canonicalGitVibeLabelName(name);
-  const legacyName = legacyByCanonicalLabelName.get(canonicalName);
-  return legacyName ? [canonicalName, legacyName] : [canonicalName];
+  return gitVibeRuntimeLabelNames.has(name);
 }

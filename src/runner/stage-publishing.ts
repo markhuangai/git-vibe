@@ -1,10 +1,6 @@
 import { addDiscussionComment, deleteDiscussionComment } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
-import {
-  equivalentGitVibeLabelNames,
-  gitVibeInternalLabels,
-  gitVibeLabels,
-} from "../shared/labels.js";
+import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
 import {
   matchesTransientStatusScope,
   parseTransientStatusMarker,
@@ -109,7 +105,7 @@ export async function applyStageStartLabelTransition(
 
 async function applyIssueLabelTransition(options: LabelTransitionOptions): Promise<void> {
   for (const staleLabel of staleLabelsForTransition(options.context, options.label)) {
-    await removeEquivalentIssueLabels({
+    await removeIssueLabel({
       client: options.client,
       issueNumber: options.context.artifact.number,
       label: staleLabel,
@@ -168,7 +164,7 @@ export async function publishFeedbackInvestigationReplies(
 
 async function applyInvestigationLabelTransition(options: StagePublishingOptions): Promise<void> {
   if (isInvestigationReady(options.parsedOutput)) {
-    await removeEquivalentIssueLabels({
+    await removeIssueLabel({
       client: options.client,
       issueNumber: options.context.artifact.number,
       label: gitVibeLabels.investigating.name,
@@ -183,7 +179,7 @@ async function applyInvestigationLabelTransition(options: StagePublishingOptions
       repository: options.runner.repository,
       token: options.runner.token,
     });
-    await removeEquivalentIssueLabels({
+    await removeIssueLabel({
       client: options.client,
       issueNumber: options.context.artifact.number,
       label: gitVibeLabels.blocked.name,
@@ -201,7 +197,7 @@ async function applyInvestigationLabelTransition(options: StagePublishingOptions
     repository: options.runner.repository,
     token: options.runner.token,
   });
-  await removeEquivalentIssueLabels({
+  await removeIssueLabel({
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.investigating.name,
@@ -209,7 +205,7 @@ async function applyInvestigationLabelTransition(options: StagePublishingOptions
     repository: options.runner.repository,
     token: options.runner.token,
   });
-  await removeEquivalentIssueLabels({
+  await removeIssueLabel({
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.inProgress.name,
@@ -514,19 +510,6 @@ async function removeIssueLabel(options: {
       label: options.label,
     });
     throw error;
-  }
-}
-
-async function removeEquivalentIssueLabels(options: {
-  client: GitHubClient;
-  issueNumber: string;
-  label: string;
-  logger: StageLogger;
-  repository: string;
-  token: string;
-}): Promise<void> {
-  for (const label of equivalentGitVibeLabelNames(options.label)) {
-    await removeIssueLabel({ ...options, label });
   }
 }
 

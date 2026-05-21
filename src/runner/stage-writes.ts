@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { testCommandsFor } from "./config.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
-import { equivalentGitVibeLabelNames, gitVibeLabels } from "../shared/labels.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import { createImplementationIssues } from "./materialize-issues.js";
 import {
   ensureGitIdentity,
@@ -213,14 +213,14 @@ export async function markPullRequestFeedbackInvestigationStarted(options: {
   options: RunnerOptions;
 }): Promise<void> {
   if (options.context.artifact.type !== "pull-request") return;
-  await removeEquivalentRunnerIssueLabels({
+  await removeRunnerIssueLabelIfPresent({
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.readyForApproval.name,
     logger: options.logger,
     runner: options.options,
   });
-  await removeEquivalentRunnerIssueLabels({
+  await removeRunnerIssueLabelIfPresent({
     client: options.client,
     issueNumber: options.context.artifact.number,
     label: gitVibeLabels.blocked.name,
@@ -548,18 +548,6 @@ async function removeRunnerIssueLabelIfPresent(options: {
       label: options.label,
     });
     throw error;
-  }
-}
-
-async function removeEquivalentRunnerIssueLabels(options: {
-  client: GitHubClient;
-  issueNumber: string;
-  label: string;
-  logger: StageLogger;
-  runner: RunnerOptions;
-}): Promise<void> {
-  for (const label of equivalentGitVibeLabelNames(options.label)) {
-    await removeRunnerIssueLabelIfPresent({ ...options, label });
   }
 }
 

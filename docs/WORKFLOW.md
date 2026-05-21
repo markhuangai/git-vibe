@@ -70,9 +70,8 @@ flowchart TD
   GitVibe status comments for the same artifact before posting the next running
   or result comment.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
-- Consumer repositories may opt into community-triggered bug investigation using a reaction threshold, such as six `+1` reactions. This can only start investigation; it must never start code changes.
 - GitVibe never auto-merges and never approves its own pull requests.
-- External agents are optional mention partners. GitVibe may post commands like `@codex review` or `@claude ...` only after admin/collaborator opt-in or explicit config.
+- External agents are optional mention partners. GitVibe may post commands like `@codex review` or `@claude ...` only after admin/collaborator opt-in.
 
 ## Public Interfaces
 
@@ -329,20 +328,6 @@ sequenceDiagram
     Maint->>Issue: Answer blocking questions
     Maint->>Issue: Re-apply git-vibe:investigate
   end
-```
-
-Community-triggered investigation is optional and configured per repository. Because GitHub reactions are API-readable but are not a reliable standalone workflow trigger, GitVibe should evaluate reaction thresholds during issue events, comment events, and/or a scheduled scan. The threshold path may only dispatch the investigation-only workflow.
-
-Example config shape:
-
-```yaml
-bug_investigation:
-  auto_start_on_new_bug: false
-  community_trigger:
-    enabled: true
-    reaction: "+1"
-    threshold: 6
-    dispatch: investigate
 ```
 
 ## Feature Refinement Flow

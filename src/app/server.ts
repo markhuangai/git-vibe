@@ -43,9 +43,9 @@ import {
   materializeRequiresValidationBody,
   postQueuedWorkflowComment,
   protectedLabelRejectionBody,
-  removeEquivalentIssueLabelIfPresent,
   removeDiscussionLabelBestEffort,
   removeDiscussionLabelFromPayload,
+  removeIssueLabelIfPresent,
   sourceReviewInput,
 } from "./server-actions.js";
 import { handleApprovedIssueLabel } from "./approval-labels.js";
@@ -491,7 +491,7 @@ async function handleInvestigateIssueLabel(
   await dispatchWorkflow(options, "investigate.yml", {
     "issue-number": issueNumber,
   });
-  await removeEquivalentIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
+  await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
   await addIssueLabel(options, issueNumber, gitVibeLabels.investigating.name);
   await removeIssueLabel({
     client: options.client,
