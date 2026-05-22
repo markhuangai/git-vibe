@@ -4,8 +4,8 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
- * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
+ * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
@@ -57,6 +57,7 @@ const workflowRunNameSpecs = [
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
   { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
   { file: ".github/workflows/review.yml", stage: "review", artifact: "PR" },
+  { file: ".github/workflows/review-dev-pr.yml", stage: "review-dev", artifact: "PR" },
   { file: ".github/workflows/address-feedback.yml", stage: "address-feedback", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/validate.yml",
@@ -89,6 +90,7 @@ const workflowStaticNames = {
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
   ".github/workflows/review.yml": "GitVibe review",
+  ".github/workflows/review-dev-pr.yml": "GitVibe review dev PR",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
@@ -429,6 +431,39 @@ describe("GitVibe workflow write permissions", () => {
         "address-feedback"
       ]?.steps?.find((step) => step.name === "Upload feedback remediation result"),
     ).toBeUndefined();
+  });
+});
+
+describe("GitVibe automatic PR review workflow", () => {
+  it("keeps PR-open automation in a repo-local wrapper around review.yml", () => {
+    const wrapper = readWorkflow(".github/workflows/review-dev-pr.yml");
+    const source = readWorkflow(".github/workflows/review.yml");
+    const consumer = readWorkflow("examples/consumer/.github/workflows/review.yml");
+
+    expect(source.on?.pull_request_target).toBeUndefined();
+    expect(consumer.on?.pull_request_target).toBeUndefined();
+    expect(wrapper.on?.pull_request_target).toMatchObject({
+      branches: ["dev"],
+      types: ["opened", "reopened", "ready_for_review"],
+    });
+    expect(wrapper.jobs?.review).toMatchObject({
+      if: "${{ !github.event.pull_request.draft }}",
+      secrets: {
+        GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
+        GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
+      },
+      uses: "./.github/workflows/review.yml",
+      with: {
+        "action-ref": "${{ github.event.pull_request.base.ref }}",
+        "action-repository": "${{ github.repository }}",
+        "dry-run": false,
+        max_turns: 90,
+        "pr-number": "${{ format('{0}', github.event.pull_request.number) }}",
+        runner: "docker-runner",
+        "source-comment": "",
+        timeout_minutes: 60,
+      },
+    });
   });
 });
 

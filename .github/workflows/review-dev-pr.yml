@@ -1,0 +1,25 @@
+name: GitVibe review dev PR
+run-name: "[git-vibe][review-dev]: PR #${{ github.event.pull_request.number }}"
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+    branches:
+      - dev
+
+jobs:
+  review:
+    if: ${{ !github.event.pull_request.draft }}
+    uses: ./.github/workflows/review.yml
+    with:
+      pr-number: ${{ format('{0}', github.event.pull_request.number) }}
+      runner: docker-runner
+      timeout_minutes: 60
+      max_turns: 90
+      dry-run: false
+      source-comment: ""
+      action-repository: ${{ github.repository }}
+      action-ref: ${{ github.event.pull_request.base.ref }}
+    secrets:
+      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
+      GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
