@@ -1,15 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, stepCountIs } from "ai";
-import { createBash } from "agentool/bash";
-import { createDiff } from "agentool/diff";
-import { createEdit } from "agentool/edit";
-import { createGlob } from "agentool/glob";
-import { createGrep } from "agentool/grep";
-import { createMultiEdit } from "agentool/multi-edit";
-import { createOutputValidator } from "agentool/output-validator";
-import { createRead } from "agentool/read";
-import { createWrite } from "agentool/write";
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import {
   activeProfileByName,
@@ -26,11 +17,9 @@ import { bundleValueFromSource } from "./cli-adapter-utils.js";
 import { runClaudeCodeCliStage } from "./claude-code-cli.js";
 import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexCliStage } from "./codex-cli.js";
-import { createGitHubSearch } from "./github-search.js";
-import { filterToolsForWebPolicy, webPolicyFor } from "./ai-web-policy.js";
-import { createAllowlistedWebFetch, createAllowlistedWebSearch } from "./ai-web-tools.js";
 import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
 import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
+import { createTools, stageToolNames } from "./ai-tools.js";
 import {
   extractValidatedOutput,
   outputValidatorContentFromSteps,
@@ -161,8 +150,9 @@ async function runAiSdkStageWithProfile(
   profileName: string,
   profile: Record<string, unknown>,
 ): Promise<string> {
-  const tools = createTools(options);
+  const toolNames = stageToolNames(options);
   const runtime = aiSdkRuntime({ options, profile, profileName });
+  const tools = createTools(options, runtime.model, toolNames);
   const primaryTurnBudget = primaryTurnBudgetFor(options);
 
   const primaryResult = await runAiSdkRequest(runtime, {
@@ -501,35 +491,6 @@ function createModel(
   }).chat(model);
 }
 
-function createTools(options: RunAiStageOptions): ToolSet {
-  const cwd = options.cwd;
-  const webPolicy = webPolicyFor(options.config);
-  const tools: ToolSet = {
-    output_validator: createOutputValidator({
-      schema: options.schema as never,
-      schemaId: options.schemaId,
-    }),
-  };
-
-  for (const toolName of toolsForStage(options)) {
-    if (toolName === "read") tools.read = createRead({ cwd });
-    if (toolName === "grep") tools.grep = createGrep({ cwd });
-    if (toolName === "glob") tools.glob = createGlob({ cwd });
-    if (toolName === "bash-readonly")
-      tools.bash = createBash({ cwd, description: "Read-only shell commands only." });
-    if (toolName === "bash") tools.bash = createBash({ cwd });
-    if (toolName === "diff") tools.diff = createDiff({ cwd });
-    if (toolName === "edit") tools.edit = createEdit({ cwd });
-    if (toolName === "write") tools.write = createWrite({ cwd });
-    if (toolName === "multi-edit") tools.multi_edit = createMultiEdit({ cwd });
-    if (toolName === "github-search") tools.github_search = createGitHubSearch(options);
-    if (toolName === "web-fetch") tools.web_fetch = createAllowlistedWebFetch(webPolicy);
-    if (toolName === "web-search") tools.web_search = createAllowlistedWebSearch(webPolicy);
-  }
-
-  return tools;
-}
-
 function modelName(profile: Record<string, unknown>): string {
   return aiSdkModelName(profile);
 }
@@ -615,59 +576,6 @@ function generationNumber(profile: Record<string, unknown>, key: string, fallbac
   const generation = profile.generation as Record<string, unknown> | undefined;
   const value = generation?.[key];
   return typeof value === "number" ? value : fallback;
-}
-
-function toolsForStage(options: RunAiStageOptions): string[] {
-  if (options.toolOverride) {
-    const disallowed = options.toolOverride.filter((tool) => !toolAllowedForStage(tool, options));
-    if (disallowed.length > 0) {
-      throw new Error(
-        `AI tool override for ${options.stage} includes disallowed tools: ${disallowed.join(", ")}.`,
-      );
-    }
-    return filterToolsForWebPolicy({
-      config: options.config,
-      explicit: true,
-      logger: options.logger,
-      stage: options.stage,
-      tools: options.toolOverride,
-    });
-  }
-
-  const configuredTools = stageConfigFor(options.config, options.stage).tools;
-  if (configuredTools === undefined) {
-    return filterToolsForWebPolicy({
-      config: options.config,
-      explicit: false,
-      logger: options.logger,
-      stage: options.stage,
-      tools: options.stageDefinition.tools,
-    });
-  }
-  if (!Array.isArray(configuredTools) || configuredTools.some((tool) => !stringValue(tool))) {
-    throw new Error(`ai.stages.${options.stage}.tools must be a string array.`);
-  }
-
-  const tools = configuredTools as string[];
-  const disallowed = tools.filter((tool) => !options.stageDefinition.tools.includes(tool));
-  if (disallowed.length > 0) {
-    throw new Error(
-      `ai.stages.${options.stage}.tools includes disallowed tools: ${disallowed.join(", ")}.`,
-    );
-  }
-
-  return filterToolsForWebPolicy({
-    config: options.config,
-    explicit: true,
-    logger: options.logger,
-    stage: options.stage,
-    tools,
-  });
-}
-
-function toolAllowedForStage(tool: string, options: RunAiStageOptions): boolean {
-  if (options.stageDefinition.tools.includes(tool)) return true;
-  return tool === "bash-readonly" && options.stageDefinition.tools.includes("bash");
 }
 
 function validateStageConfig(options: RunAiStageOptions): void {

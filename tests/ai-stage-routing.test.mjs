@@ -8,6 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
+const createAgent = vi.fn((config) => ({
+  description: config.description,
+  execute: vi.fn(),
+  inputSchema: {},
+}));
 const spawn = vi.fn();
 const spawnedChildren = [];
 
@@ -18,6 +23,7 @@ vi.mock("ai", () => ({
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
+vi.mock("agentool/agent", () => ({ createAgent }));
 vi.mock("node:child_process", () => ({ spawn }));
 
 const { runAiStage } = await import("../src/runner/ai.ts");
@@ -30,6 +36,7 @@ beforeEach(() => {
   generateText.mockReset();
   createOpenAI.mockClear();
   createAnthropic.mockClear();
+  createAgent.mockClear();
   spawn.mockReset();
   spawnedChildren.length = 0;
   vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -97,12 +104,78 @@ describe("AI stage runner stage routing", () => {
       }),
     );
   });
+});
+
+describe("AI stage runner agent tool routing", () => {
+  it("exposes the agent tool with read-only child tools on read-only stages", async () => {
+    generateText.mockResolvedValueOnce(aiResult("validate"));
+
+    await expect(runAiStage(validateStageOptions(readOnlyAgentConfig()))).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
+    );
+
+    const tools = generateText.mock.calls[0][0].tools;
+    expect(Object.keys(tools).sort()).toEqual([
+      "agent",
+      "github_search",
+      "glob",
+      "grep",
+      "output_validator",
+      "read",
+    ]);
+    expect(createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultAgent: "code",
+        maxConcurrent: 3,
+        maxTurns: 12,
+        model: "openai-model",
+      }),
+    );
+    expect(createAgent.mock.calls[0][0].description).toContain(
+      "Subagents do not receive the parent prompt or messages",
+    );
+    expect(Object.keys(createAgent.mock.calls[0][0].tools).sort()).toEqual([
+      "github_search",
+      "glob",
+      "grep",
+      "read",
+    ]);
+  });
 
   it("rejects stage tool overrides that expand canonical stage permissions", async () => {
     await expectValidationConfigError(
       validationConfigWithStage({ tools: ["read", "edit"] }),
       "ai.stages.validate.tools includes disallowed tools: edit.",
     );
+
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("rejects agent tool overrides on write stages", async () => {
+    await expect(
+      runAiStage(
+        implementStageOptions({
+          ai: {
+            profiles: {
+              local_proxy: {
+                provider: {
+                  api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+                  base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
+                  model: "stage-model",
+                  type: "openai-compatible",
+                },
+              },
+            },
+            stages: {
+              implement: {
+                profile: "local_proxy",
+                tools: ["agent"],
+              },
+            },
+          },
+        }),
+      ),
+    ).rejects.toThrow("ai.stages.implement.tools includes disallowed tools: agent.");
 
     expect(generateText).not.toHaveBeenCalled();
   });
@@ -428,6 +501,28 @@ function validationConfigWithStage(stageConfig) {
         validate: {
           profile: "local_proxy",
           ...stageConfig,
+        },
+      },
+    },
+  };
+}
+
+function readOnlyAgentConfig() {
+  return {
+    ai: {
+      profiles: {
+        local_proxy: {
+          provider: {
+            api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+            base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },
+            model: "stage-model",
+            type: "openai-compatible",
+          },
+        },
+      },
+      stages: {
+        validate: {
+          profile: "local_proxy",
         },
       },
     },

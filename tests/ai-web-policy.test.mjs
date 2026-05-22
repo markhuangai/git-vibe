@@ -63,6 +63,7 @@ describe("AI web policy", () => {
     );
 
     expect(Object.keys(generateText.mock.calls[0][0].tools).sort()).toEqual([
+      "agent",
       "github_search",
       "glob",
       "grep",

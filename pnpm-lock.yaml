@@ -18,8 +18,8 @@ importers:
         specifier: ^3.0.60
         version: 3.0.60(zod@4.4.3)
       agentool:
-        specifier: ^1.4.1
-        version: 1.4.1(ai@6.0.175(zod@4.4.3))(zod@4.4.3)
+        specifier: ^1.5.0
+        version: 1.5.0(ai@6.0.175(zod@4.4.3))(zod@4.4.3)
       ai:
         specifier: ^6.0.175
         version: 6.0.175(zod@4.4.3)
@@ -932,10 +932,10 @@ packages:
       }
     engines: { node: ">=12.0" }
 
-  agentool@1.4.1:
+  agentool@1.5.0:
     resolution:
       {
-        integrity: sha512-xv4F+22ZuMxSKOwibMvZ2/XO3Oafkwa/Oe2cNtkc+TUYWEEs3K+Cn34cuzg1xHtUa+7I6Gx/ztrh9YtKdur+gg==,
+        integrity: sha512-sIN5DwWFsAnBRryI6RaRv2fg4KC4MPMwQwj0W/UitBkAX20Lbwkqs4vm8zEa4ImJfbb0PFZqmnnsHx6YkkQ7cw==,
       }
     engines: { node: ">=18.0.0" }
     peerDependencies:
@@ -2586,7 +2586,7 @@ snapshots:
 
   adm-zip@0.5.17: {}
 
-  agentool@1.4.1(ai@6.0.175(zod@4.4.3))(zod@4.4.3):
+  agentool@1.5.0(ai@6.0.175(zod@4.4.3))(zod@4.4.3):
     dependencies:
       ai: 6.0.175(zod@4.4.3)
       ajv: 8.20.0

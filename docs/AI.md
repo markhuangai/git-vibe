@@ -127,7 +127,7 @@ Rules:
 
 ## Provider Strategy
 
-- Provider execution uses `ai-sdk-agentool` with Vercel AI SDK, `agentool` 1.4.x, provider SDKs, and Zod schemas.
+- Provider execution uses `ai-sdk-agentool` with Vercel AI SDK, `agentool` 1.5.x, provider SDKs, and Zod schemas.
 - Provider support should include OpenAI, Anthropic, and OpenAI-compatible custom endpoints through the same config shape.
 - Additional providers should be added behind the same adapter contract, not by changing workflow stages.
 - External apps such as Codex, Claude, and Copilot are mention partners. GitVibe may invoke them with configured comments and ingest their visible replies, but GitVibe should not depend on private third-party state or assume they respond to bot mentions.
@@ -241,10 +241,16 @@ AI SDK tool policy by stage:
 Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters do not receive these tool lists because their native agents own tool selection.
 
 - triage: no tools, GitHub context only.
-- investigation/refinement/validation: read, grep, glob, GitHub-only project search; website fetch/search is disabled by default.
+- investigation/refinement/validation: read, grep, glob, GitHub-only project search, and read-only `agent` subagents; website fetch/search is disabled by default.
 - implementation: read, grep, glob, edit, write, multi-edit, bash, diff.
-- review: read, grep, glob, read-only bash/test commands, diff.
+- review: read, grep, glob, diff, and read-only `agent` subagents.
 - PR feedback remediation: implementation tools scoped to the existing PR branch.
+
+The `agent` tool is available only to read-only stages (`investigate`, `validate`,
+and `review-matrix`). GitVibe configures child agents with read-only tools and
+GitVibe-controlled system prompts. Child agents do not receive the parent prompt
+automatically, so the orchestrating model must include the relevant issue or PR
+context and the exact investigation question in each delegated prompt.
 
 Web access policy:
 
