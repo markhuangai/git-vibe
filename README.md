@@ -350,6 +350,11 @@ ai:
           from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
+      # Optional explicit repo context. GitVibe does not auto-load AGENTS.md,
+      # CLAUDE.md, or other native CLI files.
+      # context:
+      #   files:
+      #     - AGENTS.md
   role_groups:
     review_gate:
       synthesizer: local_proxy
@@ -384,6 +389,10 @@ falling back to a profile name the repository may not have configured.
 Role definitions referenced by `role_group` live in `.git-vibe/role-group/*.md`.
 CLI adapters use fixed commands (`codex exec` and `claude -p`); profiles choose
 adapter, model, auth, env, and reasoning settings, not the executable command.
+Profiles may opt into shared repository guidance with
+`ai.profiles.<name>.context.files`. Listed files are appended to the rendered
+system prompt for that profile across `ai-sdk-agentool`, `cli-codex`, and
+`cli-claude-code`; GitVibe never auto-loads `AGENTS.md` or `CLAUDE.md`.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.

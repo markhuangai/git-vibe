@@ -128,6 +128,39 @@ describe("stage runner matrix member execution", () => {
   });
 });
 
+describe("stage runner matrix member profile context", () => {
+  it("passes member profile context alongside the role definition", async () => {
+    const cwd = await workspace(profileConfigWithContext());
+    writeRole(cwd, "security.md", "Focus on token boundaries.");
+    writeFileSync(join(cwd, "PROFILE.md"), "Member profile guidance.");
+    generateText.mockResolvedValueOnce(aiResult("validate"));
+    globalThis.fetch = fetchMock([issueResponse(), commentsResponse([])]);
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      executionMode: "member",
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      profileName: "test",
+      repository: "example/repo",
+      roleName: "security.md",
+      stage: "validate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(generateText.mock.calls[0][0].system).toContain(
+      '<git_vibe_profile_context profile="test" path="PROFILE.md">',
+    );
+    expect(generateText.mock.calls[0][0].system).toContain("Member profile guidance.");
+    expect(generateText.mock.calls[0][0].system).toContain("<git_vibe_role_definition>");
+    expect(generateText.mock.calls[0][0].system).toContain("Focus on token boundaries.");
+  });
+});
+
 describe("stage runner matrix finalizer execution", () => {
   it("passes through single-profile member output during finalization", async () => {
     const cwd = await workspace(profileConfig());
@@ -193,8 +226,9 @@ describe("stage runner matrix finalizer execution", () => {
 
 describe("stage runner matrix finalizer synthesis", () => {
   it("synthesizes role-group member outputs into one final stage result", async () => {
-    const cwd = await workspace(roleGroupConfig("validate"));
+    const cwd = await workspace(roleGroupConfigWithContext("validate"));
     writeRole(cwd, "security.md", "Focus on token boundaries.");
+    writeFileSync(join(cwd, "PROFILE.md"), "Synthesizer profile guidance.");
     const resultsDir = join(cwd, "member-results");
     mkdirSync(resultsDir);
     writeFileSync(join(resultsDir, "git-vibe-validate-result.json"), memberResult("validate"));
@@ -230,6 +264,10 @@ describe("stage runner matrix finalizer synthesis", () => {
     expect(generateText.mock.calls[0][0].system).toContain(
       "Inspect the repository and GitHub context",
     );
+    expect(generateText.mock.calls[0][0].system).toContain(
+      '<git_vibe_profile_context profile="test" path="PROFILE.md">',
+    );
+    expect(generateText.mock.calls[0][0].system).toContain("Synthesizer profile guidance.");
   });
 });
 
@@ -258,12 +296,42 @@ function profileConfig() {
   ].join("\n");
 }
 
+function profileConfigWithContext() {
+  return [
+    "ai:",
+    "  profiles:",
+    "    test:",
+    profileYamlWithContext(),
+    "  stages:",
+    "    review-matrix:",
+    "      profile: test",
+  ].join("\n");
+}
+
 function roleGroupConfig(stage = "review-matrix") {
   return [
     "ai:",
     "  profiles:",
     "    test:",
     profileYaml(),
+    "  role_groups:",
+    "    review_gate:",
+    "      synthesizer: test",
+    "      roles:",
+    "        - role: security.md",
+    "          profile: test",
+    "  stages:",
+    `    ${stage}:`,
+    "      role_group: review_gate",
+  ].join("\n");
+}
+
+function roleGroupConfigWithContext(stage = "review-matrix") {
+  return [
+    "ai:",
+    "  profiles:",
+    "    test:",
+    profileYamlWithContext(),
     "  role_groups:",
     "    review_gate:",
     "      synthesizer: test",
@@ -286,6 +354,10 @@ function profileYaml() {
     "        api_key:",
     "          from_bundle: GITVIBE_AI_API_KEY",
   ].join("\n");
+}
+
+function profileYamlWithContext() {
+  return [profileYaml(), "      context:", "        files:", "          - PROFILE.md"].join("\n");
 }
 
 function memberResult(stage = "review-matrix") {

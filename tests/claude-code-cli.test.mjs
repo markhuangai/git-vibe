@@ -1,5 +1,8 @@
 // @ts-nocheck
 import { EventEmitter } from "node:events";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setImmediate } from "node:timers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -134,6 +137,38 @@ describe("Claude Code CLI adapter", () => {
     );
 
     expect(spawn).not.toHaveBeenCalled();
+  });
+});
+
+describe("Claude Code CLI profile context", () => {
+  it("adds context files configured on Claude Code profiles to the system prompt", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "git-vibe-claude-context-"));
+    writeFileSync(join(cwd, "CLAUDE-extra.md"), "Claude profile guidance.");
+    const config = claudeCodeConfig();
+    config.ai.profiles.claude_code.context = { files: ["CLAUDE-extra.md"] };
+    mockReadableClaudeStream({
+      is_error: false,
+      structured_output: { stage: "validate", status: "completed" },
+      type: "result",
+    });
+
+    try {
+      await expect(
+        runAiStage({
+          ...validateStageOptions(config),
+          cwd,
+        }),
+      ).resolves.toBe('{"stage":"validate","status":"completed"}');
+
+      const args = spawn.mock.calls[0][1];
+      const systemPrompt = args[args.indexOf("--system-prompt") + 1];
+      expect(systemPrompt).toContain(
+        '<git_vibe_profile_context profile="claude_code" path="CLAUDE-extra.md">',
+      );
+      expect(systemPrompt).toContain("Claude profile guidance.");
+    } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
   });
 });
 
