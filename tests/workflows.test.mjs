@@ -4,7 +4,7 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
+ * @typedef {{ concurrency?: { group?: string, ["cancel-in-progress"]?: boolean }, env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
@@ -463,6 +463,20 @@ describe("GitVibe automatic PR review workflow", () => {
         "source-comment": "",
         timeout_minutes: 60,
       },
+    });
+  });
+
+  it("cancels older in-progress review runs for the same pull request", () => {
+    const source = readWorkflow(".github/workflows/review.yml");
+    const wrapper = readWorkflow(".github/workflows/review-dev-pr.yml");
+
+    expect(source.concurrency).toMatchObject({
+      group: "git-vibe-review-${{ inputs.pr-number }}",
+      "cancel-in-progress": true,
+    });
+    expect(wrapper.concurrency).toMatchObject({
+      group: "git-vibe-review-${{ github.event.pull_request.number }}",
+      "cancel-in-progress": true,
     });
   });
 });

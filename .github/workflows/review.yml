@@ -95,6 +95,10 @@ on:
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
 
+concurrency:
+  group: git-vibe-review-${{ inputs.pr-number }}
+  cancel-in-progress: true
+
 jobs:
   plan-review-matrix:
     runs-on: ${{ inputs.runner }}
