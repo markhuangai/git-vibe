@@ -199,8 +199,11 @@ describe("stage prompt standards guidance", () => {
       stageContract: "Review pull request #123.",
     });
 
+    const properties = /** @type {Record<string, any>} */ (schema.properties);
     expect(prompts.system).toContain("pull request or merge-preparation change");
     expect(prompts.prompt).toContain("PR can proceed to approval");
+    expect(prompts.prompt).toContain("inline_comments");
+    expect(properties.inline_comments).toMatchObject({ type: "array" });
     expect(prompts.prompt).not.toContain("before PR creation");
   });
 });

@@ -13,6 +13,7 @@ import {
 } from "./stage-discussion-labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import type { StageLogger } from "./logging.js";
+import { publishPullRequestReviewResult } from "./pr-review-publishing.js";
 import {
   renderStageResultComment,
   renderStageStartComment,
@@ -50,6 +51,7 @@ export async function publishStageResultComment(options: StagePublishingOptions)
     workflowRunUrl: options.runner.workflowRunUrl,
   });
   await publishArtifactComment({ ...options, body });
+  await publishPullRequestReviewResult(options);
 }
 
 export async function cleanupStageStatusComments(

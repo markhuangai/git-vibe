@@ -66,7 +66,7 @@ Initial stage contracts:
 | Materialization         | Accepted validated discussion        | Implementation issue drafts with dependencies, acceptance criteria, and review guidance | May create labeled implementation issues                          |
 | Validation              | Repo snapshot and accepted context   | Pass/fail, contradictions, implementation brief                                         | May mark ready only if policy allows                              |
 | Implementation          | `git-vibe/{root-issue}` branch       | Commits, test output, implementation summary                                            | Uses branch-update engine; may update issue branch, not merge     |
-| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes                                    | May mark a PR ready or blocked, and may queue PR feedback retries |
+| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes, optional inline PR comments       | May mark a PR ready or blocked, and may queue PR feedback retries |
 | PR feedback remediation | Existing PR branch                   | Fix commits or skipped-comment rationale                                                | Uses branch-update engine; may update PR branch, not create PR    |
 
 AI result envelope:
@@ -78,6 +78,7 @@ AI result envelope:
   "confidence": 0.74,
   "summary": "...",
   "findings": [],
+  "inline_comments": [],
   "blocking_questions": ["What expected behavior should implementation preserve?"],
   "questions": [],
   "assumptions": [],

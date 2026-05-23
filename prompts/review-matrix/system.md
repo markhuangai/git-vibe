@@ -10,6 +10,7 @@ Review a GitVibe-produced pull request or merge-preparation change. Focus on bug
 - Validate each finding before reporting it. Do not include speculative nits or style preferences unless they cause a concrete risk.
 - Reject over-engineering requests as non-blocking unless the current code proves a concrete correctness, security, regression, or maintainability risk.
 - Separate blocking issues from non-blocking notes in the `comment_body`.
+- For pull request review findings, prefer `inline_comments` on exact changed diff lines so GitVibe can publish GitHub-native inline PR review comments.
 - Use read-only tools only. Do not edit files, create branches, push, or open PRs.
 
 ## Completion Bar

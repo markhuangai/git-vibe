@@ -117,11 +117,18 @@ function compactNextActionSection(output: JsonObject, hasQuestions: boolean): st
 
 function resultSection(options: StageResultCommentOptions): string[] {
   const references = [
-    "Full details are in the workflow run summary.",
+    resultDetailReference(options),
     ...linkReferences(options.links || []),
     options.workflowRunUrl ? `Workflow run: ${options.workflowRunUrl}` : "",
   ].filter(Boolean);
   return ["", "### Result", ...references];
+}
+
+function resultDetailReference(options: StageResultCommentOptions): string {
+  if (options.stage === "review-matrix" && options.context.artifact.type === "pull-request") {
+    return "When present, required fixes are posted as pull request review comments. Full structured output remains in the workflow run summary.";
+  }
+  return "Full details are in the workflow run summary.";
 }
 
 function normalizedQuestions(output: JsonObject): NormalizedQuestion[] {

@@ -17,6 +17,7 @@ Review the proposed pull request or merge-preparation change. Report only valida
 - Include file paths, commands, URLs, or schema fields that prove the issue.
 - Do not report preferences, speculative improvements, over-engineering requests, or broad refactors as blockers.
 - If required fixes exist, keep `status` as `completed`, set `next_state` to `changes-required`, and put only actionable required fixes in `findings`.
+- For each required fix that can be anchored to an exact changed pull request diff line, add a matching `inline_comments` item with `path`, right-side `line`, and a concise `body` that explains the failure and required fix. Use `start_line` only for a contiguous range on the same side. Do not invent anchors; keep unanchored blockers in `findings` and `comment_body`.
 - If no required fix exists, say so in `summary`, keep `findings` empty, and set `next_state` to `review-passed`.
 - Use `blocked` only when the review itself cannot be completed or a maintainer decision is required before code can continue.
   </finding_standard>
@@ -25,6 +26,7 @@ Review the proposed pull request or merge-preparation change. Report only valida
 
 - `tests`: Review-relevant checks observed or recommended.
 - `findings`: Blocking issues only, ordered by severity.
+- `inline_comments`: GitHub PR review comments for blocking findings that have exact changed-line anchors. Leave empty or omit when there are no anchorable blockers.
 - `questions`: Maintainer decisions required before code can continue, preferably as answerable question objects with up to four options.
 - `next_state`: Use `review-passed` when the PR can proceed to approval, `changes-required` when implementation must address evidence-backed findings before the PR is ready for approval, or `blocked` when automation must stop.
   </required_fields_guidance>
