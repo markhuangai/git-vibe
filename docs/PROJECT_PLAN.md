@@ -16,7 +16,7 @@ GitVibe is a self-hostable repository webhook server plus reusable GitHub Action
 The public action namespace should be:
 
 ```yaml
-uses: markhuangai/git-vibe/investigate@v2
+uses: markhuangai/git-vibe/investigate@v3
 ```
 
 Reusable full pipelines should be published from the same repository:
@@ -24,7 +24,7 @@ Reusable full pipelines should be published from the same repository:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v2
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
 ```
 
 Core defaults:

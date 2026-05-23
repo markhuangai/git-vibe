@@ -7,7 +7,7 @@ GitVibe is a self-hostable repository webhook server plus reusable GitHub Action
 The public action namespace should be:
 
 ```yaml
-uses: markhuangai/git-vibe/investigate@v2
+uses: markhuangai/git-vibe/investigate@v3
 ```
 
 Reusable full pipelines should be published from the same repository:
@@ -15,7 +15,7 @@ Reusable full pipelines should be published from the same repository:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v2
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
 ```
 
 Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The GitVibe orchestrator is hosted by the repository owner, receives or polls GitHub events, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
@@ -140,7 +140,7 @@ event_delivery:
 
 Consumer repositories do not clone GitVibe's internal action implementation.
 They copy small starter `.github` and `.git-vibe` folders and pin GitVibe's
-public reusable workflows to the `v2` release tag.
+public reusable workflows to the `v3` release tag.
 
 Copy source:
 
@@ -178,7 +178,7 @@ The wrapper workflows call reusable workflows such as:
 ```yaml
 jobs:
   develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v2
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
 ```
 
 Required repository or organization secrets/variables:

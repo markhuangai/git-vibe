@@ -33,7 +33,7 @@ describe("GitVibe app deployment boundary", () => {
     const content = readFileSync(".github/workflows/release.yml", "utf8");
 
     expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
-      default: "v2",
+      default: "v3",
       required: true,
     });
     expect(workflow.permissions).toMatchObject({
