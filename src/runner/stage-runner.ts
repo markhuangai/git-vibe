@@ -383,7 +383,6 @@ function validationRepairRunner({
           maxAttempts,
           runner: options,
         }),
-        reserveFinalizationTurns: false,
       }),
       context,
       definition,
@@ -417,12 +416,7 @@ async function runStageAiResult({
   if (options.dryRun) return buildResult(dryRunContent(options.stage, context, logger));
 
   try {
-    return await buildResult(
-      await runAiStage({
-        ...aiRunOptions,
-        reserveFinalizationTurns: options.stage === "implement",
-      }),
-    );
+    return await buildResult(await runAiStage(aiRunOptions));
   } catch (error) {
     if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
     logger.event("output.finalize.failed", {

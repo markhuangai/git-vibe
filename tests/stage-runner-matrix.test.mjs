@@ -128,6 +128,59 @@ describe("stage runner matrix member execution", () => {
   });
 });
 
+describe("stage runner matrix structured output continuation", () => {
+  it("continues review-matrix member output when the model skips output_validator", async () => {
+    const cwd = await workspace(profileConfig());
+    commitAll(cwd);
+    writeRole(cwd, "security.md", "Focus on token boundaries.");
+    generateText.mockResolvedValueOnce({
+      steps: [],
+      text: JSON.stringify({
+        assumptions: [],
+        comment_body: "Reviewed.",
+        findings: [],
+        next_state: "review-passed",
+        references: [],
+        stage: "review-matrix",
+        status: "completed",
+        summary: "Reviewed.",
+      }),
+    });
+    generateText.mockResolvedValueOnce(aiResult("review-matrix"));
+    globalThis.fetch = fetchMock([issueResponse(), commentsResponse([]), repositoryResponse()]);
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      executionMode: "member",
+      issueNumber: "12",
+      maxTurns: 25,
+      prNumber: "",
+      profileName: "test",
+      repository: "example/repo",
+      roleName: "security.md",
+      stage: "review-matrix",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[0][0]).toMatchObject({
+      stopWhen: [expect.any(Function), { count: 15 }],
+    });
+    expect(generateText.mock.calls[1][0]).toMatchObject({
+      activeTools: ["output_validator"],
+      stopWhen: [expect.any(Function), { count: 10 }],
+      toolChoice: { type: "tool", toolName: "output_validator" },
+    });
+    expect(Object.keys(generateText.mock.calls[1][0].tools)).toEqual(["output_validator"]);
+    expect(generateText.mock.calls[1][0].messages.at(-1).content).toContain(
+      "Call output_validator with the exact final JSON.",
+    );
+  });
+});
+
 describe("stage runner matrix member profile context", () => {
   it("passes member profile context alongside the role definition", async () => {
     const cwd = await workspace(profileConfigWithContext());
@@ -284,6 +337,13 @@ function writeRole(cwd, file, content) {
   writeFileSync(join(cwd, ".git-vibe", "role-group", file), content);
 }
 
+function commitAll(cwd) {
+  execFileSync("git", ["config", "user.name", "tester"], { cwd });
+  execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd });
+  execFileSync("git", ["add", "-A"], { cwd });
+  execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" });
+}
+
 function profileConfig() {
   return [
     "ai:",
@@ -404,6 +464,7 @@ function nextStateForStage(stage) {
 }
 
 const commentsResponse = (comments) => response(200, comments);
+const repositoryResponse = () => response(200, { default_branch: "main" });
 const issueResponse = () =>
   response(200, {
     body: "Issue body",

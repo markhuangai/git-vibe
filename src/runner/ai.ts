@@ -178,7 +178,7 @@ async function runAiSdkStageWithProfile(
   }
 
   const finalizationTurns = options.maxTurns - primaryTurnBudget;
-  if (!options.reserveFinalizationTurns || finalizationTurns <= 0) throw primary.error;
+  if (!structuredOutputFinalizationEnabled(options) || finalizationTurns <= 0) throw primary.error;
 
   options.logger?.event("ai.continuation.start", {
     max_turns: finalizationTurns,
@@ -348,10 +348,17 @@ function toolChoiceInput(request: AiSdkRequest): object {
 }
 
 function primaryTurnBudgetFor(options: RunAiStageOptions): number {
-  if (!options.reserveFinalizationTurns || options.maxTurns <= MIN_TURNS_BEFORE_RESERVE) {
+  if (
+    !structuredOutputFinalizationEnabled(options) ||
+    options.maxTurns <= MIN_TURNS_BEFORE_RESERVE
+  ) {
     return options.maxTurns;
   }
   return options.maxTurns - OUTPUT_FINALIZATION_RESERVED_TURNS;
+}
+
+function structuredOutputFinalizationEnabled(options: RunAiStageOptions): boolean {
+  return options.reserveFinalizationTurns !== false;
 }
 
 async function validatedOutputOrError(

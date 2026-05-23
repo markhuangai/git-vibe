@@ -144,6 +144,28 @@ describe("AI stage finalization continuation", () => {
     );
   });
 
+  it("continues non-implementation stages by default when the model skips output_validator", async () => {
+    generateText.mockResolvedValueOnce({
+      steps: [],
+      text: '{"stage":"validate","status":"completed"}',
+    });
+    mockOutput("validate");
+
+    await expect(runStageWithBudget("validate", 25)).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
+    );
+
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[0][0]).toMatchObject({
+      stopWhen: [expect.any(Function), { count: 15 }],
+    });
+    expect(generateText.mock.calls[1][0]).toMatchObject({
+      activeTools: ["output_validator"],
+      stopWhen: [expect.any(Function), { count: 10 }],
+      toolChoice: { type: "tool", toolName: "output_validator" },
+    });
+  });
+
   it("rejects when reserved finalization also fails to call the validator", async () => {
     generateText.mockResolvedValueOnce({ steps: [], text: "not json" });
     generateText.mockResolvedValueOnce({ steps: [], text: "still not json" });
@@ -158,27 +180,34 @@ describe("AI stage finalization continuation", () => {
  * @param {number} maxTurns
  */
 function runImplementWithBudget(maxTurns, schema = {}) {
+  return runStageWithBudget("implement", maxTurns, schema);
+}
+
+/**
+ * @param {"implement" | "validate"} stage
+ * @param {number} maxTurns
+ */
+function runStageWithBudget(stage, maxTurns, schema = {}) {
   return runAiStage({
-    config: config(),
+    config: config(stage),
     cwd: process.cwd(),
     maxTurns,
     prompt: "Prompt",
-    reserveFinalizationTurns: true,
     schema,
     schemaId: "schema",
-    stage: "implement",
-    stageDefinition: stageDefinitions.implement,
+    stage,
+    stageDefinition: stageDefinitions[stage],
     system: "System",
   });
 }
 
-function mockOutput() {
+function mockOutput(stage = "implement") {
   generateText.mockResolvedValueOnce({
     steps: [
       {
         toolCalls: [
           {
-            input: { content: '{"stage":"implement","status":"completed"}' },
+            input: { content: `{"stage":"${stage}","status":"completed"}` },
             toolName: "output_validator",
           },
         ],
@@ -200,7 +229,7 @@ function stageSchema() {
   };
 }
 
-function config() {
+function config(stage = "implement") {
   return {
     ai: {
       profiles: {
@@ -213,7 +242,7 @@ function config() {
           },
         },
       },
-      stages: { implement: { profile: "test" } },
+      stages: { [stage]: { profile: "test" } },
     },
   };
 }
