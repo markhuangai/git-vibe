@@ -61,6 +61,9 @@ ai:
       enabled: true
       adapter: ai-sdk-agentool
       context_window_tokens: 200000
+      context:
+        files:
+          - AGENTS.md
       provider:
         type: openai-compatible
         model: kimi-k2.5

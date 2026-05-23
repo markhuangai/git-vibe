@@ -174,6 +174,9 @@ ai:
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex
+      context:
+        files:
+          - AGENTS.md
       reasoning:
         effort: high
         summary: concise
@@ -215,11 +218,21 @@ can inspect repository and GitHub context, and returns the same final stage
 schema that single-profile execution returns. `role_group` is allowed only for
 read-only stages: `investigate`, `validate`, and `review-matrix`.
 
+Profile context files are explicit per-profile system prompt additions. GitVibe
+does not auto-load `AGENTS.md`, `CLAUDE.md`, or Codex/Claude native context
+files. When `ai.profiles.<profile>.context.files` is configured, each listed
+workspace-relative file is appended to the system prompt inside a
+`<git_vibe_profile_context>` block for runs using that profile, including
+fallback retries, role-group members, and finalizers. Missing files, empty files,
+absolute paths, `..` traversal, symlinks, directories, and paths resolving
+outside the workspace fail fast.
+
 Normalized reasoning config:
 
 - `reasoning.effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. Adapters should reject unsupported values for the selected provider/model with a clear config error.
 - `reasoning.summary`: `auto`, `concise`, `detailed`, or `none` where the adapter supports summaries.
 - `context_window_tokens`: optional positive integer on an AI profile. When set, `ai-sdk-agentool` logs per-step `context_used_pct` from reported input tokens.
+- `context.files`: optional non-empty list of relative workspace files to append to this profile's system prompt.
 - `provider.api_key.from_bundle`: AI SDK provider API key inside `GITVIBE_AI_ENV_JSON`.
 - `provider.base_url.from_bundle`: AI SDK provider base URL inside `GITVIBE_AI_ENV_JSON`; required for OpenAI-compatible endpoints and optional for native OpenAI.
 - `env.<NAME>`: CLI-only environment mapping for spawned CLI processes. Use `{ from_bundle: KEY }` to read a key inside `GITVIBE_AI_ENV_JSON`, or a literal string for values intentionally committed in config.

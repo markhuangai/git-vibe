@@ -34,6 +34,11 @@ ai:
         temperature: 0.2
         max_output_tokens: 6000
         max_steps: 90
+      # Optional explicit repo context. GitVibe does not auto-load AGENTS.md,
+      # CLAUDE.md, or other native CLI files.
+      # context:
+      #   files:
+      #     - AGENTS.md
     codex_cli:
       enabled: false
       adapter: cli-codex
@@ -41,6 +46,9 @@ ai:
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex
+      # context:
+      #   files:
+      #     - AGENTS.md
       reasoning:
         effort: high
         summary: concise
@@ -52,6 +60,9 @@ ai:
         CLAUDE_CODE_OAUTH_TOKEN:
           from_bundle: CLAUDE_OAUTH_TOKEN
       model: opus
+      # context:
+      #   files:
+      #     - .git-vibe/CLAUDE-extra.md
       reasoning:
         effort: xhigh
   role_groups:

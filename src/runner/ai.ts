@@ -20,6 +20,7 @@ import { runCodexCliStage } from "./codex-cli.js";
 import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
 import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
 import { createTools, stageToolNames } from "./ai-tools.js";
+import { systemWithProfileContext } from "./profile-context.js";
 import {
   extractValidatedOutput,
   outputValidatorContentFromSteps,
@@ -124,16 +125,25 @@ async function runAiStageWithProfile(
 ): Promise<string> {
   const profile = activeProfileByName(options.config, profileName);
   const adapter = adapterName(profile);
+  const profileOptions = {
+    ...options,
+    system: systemWithProfileContext({
+      cwd: options.cwd,
+      profile,
+      profileName,
+      system: options.system,
+    }),
+  };
   if (adapter === "cli-codex") {
     return runCodexCliStage({
-      options,
+      options: profileOptions,
       profile,
       profileName,
     });
   }
   if (adapter === "cli-claude-code") {
     return runClaudeCodeCliStage({
-      options,
+      options: profileOptions,
       profile,
       profileName,
     });
@@ -142,7 +152,7 @@ async function runAiStageWithProfile(
     throw new Error(`AI profile ${profileName} uses unsupported adapter ${adapter}.`);
   }
 
-  return runAiSdkStageWithProfile(options, profileName, profile);
+  return runAiSdkStageWithProfile(profileOptions, profileName, profile);
 }
 
 async function runAiSdkStageWithProfile(
