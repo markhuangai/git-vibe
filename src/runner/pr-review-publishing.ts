@@ -17,8 +17,9 @@ export async function publishPullRequestReviewResult(options: {
   logger: StageLogger;
   parsedOutput: JsonObject;
   runner: RunnerOptions;
-}): Promise<void> {
-  if (!shouldPublishPullRequestReview(options)) return;
+  stageResultBody: string;
+}): Promise<boolean> {
+  if (!shouldPublishPullRequestReview(options)) return false;
 
   const comments = inlineReviewComments(options.parsedOutput.inline_comments);
   options.logger.event("github.pr.review.start", {
@@ -29,6 +30,7 @@ export async function publishPullRequestReviewResult(options: {
     body: pullRequestReviewBody({
       comments,
       output: options.parsedOutput,
+      stageResultBody: options.stageResultBody,
       workflowRunUrl: options.runner.workflowRunUrl,
     }),
     client: options.client,
@@ -41,6 +43,7 @@ export async function publishPullRequestReviewResult(options: {
     comments: comments.length,
     pull_request: options.context.artifact.number,
   });
+  return true;
 }
 
 function shouldPublishPullRequestReview(options: {
@@ -49,9 +52,7 @@ function shouldPublishPullRequestReview(options: {
   runner: RunnerOptions;
 }): boolean {
   return (
-    options.runner.stage === "review-matrix" &&
-    options.context.artifact.type === "pull-request" &&
-    normalizedState(options.parsedOutput.next_state) === "changes-required"
+    options.runner.stage === "review-matrix" && options.context.artifact.type === "pull-request"
   );
 }
 
@@ -113,19 +114,27 @@ function inlineReviewComment(value: unknown, index: number): PullRequestReviewCo
 function pullRequestReviewBody(options: {
   comments: PullRequestReviewComment[];
   output: JsonObject;
+  stageResultBody: string;
   workflowRunUrl?: string;
 }): string {
   const findings = stringItems(options.output.findings);
   return cleanLines([
-    "## GitVibe Review Matrix",
-    "",
-    stringField(options.output.summary) || "Review matrix found required changes.",
-    "",
-    "**Next state:** `changes-required`",
-    `**Inline comments:** ${options.comments.length}`,
-    ...findingsSection(findings),
-    ...workflowRunSection(options.workflowRunUrl),
+    ...options.stageResultBody.split(/\r?\n/),
+    ...reviewDetailsSection({ comments: options.comments, findings }),
+    ...fallbackWorkflowRunSection(options.stageResultBody, options.workflowRunUrl),
   ]).join("\n");
+}
+
+function reviewDetailsSection(options: {
+  comments: PullRequestReviewComment[];
+  findings: string[];
+}): string[] {
+  if (!options.comments.length && !options.findings.length) return [];
+  return [
+    "",
+    `**Inline comments:** ${options.comments.length}`,
+    ...findingsSection(options.findings),
+  ];
 }
 
 function findingsSection(findings: string[]): string[] {
@@ -137,8 +146,9 @@ function findingsSection(findings: string[]): string[] {
   ];
 }
 
-function workflowRunSection(url: string | undefined): string[] {
-  return url ? ["", `Workflow run: ${url}`] : [];
+function fallbackWorkflowRunSection(body: string, url: string | undefined): string[] {
+  if (!url || body.includes(`Workflow run: ${url}`)) return [];
+  return ["", `Workflow run: ${url}`];
 }
 
 function stringItems(value: unknown): string[] {
@@ -156,14 +166,6 @@ function sideField(value: unknown): "LEFT" | "RIGHT" {
 
 function stringField(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizedState(value: unknown): string {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replaceAll("_", "-")
-    .replace(/\s+/g, "-");
 }
 
 function cleanLines(lines: string[]): string[] {

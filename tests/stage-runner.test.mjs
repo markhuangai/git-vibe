@@ -99,6 +99,7 @@ describe("stage runner discussion dry-runs", () => {
       commentsResponse([]),
       pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
+      pullRequestReviewsResponse(),
     ]);
     await expect(
       runStage({
@@ -622,6 +623,7 @@ function issueResponse(body, overrides = {}) {
 const commentsResponse = (comments) => response(200, comments);
 const reviewThreadsResponse = () =>
   graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
+const pullRequestReviewsResponse = () => response(200, []);
 /** @param {string} branch */
 const pullRequestResponse = (branch) =>
   response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });

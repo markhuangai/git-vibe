@@ -39,13 +39,13 @@ describe("pull request review-fix retries", () => {
       ref: "develop",
       return_run_details: true,
     });
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).toContain(
+    expect(requestBodiesFor(client, "POST", "/pulls/22/reviews")[0].body).toContain(
       "## GitVibe Review Matrix",
     );
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[1].body).toContain(
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).toContain(
       "git-vibe:review-fix kind=pull-request pr=22 depth=1",
     );
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[1].body).toContain(
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).toContain(
       "https://github.com/example/repo/actions/runs/44",
     );
   });
@@ -182,7 +182,8 @@ describe("pull request review-fix config gates", () => {
     expect(
       requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches"),
     ).toEqual([]);
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")).toHaveLength(1);
+    expect(requestBodiesFor(client, "POST", "/pulls/22/reviews")).toHaveLength(1);
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")).toHaveLength(0);
     expect(logger.event).toHaveBeenCalledWith(
       "github.workflow.dispatch.skip",
       expect.objectContaining({ reason: "address-pr-feedback-disabled" }),
@@ -260,7 +261,10 @@ describe("pull request review-fix dispatch boundaries", () => {
       { inputs: { "pr-number": "22" }, ref: "main", return_run_details: true },
       { inputs: { "pr-number": "22" }, ref: "main" },
     ]);
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[1].body).not.toContain(
+    expect(requestBodiesFor(client, "POST", "/pulls/22/reviews")[0].body).toContain(
+      "## GitVibe Review Matrix",
+    );
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).not.toContain(
       "Workflow run:",
     );
     expect(logger.event).toHaveBeenCalledWith(

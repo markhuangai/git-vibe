@@ -47,7 +47,9 @@ describe("pull request review publishing", () => {
     );
     expect(review).toMatchObject({
       body: {
-        body: expect.stringContaining("## GitVibe Review Matrix"),
+        body: expect.stringContaining(
+          "<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=12 -->",
+        ),
         comments: [
           {
             body: expect.stringContaining("pull_request.labeled"),
@@ -73,12 +75,14 @@ describe("pull request review publishing", () => {
     expect(review.body.body).toContain(
       "Workflow run: https://github.com/example/repo/actions/runs/99",
     );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
+    expect(requestCalls(client).map((request) => request.path)).not.toContain(
       "/repos/example/repo/issues/12/comments",
     );
   });
+});
 
-  it("does not submit a pull request review when review-matrix passes", async () => {
+describe("pull request review publishing passed reviews", () => {
+  it("submits a top-level pull request review when review-matrix passes", async () => {
     const client = createClient();
 
     await publishStageResultComment({
@@ -93,8 +97,16 @@ describe("pull request review publishing", () => {
       runner: runner({ stage: "review-matrix" }),
     });
 
+    const review = requestCalls(client).find((request) =>
+      request.path.endsWith("/pulls/12/reviews"),
+    );
+    expect(review.body).toMatchObject({
+      body: expect.stringContaining("**Next state:** `review-passed`"),
+      comments: undefined,
+      event: "COMMENT",
+    });
     expect(requestCalls(client).map((request) => request.path)).not.toContain(
-      "/repos/example/repo/pulls/12/reviews",
+      "/repos/example/repo/issues/12/comments",
     );
   });
 });
@@ -156,6 +168,9 @@ describe("pull request review publishing validation", () => {
       ).rejects.toThrow(message);
       expect(requestCalls(client).map((request) => request.path)).not.toContain(
         "/repos/example/repo/pulls/12/reviews",
+      );
+      expect(requestCalls(client).map((request) => request.path)).not.toContain(
+        "/repos/example/repo/issues/12/comments",
       );
     }
   });

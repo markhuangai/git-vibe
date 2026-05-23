@@ -207,7 +207,15 @@ async function loadRunnerContext(options: {
   logger: StageLogger;
   options: RunnerOptions;
 }): Promise<ContextPacket> {
-  options.logger.event("context.load.start", { target: options.definition.target });
+  const prContext =
+    (options.options.stage === "review-matrix" || options.options.stage === "investigate") &&
+    options.options.prNumber;
+  options.logger.event("context.load.start", {
+    issue_number: options.options.issueNumber,
+    pr_number: options.options.prNumber,
+    resolved_target: prContext ? "pull-request" : options.definition.target,
+    target: options.definition.target,
+  });
   const context = withStageHandoffs(
     withSourceComment(
       await contextFor({ client: options.client, options: options.options }),

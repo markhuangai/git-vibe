@@ -50,8 +50,8 @@ export async function publishStageResultComment(options: StagePublishingOptions)
     stage: options.runner.stage,
     workflowRunUrl: options.runner.workflowRunUrl,
   });
+  if (await publishPullRequestReviewResult({ ...options, stageResultBody: body })) return;
   await publishArtifactComment({ ...options, body });
-  await publishPullRequestReviewResult(options);
 }
 
 export async function cleanupStageStatusComments(

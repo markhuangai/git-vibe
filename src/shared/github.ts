@@ -33,16 +33,24 @@ export class GitHubClient {
     let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const response = await fetch(`${this.apiBaseUrl}${path}`, {
-        body: body ? JSON.stringify(body) : undefined,
-        headers: {
-          accept: "application/vnd.github+json",
-          authorization: `Bearer ${token}`,
-          "content-type": "application/json",
-          "x-github-api-version": apiVersion || "2022-11-28",
-        },
-        method,
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}${path}`, {
+          body: body ? JSON.stringify(body) : undefined,
+          headers: {
+            accept: "application/vnd.github+json",
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+            "x-github-api-version": apiVersion || "2022-11-28",
+          },
+          method,
+        });
+      } catch (error) {
+        throw new Error(
+          `GitHub API ${method} ${path} transport failed on attempt ${attempt}: ${transportErrorSummary(error)}`,
+          { cause: error },
+        );
+      }
 
       if (response.status === 204) return {} as T;
 
@@ -93,6 +101,27 @@ function backoffDelay(attempt: number, baseDelayMs: number): number {
 function sleep(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function transportErrorSummary(error: unknown): string {
+  const parts = errorParts(error);
+  const cause = error instanceof Error ? errorParts(error.cause) : [];
+  return [...parts, ...cause.map((part) => `cause_${part}`)].join(" ") || String(error);
+}
+
+function errorParts(error: unknown): string[] {
+  if (!error || typeof error !== "object") return [];
+  const record = error as Record<string, unknown>;
+  return [
+    stringPart("name", record.name),
+    stringPart("message", record.message),
+    stringPart("code", record.code),
+  ].filter((part): part is string => Boolean(part));
+}
+
+function stringPart(name: string, value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return `${name}=${JSON.stringify(value.trim())}`;
 }
 
 function graphqlReadOnly(query: string): boolean {
