@@ -311,6 +311,60 @@ describe("GitVibe app server pull request review label validation", () => {
   });
 });
 
+describe("GitVibe app server pull request review config gates", () => {
+  it("removes review labels without dispatching when review-matrix is disabled", async () => {
+    const client = createClient({
+      configContent: "ai:\n  stages:\n    review-matrix:\n      enabled: false\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [{ name: gitVibeLabels.review.name }],
+        number: 12,
+        pull_request: {},
+      },
+      label: { name: gitVibeLabels.review.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "ai.stages.review-matrix.enabled",
+    );
+  });
+
+  it("removes review labels without dispatching when review-matrix config is invalid", async () => {
+    const client = createClient({
+      configContent: "ai:\n  stages:\n    review-matrix:\n      enabled: nope\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [{ name: gitVibeLabels.review.name }],
+        number: 12,
+        pull_request: {},
+      },
+      label: { name: gitVibeLabels.review.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "could not be read as valid GitVibe config",
+    );
+  });
+});
+
 describe("GitVibe app server managed runtime labels", () => {
   it("accepts trusted managed runtime labels without dispatching workflows", async () => {
     const client = createClient({ permission: { role_name: "maintain" } });
