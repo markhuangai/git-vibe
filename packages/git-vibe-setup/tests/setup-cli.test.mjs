@@ -30,7 +30,7 @@ describe("git-vibe-setup", () => {
     const packageJson = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
 
     expect(packageJson.name).toBe("git-vibe-setup");
-    expect(packageJson.bin["git-vibe-setup"]).toBe("./dist/cli.js");
+    expect(packageJson.bin["git-vibe-setup"]).toBe("dist/cli.js");
     expect(packageJson.files).toEqual(expect.arrayContaining(["templates"]));
   });
 });
