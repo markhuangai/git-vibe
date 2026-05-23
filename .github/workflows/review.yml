@@ -83,7 +83,7 @@ on:
         description: GitVibe action source ref.
         required: false
         type: string
-        default: v2
+        default: v3
     secrets:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.
@@ -94,6 +94,10 @@ on:
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
+
+concurrency:
+  group: git-vibe-review-${{ inputs.pr-number }}
+  cancel-in-progress: true
 
 jobs:
   plan-review-matrix:

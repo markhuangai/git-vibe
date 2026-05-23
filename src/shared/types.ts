@@ -1,7 +1,6 @@
 export type Stage =
   | "investigate"
   | "validate"
-  | "decompose"
   | "materialize"
   | "implement"
   | "review-matrix"

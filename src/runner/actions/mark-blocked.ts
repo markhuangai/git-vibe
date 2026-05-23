@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { GitHubClient, splitRepository, type GitHubRequest } from "../../shared/github.js";
-import { equivalentGitVibeLabelNames, gitVibeLabels } from "../../shared/labels.js";
+import { gitVibeLabels } from "../../shared/labels.js";
 import { redactLogText } from "../logging.js";
 
 interface GitHubRequester {
@@ -59,12 +59,8 @@ export async function markBlocked(runtime: MarkBlockedRuntime = {}): Promise<num
 export async function markIssueBlocked(options: MarkBlockedOptions): Promise<void> {
   if (options.dryRun) return;
 
-  for (const label of equivalentGitVibeLabelNames(gitVibeLabels.inProgress.name)) {
-    await removeIssueLabelIfPresent(options, label);
-  }
-  for (const label of equivalentGitVibeLabelNames(gitVibeLabels.approved.name)) {
-    await removeIssueLabelIfPresent(options, label);
-  }
+  await removeIssueLabelIfPresent(options, gitVibeLabels.inProgress.name);
+  await removeIssueLabelIfPresent(options, gitVibeLabels.approved.name);
   await addIssueLabel(options, gitVibeLabels.blocked.name);
 }
 

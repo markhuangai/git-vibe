@@ -55,15 +55,8 @@ afterEach(() => {
 });
 
 describe("AI context compaction config", () => {
-  it("defaults max context window tokens and validates overrides", () => {
+  it("defaults max context window tokens", () => {
     expect(maxContextWindowTokensFor({})).toBe(200000);
-    expect(
-      maxContextWindowTokensFor({ ai: { budgets: { max_context_window_tokens: 1234 } } }),
-    ).toBe(1234);
-    expect(maxContextWindowTokensFor({ ai: { budgets: null } })).toBe(200000);
-    expect(() =>
-      maxContextWindowTokensFor({ ai: { budgets: { max_context_window_tokens: 0 } } }),
-    ).toThrow("ai.budgets.max_context_window_tokens must be a positive integer.");
   });
 
   it("allows profile context window overrides and rejects malformed profile values", () => {
@@ -73,6 +66,21 @@ describe("AI context compaction config", () => {
     expect(() =>
       contextWindowTokensForProfile("local_proxy", { context_window_tokens: 0 }, {}),
     ).toThrow("AI profile local_proxy context_window_tokens must be a positive integer.");
+  });
+
+  it("estimates non-text message parts without assuming string fields", () => {
+    expect(
+      estimateModelMessagesTokens([
+        {
+          content: [
+            null,
+            { text: 123, type: "text" },
+            { input: { path: "README.md" }, toolName: "read", type: "tool-call" },
+          ],
+          role: "user",
+        },
+      ]),
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -263,11 +271,11 @@ describe("AI context compaction stage wiring", () => {
 
 async function compactAtStep(messages, { logger = { event: vi.fn() }, maxTokens }) {
   return compactStepMessages({
-    config: { ai: { budgets: { max_context_window_tokens: maxTokens } } },
+    config: {},
     logger,
     messages,
     model: "openai-model",
-    profile: {},
+    profile: { context_window_tokens: maxTokens },
     profileName: "local_proxy",
     stepNumber: 0,
   });
@@ -281,9 +289,9 @@ function aiSdkOptions({ logger }) {
   return {
     config: {
       ai: {
-        budgets: { max_context_window_tokens: 10 },
         profiles: {
           local_proxy: {
+            context_window_tokens: 10,
             provider: {
               api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
               base_url: { from_bundle: "GITVIBE_AI_BASE_URL" },

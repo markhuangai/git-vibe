@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { runAiStage, type RunAiStageOptions } from "./ai.js";
 import { loadConfig } from "./config.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
-import { blockUnvalidatedDecompose } from "./decompose-gate.js";
 import { GitHubClient } from "../shared/github.js";
 import { withStageHandoffs, writeStageResultFile, writeStageResultSummary } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
@@ -15,6 +14,7 @@ import {
   loadMatrixStageResults,
   matrixResultMetadata,
   readRoleDefinition,
+  roleGroupSynthesisMembers,
   stageExecutionPlan,
   synthesisPromptAddition,
   synthesizerSystemAddition,
@@ -69,14 +69,6 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
-  const unvalidatedDecomposeResult = await blockUnvalidatedDecompose({
-    buildResult: (content) => stageRunResult({ content, context, definition, logger, options }),
-    client,
-    context,
-    logger,
-    runner: options,
-  });
-  if (unvalidatedDecomposeResult) return unvalidatedDecomposeResult;
   const transientComments = await publishStageStart({ client, context, logger, options });
   const blockedResult = await blockUnsafePullRequestHead({
     client,
@@ -215,7 +207,15 @@ async function loadRunnerContext(options: {
   logger: StageLogger;
   options: RunnerOptions;
 }): Promise<ContextPacket> {
-  options.logger.event("context.load.start", { target: options.definition.target });
+  const prContext =
+    (options.options.stage === "review-matrix" || options.options.stage === "investigate") &&
+    options.options.prNumber;
+  options.logger.event("context.load.start", {
+    issue_number: options.options.issueNumber,
+    pr_number: options.options.prNumber,
+    resolved_target: prContext ? "pull-request" : options.definition.target,
+    target: options.definition.target,
+  });
   const context = withStageHandoffs(
     withSourceComment(
       await contextFor({ client: options.client, options: options.options }),
@@ -383,7 +383,6 @@ function validationRepairRunner({
           maxAttempts,
           runner: options,
         }),
-        reserveFinalizationTurns: false,
       }),
       context,
       definition,
@@ -417,12 +416,7 @@ async function runStageAiResult({
   if (options.dryRun) return buildResult(dryRunContent(options.stage, context, logger));
 
   try {
-    return await buildResult(
-      await runAiStage({
-        ...aiRunOptions,
-        reserveFinalizationTurns: options.stage === "implement",
-      }),
-    );
+    return await buildResult(await runAiStage(aiRunOptions));
   } catch (error) {
     if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
     logger.event("output.finalize.failed", {
@@ -496,6 +490,7 @@ async function runMatrixFinalizerResult({
     synthesisPromptAddition({
       expected,
       failed,
+      members: roleGroupSynthesisMembers(options.cwd, plan),
       results,
       roleGroup: plan.roleGroup,
       stage: options.stage,

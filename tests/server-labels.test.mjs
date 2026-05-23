@@ -7,6 +7,7 @@ import {
   discussionCommentBodies,
   discussionLabelAdds,
   discussionLabelRemovals,
+  reactionVariables,
   repositoryPayload,
   requestBodies,
   requestPaths,
@@ -56,10 +57,7 @@ describe("GitVibe app server issue labels", () => {
       "/repos/example/repo/issues/9/labels/git-vibe%3Ainvestigate",
     );
     expect(requestPaths(client, "DELETE")).toEqual(
-      expect.arrayContaining([
-        "/repos/example/repo/issues/9/labels/gvi%3Ablocked",
-        "/repos/example/repo/issues/9/labels/git-vibe%3Ablocked",
-      ]),
+      expect.arrayContaining(["/repos/example/repo/issues/9/labels/gvi%3Ablocked"]),
     );
     expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
   });
@@ -86,7 +84,11 @@ describe("GitVibe app server issue approval labels", () => {
   });
 
   it("dispatches trusted approved labels after investigation has completed", async () => {
-    const client = createClient({ permission: { role_name: "maintain" } });
+    const client = createClient({
+      configContent:
+        "ai:\n  budgets:\n    implementation_max_turns: 240\n    validation_repair_attempts: 2\n",
+      permission: { role_name: "maintain" },
+    });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
       issue: {
@@ -100,7 +102,11 @@ describe("GitVibe app server issue approval labels", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: { "issue-number": "9" },
+        inputs: {
+          "issue-number": "9",
+          implementation_max_turns: "240",
+          validation_repair_attempts: "2",
+        },
         ref: "main",
         return_run_details: true,
       }),
@@ -108,7 +114,7 @@ describe("GitVibe app server issue approval labels", () => {
     expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
   });
 
-  it("accepts legacy investigated labels when approving in-flight issues", async () => {
+  it("rejects legacy investigated labels when approving in-flight issues", async () => {
     const client = createClient({ permission: { role_name: "maintain" } });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
@@ -121,16 +127,249 @@ describe("GitVibe app server issue approval labels", () => {
       sender: { login: "maintainer" },
     });
 
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aapproved",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "has not completed investigation yet",
+    );
+  });
+});
+
+describe("GitVibe app server issue approval config gates", () => {
+  it("removes approved labels without dispatching when implementation is disabled", async () => {
+    const client = createClient({
+      configContent: "ai:\n  stages:\n    implement:\n      enabled: false\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [{ name: gitVibeLabels.approved.name }, { name: gitVibeLabels.investigated.name }],
+        number: 9,
+      },
+      label: { name: gitVibeLabels.approved.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aapproved",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "ai.stages.implement.enabled",
+    );
+  });
+
+  it("removes approved labels without dispatching when implementation config is invalid", async () => {
+    const client = createClient({
+      configContent: "ai:\n  stages:\n    implement:\n      enabled: nope\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [{ name: gitVibeLabels.approved.name }, { name: gitVibeLabels.investigated.name }],
+        number: 9,
+      },
+      label: { name: gitVibeLabels.approved.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aapproved",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "could not be read as valid GitVibe config",
+    );
+  });
+});
+
+describe("GitVibe app server pull request review labels", () => {
+  it("dispatches trusted PR review labels and marks review running", async () => {
+    const client = createClient({
+      configContent: "ai:\n  budgets:\n    default_max_turns: 91\n    review_timeout_minutes: 62\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: {
+        labels: [
+          { name: gitVibeLabels.review.name },
+          { name: gitVibeLabels.readyForApproval.name },
+          { name: gitVibeLabels.blocked.name },
+        ],
+        number: 12,
+        pull_request: {},
+      },
+      label: { name: gitVibeLabels.review.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestPaths(client, "POST")).toContain(
+      "/repos/example/repo/actions/workflows/review.yml/dispatches",
+    );
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: { "issue-number": "9" },
+        inputs: { "pr-number": "12", max_turns: "91", timeout_minutes: "62" },
         ref: "main",
         return_run_details: true,
       }),
     ]);
-    expect(requestBodies(client, "POST", "/issues/9/comments")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toEqual(
+      expect.arrayContaining([
+        "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+        "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
+        "/repos/example/repo/issues/12/labels/gvi%3Areviewing",
+        "/repos/example/repo/issues/12/labels/gvi%3Areview-fix",
+      ]),
+    );
+    expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
+      labels: ["gvi:reviewing"],
+    });
+  });
+
+  it("dispatches trusted pull_request review label events", async () => {
+    const client = createClient({
+      configContent: "ai:\n  budgets:\n    default_max_turns: 91\n    review_timeout_minutes: 62\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("pull_request", {
+      action: "labeled",
+      label: { name: gitVibeLabels.review.name },
+      pull_request: { number: 12 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: { "pr-number": "12", max_turns: "91", timeout_minutes: "62" },
+        ref: "main",
+        return_run_details: true,
+      }),
+    ]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
+      labels: ["gvi:reviewing"],
+    });
   });
 });
+
+describe("GitVibe app server pull request review label validation", () => {
+  it("rejects review labels on issues", async () => {
+    const client = createClient({ permission: { role_name: "maintain" } });
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { labels: [{ name: gitVibeLabels.review.name }], number: 12 },
+      label: { name: gitVibeLabels.review.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "only runs on pull requests",
+    );
+  });
+
+  it("leaves review labels in place when review dispatch fails", async () => {
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      workflowDispatchError: new Error("dispatch unavailable"),
+      workflowDispatchErrorCount: 1,
+    });
+
+    await expect(
+      createApp({ client }).handleWebhook("issues", {
+        action: "labeled",
+        issue: {
+          labels: [{ name: gitVibeLabels.review.name }],
+          number: 12,
+          pull_request: {},
+        },
+        label: { name: gitVibeLabels.review.name },
+        repository: repositoryPayload(),
+        sender: { login: "maintainer" },
+      }),
+    ).rejects.toThrow("dispatch unavailable");
+
+    expect(requestPaths(client, "DELETE")).toEqual([]);
+    expect(requestBodies(client, "POST", "/issues/12/labels")).toEqual([]);
+    expect(requestBodies(client, "POST", "/issues/12/comments")).toEqual([]);
+  });
+});
+
+describe("GitVibe app server pull request review config gates", () => {
+  it("removes review labels without dispatching when review-matrix is disabled", async () => {
+    const client = createClient({
+      configContent: "ai:\n  stages:\n    review-matrix:\n      enabled: false\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", reviewPullRequestLabelPayload());
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "ai.stages.review-matrix.enabled",
+    );
+  });
+
+  it("removes review labels without dispatching when review-matrix config is invalid", async () => {
+    const client = createClient({
+      configContent: "ai:\n  stages:\n    review-matrix:\n      enabled: nope\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", reviewPullRequestLabelPayload());
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "could not be read as valid GitVibe config",
+    );
+  });
+
+  it("stringifies non-Error review-matrix config failures", async () => {
+    const client = createClient({
+      configError: "raw config failure",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", reviewPullRequestLabelPayload());
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "raw config failure",
+    );
+  });
+});
+
+function reviewPullRequestLabelPayload() {
+  return {
+    action: "labeled",
+    issue: { labels: [{ name: gitVibeLabels.review.name }], number: 12, pull_request: {} },
+    label: { name: gitVibeLabels.review.name },
+    repository: repositoryPayload(),
+    sender: { login: "maintainer" },
+  };
+}
 
 describe("GitVibe app server managed runtime labels", () => {
   it("accepts trusted managed runtime labels without dispatching workflows", async () => {
@@ -277,58 +516,8 @@ describe("GitVibe app server discussion labels", () => {
   });
 });
 
-describe("GitVibe app server discussion decomposition labels", () => {
-  it("blocks discussion decomposition until validation has completed", async () => {
-    const client = createClient({ permission: { permission: "write" } });
-    const app = createApp({ client });
-
-    await app.handleWebhook("discussion", {
-      action: "labeled",
-      discussion: { node_id: "discussion-node", number: 5 },
-      label: { name: gitVibeLabels.decompose.name, node_id: "decompose-label-node" },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
-
-    expect(workflowDispatches(client)).toEqual([]);
-    expect(discussionLabelRemovals(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["decompose-label-node"] },
-    ]);
-    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed validation yet");
-  });
-
-  it("dispatches trusted discussion decomposition after validation", async () => {
-    const client = createClient({
-      discussionLabels: [gitVibeLabels.validated.name],
-      permission: { permission: "write" },
-    });
-    const app = createApp({ client });
-
-    await app.handleWebhook("discussion", {
-      action: "labeled",
-      discussion: { node_id: "discussion-node", number: 5 },
-      label: { name: gitVibeLabels.decompose.name, node_id: "decompose-label-node" },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
-
-    expect(requestPaths(client, "POST")).toContain(
-      "/repos/example/repo/actions/workflows/decompose.yml/dispatches",
-    );
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({ inputs: { "discussion-number": "5" } }),
-    ]);
-    expect(discussionLabelAdds(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-    ]);
-    expect(discussionLabelRemovals(client)).toEqual([
-      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
-      { discussionId: "discussion-node", labelIds: ["decompose-label-node"] },
-    ]);
-    expect(discussionCommentBodies(client).join("\n")).toContain("decompose.yml");
-  });
-
-  it("blocks discussion approval until decomposition has completed", async () => {
+describe("GitVibe app server discussion materialization labels", () => {
+  it("blocks discussion approval until validation has completed", async () => {
     const client = createClient({ permission: { permission: "write" } });
     const app = createApp({ client });
 
@@ -344,12 +533,12 @@ describe("GitVibe app server discussion decomposition labels", () => {
     expect(discussionLabelRemovals(client)).toEqual([
       { discussionId: "discussion-node", labelIds: ["approved-label-node"] },
     ]);
-    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed decomposition yet");
+    expect(discussionCommentBodies(client).at(-1)).toContain("has not completed validation yet");
   });
 
-  it("dispatches trusted discussion materialization after decomposition", async () => {
+  it("dispatches trusted discussion materialization after validation", async () => {
     const client = createClient({
-      discussionLabels: [gitVibeLabels.decomposed.name],
+      discussionLabels: [gitVibeLabels.validated.name],
       permission: { permission: "write" },
     });
     const app = createApp({ client });
@@ -369,6 +558,42 @@ describe("GitVibe app server discussion decomposition labels", () => {
       expect.objectContaining({ inputs: { "discussion-number": "5" } }),
     ]);
     expect(discussionCommentBodies(client).join("\n")).toContain("materialize.yml");
+  });
+
+  it("dispatches trusted discussion materialization commands after validation", async () => {
+    const client = createClient({
+      discussionLabels: [gitVibeLabels.validated.name],
+      permission: { permission: "write" },
+    });
+    const app = createApp({ client });
+
+    await app.handleWebhook("discussion_comment", {
+      action: "created",
+      comment: {
+        body: "/git-vibe materialize split the story into 5 issues since it is too big",
+        node_id: "discussion-command-node",
+      },
+      discussion: { node_id: "discussion-node", number: 5 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestPaths(client, "POST")).toContain(
+      "/repos/example/repo/actions/workflows/materialize.yml/dispatches",
+    );
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: expect.objectContaining({ "discussion-number": "5" }),
+      }),
+    ]);
+    expect(JSON.parse(workflowDispatches(client)[0].inputs["source-comment"])).toMatchObject({
+      body: "/git-vibe materialize split the story into 5 issues since it is too big",
+      kind: "discussion-comment",
+      nodeId: "discussion-command-node",
+    });
+    expect(reactionVariables(client)).toEqual([
+      { content: "ROCKET", subjectId: "discussion-command-node" },
+    ]);
   });
 });
 

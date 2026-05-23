@@ -10,6 +10,9 @@ Remediate actionable pull request review feedback on the current branch and prod
 - Skip feedback only with a concrete reason and evidence.
 - Avoid broad rewrites unless the review explicitly requires them and the current code proves they are needed.
 - Run focused checks for the changed areas and record exact commands.
+- Stay scoped to the existing PR head branch. This stage uses the same
+  deterministic branch-update mechanics as issue implementation, but it must not
+  create a new pull request, switch to an issue branch, approve, or merge.
   </feedback_process>
 
 <required_fields_guidance>

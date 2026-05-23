@@ -27,14 +27,13 @@ describe("stage contracts", () => {
     expect(Object.keys(stageDefinitions).sort()).toEqual([
       "address-pr-feedback",
       "create-pr",
-      "decompose",
       "implement",
       "investigate",
       "materialize",
       "review-matrix",
       "validate",
     ]);
-    expect(parseStage("decompose")).toBe("decompose");
+    expect(() => parseStage("decompose")).toThrow("Unknown GitVibe action stage");
     expect(() => parseStage("unknown")).toThrow("Unknown GitVibe action stage");
   });
 
@@ -186,6 +185,27 @@ describe("stage prompt standards guidance", () => {
       "repository standards or validation requirements discovered before or while coding",
     );
   });
+
+  it("guides review-matrix toward PR approval readiness", () => {
+    const schema = loadStageSchema(stageDefinitions["review-matrix"].schemaFile);
+    const prompts = renderPrompts({
+      context: {
+        ...baseContext,
+        artifact: { ...baseContext.artifact, type: "pull-request" },
+      },
+      outputSchema: schema,
+      promptDir: stageDefinitions["review-matrix"].promptDir,
+      repositoryContext: "## main",
+      stageContract: "Review pull request #123.",
+    });
+
+    const properties = /** @type {Record<string, any>} */ (schema.properties);
+    expect(prompts.system).toContain("pull request or merge-preparation change");
+    expect(prompts.prompt).toContain("PR can proceed to approval");
+    expect(prompts.prompt).toContain("inline_comments");
+    expect(properties.inline_comments).toMatchObject({ type: "array" });
+    expect(prompts.prompt).not.toContain("before PR creation");
+  });
 });
 
 describe("stage prompt assets", () => {
@@ -256,50 +276,50 @@ describe("stage output validation", () => {
   });
 });
 
-describe("decompose output validation", () => {
-  it("validates decompose story unit contracts", async () => {
-    const schema = loadStageSchema(stageDefinitions.decompose.schemaFile);
+describe("materialize output validation", () => {
+  it("validates materialized issue contracts", async () => {
+    const schema = loadStageSchema(stageDefinitions.materialize.schemaFile);
     const output = {
       assumptions: [],
-      comment_body: "Decomposition plan.",
-      findings: ["The discussion is validated."],
-      next_state: "ready-for-materialization",
-      references: ["https://github.com/example/repo/discussions/12"],
-      stage: "decompose",
-      status: "completed",
-      story_units: [
+      comment_body: "Materialization plan.",
+      findings: ["The discussion is validated and accepted."],
+      issues: [
         {
           acceptance_criteria: ["Validated output is posted."],
-          background: "Maintainers need a plan before materialization.",
+          background: "Maintainers need an implementation issue.",
           backpressure_commands: ["/git-vibe validate"],
           blocked_by: [],
           parallel_group: "foundation",
-          requirements: ["Add the decompose stage."],
-          review_guidelines: ["Verify marker parsing."],
-          title: "Add decompose stage",
+          requirements: ["Create the materialized issue."],
+          review_guidelines: ["Verify marker links."],
+          title: "Create materialized issue",
         },
       ],
-      summary: "Decomposition is ready.",
+      next_state: "implementation-issues-ready",
+      references: ["https://github.com/example/repo/discussions/12"],
+      stage: "materialize",
+      status: "completed",
+      summary: "Materialization is ready.",
     };
 
     await expect(
       validateOutput({
         content: JSON.stringify(output),
         schema,
-        schemaId: stageDefinitions.decompose.schemaId,
+        schemaId: stageDefinitions.materialize.schemaId,
       }),
-    ).resolves.toMatchObject({ stage: "decompose" });
+    ).resolves.toMatchObject({ stage: "materialize" });
 
     await expect(
       validateOutput({
         content: JSON.stringify({
           ...output,
-          story_units: [{ ...output.story_units[0], review_guidelines: undefined }],
+          issues: [{ ...output.issues[0], review_guidelines: undefined }],
         }),
         schema,
-        schemaId: stageDefinitions.decompose.schemaId,
+        schemaId: stageDefinitions.materialize.schemaId,
       }),
-    ).rejects.toThrow("AI output failed decompose.v1 validation");
+    ).rejects.toThrow("AI output failed materialize.v2 validation");
   });
 });
 

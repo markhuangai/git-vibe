@@ -1,4 +1,10 @@
-import { gitVibeBaseBranchVariable } from "../shared/config.js";
+import {
+  gitVibeBaseBranchVariable,
+  gitVibeConfigPath,
+  parseGitVibeConfig,
+  stageEnabled,
+} from "../shared/config.js";
+import { workflowBudgetInputsFor } from "../shared/budgets.js";
 import {
   addDiscussionComment,
   addDiscussionLabel,
@@ -12,11 +18,7 @@ import {
   repositoryActionsVariable,
   repositoryDefaultBranch,
 } from "../shared/github.js";
-import {
-  equivalentGitVibeLabelNames,
-  gitVibeInternalLabels,
-  gitVibeLabels,
-} from "../shared/labels.js";
+import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
 import {
   matchesTransientStatusScope,
@@ -30,6 +32,7 @@ import {
   reviewFixTraceFromBody,
 } from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
+import type { GitVibeConfig, Stage } from "../shared/types.js";
 import type { IntakeComment } from "./intake.js";
 import { removeIssueLabel } from "./labels.js";
 import type { WebhookPayload } from "./types.js";
@@ -94,9 +97,7 @@ async function markPullRequestApprovalState(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<void> {
-  for (const label of equivalentGitVibeLabelNames(gitVibeLabels.readyForApproval.name)) {
-    await removeIssueLabelIfPresent(options, prNumber, label);
-  }
+  await removeIssueLabelIfPresent(options, prNumber, gitVibeLabels.readyForApproval.name);
   await addIssueLabel(options, prNumber, gitVibeLabels.prApproved.name);
 }
 
@@ -134,6 +135,46 @@ export async function dispatchWorkflow(
     token: options.token,
   });
   return { ref };
+}
+
+export async function repositoryStageEnabled(
+  options: WebhookActionContext,
+  stage: Stage,
+): Promise<boolean> {
+  return stageEnabled(await repositoryGitVibeConfig(options), stage);
+}
+
+export async function repositoryGitVibeConfig(
+  options: WebhookActionContext,
+): Promise<GitVibeConfig> {
+  try {
+    const file = await options.client.request<{
+      content?: string;
+      encoding?: string;
+      type?: string;
+    }>({
+      method: "GET",
+      path: `/repos/${options.owner}/${options.repo}/contents/${gitVibeConfigPath}`,
+      token: options.token,
+    });
+    if (file.type && file.type !== "file") {
+      throw new Error(`${gitVibeConfigPath} must be a file.`);
+    }
+    if (file.encoding && file.encoding !== "base64") {
+      throw new Error(`${gitVibeConfigPath} must be returned as base64 content.`);
+    }
+    return parseGitVibeConfig(Buffer.from(file.content || "", "base64").toString("utf8"));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return {};
+    throw error;
+  }
+}
+
+export async function repositoryWorkflowBudgetInputs(
+  options: WebhookActionContext,
+  workflow: string,
+): Promise<Record<string, string>> {
+  return workflowBudgetInputsFor(await repositoryGitVibeConfig(options), workflow);
 }
 
 export function commandInputs(
@@ -240,16 +281,14 @@ export function labelReason(label: string): string {
 }
 
 export function issueHasLabel(issue: WebhookPayload["issue"], label: string): boolean {
-  const labelNames = new Set(equivalentGitVibeLabelNames(label));
-  return Boolean(issue?.labels?.some((item) => item.name && labelNames.has(item.name)));
+  return Boolean(issue?.labels?.some((item) => item.name === label));
 }
 
 export async function discussionHasLabel(
   options: WebhookActionContext,
   label: string,
 ): Promise<boolean> {
-  const labelNames = new Set(equivalentGitVibeLabelNames(label));
-  if (discussionPayloadLabels(options.payload.discussion).some((name) => labelNames.has(name))) {
+  if (discussionPayloadLabels(options.payload.discussion).includes(label)) {
     return true;
   }
 
@@ -260,7 +299,7 @@ export async function discussionHasLabel(
     discussionId,
     token: options.token,
   });
-  return labels.some((name) => labelNames.has(name));
+  return labels.includes(label);
 }
 
 export async function acknowledgeCommand(options: WebhookActionContext): Promise<boolean> {
@@ -352,16 +391,6 @@ export async function removeIssueLabelIfPresent(
   }
 }
 
-export async function removeEquivalentIssueLabelIfPresent(
-  options: WebhookActionContext,
-  issueNumber: string,
-  label: string,
-): Promise<void> {
-  for (const equivalentLabel of equivalentGitVibeLabelNames(label)) {
-    await removeIssueLabelIfPresent(options, issueNumber, equivalentLabel);
-  }
-}
-
 export async function handleManagedReviewFixLabel(
   options: WebhookActionContext,
   issueNumber: string,
@@ -411,16 +440,8 @@ export function internalLabelRejectionBody(label: string): string {
   return `GitVibe removed \`${label}\` because \`gvi:\` labels are internal runtime labels and must only be applied by GitVibe with a valid hidden marker.`;
 }
 
-export function approvalRequiresInvestigationBody(label: string): string {
-  return `GitVibe removed \`${label}\` because this issue has not completed investigation yet. Add \`${gitVibeLabels.investigate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.investigating.name}\` and then \`${gitVibeLabels.investigated.name}\` when the investigation is ready for implementation.`;
-}
-
-export function approvalRequiresDecompositionBody(label: string): string {
-  return `GitVibe removed \`${label}\` because this discussion has not completed decomposition yet. Add \`${gitVibeLabels.decompose.name}\` after validation; GitVibe will replace it with \`${gitVibeLabels.decomposing.name}\` and then \`${gitVibeLabels.decomposed.name}\` when the decomposition is ready for materialization.`;
-}
-
-export function decomposeRequiresValidationBody(label: string): string {
-  return `GitVibe removed \`${label}\` because this discussion has not completed validation yet. Add \`${gitVibeLabels.validate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.validating.name}\` and then \`${gitVibeLabels.validated.name}\` when validation is ready for decomposition.`;
+export function materializeRequiresValidationBody(trigger: string): string {
+  return `GitVibe did not start materialization from ${trigger} because this discussion has not completed validation yet. Add \`${gitVibeLabels.validate.name}\` first; GitVibe will replace it with \`${gitVibeLabels.validating.name}\` and then \`${gitVibeLabels.validated.name}\` when validation is ready for materialization.`;
 }
 
 async function updateSourceIssueLabels(
@@ -433,9 +454,7 @@ async function updateSourceIssueLabels(
       await addIssueLabel(options, issueNumber, label);
     }
     for (const label of change.remove) {
-      for (const equivalentLabel of equivalentGitVibeLabelNames(label)) {
-        await removeIssueLabelIfPresent(options, issueNumber, equivalentLabel);
-      }
+      await removeIssueLabelIfPresent(options, issueNumber, label);
     }
   }
 }

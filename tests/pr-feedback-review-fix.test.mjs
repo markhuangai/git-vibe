@@ -28,7 +28,10 @@ describe("pull request review-fix retries", () => {
 
     expect(
       requestBodiesFor(client, "POST", "/issues/22/labels").map((body) => body.labels),
-    ).toEqual(expect.arrayContaining([["gvi:blocked"], ["gvi:review-fix"]]));
+    ).toEqual(expect.arrayContaining([["gvi:blocked"]]));
+    expect(
+      requestBodiesFor(client, "POST", "/issues/22/labels").map((body) => body.labels),
+    ).not.toContainEqual(["gvi:review-fix"]);
     expect(
       requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches")[0],
     ).toEqual({
@@ -36,13 +39,13 @@ describe("pull request review-fix retries", () => {
       ref: "develop",
       return_run_details: true,
     });
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).toContain(
+    expect(requestBodiesFor(client, "POST", "/pulls/22/reviews")[0].body).toContain(
       "## GitVibe Review Matrix",
     );
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[1].body).toContain(
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).toContain(
       "git-vibe:review-fix kind=pull-request pr=22 depth=1",
     );
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[1].body).toContain(
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).toContain(
       "https://github.com/example/repo/actions/runs/44",
     );
   });
@@ -77,10 +80,113 @@ describe("pull request review-fix retries", () => {
     ).toEqual([]);
     expect(
       requestBodiesFor(client, "POST", "/issues/22/labels").map((body) => body.labels),
-    ).toEqual(expect.arrayContaining([["gvi:blocked"], ["gvi:review-fix"]]));
+    ).toEqual(expect.arrayContaining([["gvi:blocked"]]));
     expect(logger.event).toHaveBeenCalledWith(
       "github.workflow.dispatch.skip",
       expect.objectContaining({ depth: 4, reason: "pr-review-fix-depth" }),
+    );
+  });
+});
+
+describe("pull request review-fix iteration limits", () => {
+  it("uses the configured PR feedback review-fix iteration limit", async () => {
+    const client = recordingClient();
+    const logger = fakeLogger();
+
+    await expect(
+      maybeHandlePullRequestReviewFixRequired({
+        client,
+        config: { ai: { budgets: { pr_feedback_max_iterations: 1 } } },
+        context: contextWithPullRequest({
+          timeline: [
+            {
+              body: pullRequestReviewFixMarker({ depth: 1, pullRequest: "22" }),
+              id: "1",
+              kind: "issue-comment",
+            },
+          ],
+        }),
+        logger,
+        result: stageResult({ next_state: "changes-required" }),
+        runner: runnerOptions(),
+        transientComments: [],
+      }),
+    ).resolves.toMatchObject({
+      parsedOutput: expect.objectContaining({
+        next_state: "blocked",
+        summary: expect.stringContaining("configured limit of 1"),
+      }),
+      status: "blocked",
+    });
+
+    expect(
+      requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches"),
+    ).toEqual([]);
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.workflow.dispatch.skip",
+      expect.objectContaining({ depth: 2, max_depth: 1, reason: "pr-review-fix-depth" }),
+    );
+  });
+});
+
+describe("pull request review-fix config gates", () => {
+  it("passes configured address-feedback workflow budgets when queuing a retry", async () => {
+    process.env.GITVIBE_BASE_BRANCH = "develop";
+    const client = recordingClient();
+
+    await maybeHandlePullRequestReviewFixRequired({
+      client,
+      config: {
+        ai: {
+          budgets: {
+            default_max_turns: 90,
+            default_timeout_minutes: 60,
+            feedback_max_turns: 122,
+            feedback_timeout_minutes: 123,
+          },
+        },
+      },
+      context: contextWithPullRequest(),
+      logger: fakeLogger(),
+      result: stageResult({ next_state: "changes_required" }),
+      runner: runnerOptions(),
+      transientComments: [],
+    });
+
+    expect(
+      requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches")[0]
+        .inputs,
+    ).toEqual({
+      "pr-number": "22",
+      max_turns: "122",
+      timeout_minutes: "123",
+    });
+  });
+
+  it("leaves a blocked review result without queuing feedback when feedback automation is disabled", async () => {
+    const client = recordingClient();
+    const logger = fakeLogger();
+
+    await expect(
+      maybeHandlePullRequestReviewFixRequired({
+        client,
+        config: { ai: { stages: { "address-pr-feedback": { enabled: false } } } },
+        context: contextWithPullRequest(),
+        logger,
+        result: stageResult({ next_state: "changes-required" }),
+        runner: runnerOptions(),
+        transientComments: [],
+      }),
+    ).resolves.toMatchObject({ status: "completed" });
+
+    expect(
+      requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches"),
+    ).toEqual([]);
+    expect(requestBodiesFor(client, "POST", "/pulls/22/reviews")).toHaveLength(1);
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")).toHaveLength(0);
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.workflow.dispatch.skip",
+      expect.objectContaining({ reason: "address-pr-feedback-disabled" }),
     );
   });
 });
@@ -155,7 +261,10 @@ describe("pull request review-fix dispatch boundaries", () => {
       { inputs: { "pr-number": "22" }, ref: "main", return_run_details: true },
       { inputs: { "pr-number": "22" }, ref: "main" },
     ]);
-    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[1].body).not.toContain(
+    expect(requestBodiesFor(client, "POST", "/pulls/22/reviews")[0].body).toContain(
+      "## GitVibe Review Matrix",
+    );
+    expect(requestBodiesFor(client, "POST", "/issues/22/comments")[0].body).not.toContain(
       "Workflow run:",
     );
     expect(logger.event).toHaveBeenCalledWith(

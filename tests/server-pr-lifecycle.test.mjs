@@ -30,7 +30,6 @@ describe("GitVibe app server PR approval labels", () => {
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/issues/22/labels/gvi%3Aready-for-approval",
-        "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
       ]),
     );
@@ -125,11 +124,8 @@ describe("GitVibe app server PR merge labels", () => {
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/issues/22/labels/gvi%3Aready-for-approval",
-        "/repos/example/repo/issues/22/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/gvi%3Apr-opened",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Apr-opened",
         "/repos/example/repo/issues/12/labels/gvi%3Apr-approved",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Apr-approved",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved",
       ]),
     );

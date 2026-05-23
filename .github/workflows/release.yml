@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag to create, such as v2 or v2.0.0.
+        description: Release tag to create, such as v3 or v3.0.0.
         required: true
-        default: v2
+        default: v3
       source_image_tag:
         description: Existing GHCR image tag to promote. Defaults to the workflow commit SHA.
         required: false
@@ -46,7 +46,7 @@ jobs:
           fi
 
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}([-+][0-9A-Za-z._-]+)?$ ]]; then
-            echo "::error::release_tag must look like v2, v2.0.0, or v2.0.0-rc.1."
+            echo "::error::release_tag must look like v3, v3.0.0, or v3.0.0-rc.1."
             exit 1
           fi
 

@@ -34,7 +34,15 @@ export interface MatrixStageResult {
   summary: string;
 }
 
-const roleGroupStages = new Set<Stage>(["decompose", "investigate", "review-matrix", "validate"]);
+export interface RoleGroupSynthesisMember {
+  artifact: string;
+  index: number;
+  profile: string;
+  role: string;
+  roleDefinition: string;
+}
+
+const roleGroupStages = new Set<Stage>(["investigate", "review-matrix", "validate"]);
 const writeOrPublishStages = new Set<Stage>([
   "address-pr-feedback",
   "create-pr",
@@ -160,6 +168,19 @@ export function readRoleDefinition(cwd: string, role: string): string {
   return content;
 }
 
+export function roleGroupSynthesisMembers(
+  cwd: string,
+  plan: StageExecutionPlan,
+): RoleGroupSynthesisMember[] {
+  return plan.matrix.include.map((member) => ({
+    artifact: member.artifact,
+    index: member.index,
+    profile: member.profile,
+    role: member.role,
+    roleDefinition: member.role ? readRoleDefinition(cwd, member.role) : "",
+  }));
+}
+
 export function loadMatrixStageResults(
   directory: string | undefined,
   stage: Stage,
@@ -191,6 +212,7 @@ export function matrixResultMetadata(options: {
 export function synthesisPromptAddition(options: {
   expected: number;
   failed: number;
+  members?: RoleGroupSynthesisMember[];
   results: MatrixStageResult[];
   roleGroup?: string;
   stage: Stage;
@@ -200,6 +222,13 @@ ${JSON.stringify(
   {
     expected_results: options.expected,
     failed_results: options.failed,
+    configured_members: (options.members || []).map((member) => ({
+      artifact: member.artifact,
+      index: member.index,
+      profile: member.profile,
+      role: member.role,
+      role_definition: member.roleDefinition,
+    })),
     results: options.results.map((result) => ({
       output: result.parsedOutput,
       profile: result.profile,
@@ -221,7 +250,10 @@ export function synthesizerSystemAddition(): string {
   return [
     "<role_group_synthesizer>",
     "You are synthesizing multiple GitVibe role results into one final stage result.",
+    "Use configured role definitions to understand each member's review lens and expected coverage.",
+    "Inspect the repository and GitHub context when member outputs disagree, omit important concepts, or need evidence.",
     "Return the existing stage schema only. Do not return arrays of reviewer results.",
+    "You may add your own findings only when they are grounded in inspected repository, diff, or GitHub evidence.",
     "Discard false positives, duplicate findings, obsolete findings, and over-engineered suggestions.",
     "Mention role success and failure counts in summary or comment_body when any role result is missing.",
     "</role_group_synthesizer>",

@@ -1,11 +1,11 @@
-name: GitVibe decompose
-run-name: "[git-vibe][decompose]: Discussion #${{ inputs.discussion-number }}"
+name: GitVibe review
+run-name: "[git-vibe][review]: PR #${{ inputs.pr-number }}"
 
 on:
   workflow_dispatch:
     inputs:
-      discussion-number:
-        description: Discussion number to decompose.
+      pr-number:
+        description: Pull request number to review.
         required: true
         type: string
       dry-run:
@@ -20,10 +20,10 @@ on:
         default: ""
 
 jobs:
-  decompose:
-    uses: markhuangai/git-vibe/.github/workflows/decompose.yml@v2
+  review:
+    uses: markhuangai/git-vibe/.github/workflows/review.yml@v3
     with:
-      discussion-number: ${{ inputs.discussion-number }}
+      pr-number: ${{ inputs.pr-number }}
       runner: ubuntu-latest
       timeout_minutes: 60
       max_turns: 90

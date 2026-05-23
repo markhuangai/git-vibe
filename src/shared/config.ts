@@ -4,7 +4,7 @@ import { parse } from "yaml";
 import { z } from "zod";
 import type { GitVibeConfig } from "./types.js";
 
-const gitVibeConfigPath = ".github/git-vibe.yml";
+export const gitVibeConfigPath = ".github/git-vibe.yml";
 export const gitVibeBaseBranchVariable = "GITVIBE_BASE_BRANCH";
 
 const configSchema = z
@@ -29,14 +29,34 @@ export function loadConfig(cwd = process.cwd()): GitVibeConfig {
     return {};
   }
 
-  return parseConfig(readFileSync(absolutePath, "utf8"));
+  return parseGitVibeConfig(readFileSync(absolutePath, "utf8"));
 }
 
-function parseConfig(content: string): GitVibeConfig {
+export function parseGitVibeConfig(content: string): GitVibeConfig {
   const parsed = parse(content) as unknown;
   return configSchema.parse(parsed || {}) as GitVibeConfig;
 }
 
 export function testCommandsFor(config: GitVibeConfig): string[] {
   return config.tests?.commands?.filter((command) => command.trim().length > 0) || [];
+}
+
+export function stageEnabled(config: GitVibeConfig, stage: string): boolean {
+  const stages = config.ai?.stages;
+  if (stages === undefined) return true;
+  if (!isRecord(stages)) throw new Error("ai.stages must be an object.");
+
+  const stageConfig = stages[stage];
+  if (stageConfig === undefined) return true;
+  if (!isRecord(stageConfig)) throw new Error(`ai.stages.${stage} must be an object.`);
+
+  const enabled = stageConfig.enabled;
+  if (enabled === undefined) return true;
+  if (typeof enabled !== "boolean")
+    throw new Error(`ai.stages.${stage}.enabled must be a boolean.`);
+  return enabled;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -13,7 +13,6 @@ import { stageExecutionPlan } from "../src/runner/role-groups.ts";
 const consumerRoot = join(process.cwd(), "examples", "consumer");
 const roleGroupStages = /** @type {Stage[]} */ (["investigate", "validate", "review-matrix"]);
 const profileStages = /** @type {Stage[]} */ ([
-  "decompose",
   "materialize",
   "implement",
   "create-pr",
@@ -35,13 +34,6 @@ describe("consumer examples", () => {
     const config = loadConfig(consumerRoot);
 
     assertStarterRouting(configText, config, consumerRoot);
-  });
-
-  it("keeps the root example config compatible with role-group routing", () => {
-    const configText = readFileSync(join(process.cwd(), ".github", "git-vibe.example.yml"), "utf8");
-    const config = /** @type {GitVibeConfig} */ (parse(configText));
-
-    assertStarterRouting(configText, config, process.cwd());
   });
 });
 

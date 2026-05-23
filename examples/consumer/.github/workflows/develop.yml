@@ -21,13 +21,13 @@ on:
 
 jobs:
   develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v2
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
     with:
       issue-number: ${{ inputs.issue-number }}
       runner: ubuntu-latest
       implementation_timeout_minutes: 120
       review_timeout_minutes: 60
-      publish_timeout_minutes: 15
+      create_pr_timeout_minutes: 15
       max_turns: 90
       implementation_max_turns: 120
       validation_repair_attempts: 2

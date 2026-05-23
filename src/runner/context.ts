@@ -31,6 +31,16 @@ interface PullRequestResponse extends JsonObject {
   };
 }
 
+interface PullRequestReviewResponse extends JsonObject {
+  author_association?: string;
+  body?: string;
+  html_url?: string;
+  id?: number;
+  node_id?: string;
+  submitted_at?: string;
+  user?: { login?: string };
+}
+
 export async function buildIssueContext(options: {
   client: GitHubClient;
   issueNumber: string;
@@ -69,6 +79,16 @@ export async function buildIssueContext(options: {
           token: options.token,
         })
       : [];
+  const reviews =
+    options.type === "pull-request"
+      ? await pullRequestReviews({
+          client: options.client,
+          name: repo,
+          owner,
+          pullNumber: options.issueNumber,
+          token: options.token,
+        })
+      : [];
   const relatedTimeline =
     options.type === "pull-request"
       ? await pullRequestRelatedTimeline({
@@ -84,6 +104,7 @@ export async function buildIssueContext(options: {
   const timeline = [
     toTimelineItem("body", `issue-${options.issueNumber}`, issue),
     ...comments.map((comment) => toTimelineItem("comment", String(comment.id || ""), comment)),
+    ...reviews.map(toPullRequestReviewBodyTimelineItem),
     ...reviewComments.map(toPullRequestReviewTimelineItem),
     ...relatedTimeline,
   ].sort(compareTimelineItems);
@@ -283,6 +304,21 @@ async function openPullRequestReviewComments(options: {
     );
 }
 
+async function pullRequestReviews(options: {
+  client: GitHubClient;
+  name: string;
+  owner: string;
+  pullNumber: string;
+  token: string;
+}): Promise<PullRequestReviewResponse[]> {
+  const reviews = await options.client.request<PullRequestReviewResponse[]>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.name}/pulls/${options.pullNumber}/reviews?per_page=100`,
+    token: options.token,
+  });
+  return reviews.filter((review) => Boolean(review.body?.trim()));
+}
+
 export async function buildDiscussionContext(options: {
   client: GitHubClient;
   discussionNumber: string;
@@ -350,6 +386,16 @@ function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): Ti
     databaseId: item.databaseId,
     parentId: item.replyTo?.id ? String(item.replyTo.id) : undefined,
   };
+}
+
+function toPullRequestReviewBodyTimelineItem(item: PullRequestReviewResponse): TimelineItem {
+  return toTimelineItem("pull-request-review", String(item.node_id || item.id || ""), {
+    ...item,
+    body: item.body || "",
+    created_at: item.submitted_at,
+    html_url: item.html_url,
+    user: item.user,
+  });
 }
 
 function discussionNodeToTimelineItem(

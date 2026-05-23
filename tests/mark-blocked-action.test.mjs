@@ -22,13 +22,6 @@ describe("markIssueBlocked", () => {
       [
         {
           method: "DELETE",
-          path: "/repos/markhuangai/git-vibe/issues/22/labels/git-vibe%3Ain-progress",
-          token: "token",
-        },
-      ],
-      [
-        {
-          method: "DELETE",
           path: "/repos/markhuangai/git-vibe/issues/22/labels/git-vibe%3Aapproved",
           token: "token",
         },

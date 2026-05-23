@@ -16,7 +16,7 @@ GitVibe is a self-hostable repository webhook server plus reusable GitHub Action
 The public action namespace should be:
 
 ```yaml
-uses: markhuangai/git-vibe/investigate@v2
+uses: markhuangai/git-vibe/investigate@v3
 ```
 
 Reusable full pipelines should be published from the same repository:
@@ -24,7 +24,7 @@ Reusable full pipelines should be published from the same repository:
 ```yaml
 jobs:
   git-vibe-develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v2
+    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
 ```
 
 Core defaults:
@@ -32,6 +32,10 @@ Core defaults:
 - `/git-vibe ...` is the public command form for command-triggered workflows.
 - Bugs are investigated before any implementation approval.
 - Feature requests start in discussions and are materialized into issues only after refinement and protected approval.
+- Development automation can be disabled with `ai.stages.implement.enabled: false`; PR review remains separately triggerable through `review.yml` and `git-vibe:review`.
+- Issue implementation and PR feedback remediation share runner-level
+  branch-update mechanics, while `develop.yml` and `address-feedback.yml` stay
+  separate workflow orchestrators.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
 - AI returns structured results; deterministic GitVibe code performs GitHub writes.
 - App, runner, and shared TypeScript live in one package but separate source boundaries so runner-only changes do not redeploy the app.

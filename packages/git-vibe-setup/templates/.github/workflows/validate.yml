@@ -27,7 +27,7 @@ on:
 
 jobs:
   validate:
-    uses: markhuangai/git-vibe/.github/workflows/validate.yml@v2
+    uses: markhuangai/git-vibe/.github/workflows/validate.yml@v3
     with:
       issue-number: ${{ inputs.issue-number }}
       discussion-number: ${{ inputs.discussion-number }}

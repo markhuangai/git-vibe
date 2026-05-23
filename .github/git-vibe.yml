@@ -14,6 +14,8 @@ labels:
   investigated: gvi:investigated
   ready_for_approval: gvi:ready-for-approval
   approved: git-vibe:approved
+  review: git-vibe:review
+  reviewing: gvi:reviewing
   in_progress: gvi:in-progress
   blocked: gvi:blocked
   pr_opened: gvi:pr-opened
@@ -22,9 +24,6 @@ labels:
   validate: git-vibe:validate
   validating: gvi:validating
   validated: gvi:validated
-  decompose: git-vibe:decompose
-  decomposing: gvi:decomposing
-  decomposed: gvi:decomposed
 
 commands:
   prefix: /git-vibe
@@ -52,25 +51,41 @@ tests:
     - pnpm check
 
 ai:
+  budgets:
+    default_timeout_minutes: 60
+    review_timeout_minutes: 60
+    implementation_timeout_minutes: 120
+    feedback_timeout_minutes: 120
+    create_pr_timeout_minutes: 15
+    default_max_turns: 90
+    implementation_max_turns: 200
+    feedback_max_turns: 120
+    validation_repair_attempts: 3
+    validation_repair_max_turns: 45
+    pr_feedback_max_iterations: 3
+    request_retry_attempts: 3
+    request_retry_delay_seconds: 60
+  security:
+    web:
+      allowed_domains: []
+      # - github.com
+      # - "*.github.com"
   profiles:
     local_proxy:
-      enabled: true
       adapter: ai-sdk-agentool
       context_window_tokens: 200000
+      context:
+        files:
+          - AGENTS.md
       provider:
         type: openai-compatible
-        model: qwen3.6-plus
+        model: kimi-k2.5
         base_url:
           from_bundle: GITVIBE_AI_BASE_URL
         api_key:
           from_bundle: GITVIBE_AI_API_KEY
       reasoning:
         effort: high
-      generation:
-        temperature: 0.2
-        max_output_tokens: 6000
-        max_steps: 90
-        prompt_version: v1
       provider_options:
         openai:
           reasoningEffort: high
@@ -78,7 +93,6 @@ ai:
         anthropic:
           effort: high
     codex_5.4_high:
-      enabled: true
       adapter: cli-codex
       auth_json:
         from_bundle: CODEX_AUTH_JSON
@@ -87,7 +101,6 @@ ai:
         effort: high
         summary: concise
     codex_5.5_high:
-      enabled: true
       adapter: cli-codex
       auth_json:
         from_bundle: CODEX_AUTH_JSON
@@ -96,7 +109,6 @@ ai:
         effort: high
         summary: concise
     codex_5.5_xhigh:
-      enabled: true
       adapter: cli-codex
       auth_json:
         from_bundle: CODEX_AUTH_JSON
@@ -105,16 +117,15 @@ ai:
         effort: xhigh
         summary: concise
     claude_code:
-      enabled: true
       adapter: cli-claude-code
       env:
         ANTHROPIC_API_KEY:
           from_bundle: GITVIBE_AI_API_KEY
         ANTHROPIC_BASE_URL:
           from_bundle: ANTHROPIC_BASE_URL
-        ANTHROPIC_DEFAULT_OPUS_MODEL: qwen3.6-plus
-        ANTHROPIC_DEFAULT_SONNET_MODEL: qwen3.6-plus
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: qwen3.6-plus
+        ANTHROPIC_DEFAULT_OPUS_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: kimi-k2.5
         ANTHROPIC_MODEL: opus
         CLAUDE_CODE_SUBAGENT_MODEL: opus
       model: opus
@@ -122,61 +133,30 @@ ai:
         effort: max
   role_groups:
     swarm:
-      synthesizer: local_proxy
+      synthesizer: codex_5.5_high
       parallel: 3
       roles:
         - role: correctness.md
-          profile: codex_5.5_high
+          profile: local_proxy
         - role: security.md
           profile: local_proxy
         - role: maintainability.md
           profile: local_proxy
-  budgets:
-    default_timeout_minutes: 60
-    implementation_timeout_minutes: 120
-    feedback_timeout_minutes: 120
-    publish_timeout_minutes: 15
-    default_max_turns: 90
-    implementation_max_turns: 200
-    feedback_max_turns: 120
-    review_max_iterations: 5
-    validation_repair_attempts: 3
-    validation_repair_max_turns: 45
-    request_retry_attempts: 3
-    request_retry_delay_seconds: 60
-    max_context_window_tokens: 200000
-    max_context_items: 200
-    max_files_per_stage: 80
   stages:
     investigate:
-      enabled: true
       role_group: swarm
     validate:
-      enabled: true
       role_group: swarm
-    decompose:
-      enabled: true
-      profile: codex_5.5_high
     materialize:
-      enabled: true
       profile: codex_5.5_high
     implement:
-      enabled: true
+      enabled: false
       profile: codex_5.4_high
     review-matrix:
-      enabled: true
       role_group: swarm
     create-pr:
-      enabled: true
+      enabled: false
       profile: codex_5.5_high
     address-pr-feedback:
-      enabled: true
+      enabled: false
       profile: codex_5.4_high
-
-bug_investigation:
-  auto_start_on_new_bug: false
-  community_trigger:
-    enabled: false
-    reaction: "+1"
-    threshold: 6
-    dispatch: investigation-only

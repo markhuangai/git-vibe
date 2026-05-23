@@ -7,6 +7,10 @@ on:
     branches:
       - dev
 
+concurrency:
+  group: git-vibe-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   review:
     if: ${{ !github.event.pull_request.draft }}

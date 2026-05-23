@@ -103,7 +103,7 @@ function readTargetInputs(
   if (stage === "investigate" && !issueNumber && !prNumber) {
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for investigate.");
   }
-  if ((stage === "decompose" || stage === "materialize") && !discussionNumber) {
+  if (stage === "materialize" && !discussionNumber) {
     throw new Error("GITVIBE_DISCUSSION_NUMBER is required for this stage.");
   }
   if (stage === "validate" && !issueNumber && !discussionNumber) {
@@ -113,14 +113,9 @@ function readTargetInputs(
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for review-matrix.");
   }
   if (
-    ![
-      "address-pr-feedback",
-      "investigate",
-      "review-matrix",
-      "decompose",
-      "materialize",
-      "validate",
-    ].includes(stage) &&
+    !["address-pr-feedback", "investigate", "review-matrix", "materialize", "validate"].includes(
+      stage,
+    ) &&
     !issueNumber
   ) {
     throw new Error("GITVIBE_ISSUE_NUMBER is required for this stage.");
@@ -218,6 +213,12 @@ function writeOutputs(
       isInvestigationReady(result.parsedOutput) ? "true" : "false",
       appendFile,
     );
+  }
+  if (result.schemaId === "create-pr.v1") {
+    const prNumber = stringOutput(result.parsedOutput.pr_number);
+    const prUrl = stringOutput(result.parsedOutput.pr_url);
+    if (prNumber) writeOutput(env.GITHUB_OUTPUT, "pr-number", prNumber, appendFile);
+    if (prUrl) writeOutput(env.GITHUB_OUTPUT, "pr-url", prUrl, appendFile);
   }
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);

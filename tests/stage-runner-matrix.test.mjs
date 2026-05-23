@@ -128,6 +128,92 @@ describe("stage runner matrix member execution", () => {
   });
 });
 
+describe("stage runner matrix structured output continuation", () => {
+  it("continues review-matrix member output when the model skips output_validator", async () => {
+    const cwd = await workspace(profileConfig());
+    commitAll(cwd);
+    writeRole(cwd, "security.md", "Focus on token boundaries.");
+    generateText.mockResolvedValueOnce({
+      steps: [],
+      text: JSON.stringify({
+        assumptions: [],
+        comment_body: "Reviewed.",
+        findings: [],
+        next_state: "review-passed",
+        references: [],
+        stage: "review-matrix",
+        status: "completed",
+        summary: "Reviewed.",
+      }),
+    });
+    generateText.mockResolvedValueOnce(aiResult("review-matrix"));
+    globalThis.fetch = fetchMock([issueResponse(), commentsResponse([]), repositoryResponse()]);
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      executionMode: "member",
+      issueNumber: "12",
+      maxTurns: 25,
+      prNumber: "",
+      profileName: "test",
+      repository: "example/repo",
+      roleName: "security.md",
+      stage: "review-matrix",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[0][0]).toMatchObject({
+      stopWhen: [expect.any(Function), { count: 15 }],
+    });
+    expect(generateText.mock.calls[1][0]).toMatchObject({
+      activeTools: ["output_validator"],
+      stopWhen: [expect.any(Function), { count: 10 }],
+      toolChoice: { type: "tool", toolName: "output_validator" },
+    });
+    expect(Object.keys(generateText.mock.calls[1][0].tools)).toEqual(["output_validator"]);
+    expect(generateText.mock.calls[1][0].messages.at(-1).content).toContain(
+      "Call output_validator with the exact final JSON.",
+    );
+  });
+});
+
+describe("stage runner matrix member profile context", () => {
+  it("passes member profile context alongside the role definition", async () => {
+    const cwd = await workspace(profileConfigWithContext());
+    writeRole(cwd, "security.md", "Focus on token boundaries.");
+    writeFileSync(join(cwd, "PROFILE.md"), "Member profile guidance.");
+    generateText.mockResolvedValueOnce(aiResult("validate"));
+    globalThis.fetch = fetchMock([issueResponse(), commentsResponse([])]);
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      executionMode: "member",
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      profileName: "test",
+      repository: "example/repo",
+      roleName: "security.md",
+      stage: "validate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(generateText.mock.calls[0][0].system).toContain(
+      '<git_vibe_profile_context profile="test" path="PROFILE.md">',
+    );
+    expect(generateText.mock.calls[0][0].system).toContain("Member profile guidance.");
+    expect(generateText.mock.calls[0][0].system).toContain("<git_vibe_role_definition>");
+    expect(generateText.mock.calls[0][0].system).toContain("Focus on token boundaries.");
+  });
+});
+
 describe("stage runner matrix finalizer execution", () => {
   it("passes through single-profile member output during finalization", async () => {
     const cwd = await workspace(profileConfig());
@@ -189,10 +275,13 @@ describe("stage runner matrix finalizer execution", () => {
     });
     expect(generateText).not.toHaveBeenCalled();
   });
+});
 
+describe("stage runner matrix finalizer synthesis", () => {
   it("synthesizes role-group member outputs into one final stage result", async () => {
-    const cwd = await workspace(roleGroupConfig("validate"));
+    const cwd = await workspace(roleGroupConfigWithContext("validate"));
     writeRole(cwd, "security.md", "Focus on token boundaries.");
+    writeFileSync(join(cwd, "PROFILE.md"), "Synthesizer profile guidance.");
     const resultsDir = join(cwd, "member-results");
     mkdirSync(resultsDir);
     writeFileSync(join(resultsDir, "git-vibe-validate-result.json"), memberResult("validate"));
@@ -220,7 +309,18 @@ describe("stage runner matrix finalizer execution", () => {
 
     expect(result.summary).toBe("Synthesized.");
     expect(generateText.mock.calls[0][0].prompt).toContain("<role_group_results>");
+    expect(generateText.mock.calls[0][0].prompt).toContain('"configured_members"');
+    expect(generateText.mock.calls[0][0].prompt).toContain(
+      '"role_definition": "Focus on token boundaries."',
+    );
     expect(generateText.mock.calls[0][0].system).toContain("<role_group_synthesizer>");
+    expect(generateText.mock.calls[0][0].system).toContain(
+      "Inspect the repository and GitHub context",
+    );
+    expect(generateText.mock.calls[0][0].system).toContain(
+      '<git_vibe_profile_context profile="test" path="PROFILE.md">',
+    );
+    expect(generateText.mock.calls[0][0].system).toContain("Synthesizer profile guidance.");
   });
 });
 
@@ -237,12 +337,31 @@ function writeRole(cwd, file, content) {
   writeFileSync(join(cwd, ".git-vibe", "role-group", file), content);
 }
 
+function commitAll(cwd) {
+  execFileSync("git", ["config", "user.name", "tester"], { cwd });
+  execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd });
+  execFileSync("git", ["add", "-A"], { cwd });
+  execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" });
+}
+
 function profileConfig() {
   return [
     "ai:",
     "  profiles:",
     "    test:",
     profileYaml(),
+    "  stages:",
+    "    review-matrix:",
+    "      profile: test",
+  ].join("\n");
+}
+
+function profileConfigWithContext() {
+  return [
+    "ai:",
+    "  profiles:",
+    "    test:",
+    profileYamlWithContext(),
     "  stages:",
     "    review-matrix:",
     "      profile: test",
@@ -267,6 +386,24 @@ function roleGroupConfig(stage = "review-matrix") {
   ].join("\n");
 }
 
+function roleGroupConfigWithContext(stage = "review-matrix") {
+  return [
+    "ai:",
+    "  profiles:",
+    "    test:",
+    profileYamlWithContext(),
+    "  role_groups:",
+    "    review_gate:",
+    "      synthesizer: test",
+    "      roles:",
+    "        - role: security.md",
+    "          profile: test",
+    "  stages:",
+    `    ${stage}:`,
+    "      role_group: review_gate",
+  ].join("\n");
+}
+
 function profileYaml() {
   return [
     "      provider:",
@@ -277,6 +414,10 @@ function profileYaml() {
     "        api_key:",
     "          from_bundle: GITVIBE_AI_API_KEY",
   ].join("\n");
+}
+
+function profileYamlWithContext() {
+  return [profileYaml(), "      context:", "        files:", "          - PROFILE.md"].join("\n");
 }
 
 function memberResult(stage = "review-matrix") {
@@ -323,6 +464,7 @@ function nextStateForStage(stage) {
 }
 
 const commentsResponse = (comments) => response(200, comments);
+const repositoryResponse = () => response(200, { default_branch: "main" });
 const issueResponse = () =>
   response(200, {
     body: "Issue body",

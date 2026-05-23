@@ -17,14 +17,14 @@ describe("discussion label helpers", () => {
     await addDiscussionLabel({
       client,
       discussionId: "discussion-node",
-      label: "gvi:decomposing",
+      label: "gvi:validated",
       repository: "example/repo",
       token: "token",
     });
 
     expect(client.graphql).toHaveBeenCalledWith(
       expect.stringContaining("GitVibeDiscussionLabelId"),
-      { label: "gvi:decomposing", name: "repo", owner: "example" },
+      { label: "gvi:validated", name: "repo", owner: "example" },
       "token",
     );
     expect(client.graphql).toHaveBeenCalledWith(
@@ -162,7 +162,7 @@ describe("discussion label listing", () => {
 
     await expect(
       discussionLabels({ client, discussionId: "discussion-node", token: "token" }),
-    ).resolves.toEqual(["gvi:validated", "git-vibe:decompose"]);
+    ).resolves.toEqual(["gvi:validated", "git-vibe:approved"]);
   });
 
   it("returns an empty label list when labels are unavailable", async () => {
@@ -209,7 +209,7 @@ function createClient(options = {}) {
         return {
           node: {
             labels: {
-              nodes: [{ name: "gvi:validated" }, { name: "git-vibe:decompose" }],
+              nodes: [{ name: "gvi:validated" }, { name: "git-vibe:approved" }],
             },
           },
         };

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "decompose.v1",
+  "$id": "materialize.v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,10 +12,10 @@
     "assumptions",
     "references",
     "next_state",
-    "story_units"
+    "issues"
   ],
   "properties": {
-    "stage": { "type": "string", "const": "decompose" },
+    "stage": { "type": "string", "const": "materialize" },
     "status": { "type": "string", "enum": ["completed", "blocked"] },
     "summary": { "type": "string" },
     "comment_body": { "type": "string" },
@@ -39,8 +39,8 @@
     },
     "assumptions": { "type": "array", "items": { "type": "string" } },
     "references": { "type": "array", "items": { "type": "string" } },
-    "next_state": { "type": "string", "enum": ["ready-for-materialization", "blocked"] },
-    "story_units": {
+    "next_state": { "type": "string", "enum": ["implementation-issues-ready", "blocked"] },
+    "issues": {
       "type": "array",
       "items": {
         "type": "object",
@@ -77,8 +77,8 @@
       },
       "then": {
         "properties": {
-          "next_state": { "const": "ready-for-materialization" },
-          "story_units": { "minItems": 1 }
+          "next_state": { "const": "implementation-issues-ready" },
+          "issues": { "minItems": 1 }
         }
       }
     },

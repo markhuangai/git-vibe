@@ -28,6 +28,7 @@ const runnerBaseBranch = vi.fn(async () => ({
   defaultBranch: "main",
   targetsDefault: true,
 }));
+const dispatchPullRequestReviewWorkflow = vi.fn(async () => undefined);
 const runValidationCommand = vi.fn();
 const validationRepairAttemptsFor = vi.fn(() => 1);
 
@@ -48,6 +49,9 @@ vi.mock("../src/runner/review-fix.js", () => ({
 vi.mock("../src/runner/stage-branches.js", () => ({
   branchForWriteStage,
   runnerBaseBranch,
+}));
+vi.mock("../src/runner/pr-review-dispatch.js", () => ({
+  dispatchPullRequestReviewWorkflow,
 }));
 vi.mock("../src/runner/validation.js", () => ({
   runValidationCommand,
@@ -74,6 +78,7 @@ beforeEach(() => {
     issueChain,
     branchForWriteStage,
     runnerBaseBranch,
+    dispatchPullRequestReviewWorkflow,
     runValidationCommand,
     validationRepairAttemptsFor,
   ]) {
@@ -95,6 +100,8 @@ beforeEach(() => {
   runValidationCommand.mockImplementation(() => undefined);
   validationRepairAttemptsFor.mockReturnValue(1);
   execFileSync.mockReturnValue(Buffer.from(""));
+  addDiscussionComment.mockResolvedValue(undefined);
+  closeDiscussion.mockResolvedValue(undefined);
 });
 
 describe("stage deterministic writes", () => {
@@ -140,7 +147,7 @@ describe("stage deterministic writes", () => {
   });
 });
 
-describe("stage deterministic GitHub writes", () => {
+describe("stage deterministic materialize writes", () => {
   it("materializes implementation issues from discussion output", async () => {
     const client = createClient([
       { html_url: "https://github.com/example/repo/issues/44", number: 44 },
@@ -153,8 +160,18 @@ describe("stage deterministic GitHub writes", () => {
         context: context("discussion", { id: "discussion-node" }),
         result: result({
           parsedOutput: {
-            issue_body: "Implement this.",
-            issue_title: "Implementation issue",
+            issues: [
+              {
+                acceptance_criteria: ["It works."],
+                background: "Implement this.",
+                backpressure_commands: ["corepack pnpm test"],
+                blocked_by: [],
+                parallel_group: "default",
+                requirements: ["Build the implementation."],
+                review_guidelines: ["Check the source discussion link."],
+                title: "Implementation issue",
+              },
+            ],
             status: "completed",
           },
         }),
@@ -172,22 +189,166 @@ describe("stage deterministic GitHub writes", () => {
     expect(closeDiscussion).toHaveBeenCalledTimes(1);
   });
 
-  it("creates or updates pull requests and manages ready-for-approval labels", async () => {
+  it("materializes split implementation issues with dependency details", async () => {
+    const client = createClient([
+      { html_url: "https://github.com/example/repo/issues/44", number: 44 },
+      { number: 45 },
+    ]);
+
+    await applyDeterministicWrites(
+      options({
+        client,
+        context: context("discussion", { id: "discussion-node" }),
+        result: result({
+          parsedOutput: {
+            issues: [
+              {
+                acceptance_criteria: ["First issue passes."],
+                background: "Build the first slice.",
+                backpressure_commands: ["corepack pnpm test"],
+                blocked_by: [],
+                parallel_group: "foundation",
+                requirements: ["Create the shared support."],
+                review_guidelines: ["Review the source discussion."],
+                title: "Build foundation",
+              },
+              {
+                acceptance_criteria: ["Second issue passes."],
+                background: "Build the dependent slice.",
+                backpressure_commands: ["corepack pnpm test"],
+                blocked_by: ["#44"],
+                parallel_group: "follow-up",
+                requirements: ["Use the shared support."],
+                review_guidelines: ["Check dependency order."],
+                title: "Build follow-up",
+              },
+            ],
+            status: "completed",
+          },
+        }),
+        runner: runner({ stage: "materialize" }),
+      }),
+    );
+
+    const issueBodies = client.request.mock.calls.map(([request]) => request.body?.body || "");
+    expect(issueBodies.join("\n")).toContain("Blocked by: #44");
+    expect(addDiscussionComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: [
+          "GitVibe created implementation issues:",
+          "- #44: https://github.com/example/repo/issues/44",
+          "- #45",
+        ].join("\n"),
+      }),
+    );
+  });
+});
+
+describe("stage deterministic materialize fallback writes", () => {
+  it("logs close failures after materializing a discussion issue", async () => {
+    const client = createClient([
+      { html_url: "https://github.com/example/repo/issues/44", number: 44 },
+    ]);
+    const stageLogger = logger();
+    closeDiscussion.mockRejectedValueOnce(new Error("close unavailable"));
+
+    await expect(
+      applyDeterministicWrites(
+        options({
+          client,
+          context: context("discussion", { id: "discussion-node" }),
+          logger: stageLogger,
+          result: result({
+            parsedOutput: {
+              issues: [
+                {
+                  acceptance_criteria: ["It works."],
+                  background: "Implement this.",
+                  backpressure_commands: [],
+                  blocked_by: [],
+                  parallel_group: "default",
+                  requirements: ["Build the implementation."],
+                  review_guidelines: [],
+                  title: "Implementation issue",
+                },
+              ],
+              status: "completed",
+            },
+          }),
+          runner: runner({ stage: "materialize" }),
+        }),
+      ),
+    ).resolves.toMatchObject({ status: "completed" });
+
+    expect(stageLogger.event).toHaveBeenCalledWith(
+      "github.discussion.close.failed",
+      expect.objectContaining({ discussion: "12", error: "close unavailable" }),
+    );
+  });
+
+  it("materializes fallback issue defaults from sparse issue drafts", async () => {
+    const client = createClient([{}]);
+
+    await applyDeterministicWrites(
+      options({
+        client,
+        context: context("discussion", { id: "discussion-node" }),
+        result: result({
+          parsedOutput: {
+            issues: [{}],
+            status: "completed",
+          },
+        }),
+        runner: runner({ stage: "materialize" }),
+      }),
+    );
+
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ title: "Implement accepted discussion" }),
+      }),
+    );
+    expect(client.request.mock.calls[0][0].body.body).toContain("Parallel group: `default`");
+    expect(addDiscussionComment).toHaveBeenCalledWith(
+      expect.objectContaining({ body: "GitVibe created implementation issue an issue." }),
+    );
+  });
+
+  it("skips materialize issue creation when output has no issue drafts", async () => {
+    const client = createClient();
+
+    await applyDeterministicWrites(
+      options({
+        client,
+        context: context("discussion", { id: "discussion-node" }),
+        result: result({ parsedOutput: { issues: "invalid", status: "completed" } }),
+        runner: runner({ stage: "materialize" }),
+      }),
+    );
+
+    expect(client.request).not.toHaveBeenCalled();
+    expect(addDiscussionComment).not.toHaveBeenCalled();
+    expect(closeDiscussion).not.toHaveBeenCalled();
+  });
+});
+
+describe("stage deterministic pull request writes", () => {
+  it("creates or updates pull requests and exposes pull request outputs", async () => {
     const updateClient = createClient([
       [{ number: 7 }],
       { html_url: "https://github.com/example/repo/pull/7", number: 7 },
-      {},
     ]);
-    await applyDeterministicWrites(
+    const updatedResult = await applyDeterministicWrites(
       options({ client: updateClient, runner: runner({ stage: "create-pr" }) }),
     );
 
     expect(updateClient.request).toHaveBeenCalledWith(
       expect.objectContaining({ method: "PATCH", path: "/repos/example/repo/pulls/7" }),
     );
-    expect(updateClient.request).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/repos/example/repo/issues/7/labels" }),
-    );
+    expect(updatedResult.parsedOutput).toMatchObject({
+      pr_number: "7",
+      pr_url: "https://github.com/example/repo/pull/7",
+    });
 
     const createClientWithoutNumber = createClient([
       [],
@@ -204,6 +365,40 @@ describe("stage deterministic GitHub writes", () => {
 });
 
 describe("stage deterministic git commits", () => {
+  it("uses the shared branch update path for issue implementation", async () => {
+    await applyDeterministicWrites(options({ runner: runner({ stage: "implement" }) }));
+
+    expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
+    expect(branchForWriteStage).toHaveBeenCalledWith(
+      "implement",
+      expect.objectContaining({ artifact: expect.objectContaining({ type: "issue" }) }),
+    );
+    expect(publishStageResultComment).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared branch update path for pull request feedback remediation", async () => {
+    const client = createClient();
+
+    await applyDeterministicWrites(
+      options({
+        client,
+        context: context("pull-request", {
+          pullRequestHead: { branch: "feature", repository: "example/repo" },
+        }),
+        runner: runner({ stage: "address-pr-feedback" }),
+      }),
+    );
+
+    expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
+    expect(branchForWriteStage).toHaveBeenCalledWith(
+      "address-pr-feedback",
+      expect.objectContaining({ artifact: expect.objectContaining({ type: "pull-request" }) }),
+    );
+    expect(publishStageResultComment).toHaveBeenCalledTimes(1);
+    expect(dispatchPullRequestReviewWorkflow).not.toHaveBeenCalled();
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
   it("commits only after validation succeeds and changed files are staged", async () => {
     execFileSync.mockImplementation((command, args) => {
       const joined = `${command} ${args.join(" ")}`;
@@ -226,6 +421,7 @@ describe("stage deterministic git commits", () => {
       expect.arrayContaining(["push"]),
       expect.any(Object),
     );
+    expect(dispatchPullRequestReviewWorkflow).toHaveBeenCalledTimes(1);
   });
 
   it("returns repaired blocked results without committing", async () => {
@@ -278,9 +474,7 @@ describe("pull request feedback investigation labels", () => {
     expect(client.request.mock.calls.map(([request]) => request.path)).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
-        "/repos/example/repo/issues/12/labels/git-vibe%3Ablocked",
       ]),
     );
   });

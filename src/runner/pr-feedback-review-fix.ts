@@ -1,6 +1,6 @@
-import { baseBranchFromEnv } from "../shared/config.js";
+import { baseBranchFromEnv, stageEnabled } from "../shared/config.js";
+import { addressFeedbackWorkflowBudgetInputs, positiveBudgetInteger } from "../shared/budgets.js";
 import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
-import { gitVibeInternalLabels } from "../shared/labels.js";
 import {
   pullRequestReviewFixFromBody,
   pullRequestReviewFixMarker,
@@ -19,8 +19,6 @@ import type {
   RunnerOptions,
   StageRunResult,
 } from "../shared/types.js";
-
-const maxPullRequestReviewFixIterations = 3;
 
 export async function maybeHandlePullRequestReviewFixRequired(options: {
   client: GitHubClient;
@@ -44,6 +42,7 @@ export async function maybeHandlePullRequestReviewFixRequired(options: {
 
 async function handlePullRequestReviewFixRequired(options: {
   client: GitHubClient;
+  config: GitVibeConfig;
   context: ContextPacket;
   logger: StageLogger;
   result: StageRunResult;
@@ -63,14 +62,22 @@ async function handlePullRequestReviewFixRequired(options: {
   });
 
   const depth = nextPullRequestReviewFixDepth(options.context);
-  if (depth > maxPullRequestReviewFixIterations) {
-    await addPullRequestReviewFixLabel(options);
+  const maxDepth = pullRequestReviewFixMaxIterationsFor(options.config);
+  if (depth > maxDepth) {
     options.logger.event("github.workflow.dispatch.skip", {
       depth,
-      max_depth: maxPullRequestReviewFixIterations,
+      max_depth: maxDepth,
       reason: "pr-review-fix-depth",
     });
-    return blockedPullRequestReviewFixResult({ ...options, depth });
+    return blockedPullRequestReviewFixResult({ ...options, depth, maxDepth });
+  }
+
+  if (!stageEnabled(options.config, "address-pr-feedback")) {
+    options.logger.event("github.workflow.dispatch.skip", {
+      reason: "address-pr-feedback-disabled",
+      workflow: "address-feedback.yml",
+    });
+    return options.result;
   }
 
   const dispatch = await dispatchAddressFeedbackWorkflow({ ...options, depth });
@@ -79,15 +86,15 @@ async function handlePullRequestReviewFixRequired(options: {
     depth,
     workflowRunUrl: dispatch.html_url,
   });
-  await addPullRequestReviewFixLabel(options);
   return options.result;
 }
 
 function blockedPullRequestReviewFixResult(options: {
   depth: number;
+  maxDepth: number;
   result: StageRunResult;
 }): StageRunResult {
-  const summary = `Review requested changes, but PR review-fix iteration ${options.depth} exceeds the configured limit of ${maxPullRequestReviewFixIterations}.`;
+  const summary = `Review requested changes, but PR review-fix iteration ${options.depth} exceeds the configured limit of ${options.maxDepth}.`;
   const parsedOutput = {
     ...options.result.parsedOutput,
     next_state: "blocked",
@@ -102,6 +109,10 @@ function blockedPullRequestReviewFixResult(options: {
   };
 }
 
+function pullRequestReviewFixMaxIterationsFor(config: GitVibeConfig): number {
+  return positiveBudgetInteger(config, "pr_feedback_max_iterations", 3);
+}
+
 function nextPullRequestReviewFixDepth(context: ContextPacket): number {
   const depths = context.timeline
     .map((item) => pullRequestReviewFixFromBody(item.body))
@@ -112,6 +123,7 @@ function nextPullRequestReviewFixDepth(context: ContextPacket): number {
 
 async function dispatchAddressFeedbackWorkflow(options: {
   client: GitHubClient;
+  config: GitVibeConfig;
   context: ContextPacket;
   depth: number;
   logger: StageLogger;
@@ -125,7 +137,10 @@ async function dispatchAddressFeedbackWorkflow(options: {
   });
   const dispatch = await dispatchWorkflowWithRunDetails({
     client: options.client,
-    inputs: { "pr-number": options.context.artifact.number },
+    inputs: {
+      ...addressFeedbackWorkflowBudgetInputs(options.config),
+      "pr-number": options.context.artifact.number,
+    },
     logger: options.logger,
     owner,
     ref,
@@ -159,20 +174,6 @@ async function createPullRequestReviewFixComment(options: {
     },
     method: "POST",
     path: `/repos/${owner}/${repo}/issues/${options.context.artifact.number}/comments`,
-    token: options.runner.token,
-  });
-}
-
-async function addPullRequestReviewFixLabel(options: {
-  client: GitHubClient;
-  context: ContextPacket;
-  runner: RunnerOptions;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.runner.repository);
-  await options.client.request({
-    body: { labels: [gitVibeInternalLabels.reviewFix.name] },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/issues/${options.context.artifact.number}/labels`,
     token: options.runner.token,
   });
 }

@@ -12,10 +12,34 @@ describe("documentation workflow descriptions", () => {
 
   it("keeps Mermaid workflow docs aligned with PR feedback investigation", () => {
     const workflow = readFileSync("docs/WORKFLOW.md", "utf8");
+    const lifecycle = workflow.slice(
+      workflow.indexOf("## Lifecycle"),
+      workflow.indexOf("## Key Behavior"),
+    );
 
-    expect(workflow).toContain("FeedbackInvestigation");
+    expect(workflow).toContain("Feedback[address-feedback.yml]");
+    expect(lifecycle.match(/```mermaid/g)).toHaveLength(1);
+    expect(lifecycle).toContain("Develop --> DevEngine");
+    expect(lifecycle).toContain("FeedbackInvestigation -->|fixes required| DevEngine");
+    expect(workflow).toContain("UpdatePRBranch[Update existing PR branch]");
+    expect(workflow).not.toContain("Feedback --> PR");
     expect(workflow).toContain("PR gvi:ready-for-approval");
     expect(workflow).toContain("investigate` in PR-feedback mode");
+  });
+
+  it("keeps Mermaid workflow docs aligned with PR-first review", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const workflow = readFileSync("docs/WORKFLOW.md", "utf8");
+
+    expect(readme).toContain("K[Create or update PR]");
+    expect(readme).toContain("N[Update existing PR branch]");
+    expect(readme).toContain("K --> L");
+    expect(readme).toContain("N --> L");
+    expect(workflow).toContain('PrOpened["Source issue gvi:pr-opened"]');
+    expect(workflow).toContain("PrOpened -->|auto PR review| PrReviewStart");
+    expect(workflow).toContain("PrInProgress -->|review starts| PrReviewing");
+    expect(workflow).toContain("PR labeled git-vibe:review");
+    expect(workflow).toContain("Dispatch review.yml");
   });
 
   it("documents the local git-vibe-setup installer behavior", () => {

@@ -73,6 +73,7 @@ function toolInputSummary(tool: string, input: unknown): Record<string, unknown>
   if (tool === "edit") return editInputSummary(value);
   if (tool === "write") return writeInputSummary(value);
   if (tool === "multi_edit") return multiEditInputSummary(value);
+  if (tool === "github_search") return pickFields(value, ["query", "kind", "limit"]);
   if (tool === "web_fetch") return pickFields(value, ["url"]);
   if (tool === "web_search")
     return pickFields(value, ["query", "allowed_domains", "blocked_domains"]);

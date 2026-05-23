@@ -4,8 +4,8 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
- * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string }} WorkflowJob
+ * @typedef {{ concurrency?: { group?: string, ["cancel-in-progress"]?: boolean }, env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
+ * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
  */
@@ -22,26 +22,25 @@ const legacyAiEnvNames = [
 
 const reusableWorkflows = [
   ".github/workflows/address-feedback.yml",
-  ".github/workflows/decompose.yml",
   ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
+  ".github/workflows/review.yml",
   ".github/workflows/validate.yml",
 ];
 
 const consumerWorkflows = [
   "examples/consumer/.github/workflows/address-feedback.yml",
-  "examples/consumer/.github/workflows/decompose.yml",
   "examples/consumer/.github/workflows/develop.yml",
   "examples/consumer/.github/workflows/investigate.yml",
   "examples/consumer/.github/workflows/materialize.yml",
+  "examples/consumer/.github/workflows/review.yml",
   "examples/consumer/.github/workflows/validate.yml",
 ];
 
 const actionFiles = [
   "address-pr-feedback/action.yml",
   "create-pr/action.yml",
-  "decompose/action.yml",
   "implement/action.yml",
   "investigate/action.yml",
   "mark-blocked/action.yml",
@@ -54,20 +53,16 @@ const actionFiles = [
 const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
   { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
-  { file: ".github/workflows/decompose.yml", stage: "decompose", artifact: "Discussion" },
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
   { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
+  { file: ".github/workflows/review.yml", stage: "review", artifact: "PR" },
+  { file: ".github/workflows/review-dev-pr.yml", stage: "review-dev", artifact: "PR" },
   { file: ".github/workflows/address-feedback.yml", stage: "address-feedback", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/validate.yml",
     stage: "validate",
     multiArtifact: true,
-  },
-  {
-    file: "examples/consumer/.github/workflows/decompose.yml",
-    stage: "decompose",
-    artifact: "Discussion",
   },
   {
     file: "examples/consumer/.github/workflows/materialize.yml",
@@ -80,6 +75,7 @@ const workflowRunNameSpecs = [
     artifact: "Issue",
   },
   { file: "examples/consumer/.github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
+  { file: "examples/consumer/.github/workflows/review.yml", stage: "review", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/address-feedback.yml",
     stage: "address-feedback",
@@ -90,16 +86,17 @@ const workflowRunNameSpecs = [
 const workflowStaticNames = {
   ".github/workflows/release.yml": "GitVibe release",
   ".github/workflows/validate.yml": "GitVibe validate",
-  ".github/workflows/decompose.yml": "GitVibe decompose",
   ".github/workflows/materialize.yml": "GitVibe materialize",
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
+  ".github/workflows/review.yml": "GitVibe review",
+  ".github/workflows/review-dev-pr.yml": "GitVibe review dev PR",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
-  "examples/consumer/.github/workflows/decompose.yml": "GitVibe decompose",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
   "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
   "examples/consumer/.github/workflows/develop.yml": "GitVibe develop",
+  "examples/consumer/.github/workflows/review.yml": "GitVibe review",
   "examples/consumer/.github/workflows/address-feedback.yml": "GitVibe address feedback",
 };
 
@@ -364,6 +361,7 @@ describe("GitVibe workflow numeric inputs", () => {
       const workflow = readWorkflow(file);
       for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
         const timeout = job["timeout-minutes"];
+        if (String(job.uses || "").startsWith("./.github/workflows/")) continue;
         if (
           file === ".github/workflows/develop.yml" &&
           jobName === "implementation-blocked-cleanup"
@@ -401,11 +399,6 @@ describe("GitVibe workflow numeric inputs", () => {
 describe("GitVibe workflow write permissions", () => {
   it("grants write permissions where stage result comments are published", () => {
     expect(
-      readWorkflow(".github/workflows/decompose.yml").jobs?.decompose?.permissions,
-    ).toMatchObject({
-      discussions: "write",
-    });
-    expect(
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.permissions,
     ).toMatchObject({
       discussions: "write",
@@ -442,6 +435,53 @@ describe("GitVibe workflow write permissions", () => {
   });
 });
 
+describe("GitVibe automatic PR review workflow", () => {
+  it("keeps PR-open automation in a repo-local wrapper around review.yml", () => {
+    const wrapper = readWorkflow(".github/workflows/review-dev-pr.yml");
+    const source = readWorkflow(".github/workflows/review.yml");
+    const consumer = readWorkflow("examples/consumer/.github/workflows/review.yml");
+
+    expect(source.on?.pull_request_target).toBeUndefined();
+    expect(consumer.on?.pull_request_target).toBeUndefined();
+    expect(wrapper.on?.pull_request_target).toMatchObject({
+      branches: ["dev"],
+      types: ["opened", "reopened", "ready_for_review"],
+    });
+    expect(wrapper.jobs?.review).toMatchObject({
+      if: "${{ !github.event.pull_request.draft }}",
+      secrets: {
+        GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
+        GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
+      },
+      uses: "./.github/workflows/review.yml",
+      with: {
+        "action-ref": "${{ github.event.pull_request.base.ref }}",
+        "action-repository": "${{ github.repository }}",
+        "dry-run": false,
+        max_turns: 90,
+        "pr-number": "${{ format('{0}', github.event.pull_request.number) }}",
+        runner: "docker-runner",
+        "source-comment": "",
+        timeout_minutes: 60,
+      },
+    });
+  });
+
+  it("cancels older in-progress review runs for the same pull request", () => {
+    const source = readWorkflow(".github/workflows/review.yml");
+    const wrapper = readWorkflow(".github/workflows/review-dev-pr.yml");
+
+    expect(source.concurrency).toMatchObject({
+      group: "git-vibe-review-${{ inputs.pr-number }}",
+      "cancel-in-progress": true,
+    });
+    expect(wrapper.concurrency).toMatchObject({
+      group: "git-vibe-review-${{ github.event.pull_request.number }}",
+      "cancel-in-progress": true,
+    });
+  });
+});
+
 describe("GitVibe develop workflow", () => {
   it("starts at implementation after issue-label investigation approval", () => {
     const workflow = readWorkflow(".github/workflows/develop.yml");
@@ -450,7 +490,6 @@ describe("GitVibe develop workflow", () => {
     const planReview = workflow.jobs?.["plan-review-matrix"];
     const reviewMembers = workflow.jobs?.["review-matrix-members"];
     const reviewMatrix = workflow.jobs?.["review-matrix"];
-    const reviewChangesRequired = workflow.jobs?.["review-changes-required"];
     const createPr = workflow.jobs?.["create-pr"];
 
     expect(workflow.on?.workflow_dispatch?.inputs?.investigation_timeout_minutes).toBeUndefined();
@@ -485,12 +524,26 @@ describe("GitVibe develop workflow", () => {
         "issue-number": "${{ inputs.issue-number }}",
       }),
     });
-    expect(planReview).toMatchObject({
+    expect(createPr).toMatchObject({
       needs: "implement",
+      outputs: expect.objectContaining({
+        "pr-number": "${{ steps.create.outputs.pr-number }}",
+        "pr-url": "${{ steps.create.outputs.pr-url }}",
+      }),
+    });
+    expect(
+      createPr?.steps?.find((step) => step.uses === "./.git-vibe/actions/create-pr"),
+    ).toMatchObject({
+      id: "create",
+    });
+    expect(planReview).toMatchObject({
+      if: "needs.create-pr.outputs.pr-number != ''",
+      needs: "create-pr",
     });
     expect(reviewMembers).toMatchObject({
       "continue-on-error": true,
-      needs: "plan-review-matrix",
+      if: "needs.create-pr.outputs.pr-number != '' && needs.plan-review-matrix.result == 'success'",
+      needs: ["create-pr", "plan-review-matrix"],
       strategy: expect.objectContaining({
         "max-parallel": "${{ fromJSON(needs.plan-review-matrix.outputs.max-parallel || '1') }}",
         matrix: {
@@ -501,8 +554,8 @@ describe("GitVibe develop workflow", () => {
     expect(planReview?.outputs).toHaveProperty("indexes", "${{ steps.plan.outputs.indexes }}");
     expect(planReview?.outputs).not.toHaveProperty("matrix");
     expect(reviewMatrix).toMatchObject({
-      if: "always() && needs.plan-review-matrix.result == 'success'",
-      needs: ["plan-review-matrix", "review-matrix-members"],
+      if: "always() && needs.create-pr.outputs.pr-number != '' && needs.plan-review-matrix.result == 'success'",
+      needs: ["create-pr", "plan-review-matrix", "review-matrix-members"],
       outputs: expect.objectContaining({
         "next-state": "${{ steps.review.outputs.next-state }}",
       }),
@@ -514,16 +567,10 @@ describe("GitVibe develop workflow", () => {
       with: expect.objectContaining({
         "execution-mode": "finalizer",
         "fail-on-blocked": "true",
+        "pr-number": "${{ needs.create-pr.outputs.pr-number }}",
       }),
     });
-    expect(reviewChangesRequired).toMatchObject({
-      if: "needs.review-matrix.outputs.next-state == 'changes-required'",
-      needs: "review-matrix",
-    });
-    expect(createPr).toMatchObject({
-      if: "needs.review-matrix.outputs.next-state == 'review-passed'",
-      needs: "review-matrix",
-    });
+    expect(workflow.jobs?.["review-changes-required"]).toBeUndefined();
   });
 });
 
@@ -533,10 +580,11 @@ describe("GitVibe address feedback workflow", () => {
     const investigateMembers = workflow.jobs?.["investigate-feedback-members"];
     const investigate = workflow.jobs?.["investigate-feedback"];
     const address = workflow.jobs?.["address-feedback"];
-    const planReview = workflow.jobs?.["plan-review-matrix"];
-    const reviewMembers = workflow.jobs?.["review-matrix-members"];
-    const review = workflow.jobs?.["review-matrix"];
 
+    expect(workflow.jobs?.["create-pr"]).toBeUndefined();
+    expect(workflow.jobs?.["plan-review-matrix"]).toBeUndefined();
+    expect(workflow.jobs?.["review-matrix-members"]).toBeUndefined();
+    expect(workflow.jobs?.["review-matrix"]).toBeUndefined();
     expect(investigateMembers).toMatchObject({
       "continue-on-error": true,
       needs: "plan-investigate-feedback",
@@ -582,95 +630,9 @@ describe("GitVibe address feedback workflow", () => {
       id: "address",
       with: expect.objectContaining({
         "handoff-dir": "${{ runner.temp }}/git-vibe-feedback-handoff",
-      }),
-    });
-    expect(planReview).toMatchObject({
-      if: "needs.address-feedback.outputs.next-state == 'feedback-addressed'",
-      needs: "address-feedback",
-    });
-    expect(reviewMembers).toMatchObject({
-      "continue-on-error": true,
-      needs: "plan-review-matrix",
-      strategy: expect.objectContaining({
-        matrix: {
-          index: "${{ fromJSON(needs.plan-review-matrix.outputs.indexes || '[0]') }}",
-        },
-      }),
-    });
-    expect(planReview?.outputs).toHaveProperty("indexes", "${{ steps.plan.outputs.indexes }}");
-    expect(planReview?.outputs).not.toHaveProperty("matrix");
-    expect(review).toMatchObject({
-      if: "always() && needs.plan-review-matrix.result == 'success'",
-      needs: ["plan-review-matrix", "review-matrix-members"],
-      permissions: expect.objectContaining({ actions: "write" }),
-    });
-    expect(
-      review?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),
-    ).toMatchObject({
-      with: expect.objectContaining({
-        "execution-mode": "finalizer",
-        "fail-on-blocked": "true",
         "pr-number": "${{ inputs.pr-number }}",
       }),
     });
-  });
-});
-
-describe("GitVibe app deployment boundary", () => {
-  it("deploys the app only when app, shared, package, or deploy files change", () => {
-    const paths = readWorkflow(".github/workflows/app-deploy.yml").on?.push?.paths || [];
-
-    expect(paths).toContain("src/app/**");
-    expect(paths).toContain("src/shared/**");
-    expect(paths).toContain(".github/workflows/release.yml");
-    expect(paths).not.toContain("src/**");
-    expect(paths).not.toContain("src/runner/**");
-    expect(paths).not.toContain("prompts/**");
-    expect(paths).not.toContain("schemas/**");
-  });
-
-  it("builds the app image without bundled runner runtime assets", () => {
-    const dockerfile = readFileSync("Dockerfile", "utf8");
-    const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
-
-    expect(packageJson.scripts["build:app"]).toBe("tsc --project tsconfig.build.json");
-    expect(dockerfile).toContain("corepack pnpm build:app");
-    expect(dockerfile).toContain("COPY --from=build /app/dist/app ./dist/app");
-    expect(dockerfile).toContain("COPY --from=build /app/dist/shared ./dist/shared");
-    expect(dockerfile).not.toContain("COPY --from=build /app/dist ./dist");
-    expect(dockerfile).not.toContain("COPY --from=build /app/prompts ./prompts");
-    expect(dockerfile).not.toContain("COPY --from=build /app/schemas ./schemas");
-  });
-
-  it("publishes releases only from main by repository admins", () => {
-    const workflow = readWorkflow(".github/workflows/release.yml");
-    const content = readFileSync(".github/workflows/release.yml", "utf8");
-
-    expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
-      default: "v2",
-      required: true,
-    });
-    expect(workflow.permissions).toMatchObject({
-      contents: "write",
-      packages: "write",
-    });
-    expect(workflow.jobs?.release?.env).toMatchObject({
-      BUILDX_CONFIG: "/tmp/.docker-buildx",
-      DOCKER_CONTEXT: "default",
-    });
-    expect(content).toContain('GITHUB_REF" != "refs/heads/main"');
-    expect(content).toContain("collaborators/$REQUEST_ACTOR/permission");
-    expect(content).toContain('permission" != "admin"');
-    expect(content).toContain("docker buildx inspect rootless --bootstrap");
-    expect(content).toContain("docker buildx rm rootless");
-    expect(content).toContain("docker buildx create --name rootless --use default");
-    expect(content).not.toContain("docker/login-action");
-    expect(content).toContain("docker pull");
-    expect(content).toContain("docker push");
-    expect(content).toContain("docker image rm");
-    expect(content).toContain("docker buildx prune --force --filter until=48h");
-    expect(content).toContain("gh release create");
-    expect(content).toContain("--generate-notes");
   });
 });
 

@@ -1,17 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, stepCountIs } from "ai";
-import { createBash } from "agentool/bash";
-import { createDiff } from "agentool/diff";
-import { createEdit } from "agentool/edit";
-import { createGlob } from "agentool/glob";
-import { createGrep } from "agentool/grep";
-import { createMultiEdit } from "agentool/multi-edit";
-import { createOutputValidator } from "agentool/output-validator";
-import { createRead } from "agentool/read";
-import { createWebFetch } from "agentool/web-fetch";
-import { createWebSearch } from "agentool/web-search";
-import { createWrite } from "agentool/write";
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import {
   activeProfileByName,
@@ -30,6 +19,8 @@ import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexCliStage } from "./codex-cli.js";
 import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
 import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
+import { createTools, stageToolNames } from "./ai-tools.js";
+import { systemWithProfileContext } from "./profile-context.js";
 import {
   extractValidatedOutput,
   outputValidatorContentFromSteps,
@@ -134,16 +125,25 @@ async function runAiStageWithProfile(
 ): Promise<string> {
   const profile = activeProfileByName(options.config, profileName);
   const adapter = adapterName(profile);
+  const profileOptions = {
+    ...options,
+    system: systemWithProfileContext({
+      cwd: options.cwd,
+      profile,
+      profileName,
+      system: options.system,
+    }),
+  };
   if (adapter === "cli-codex") {
     return runCodexCliStage({
-      options,
+      options: profileOptions,
       profile,
       profileName,
     });
   }
   if (adapter === "cli-claude-code") {
     return runClaudeCodeCliStage({
-      options,
+      options: profileOptions,
       profile,
       profileName,
     });
@@ -152,7 +152,7 @@ async function runAiStageWithProfile(
     throw new Error(`AI profile ${profileName} uses unsupported adapter ${adapter}.`);
   }
 
-  return runAiSdkStageWithProfile(options, profileName, profile);
+  return runAiSdkStageWithProfile(profileOptions, profileName, profile);
 }
 
 async function runAiSdkStageWithProfile(
@@ -160,8 +160,9 @@ async function runAiSdkStageWithProfile(
   profileName: string,
   profile: Record<string, unknown>,
 ): Promise<string> {
-  const tools = createTools(options);
+  const toolNames = stageToolNames(options);
   const runtime = aiSdkRuntime({ options, profile, profileName });
+  const tools = createTools(options, runtime.model, toolNames);
   const primaryTurnBudget = primaryTurnBudgetFor(options);
 
   const primaryResult = await runAiSdkRequest(runtime, {
@@ -177,7 +178,7 @@ async function runAiSdkStageWithProfile(
   }
 
   const finalizationTurns = options.maxTurns - primaryTurnBudget;
-  if (!options.reserveFinalizationTurns || finalizationTurns <= 0) throw primary.error;
+  if (!structuredOutputFinalizationEnabled(options) || finalizationTurns <= 0) throw primary.error;
 
   options.logger?.event("ai.continuation.start", {
     max_turns: finalizationTurns,
@@ -347,10 +348,17 @@ function toolChoiceInput(request: AiSdkRequest): object {
 }
 
 function primaryTurnBudgetFor(options: RunAiStageOptions): number {
-  if (!options.reserveFinalizationTurns || options.maxTurns <= MIN_TURNS_BEFORE_RESERVE) {
+  if (
+    !structuredOutputFinalizationEnabled(options) ||
+    options.maxTurns <= MIN_TURNS_BEFORE_RESERVE
+  ) {
     return options.maxTurns;
   }
   return options.maxTurns - OUTPUT_FINALIZATION_RESERVED_TURNS;
+}
+
+function structuredOutputFinalizationEnabled(options: RunAiStageOptions): boolean {
+  return options.reserveFinalizationTurns !== false;
 }
 
 async function validatedOutputOrError(
@@ -500,33 +508,6 @@ function createModel(
   }).chat(model);
 }
 
-function createTools(options: RunAiStageOptions): ToolSet {
-  const cwd = options.cwd;
-  const tools: ToolSet = {
-    output_validator: createOutputValidator({
-      schema: options.schema as never,
-      schemaId: options.schemaId,
-    }),
-  };
-
-  for (const toolName of toolsForStage(options)) {
-    if (toolName === "read") tools.read = createRead({ cwd });
-    if (toolName === "grep") tools.grep = createGrep({ cwd });
-    if (toolName === "glob") tools.glob = createGlob({ cwd });
-    if (toolName === "bash-readonly")
-      tools.bash = createBash({ cwd, description: "Read-only shell commands only." });
-    if (toolName === "bash") tools.bash = createBash({ cwd });
-    if (toolName === "diff") tools.diff = createDiff({ cwd });
-    if (toolName === "edit") tools.edit = createEdit({ cwd });
-    if (toolName === "write") tools.write = createWrite({ cwd });
-    if (toolName === "multi-edit") tools.multi_edit = createMultiEdit({ cwd });
-    if (toolName === "web-fetch") tools.web_fetch = createWebFetch();
-    if (toolName === "web-search") tools.web_search = createWebSearch();
-  }
-
-  return tools;
-}
-
 function modelName(profile: Record<string, unknown>): string {
   return aiSdkModelName(profile);
 }
@@ -612,39 +593,6 @@ function generationNumber(profile: Record<string, unknown>, key: string, fallbac
   const generation = profile.generation as Record<string, unknown> | undefined;
   const value = generation?.[key];
   return typeof value === "number" ? value : fallback;
-}
-
-function toolsForStage(options: RunAiStageOptions): string[] {
-  if (options.toolOverride) {
-    const disallowed = options.toolOverride.filter((tool) => !toolAllowedForStage(tool, options));
-    if (disallowed.length > 0) {
-      throw new Error(
-        `AI tool override for ${options.stage} includes disallowed tools: ${disallowed.join(", ")}.`,
-      );
-    }
-    return options.toolOverride;
-  }
-
-  const configuredTools = stageConfigFor(options.config, options.stage).tools;
-  if (configuredTools === undefined) return options.stageDefinition.tools;
-  if (!Array.isArray(configuredTools) || configuredTools.some((tool) => !stringValue(tool))) {
-    throw new Error(`ai.stages.${options.stage}.tools must be a string array.`);
-  }
-
-  const tools = configuredTools as string[];
-  const disallowed = tools.filter((tool) => !options.stageDefinition.tools.includes(tool));
-  if (disallowed.length > 0) {
-    throw new Error(
-      `ai.stages.${options.stage}.tools includes disallowed tools: ${disallowed.join(", ")}.`,
-    );
-  }
-
-  return tools;
-}
-
-function toolAllowedForStage(tool: string, options: RunAiStageOptions): boolean {
-  if (options.stageDefinition.tools.includes(tool)) return true;
-  return tool === "bash-readonly" && options.stageDefinition.tools.includes("bash");
 }
 
 function validateStageConfig(options: RunAiStageOptions): void {

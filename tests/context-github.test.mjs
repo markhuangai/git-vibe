@@ -51,6 +51,7 @@ describe("GitHub context builders", () => {
       "Issue body",
       "First",
       "Second",
+      "<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=4 -->\n## GitVibe Review Matrix",
       "Path: src/file.ts\nDiff:\n@@ -1 +1 @@\n\nReview feedback",
     ]);
     expect(context.timeline.at(-1)).toMatchObject({
@@ -94,6 +95,7 @@ describe("GitHub pull request feedback context", () => {
         })
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce(pullRequestFixture())
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce({
           ...issueFixture(),
           body: "Source issue body\n\n<!-- git-vibe:source-discussion number=9 url=https://github.com/example/repo/discussions/9 -->",
@@ -148,7 +150,8 @@ function pullRequestContextClient() {
       .fn()
       .mockResolvedValueOnce(issueFixture())
       .mockResolvedValueOnce(commentFixtures())
-      .mockResolvedValueOnce(pullRequestFixture()),
+      .mockResolvedValueOnce(pullRequestFixture())
+      .mockResolvedValueOnce(reviewFixtures()),
     graphql: vi.fn().mockResolvedValueOnce(reviewThreadFixtures()),
   });
 }
@@ -188,6 +191,27 @@ function commentFixtures() {
       html_url: "comment-1",
       id: 1,
       user: { login: "a" },
+    },
+  ];
+}
+
+function reviewFixtures() {
+  return [
+    {
+      author_association: "MEMBER",
+      body: [
+        "<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=4 -->",
+        "## GitVibe Review Matrix",
+      ].join("\n"),
+      html_url: "review-url",
+      id: 7,
+      submitted_at: "2026-01-04T12:00:00Z",
+      user: { login: "git-vibe" },
+    },
+    {
+      body: "",
+      id: 8,
+      submitted_at: "2026-01-04T13:00:00Z",
     },
   ];
 }
@@ -487,6 +511,25 @@ describe("GitHub client", () => {
     );
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe("GitHub client transport errors", () => {
+  it("includes endpoint and network cause when fetch fails before an HTTP response", async () => {
+    const cause = Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+    const failure = Object.assign(new TypeError("fetch failed"), { cause });
+    globalThis.fetch = vi.fn().mockRejectedValueOnce(failure);
+
+    const client = new GitHubClient({ apiBaseUrl: "https://api.test", retryBaseDelayMs: 0 });
+    await expect(
+      client.request({
+        method: "GET",
+        path: "/repos/a/b/issues/33/comments?per_page=100",
+        token: "secret-token",
+      }),
+    ).rejects.toThrow(
+      'GitHub API GET /repos/a/b/issues/33/comments?per_page=100 transport failed on attempt 1: name="TypeError" message="fetch failed" cause_name="Error" cause_message="socket hang up" cause_code="ECONNRESET"',
+    );
   });
 });
 

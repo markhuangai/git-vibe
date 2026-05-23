@@ -91,7 +91,7 @@ describe("stage runner discussion dry-runs", () => {
         token: "token",
       }),
     ).resolves.toMatchObject({
-      parsedOutput: { issue_title: "GitVibe dry run: Discussion title" },
+      parsedOutput: { issues: [{ title: "GitVibe dry run: Discussion title" }] },
     });
 
     globalThis.fetch = fetchMock([
@@ -99,6 +99,7 @@ describe("stage runner discussion dry-runs", () => {
       commentsResponse([]),
       pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
+      pullRequestReviewsResponse(),
     ]);
     await expect(
       runStage({
@@ -283,9 +284,19 @@ describe("stage runner materialize writes", () => {
                   assumptions: [],
                   comment_body: "Created issue.",
                   findings: [],
-                  issue_body: "Implementation body.",
-                  issue_title: "Implement feature",
-                  next_state: "implementation-issue-ready",
+                  issues: [
+                    {
+                      acceptance_criteria: ["Issue is created."],
+                      background: "Implementation body.",
+                      backpressure_commands: ["corepack pnpm test"],
+                      blocked_by: [],
+                      parallel_group: "default",
+                      requirements: ["Implement feature."],
+                      review_guidelines: ["Verify behavior."],
+                      title: "Implement feature",
+                    },
+                  ],
+                  next_state: "implementation-issues-ready",
                   references: [],
                   stage: "materialize",
                   status: "completed",
@@ -351,9 +362,19 @@ describe("stage runner materialize fallbacks", () => {
                   assumptions: [],
                   comment_body: "Created issue.",
                   findings: [],
-                  issue_body: "",
-                  issue_title: "",
-                  next_state: "implementation-issue-ready",
+                  issues: [
+                    {
+                      acceptance_criteria: ["Issue is created."],
+                      background: "Implementation body.",
+                      backpressure_commands: [],
+                      blocked_by: [],
+                      parallel_group: "default",
+                      requirements: ["Implement feature."],
+                      review_guidelines: ["Verify behavior."],
+                      title: "Implement feature",
+                    },
+                  ],
+                  next_state: "implementation-issues-ready",
                   references: [],
                   stage: "materialize",
                   status: "completed",
@@ -385,7 +406,7 @@ describe("stage runner materialize fallbacks", () => {
     ).resolves.toMatchObject({ status: "completed" });
 
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(fetch.mock.calls[1][1].body).title).toBe("Implement: Discussion title");
+    expect(JSON.parse(fetch.mock.calls[1][1].body).title).toBe("Implement feature");
   });
 });
 
@@ -602,6 +623,7 @@ function issueResponse(body, overrides = {}) {
 const commentsResponse = (comments) => response(200, comments);
 const reviewThreadsResponse = () =>
   graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
+const pullRequestReviewsResponse = () => response(200, []);
 /** @param {string} branch */
 const pullRequestResponse = (branch) =>
   response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });

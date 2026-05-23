@@ -1,5 +1,5 @@
 import { addDiscussionLabel, removeDiscussionLabel } from "../shared/discussions.js";
-import { equivalentGitVibeLabelNames, gitVibeLabels } from "../shared/labels.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import type { GitHubClient } from "../shared/github.js";
 import type { ContextPacket, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
@@ -26,18 +26,6 @@ export async function applyDiscussionStageLabelTransition(
     });
     return;
   }
-
-  if (options.runner.stage === "decompose") {
-    const completed = String(options.parsedOutput.status || "completed") === "completed";
-    await applyDiscussionLabels(options, {
-      add: completed ? [gitVibeLabels.decomposed.name] : [gitVibeLabels.blocked.name],
-      remove: [
-        gitVibeLabels.decomposing.name,
-        gitVibeLabels.decompose.name,
-        completed ? gitVibeLabels.blocked.name : gitVibeLabels.decomposed.name,
-      ],
-    });
-  }
 }
 
 export async function applyDiscussionStageStartLabelTransition(
@@ -49,17 +37,6 @@ export async function applyDiscussionStageStartLabelTransition(
       remove: [gitVibeLabels.validated.name, gitVibeLabels.blocked.name],
     });
     return;
-  }
-
-  if (options.runner.stage === "decompose") {
-    await applyDiscussionLabels(options, {
-      add: [gitVibeLabels.decomposing.name],
-      remove: [
-        gitVibeLabels.decomposed.name,
-        gitVibeLabels.blocked.name,
-        gitVibeLabels.decompose.name,
-      ],
-    });
   }
 }
 
@@ -77,7 +54,7 @@ async function applyDiscussionLabels(
   }
 
   for (const label of changes.remove) {
-    await removeEquivalentDiscussionLabels({ ...options, discussionId, label });
+    await removeDiscussionLabelIfPresent({ ...options, discussionId, label });
   }
   for (const label of changes.add) {
     options.logger.event("github.discussion.label.start", {
@@ -98,30 +75,28 @@ async function applyDiscussionLabels(
   }
 }
 
-async function removeEquivalentDiscussionLabels(options: {
+async function removeDiscussionLabelIfPresent(options: {
   client: GitHubClient;
   discussionId: string;
   label: string;
   logger: StageLogger;
   runner: RunnerOptions;
 }): Promise<void> {
-  for (const label of equivalentGitVibeLabelNames(options.label)) {
-    try {
-      await removeDiscussionLabel({
-        client: options.client,
-        discussionId: options.discussionId,
-        label,
-        repository: options.runner.repository,
-        token: options.runner.token,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("404")) continue;
-      options.logger.event("github.discussion.label.remove.failed", {
-        error: error instanceof Error ? error.message : String(error),
-        label,
-      });
-      throw error;
-    }
+  try {
+    await removeDiscussionLabel({
+      client: options.client,
+      discussionId: options.discussionId,
+      label: options.label,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return;
+    options.logger.event("github.discussion.label.remove.failed", {
+      error: error instanceof Error ? error.message : String(error),
+      label: options.label,
+    });
+    throw error;
   }
 }
 

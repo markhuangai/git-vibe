@@ -509,7 +509,10 @@ describe("GitVibe app server command workflow variants", () => {
 
 describe("GitVibe app server PR review dispatch", () => {
   it("dispatches trusted changes-requested review submissions with review metadata", async () => {
-    const client = createClient();
+    const client = createClient({
+      configContent:
+        "ai:\n  budgets:\n    default_max_turns: 90\n    feedback_max_turns: 123\n    feedback_timeout_minutes: 124\n",
+    });
     const app = createApp({ client });
 
     await app.handleWebhook("pull_request_review", {
@@ -528,7 +531,11 @@ describe("GitVibe app server PR review dispatch", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({ "pr-number": "12" }),
+        inputs: expect.objectContaining({
+          "pr-number": "12",
+          max_turns: "123",
+          timeout_minutes: "124",
+        }),
         ref: "main",
         return_run_details: true,
       }),

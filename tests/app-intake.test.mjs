@@ -4,7 +4,6 @@ import {
   createRepositoryDiscussion,
 } from "../src/shared/discussions.ts";
 import {
-  equivalentGitVibeLabelNames,
   gitVibeInternalLabels,
   gitVibeLabelList,
   gitVibeLabels,
@@ -120,11 +119,7 @@ describe("GitVibe labels", () => {
     expect(isGitVibeLabel("gvi:runtime")).toBe(true);
     expect(isGitVibeLabel("bug")).toBe(false);
     expect(isGitVibeRuntimeLabel("gvi:investigating")).toBe(true);
-    expect(isGitVibeRuntimeLabel("git-vibe:investigating")).toBe(true);
-    expect(equivalentGitVibeLabelNames("gvi:investigating")).toEqual([
-      "gvi:investigating",
-      "git-vibe:investigating",
-    ]);
+    expect(isGitVibeRuntimeLabel("git-vibe:investigating")).toBe(false);
   });
 });
 

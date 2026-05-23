@@ -166,7 +166,7 @@ describe("server action queued discussion comments", () => {
     const context = actionContext({ payload: { discussion: { node_id: "discussion-node" } } });
     discussionComments.mockResolvedValueOnce([
       {
-        body: "<!-- git-vibe:workflow-queued workflow=decompose.yml artifact=discussion number=3 -->",
+        body: "<!-- git-vibe:workflow-queued workflow=materialize.yml artifact=discussion number=3 -->",
         id: "comment-node",
       },
       {
@@ -178,9 +178,9 @@ describe("server action queued discussion comments", () => {
     await actions.postQueuedWorkflowComment(context, {
       artifact: "discussion",
       number: "3",
-      reason: actions.labelReason("git-vibe:decompose"),
+      reason: actions.labelReason("git-vibe:approved"),
       ref: "main",
-      workflow: "decompose.yml",
+      workflow: "materialize.yml",
     });
 
     expect(deleteDiscussionComment).toHaveBeenCalledWith(
@@ -188,7 +188,7 @@ describe("server action queued discussion comments", () => {
     );
     expect(addDiscussionComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining("GitVibe queued `decompose.yml`"),
+        body: expect.stringContaining("GitVibe queued `materialize.yml`"),
         discussionId: "discussion-node",
       }),
     );
@@ -215,9 +215,9 @@ describe("server action queued discussion comments", () => {
     await actions.postQueuedWorkflowComment(context, {
       artifact: "discussion",
       number: "3",
-      reason: actions.labelReason("git-vibe:decompose"),
+      reason: actions.labelReason("git-vibe:approved"),
       ref: "main",
-      workflow: "decompose.yml",
+      workflow: "materialize.yml",
     });
 
     expect(discussionComments).not.toHaveBeenCalled();
@@ -303,9 +303,7 @@ describe("server action pull request labels", () => {
     expect(removeIssueLabel.mock.calls.map(([request]) => request)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ issueNumber: "5", label: "gvi:ready-for-approval" }),
-        expect.objectContaining({ issueNumber: "5", label: "git-vibe:ready-for-approval" }),
         expect.objectContaining({ issueNumber: "12", label: "gvi:pr-opened" }),
-        expect.objectContaining({ issueNumber: "12", label: "git-vibe:pr-opened" }),
       ]),
     );
   });
@@ -339,16 +337,13 @@ describe("server action formatting helpers", () => {
     ).toBe(true);
     expect(
       actions.issueHasLabel({ labels: [{ name: "git-vibe:investigated" }] }, "gvi:investigated"),
-    ).toBe(true);
+    ).toBe(false);
     expect(actions.issueHasLabel(undefined, "gvi:investigated")).toBe(false);
     expect(actions.labelReason("git-vibe:validate")).toContain("git-vibe:validate");
     expect(actions.protectedLabelRejectionBody(actionContext(), "git-vibe:approved")).toContain(
       "@alice",
     );
     expect(actions.internalLabelRejectionBody("gvi:internal")).toContain("internal");
-    expect(actions.approvalRequiresInvestigationBody("git-vibe:approved")).toContain(
-      "git-vibe:investigate",
-    );
   });
 });
 

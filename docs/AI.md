@@ -58,17 +58,16 @@ AI integration layers:
 
 Initial stage contracts:
 
-| Stage                   | Repository scope                    | Output                                                                      | May advance state                                                   |
-| ----------------------- | ----------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Triage classification   | Issue/discussion context            | Suggested type, labels, confidence, missing info                            | No, except safe labels if configured                                |
-| Bug investigation       | Repo snapshot and issue timeline    | Findings, suspected areas, blocking questions, concrete implementation plan | No code changes                                                     |
-| Feature validation      | Repo snapshot and discussion thread | Findings, contradictions, open questions, and readiness decision            | May mark ready for decomposition only if policy allows              |
-| Feature decomposition   | Repo snapshot and discussion thread | Story units, dependencies, acceptance criteria, and review guidance         | No issue creation without protected approval                        |
-| Materialization         | Accepted decomposed discussion      | Implementation issue title and body                                         | May create a labeled implementation issue                           |
-| Validation              | Repo snapshot and accepted context  | Pass/fail, contradictions, implementation brief                             | May mark ready only if policy allows                                |
-| Implementation          | `git-vibe/{root-issue}` branch      | Commits, test output, implementation summary                                | May create/update branch, not merge                                 |
-| Review matrix           | Branch diff and review context      | Findings by reviewer role, pass/fail, required fixes                        | May create `gvi:review-fix` issue follow-ups or PR feedback retries |
-| PR feedback remediation | Existing PR branch                  | Fix commits or skipped-comment rationale                                    | May update PR branch, not approve/merge                             |
+| Stage                   | Repository scope                     | Output                                                                                  | May advance state                                                 |
+| ----------------------- | ------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Triage classification   | Issue/discussion context             | Suggested type, labels, confidence, missing info                                        | No, except safe labels if configured                              |
+| Bug investigation       | Repo snapshot and issue timeline     | Findings, suspected areas, blocking questions, concrete implementation plan             | No code changes                                                   |
+| Feature validation      | Repo snapshot and discussion thread  | Findings, contradictions, open questions, and readiness decision                        | May mark ready for materialization only if policy allows          |
+| Materialization         | Accepted validated discussion        | Implementation issue drafts with dependencies, acceptance criteria, and review guidance | May create labeled implementation issues                          |
+| Validation              | Repo snapshot and accepted context   | Pass/fail, contradictions, implementation brief                                         | May mark ready only if policy allows                              |
+| Implementation          | `git-vibe/{root-issue}` branch       | Commits, test output, implementation summary                                            | Uses branch-update engine; may update issue branch, not merge     |
+| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes, optional inline PR comments       | May mark a PR ready or blocked, and may queue PR feedback retries |
+| PR feedback remediation | Existing PR branch                   | Fix commits or skipped-comment rationale                                                | Uses branch-update engine; may update PR branch, not create PR    |
 
 AI result envelope:
 
@@ -79,6 +78,7 @@ AI result envelope:
   "confidence": 0.74,
   "summary": "...",
   "findings": [],
+  "inline_comments": [],
   "blocking_questions": ["What expected behavior should implementation preserve?"],
   "questions": [],
   "assumptions": [],
@@ -93,7 +93,10 @@ AI result envelope:
 
 - AI cannot authorize itself. Approval, merge, protected-label acceptance, and release decisions always require admin/collaborator authority.
 - Non-write stages may publish deterministic comments and label transitions, but GitVibe applies branch and file mutations only for write stages.
-- Implementation and feedback stages run on isolated branches and may use the configured repository PAT only for deterministic GitHub writes performed by GitVibe code.
+- Implementation and feedback stages share deterministic branch-update mechanics
+  for validation, commit, and push. Implementation targets
+  `git-vibe/{root-issue}`; PR feedback targets the existing PR head branch and
+  must not create a new PR.
 - GitHub writes are deterministic code operations. AI returns a structured result envelope; GitVibe validates it, renders comments, updates labels, links artifacts, and dispatches workflows.
 - Every AI comment should include a concise summary, concrete evidence/references, unresolved questions, and the next expected human action.
 - Investigation can hand off to implementation only when `next_state` is `ready-for-implementation`, `blocking_questions` is empty, and `implementation_plan` is non-empty. Blocking maintainer decisions must not be hidden in general `questions`.
@@ -112,7 +115,7 @@ Repository prompt addition paths:
 - `.git-vibe/prompts/<stage>/system.md`: appended to the rendered system prompt for that stage.
 - `.git-vibe/prompts/<stage>/user.md`: appended to the rendered user prompt for that stage.
 
-The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `decompose`, `materialize`, `validate`).
+The `<stage>` folder name matches the `promptDir` from `stageDefinitions` (e.g., `investigate`, `implement`, `review-matrix`, `create-pr`, `address-pr-feedback`, `materialize`, `validate`).
 
 When an addition file exists, GitVibe appends its contents inside an explicit `<repository_prompt_addition>` XML section after the bundled GitVibe-controlled prompt content. The XML section makes clear that the content is repository-provided additive prompt text. GitVibe does not emit the XML section when the matching file is missing or empty.
 
@@ -125,7 +128,7 @@ Rules:
 
 ## Provider Strategy
 
-- Provider execution uses `ai-sdk-agentool` with Vercel AI SDK, `agentool` 1.4.x, provider SDKs, and Zod schemas.
+- Provider execution uses `ai-sdk-agentool` with Vercel AI SDK, `agentool` 1.5.x, provider SDKs, and Zod schemas.
 - Provider support should include OpenAI, Anthropic, and OpenAI-compatible custom endpoints through the same config shape.
 - Additional providers should be added behind the same adapter contract, not by changing workflow stages.
 - External apps such as Codex, Claude, and Copilot are mention partners. GitVibe may invoke them with configured comments and ingest their visible replies, but GitVibe should not depend on private third-party state or assume they respond to bot mentions.
@@ -139,7 +142,7 @@ CLI authentication guidance:
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 - CLI commands are fixed by adapter: `cli-codex` runs `codex exec` and `cli-claude-code` runs `claude -p`. Profiles do not accept a `command` override.
-- CLI adapters bypass native permission and sandbox prompts. GitVibe does not pass stage `tools` as CLI allowed-tool settings; Codex and Claude Code own their native agent/tool loops. Run them only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
+- CLI adapters bypass native permission and sandbox prompts. GitVibe disables native CLI web-search/web-fetch controls where the CLI exposes them, but shell or process network egress is only a hard boundary when the runner blocks it. Run CLI profiles only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
 
 ## Profile-Based Routing
 
@@ -172,6 +175,9 @@ ai:
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.3-codex
+      context:
+        files:
+          - AGENTS.md
       reasoning:
         effort: high
         summary: concise
@@ -208,26 +214,36 @@ ai:
 
 Role definitions live in `.git-vibe/role-group/*.md`. A role group entry pairs a
 role markdown file with the exact profile that should run it. The synthesizer
-profile merges successful role outputs into the same final stage schema that
-single-profile execution returns. `role_group` is allowed only for read-only
-stages: `investigate`, `validate`, `decompose`, and `review-matrix`.
+profile receives the configured role definitions and successful role outputs,
+can inspect repository and GitHub context, and returns the same final stage
+schema that single-profile execution returns. `role_group` is allowed only for
+read-only stages: `investigate`, `validate`, and `review-matrix`.
+
+Profile context files are explicit per-profile system prompt additions. GitVibe
+does not auto-load `AGENTS.md`, `CLAUDE.md`, or Codex/Claude native context
+files. When `ai.profiles.<profile>.context.files` is configured, each listed
+workspace-relative file is appended to the system prompt inside a
+`<git_vibe_profile_context>` block for runs using that profile, including
+fallback retries, role-group members, and finalizers. Missing files, empty files,
+absolute paths, `..` traversal, symlinks, directories, and paths resolving
+outside the workspace fail fast.
 
 Normalized reasoning config:
 
 - `reasoning.effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. Adapters should reject unsupported values for the selected provider/model with a clear config error.
 - `reasoning.summary`: `auto`, `concise`, `detailed`, or `none` where the adapter supports summaries.
-- `context_window_tokens`: optional positive integer on an AI profile. When set, `ai-sdk-agentool` logs per-step `context_used_pct` from reported input tokens.
+- `context_window_tokens`: optional positive integer on an AI profile. Set this to the selected model's context window; `ai-sdk-agentool` uses it for compaction and per-step `context_used_pct` logs.
+- `context.files`: optional non-empty list of relative workspace files to append to this profile's system prompt.
 - `provider.api_key.from_bundle`: AI SDK provider API key inside `GITVIBE_AI_ENV_JSON`.
 - `provider.base_url.from_bundle`: AI SDK provider base URL inside `GITVIBE_AI_ENV_JSON`; required for OpenAI-compatible endpoints and optional for native OpenAI.
 - `env.<NAME>`: CLI-only environment mapping for spawned CLI processes. Use `{ from_bundle: KEY }` to read a key inside `GITVIBE_AI_ENV_JSON`, or a literal string for values intentionally committed in config.
 - `auth_json.from_bundle`: `cli-codex` key inside `GITVIBE_AI_ENV_JSON`; the bundle value must be an escaped `auth.json` string, such as `jq -Rs . < ~/.codex/auth.json`. GitVibe writes that string to `CODEX_HOME/auth.json`, then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret after successful Codex CLI execution.
 - `provider_options`: adapter-specific passthrough for settings GitVibe does not normalize yet.
-- `ai.budgets.max_context_window_tokens`: positive integer context budget for `ai-sdk-agentool` compaction and context usage logs. Default: `200000`.
 
 Adapter mappings:
 
-- `cli-codex`: run `codex exec` with `--dangerously-bypass-approvals-and-sandbox`; map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
-- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`. GitVibe does not set `--bare` unless a profile explicitly opts in with `bare: true`.
+- `cli-codex`: run `codex exec` with `--dangerously-bypass-approvals-and-sandbox`; do not pass `--search`; map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
+- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass `--disallowedTools WebFetch,WebSearch`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`. GitVibe does not set `--bare` unless a profile explicitly opts in with `bare: true`.
 - CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native agent/tool loop and run without per-tool permission prompts in this workflow.
 - `ai-sdk-agentool` with native OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable; set a stable `providerOptions.openai.promptCacheKey` by default.
 - `ai-sdk-agentool` with OpenAI-compatible endpoints: do not add OpenAI prompt cache request fields by default because non-OpenAI endpoints may reject unknown fields.
@@ -235,25 +251,50 @@ Adapter mappings:
 
 AI SDK tool policy by stage:
 
-Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters ignore this setting because their native agents own tool selection.
+Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters do not receive these tool lists because their native agents own tool selection.
 
 - triage: no tools, GitHub context only.
-- investigation/refinement/validation: read, grep, glob, limited read-only bash, web fetch, web search.
+- investigation/refinement/validation: read, grep, glob, GitHub-only project search, and read-only `agent` subagents; website fetch/search is disabled by default.
 - implementation: read, grep, glob, edit, write, multi-edit, bash, diff.
-- review: read, grep, glob, read-only bash/test commands, diff.
+- review: read, grep, glob, diff, and read-only `agent` subagents.
 - PR feedback remediation: implementation tools scoped to the existing PR branch.
+
+The `agent` tool is available only to read-only stages (`investigate`, `validate`,
+and `review-matrix`). GitVibe configures child agents with read-only tools and
+GitVibe-controlled system prompts. Child agents do not receive the parent prompt
+automatically, so the orchestrating model must include the relevant issue or PR
+context and the exact investigation question in each delegated prompt.
+
+Web access policy:
+
+```yaml
+ai:
+  security:
+    web:
+      # Empty or absent allowed_domains keeps website access disabled.
+      allowed_domains: []
+      # - github.com
+      # - "*.github.com"
+```
+
+- Empty or absent `allowed_domains` exposes `github_search` for current-repository GitHub material and disables `web-search` and `web-fetch`.
+- Non-empty `allowed_domains` permits AI SDK website search and fetch for matching domains. GitVibe's built-in search remains `github_search`; a general external search backend is not configured by default.
+- Domain entries are exact domains or leftmost wildcards such as `*.github.com`; arbitrary regexes, URL prefixes, and hosts like `github.com.evil.example` are rejected.
+- CLI adapters keep running under this policy and log that native web tools are disabled where possible. They cannot enforce domain-level network egress through CLI arguments alone.
 
 Default AI budgets:
 
-- default max turns: `90`.
-- implementation max turns: `200`.
-- PR feedback max turns: `120`.
-- validation repair max turns: `45` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
-- validation repair attempts: `3` per implementation run.
-- issue review-fix continuation depth limit: `5` follow-up issues before GitVibe blocks and asks for human intervention.
-- PR feedback review-fix retry limit: `3` `address-feedback.yml` redispatches before the PR remains blocked.
-- provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
-- ai-sdk-agentool context window: `200000` estimated tokens, with compaction before a model call when messages reach `90%` of the configured window.
-- investigation/refinement/validation/review timeout: `60` minutes.
-- implementation and PR feedback timeout: `120` minutes.
-- PR creation/linking timeout: `15` minutes.
+- `ai.budgets.default_timeout_minutes`: `60` minutes for standalone investigate, validate, materialize, and review workflows unless a workflow-specific timeout overrides it.
+- `ai.budgets.review_timeout_minutes`: `60` minutes for PR review jobs and develop workflow review jobs.
+- `ai.budgets.implementation_timeout_minutes`: `120` minutes for implementation jobs.
+- `ai.budgets.feedback_timeout_minutes`: `120` minutes for PR feedback investigation, remediation, and follow-up review jobs.
+- `ai.budgets.create_pr_timeout_minutes`: `15` minutes for PR creation/linking.
+- `ai.budgets.default_max_turns`: `90` turns for stages that use reusable workflow `max_turns`.
+- `ai.budgets.implementation_max_turns`: `200` turns for implementation.
+- `ai.budgets.feedback_max_turns`: `120` turns for PR feedback remediation and review.
+- `ai.budgets.validation_repair_max_turns`: `45` turns per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
+- `ai.budgets.validation_repair_attempts`: `3` per implementation run.
+- `ai.budgets.pr_feedback_max_iterations`: `3` `address-feedback.yml` redispatches before the PR remains blocked.
+- `ai.budgets.request_retry_attempts`: `3` provider API retries.
+- `ai.budgets.request_retry_delay_seconds`: `60` second default provider API retry delay; `429` retry headers override this when present.
+- ai-sdk-agentool context window: each profile may set `context_window_tokens`; profiles that omit it use `200000` estimated tokens. Compaction runs before a model call when messages reach `90%` of that profile window.

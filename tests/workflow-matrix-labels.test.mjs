@@ -10,10 +10,9 @@ describe("GitVibe matrix workflow labels", () => {
         "investigate-feedback-members",
         "plan-investigate-feedback",
       ],
-      [".github/workflows/address-feedback.yml", "review-matrix-members", "plan-review-matrix"],
       [".github/workflows/develop.yml", "review-matrix-members", "plan-review-matrix"],
+      [".github/workflows/review.yml", "review-matrix-members", "plan-review-matrix"],
       [".github/workflows/investigate.yml", "investigate-members", "plan-investigate"],
-      [".github/workflows/decompose.yml", "decompose-members", "plan-decompose"],
       [".github/workflows/validate.yml", "validate-members", "plan-validate"],
     ];
 
