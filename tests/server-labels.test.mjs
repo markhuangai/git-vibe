@@ -235,6 +235,36 @@ describe("GitVibe app server pull request review labels", () => {
     });
   });
 
+  it("dispatches trusted pull_request review label events", async () => {
+    const client = createClient({
+      configContent: "ai:\n  budgets:\n    default_max_turns: 91\n    review_timeout_minutes: 62\n",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("pull_request", {
+      action: "labeled",
+      label: { name: gitVibeLabels.review.name },
+      pull_request: { number: 12 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: { "pr-number": "12", max_turns: "91", timeout_minutes: "62" },
+        ref: "main",
+        return_run_details: true,
+      }),
+    ]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
+      labels: ["gvi:reviewing"],
+    });
+  });
+});
+
+describe("GitVibe app server pull request review label validation", () => {
   it("rejects review labels on issues", async () => {
     const client = createClient({ permission: { role_name: "maintain" } });
     await createApp({ client }).handleWebhook("issues", {

@@ -260,6 +260,22 @@ async function handleWebhook(
     return;
   }
 
+  if (
+    event === "pull_request" &&
+    payload.action === "labeled" &&
+    payload.pull_request &&
+    payload.label?.name === gitVibeLabels.review.name
+  ) {
+    await handleIssueLabeled({
+      ...state,
+      owner,
+      payload: pullRequestLabelPayload(payload),
+      repo,
+      token,
+    });
+    return;
+  }
+
   if (event === "issues" && payload.action === "labeled" && payload.issue) {
     await handleIssueLabeled({ ...state, owner, payload, repo, token });
     return;
@@ -271,6 +287,17 @@ async function handleWebhook(
   }
 
   state.log(`ignored ${event}.${payload.action || "unknown"}`);
+}
+
+function pullRequestLabelPayload(payload: WebhookPayload): WebhookPayload {
+  return {
+    ...payload,
+    issue: {
+      body: payload.pull_request?.body,
+      number: payload.pull_request?.number,
+      pull_request: {},
+    },
+  };
 }
 
 async function bootstrapRepositoryLabels(
