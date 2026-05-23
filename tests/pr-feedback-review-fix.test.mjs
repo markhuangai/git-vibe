@@ -88,7 +88,81 @@ describe("pull request review-fix retries", () => {
   });
 });
 
+describe("pull request review-fix iteration limits", () => {
+  it("uses the configured PR feedback review-fix iteration limit", async () => {
+    const client = recordingClient();
+    const logger = fakeLogger();
+
+    await expect(
+      maybeHandlePullRequestReviewFixRequired({
+        client,
+        config: { ai: { budgets: { pr_feedback_max_iterations: 1 } } },
+        context: contextWithPullRequest({
+          timeline: [
+            {
+              body: pullRequestReviewFixMarker({ depth: 1, pullRequest: "22" }),
+              id: "1",
+              kind: "issue-comment",
+            },
+          ],
+        }),
+        logger,
+        result: stageResult({ next_state: "changes-required" }),
+        runner: runnerOptions(),
+        transientComments: [],
+      }),
+    ).resolves.toMatchObject({
+      parsedOutput: expect.objectContaining({
+        next_state: "blocked",
+        summary: expect.stringContaining("configured limit of 1"),
+      }),
+      status: "blocked",
+    });
+
+    expect(
+      requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches"),
+    ).toEqual([]);
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.workflow.dispatch.skip",
+      expect.objectContaining({ depth: 2, max_depth: 1, reason: "pr-review-fix-depth" }),
+    );
+  });
+});
+
 describe("pull request review-fix config gates", () => {
+  it("passes configured address-feedback workflow budgets when queuing a retry", async () => {
+    process.env.GITVIBE_BASE_BRANCH = "develop";
+    const client = recordingClient();
+
+    await maybeHandlePullRequestReviewFixRequired({
+      client,
+      config: {
+        ai: {
+          budgets: {
+            default_max_turns: 90,
+            default_timeout_minutes: 60,
+            feedback_max_turns: 122,
+            feedback_timeout_minutes: 123,
+          },
+        },
+      },
+      context: contextWithPullRequest(),
+      logger: fakeLogger(),
+      result: stageResult({ next_state: "changes_required" }),
+      runner: runnerOptions(),
+      transientComments: [],
+    });
+
+    expect(
+      requestBodiesFor(client, "POST", "/actions/workflows/address-feedback.yml/dispatches")[0]
+        .inputs,
+    ).toEqual({
+      "pr-number": "22",
+      max_turns: "122",
+      timeout_minutes: "123",
+    });
+  });
+
   it("leaves a blocked review result without queuing feedback when feedback automation is disabled", async () => {
     const client = recordingClient();
     const logger = fakeLogger();

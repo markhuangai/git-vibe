@@ -228,7 +228,7 @@ flowchart TD
   subgraph FeedbackRun[Address feedback run for existing PR]
     P[Trusted changes-requested review or command] --> Q[Investigate PR feedback]
     Q -->|fixes required| AA[Update existing PR branch]
-    AA --> AB[Run PR review-matrix]
+    AA --> AB[Dispatch PR review workflow]
     Q -->|no fixes needed| S
     AB --> Z
   end
@@ -418,12 +418,12 @@ sequenceDiagram
   alt Fixes required
     WF->>PR: Add gvi:investigated, then gvi:in-progress
     Agent->>PR: Push fixes to the existing PR head branch
-    WF->>Agent: Plan review-matrix, run member job(s), and finalize one result
+    WF->>Agent: Dispatch the normal PR review workflow
     alt Review passes
       WF->>PR: Remove blocked/reviewing state and add gvi:ready-for-approval
     else Review still requires changes
       WF->>PR: Post review result and add gvi:blocked
-      WF->>App: Queue another address-feedback.yml run when enabled, max 3
+      WF->>App: Queue another address-feedback.yml run when enabled, up to configured max
     end
   else No fixes needed
     WF->>PR: Restore gvi:ready-for-approval without implementation
@@ -437,8 +437,8 @@ request conversation as a manual retry path. Individual review-comment webhooks
 do not dispatch automation; GitVibe waits for the submitted review state and
 only treats trusted `changes_requested` reviews as the automatic signal.
 The reusable workflow runs `investigate` in PR-feedback mode first, skips coding
-when no fixes are needed, and runs `address-pr-feedback` plus `review-matrix`
-only for actionable feedback.
+when no fixes are needed, and runs `address-pr-feedback` plus the normal PR
+review workflow only for actionable feedback.
 
 ## Linking And Traceability
 
@@ -454,7 +454,7 @@ GitVibe must make every generated artifact discoverable from the others.
 - When a pull request is created, the PR body references the source issue chain. If the PR targets the repository default branch, use closing keywords such as `Closes #123`; if it targets a non-default branch, still include explicit issue links because GitHub closing keywords only create linked issues for default-branch PRs.
 - When a pull request is opened by GitVibe, the source issue gets `gvi:pr-opened`, stale source `gvi:in-progress`, `gvi:investigated`, and `gvi:ready-for-approval` labels are removed, and PR-scoped review starts before the PR is marked ready.
 - During PR review and feedback handling, the PR owns one active workflow-state label at a time among `gvi:reviewing`, `gvi:investigating`, `gvi:investigated`, `gvi:in-progress`, `gvi:blocked`, and `gvi:ready-for-approval`; the source issue remains at `gvi:pr-opened`.
-- When PR feedback review still returns `changes-required`, the PR gets a durable review-matrix result comment and `gvi:blocked`; GitVibe queues another `address-feedback.yml` run when feedback automation is enabled, until the PR has three retry markers.
+- When PR feedback review still returns `changes-required`, the PR gets a durable review-matrix result comment and `gvi:blocked`; GitVibe queues another `address-feedback.yml` run when feedback automation is enabled, until the PR reaches `ai.budgets.pr_feedback_max_iterations` retry markers.
 - When a trusted reviewer approves a GitVibe pull request, the PR gets `gvi:pr-approved`, PR `gvi:ready-for-approval` is removed, and stale source `git-vibe:approved` is removed.
 - When a GitVibe pull request is merged before default-branch closure, the PR gets `gvi:pr-approved`, PR `gvi:ready-for-approval` is removed, the source issue gets `gvi:pr-merged`, and stale source workflow state labels are removed.
 - The source issue gets a comment linking the PR and latest workflow run.

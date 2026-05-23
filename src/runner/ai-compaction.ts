@@ -88,11 +88,8 @@ export function contextWindowTokensForProfile(
   throw new Error(`AI profile ${profileName} context_window_tokens must be a positive integer.`);
 }
 
-export function maxContextWindowTokensFor(config: GitVibeConfig): number {
-  return positiveInteger(configNumber(config.ai?.budgets, "max_context_window_tokens"), {
-    fallback: defaultMaxContextWindowTokens,
-    name: "ai.budgets.max_context_window_tokens",
-  });
+export function maxContextWindowTokensFor(_config: GitVibeConfig): number {
+  return defaultMaxContextWindowTokens;
 }
 
 export function estimateModelMessagesTokens(messages: ModelMessage[]): number {
@@ -165,21 +162,6 @@ function partCharCount(part: unknown): number {
   if (type === "tool-call") return stringLength(record.toolName) + safeJsonLength(record.input);
   if (type === "tool-result") return stringLength(record.toolName) + safeJsonLength(record.output);
   return safeJsonLength(record);
-}
-
-function configNumber(value: unknown, key: string): number | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const field = (value as Record<string, unknown>)[key];
-  return typeof field === "number" ? field : undefined;
-}
-
-function positiveInteger(
-  value: number | undefined,
-  options: { fallback: number; name: string },
-): number {
-  if (value === undefined) return options.fallback;
-  if (Number.isInteger(value) && value > 0) return value;
-  throw new Error(`${options.name} must be a positive integer.`);
 }
 
 function stringLength(value: unknown): number {

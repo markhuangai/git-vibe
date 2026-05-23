@@ -84,7 +84,11 @@ describe("GitVibe app server issue approval labels", () => {
   });
 
   it("dispatches trusted approved labels after investigation has completed", async () => {
-    const client = createClient({ permission: { role_name: "maintain" } });
+    const client = createClient({
+      configContent:
+        "ai:\n  budgets:\n    implementation_max_turns: 240\n    validation_repair_attempts: 2\n",
+      permission: { role_name: "maintain" },
+    });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
       issue: {
@@ -98,7 +102,11 @@ describe("GitVibe app server issue approval labels", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: { "issue-number": "9" },
+        inputs: {
+          "issue-number": "9",
+          implementation_max_turns: "240",
+          validation_repair_attempts: "2",
+        },
         ref: "main",
         return_run_details: true,
       }),
@@ -183,7 +191,10 @@ describe("GitVibe app server issue approval config gates", () => {
 
 describe("GitVibe app server pull request review labels", () => {
   it("dispatches trusted PR review labels and marks review running", async () => {
-    const client = createClient({ permission: { role_name: "maintain" } });
+    const client = createClient({
+      configContent: "ai:\n  budgets:\n    default_max_turns: 91\n    review_timeout_minutes: 62\n",
+      permission: { role_name: "maintain" },
+    });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
       issue: {
@@ -205,7 +216,7 @@ describe("GitVibe app server pull request review labels", () => {
     );
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: { "pr-number": "12" },
+        inputs: { "pr-number": "12", max_turns: "91", timeout_minutes: "62" },
         ref: "main",
         return_run_details: true,
       }),

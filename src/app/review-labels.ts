@@ -1,3 +1,4 @@
+import { reviewWorkflowBudgetInputs } from "../shared/budgets.js";
 import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
 import {
   addIssueLabel,
@@ -6,6 +7,7 @@ import {
   labelReason,
   postQueuedWorkflowComment,
   removeIssueLabelIfPresent,
+  repositoryGitVibeConfig,
   type WebhookActionContext,
 } from "./server-actions.js";
 import { removeIssueLabel } from "./labels.js";
@@ -28,7 +30,9 @@ export async function handleReviewPullRequestLabel(
     return;
   }
 
+  const config = await repositoryGitVibeConfig(options);
   const dispatch = await dispatchWorkflow(options, "review.yml", {
+    ...reviewWorkflowBudgetInputs(config),
     "pr-number": issueNumber,
   });
   await removeIssueLabel({

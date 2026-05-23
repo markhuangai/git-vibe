@@ -1,10 +1,11 @@
-import { gitVibeConfigPath } from "../shared/config.js";
+import { developWorkflowBudgetInputs } from "../shared/budgets.js";
+import { gitVibeConfigPath, stageEnabled } from "../shared/config.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import {
   createIssueComment,
   dispatchWorkflow,
   issueHasLabel,
-  repositoryStageEnabled,
+  repositoryGitVibeConfig,
   type WebhookActionContext,
 } from "./server-actions.js";
 import { removeIssueLabel } from "./labels.js";
@@ -20,9 +21,11 @@ export async function handleApprovedIssueLabel(
     return;
   }
 
+  let config = {};
   let developmentEnabled = true;
   try {
-    developmentEnabled = await repositoryStageEnabled(options, "implement");
+    config = await repositoryGitVibeConfig(options);
+    developmentEnabled = stageEnabled(config, "implement");
   } catch (error) {
     await removeApprovedLabel(options, issueNumber, label);
     await createIssueComment(options, issueNumber, approvalConfigErrorBody(label, error));
@@ -35,6 +38,7 @@ export async function handleApprovedIssueLabel(
   }
 
   await dispatchWorkflow(options, "develop.yml", {
+    ...developWorkflowBudgetInputs(config),
     "issue-number": issueNumber,
   });
 }

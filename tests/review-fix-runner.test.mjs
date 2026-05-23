@@ -238,11 +238,11 @@ describe("issue branch preparation", () => {
 });
 
 describe("review-fix deterministic paths", () => {
-  it("blocks when review-fix depth exceeds the configured maximum", async () => {
+  it("blocks when review-fix depth exceeds the internal maximum", async () => {
     const client = requestClient([{}, {}]);
     const result = await handleReviewFixRequired({
       client,
-      config: { ai: { budgets: { review_max_iterations: 0 } } },
+      config: {},
       context: contextWithReviewFix({ depth: 5, issueNumber: "8", parent: "7", root: "7" }),
       logger: fakeLogger(),
       result: stageResult({ next_state: "changes-required" }),

@@ -46,6 +46,7 @@ import {
   removeDiscussionLabelBestEffort,
   removeDiscussionLabelFromPayload,
   removeIssueLabelIfPresent,
+  repositoryWorkflowBudgetInputs,
   sourceReviewInput,
 } from "./server-actions.js";
 import { handleApprovedIssueLabel } from "./approval-labels.js";
@@ -326,11 +327,10 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
   if (parsed.command === "address-feedback" && options.payload.issue?.pull_request) {
     const acknowledged = await acknowledgeCommand(options);
     const workflow = "address-feedback.yml";
-    const dispatch = await dispatchWorkflow(
-      options,
-      workflow,
-      commandInputs(options, { "pr-number": issueNumber }, "pull-request-comment"),
-    );
+    const dispatch = await dispatchWorkflow(options, workflow, {
+      ...(await repositoryWorkflowBudgetInputs(options, workflow)),
+      ...commandInputs(options, { "pr-number": issueNumber }, "pull-request-comment"),
+    });
     if (!acknowledged)
       await postQueuedWorkflowComment(options, {
         artifact: "pull-request",
@@ -346,11 +346,10 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
   const workflow = commandWorkflow(parsed.command);
   if (workflow && !options.payload.issue?.pull_request) {
     const acknowledged = await acknowledgeCommand(options);
-    const dispatch = await dispatchWorkflow(
-      options,
-      workflow,
-      commandInputs(options, { "issue-number": issueNumber }, "issue-comment"),
-    );
+    const dispatch = await dispatchWorkflow(options, workflow, {
+      ...(await repositoryWorkflowBudgetInputs(options, workflow)),
+      ...commandInputs(options, { "issue-number": issueNumber }, "issue-comment"),
+    });
     if (!acknowledged)
       await postQueuedWorkflowComment(options, {
         artifact: "issue",
@@ -438,7 +437,9 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
   }
 
   if (label === gitVibeLabels.validate.name) {
-    const dispatch = await dispatchWorkflow(options, "validate.yml", {
+    const workflow = "validate.yml";
+    const dispatch = await dispatchWorkflow(options, workflow, {
+      ...(await repositoryWorkflowBudgetInputs(options, workflow)),
       "issue-number": issueNumber,
     });
     await removeIssueLabel({
@@ -453,7 +454,7 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
       artifact: "issue",
       number: issueNumber,
       reason: labelReason(label),
-      workflow: "validate.yml",
+      workflow,
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
@@ -488,7 +489,9 @@ async function handleInvestigateIssueLabel(
   issueNumber: string,
   label: string,
 ): Promise<void> {
-  await dispatchWorkflow(options, "investigate.yml", {
+  const workflow = "investigate.yml";
+  await dispatchWorkflow(options, workflow, {
+    ...(await repositoryWorkflowBudgetInputs(options, workflow)),
     "issue-number": issueNumber,
   });
   await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
@@ -516,7 +519,9 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
   }
 
   if (label === gitVibeLabels.validate.name) {
-    const dispatch = await dispatchWorkflow(options, "validate.yml", {
+    const workflow = "validate.yml";
+    const dispatch = await dispatchWorkflow(options, workflow, {
+      ...(await repositoryWorkflowBudgetInputs(options, workflow)),
       "discussion-number": discussionNumber,
     });
     await addDiscussionLabelFromPayload(options, gitVibeLabels.validating.name);
@@ -524,7 +529,7 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       artifact: "discussion",
       number: discussionNumber,
       reason: labelReason(label),
-      workflow: "validate.yml",
+      workflow,
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
@@ -539,14 +544,16 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       return;
     }
 
-    const dispatch = await dispatchWorkflow(options, "materialize.yml", {
+    const workflow = "materialize.yml";
+    const dispatch = await dispatchWorkflow(options, workflow, {
+      ...(await repositoryWorkflowBudgetInputs(options, workflow)),
       "discussion-number": discussionNumber,
     });
     await postQueuedWorkflowComment(options, {
       artifact: "discussion",
       number: discussionNumber,
       reason: labelReason(label),
-      workflow: "materialize.yml",
+      workflow,
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
@@ -589,7 +596,9 @@ async function handlePullRequestReviewSubmitted(options: WebhookContext): Promis
     return;
   }
 
-  const dispatch = await dispatchWorkflow(options, "address-feedback.yml", {
+  const workflow = "address-feedback.yml";
+  const dispatch = await dispatchWorkflow(options, workflow, {
+    ...(await repositoryWorkflowBudgetInputs(options, workflow)),
     "pr-number": prNumber,
     "source-comment": sourceReviewInput(options),
   });
@@ -597,7 +606,7 @@ async function handlePullRequestReviewSubmitted(options: WebhookContext): Promis
     artifact: "pull-request",
     number: prNumber,
     reason: "trusted changes-requested review",
-    workflow: "address-feedback.yml",
+    workflow,
     ref: dispatch.ref,
     workflowRunUrl: dispatch.html_url,
   });

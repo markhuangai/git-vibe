@@ -119,12 +119,13 @@ explanation so maintainers can implement locally and still trigger review with
 false-positive, obsolete, or already-addressed review comments without coding. If
 the investigation finds required fixes, GitVibe uses the same deterministic
 branch-update engine as issue implementation but targets the existing PR head
-branch. It does not create a new PR. After pushing the fix commit, it runs
-`review-matrix` on the updated PR and restores `gvi:ready-for-approval` only
-after review passes. If that review still returns `changes-required`, GitVibe
+branch. It does not create a new PR. After pushing the fix commit, it dispatches
+the normal PR review workflow and restores `gvi:ready-for-approval` only after
+review passes. If that review still returns `changes-required`, GitVibe
 posts the review result on the PR, keeps the PR at `gvi:blocked`, and queues
 another `address-feedback.yml` run when feedback automation is enabled. PR
-feedback review retries stop after three iterations.
+feedback review retries stop after `ai.budgets.pr_feedback_max_iterations`
+iterations, defaulting to three.
 
 ## Quick Start
 
@@ -339,7 +340,6 @@ ai:
       # - "*.github.com"
   profiles:
     local_proxy:
-      enabled: true
       adapter: ai-sdk-agentool
       provider:
         type: openai-compatible

@@ -231,14 +231,13 @@ Normalized reasoning config:
 
 - `reasoning.effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. Adapters should reject unsupported values for the selected provider/model with a clear config error.
 - `reasoning.summary`: `auto`, `concise`, `detailed`, or `none` where the adapter supports summaries.
-- `context_window_tokens`: optional positive integer on an AI profile. When set, `ai-sdk-agentool` logs per-step `context_used_pct` from reported input tokens.
+- `context_window_tokens`: optional positive integer on an AI profile. Set this to the selected model's context window; `ai-sdk-agentool` uses it for compaction and per-step `context_used_pct` logs.
 - `context.files`: optional non-empty list of relative workspace files to append to this profile's system prompt.
 - `provider.api_key.from_bundle`: AI SDK provider API key inside `GITVIBE_AI_ENV_JSON`.
 - `provider.base_url.from_bundle`: AI SDK provider base URL inside `GITVIBE_AI_ENV_JSON`; required for OpenAI-compatible endpoints and optional for native OpenAI.
 - `env.<NAME>`: CLI-only environment mapping for spawned CLI processes. Use `{ from_bundle: KEY }` to read a key inside `GITVIBE_AI_ENV_JSON`, or a literal string for values intentionally committed in config.
 - `auth_json.from_bundle`: `cli-codex` key inside `GITVIBE_AI_ENV_JSON`; the bundle value must be an escaped `auth.json` string, such as `jq -Rs . < ~/.codex/auth.json`. GitVibe writes that string to `CODEX_HOME/auth.json`, then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret after successful Codex CLI execution.
 - `provider_options`: adapter-specific passthrough for settings GitVibe does not normalize yet.
-- `ai.budgets.max_context_window_tokens`: positive integer context budget for `ai-sdk-agentool` compaction and context usage logs. Default: `200000`.
 
 Adapter mappings:
 
@@ -284,15 +283,17 @@ ai:
 
 Default AI budgets:
 
-- default max turns: `90`.
-- implementation max turns: `200`.
-- PR feedback max turns: `120`.
-- validation repair max turns: `45` per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
-- validation repair attempts: `3` per implementation run.
-- issue review-fix continuation depth limit: `5` follow-up issues before GitVibe blocks and asks for human intervention.
-- PR feedback review-fix retry limit: `3` `address-feedback.yml` redispatches before the PR remains blocked.
-- provider API request retries: `3` retries with a `60` second default delay; `429` retry headers override the default delay when present.
-- ai-sdk-agentool context window: `200000` estimated tokens, with compaction before a model call when messages reach `90%` of the configured window.
-- investigation/refinement/validation/review timeout: `60` minutes.
-- implementation and PR feedback timeout: `120` minutes.
-- PR creation/linking timeout: `15` minutes.
+- `ai.budgets.default_timeout_minutes`: `60` minutes for standalone investigate, validate, materialize, and review workflows unless a workflow-specific timeout overrides it.
+- `ai.budgets.review_timeout_minutes`: `60` minutes for PR review jobs and develop workflow review jobs.
+- `ai.budgets.implementation_timeout_minutes`: `120` minutes for implementation jobs.
+- `ai.budgets.feedback_timeout_minutes`: `120` minutes for PR feedback investigation, remediation, and follow-up review jobs.
+- `ai.budgets.create_pr_timeout_minutes`: `15` minutes for PR creation/linking.
+- `ai.budgets.default_max_turns`: `90` turns for stages that use reusable workflow `max_turns`.
+- `ai.budgets.implementation_max_turns`: `200` turns for implementation.
+- `ai.budgets.feedback_max_turns`: `120` turns for PR feedback remediation and review.
+- `ai.budgets.validation_repair_max_turns`: `45` turns per repair attempt for `ai-sdk-agentool`; CLI adapters own their native loop.
+- `ai.budgets.validation_repair_attempts`: `3` per implementation run.
+- `ai.budgets.pr_feedback_max_iterations`: `3` `address-feedback.yml` redispatches before the PR remains blocked.
+- `ai.budgets.request_retry_attempts`: `3` provider API retries.
+- `ai.budgets.request_retry_delay_seconds`: `60` second default provider API retry delay; `429` retry headers override this when present.
+- ai-sdk-agentool context window: each profile may set `context_window_tokens`; profiles that omit it use `200000` estimated tokens. Compaction runs before a model call when messages reach `90%` of that profile window.

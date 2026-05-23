@@ -4,6 +4,7 @@ import {
   parseGitVibeConfig,
   stageEnabled,
 } from "../shared/config.js";
+import { workflowBudgetInputsFor } from "../shared/budgets.js";
 import {
   addDiscussionComment,
   addDiscussionLabel,
@@ -143,7 +144,9 @@ export async function repositoryStageEnabled(
   return stageEnabled(await repositoryGitVibeConfig(options), stage);
 }
 
-async function repositoryGitVibeConfig(options: WebhookActionContext): Promise<GitVibeConfig> {
+export async function repositoryGitVibeConfig(
+  options: WebhookActionContext,
+): Promise<GitVibeConfig> {
   try {
     const file = await options.client.request<{
       content?: string;
@@ -165,6 +168,13 @@ async function repositoryGitVibeConfig(options: WebhookActionContext): Promise<G
     if (error instanceof Error && error.message.includes("404")) return {};
     throw error;
   }
+}
+
+export async function repositoryWorkflowBudgetInputs(
+  options: WebhookActionContext,
+  workflow: string,
+): Promise<Record<string, string>> {
+  return workflowBudgetInputsFor(await repositoryGitVibeConfig(options), workflow);
 }
 
 export function commandInputs(

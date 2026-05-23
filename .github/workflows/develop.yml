@@ -23,8 +23,8 @@ on:
         required: false
         type: number
         default: 60
-      publish_timeout_minutes:
-        description: Maximum minutes for the PR publish job.
+      create_pr_timeout_minutes:
+        description: Maximum minutes for the PR creation job.
         required: false
         type: number
         default: 15
@@ -89,8 +89,8 @@ on:
         required: false
         type: number
         default: 60
-      publish_timeout_minutes:
-        description: Maximum minutes for the PR publish job.
+      create_pr_timeout_minutes:
+        description: Maximum minutes for the PR creation job.
         required: false
         type: number
         default: 15
@@ -215,7 +215,7 @@ jobs:
   create-pr:
     runs-on: ${{ inputs.runner }}
     needs: implement
-    timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
+    timeout-minutes: ${{ fromJSON(inputs.create_pr_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
     outputs:
@@ -248,7 +248,7 @@ jobs:
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
-          stage-timeout-minutes: ${{ fromJSON(inputs.publish_timeout_minutes) }}
+          stage-timeout-minutes: ${{ fromJSON(inputs.create_pr_timeout_minutes) }}
           max-turns: 20
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}

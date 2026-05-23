@@ -6,8 +6,7 @@
 - `docs/ARCHITECTURE.md`: architecture, setup, token, and event-delivery details.
 - `docs/WORKFLOW.md`: issue, discussion, implementation, feedback, and traceability flows.
 - `docs/AI.md`: context assembly, AI stage contracts, provider strategy, and tool policy.
-- `.github/git-vibe.example.yml`: starter config for consumer repositories.
-- `examples/consumer/.github`: copyable starter config and wrapper workflows for consumer repositories.
+- `examples/consumer/.github`: the copyable starter config and wrapper workflows for consumer repositories.
 - `examples/consumer/.git-vibe`: copyable role-group definitions referenced by the consumer starter config.
 - `.github/workflows/investigate.yml`: reusable investigation-only pipeline for bug reports and planning.
 - `.github/workflows/validate.yml`: reusable issue or Discussion validation pipeline.

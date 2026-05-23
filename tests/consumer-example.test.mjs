@@ -35,13 +35,6 @@ describe("consumer examples", () => {
 
     assertStarterRouting(configText, config, consumerRoot);
   });
-
-  it("keeps the root example config compatible with role-group routing", () => {
-    const configText = readFileSync(join(process.cwd(), ".github", "git-vibe.example.yml"), "utf8");
-    const config = /** @type {GitVibeConfig} */ (parse(configText));
-
-    assertStarterRouting(configText, config, process.cwd());
-  });
 });
 
 /**

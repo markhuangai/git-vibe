@@ -27,7 +27,7 @@ jobs:
       runner: ubuntu-latest
       implementation_timeout_minutes: 120
       review_timeout_minutes: 60
-      publish_timeout_minutes: 15
+      create_pr_timeout_minutes: 15
       max_turns: 90
       implementation_max_turns: 120
       validation_repair_attempts: 2

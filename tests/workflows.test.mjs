@@ -361,6 +361,7 @@ describe("GitVibe workflow numeric inputs", () => {
       const workflow = readWorkflow(file);
       for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
         const timeout = job["timeout-minutes"];
+        if (String(job.uses || "").startsWith("./.github/workflows/")) continue;
         if (
           file === ".github/workflows/develop.yml" &&
           jobName === "implementation-blocked-cleanup"
@@ -579,11 +580,11 @@ describe("GitVibe address feedback workflow", () => {
     const investigateMembers = workflow.jobs?.["investigate-feedback-members"];
     const investigate = workflow.jobs?.["investigate-feedback"];
     const address = workflow.jobs?.["address-feedback"];
-    const planReview = workflow.jobs?.["plan-review-matrix"];
-    const reviewMembers = workflow.jobs?.["review-matrix-members"];
-    const review = workflow.jobs?.["review-matrix"];
 
     expect(workflow.jobs?.["create-pr"]).toBeUndefined();
+    expect(workflow.jobs?.["plan-review-matrix"]).toBeUndefined();
+    expect(workflow.jobs?.["review-matrix-members"]).toBeUndefined();
+    expect(workflow.jobs?.["review-matrix"]).toBeUndefined();
     expect(investigateMembers).toMatchObject({
       "continue-on-error": true,
       needs: "plan-investigate-feedback",
@@ -629,35 +630,6 @@ describe("GitVibe address feedback workflow", () => {
       id: "address",
       with: expect.objectContaining({
         "handoff-dir": "${{ runner.temp }}/git-vibe-feedback-handoff",
-        "pr-number": "${{ inputs.pr-number }}",
-      }),
-    });
-    expect(planReview).toMatchObject({
-      if: "needs.address-feedback.outputs.next-state == 'feedback-addressed'",
-      needs: "address-feedback",
-    });
-    expect(reviewMembers).toMatchObject({
-      "continue-on-error": true,
-      needs: "plan-review-matrix",
-      strategy: expect.objectContaining({
-        matrix: {
-          index: "${{ fromJSON(needs.plan-review-matrix.outputs.indexes || '[0]') }}",
-        },
-      }),
-    });
-    expect(planReview?.outputs).toHaveProperty("indexes", "${{ steps.plan.outputs.indexes }}");
-    expect(planReview?.outputs).not.toHaveProperty("matrix");
-    expect(review).toMatchObject({
-      if: "always() && needs.plan-review-matrix.result == 'success'",
-      needs: ["plan-review-matrix", "review-matrix-members"],
-      permissions: expect.objectContaining({ actions: "write" }),
-    });
-    expect(
-      review?.steps?.find((step) => step.uses === "./.git-vibe/actions/review-matrix"),
-    ).toMatchObject({
-      with: expect.objectContaining({
-        "execution-mode": "finalizer",
-        "fail-on-blocked": "true",
         "pr-number": "${{ inputs.pr-number }}",
       }),
     });

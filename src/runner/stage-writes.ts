@@ -29,6 +29,7 @@ import { runValidationCommand, validationRepairAttemptsFor } from "./validation.
 import type { ValidationCommandFailure } from "./validation.js";
 import { reviewFixTraceFromBody } from "../shared/traceability.js";
 import { maybeHandlePullRequestReviewFixRequired } from "./pr-feedback-review-fix.js";
+import { dispatchPullRequestReviewWorkflow } from "./pr-review-dispatch.js";
 import type {
   ContextPacket,
   GitVibeConfig,
@@ -171,14 +172,16 @@ async function applyBranchUpdate(
     parsedOutput: options.result.parsedOutput,
     runner: options.options,
   });
-  const result = await commitImplementation(options);
-  if (mode === "pr-feedback-remediation" && result.status === "completed")
+  const { pushed, result } = await commitImplementation(options);
+  if (mode === "pr-feedback-remediation" && result.status === "completed") {
     await publishStageResultComment({
       ...options,
       parsedOutput: result.parsedOutput,
       runner: options.options,
       transientComments: options.transientComments,
     });
+    if (pushed) await dispatchPullRequestReviewWorkflow({ ...options, runner: options.options });
+  }
   return result;
 }
 
@@ -258,7 +261,7 @@ async function commitImplementation({
   ) => Promise<StageRunResult>;
   result: StageRunResult;
   transientComments: PublishedArtifactComment[];
-}): Promise<StageRunResult> {
+}): Promise<{ pushed: boolean; result: StageRunResult }> {
   const branch = branchForWriteStage(options.stage, context);
   const finalResult = await runValidationWithRepair({ config, logger, options, repair, result });
   if (finalResult.status !== "completed") {
@@ -278,11 +281,11 @@ async function commitImplementation({
       runner: options,
     });
     logger.event("writes.skip", { reason: "status", status: finalResult.status });
-    return finalResult;
+    return { pushed: false, result: finalResult };
   }
   logger.event("tests.done");
-  if (!commitAndPushChanges({ branch, context, logger, options })) return finalResult;
-  return finalResult;
+  const pushed = commitAndPushChanges({ branch, context, logger, options });
+  return { pushed, result: finalResult };
 }
 
 function commitAndPushChanges(options: {

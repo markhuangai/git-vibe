@@ -1,4 +1,5 @@
 import { baseBranchFromEnv, stageEnabled } from "../shared/config.js";
+import { addressFeedbackWorkflowBudgetInputs, positiveBudgetInteger } from "../shared/budgets.js";
 import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
 import {
   pullRequestReviewFixFromBody,
@@ -18,8 +19,6 @@ import type {
   RunnerOptions,
   StageRunResult,
 } from "../shared/types.js";
-
-const maxPullRequestReviewFixIterations = 3;
 
 export async function maybeHandlePullRequestReviewFixRequired(options: {
   client: GitHubClient;
@@ -63,13 +62,14 @@ async function handlePullRequestReviewFixRequired(options: {
   });
 
   const depth = nextPullRequestReviewFixDepth(options.context);
-  if (depth > maxPullRequestReviewFixIterations) {
+  const maxDepth = pullRequestReviewFixMaxIterationsFor(options.config);
+  if (depth > maxDepth) {
     options.logger.event("github.workflow.dispatch.skip", {
       depth,
-      max_depth: maxPullRequestReviewFixIterations,
+      max_depth: maxDepth,
       reason: "pr-review-fix-depth",
     });
-    return blockedPullRequestReviewFixResult({ ...options, depth });
+    return blockedPullRequestReviewFixResult({ ...options, depth, maxDepth });
   }
 
   if (!stageEnabled(options.config, "address-pr-feedback")) {
@@ -91,9 +91,10 @@ async function handlePullRequestReviewFixRequired(options: {
 
 function blockedPullRequestReviewFixResult(options: {
   depth: number;
+  maxDepth: number;
   result: StageRunResult;
 }): StageRunResult {
-  const summary = `Review requested changes, but PR review-fix iteration ${options.depth} exceeds the configured limit of ${maxPullRequestReviewFixIterations}.`;
+  const summary = `Review requested changes, but PR review-fix iteration ${options.depth} exceeds the configured limit of ${options.maxDepth}.`;
   const parsedOutput = {
     ...options.result.parsedOutput,
     next_state: "blocked",
@@ -108,6 +109,10 @@ function blockedPullRequestReviewFixResult(options: {
   };
 }
 
+function pullRequestReviewFixMaxIterationsFor(config: GitVibeConfig): number {
+  return positiveBudgetInteger(config, "pr_feedback_max_iterations", 3);
+}
+
 function nextPullRequestReviewFixDepth(context: ContextPacket): number {
   const depths = context.timeline
     .map((item) => pullRequestReviewFixFromBody(item.body))
@@ -118,6 +123,7 @@ function nextPullRequestReviewFixDepth(context: ContextPacket): number {
 
 async function dispatchAddressFeedbackWorkflow(options: {
   client: GitHubClient;
+  config: GitVibeConfig;
   context: ContextPacket;
   depth: number;
   logger: StageLogger;
@@ -131,7 +137,10 @@ async function dispatchAddressFeedbackWorkflow(options: {
   });
   const dispatch = await dispatchWorkflowWithRunDetails({
     client: options.client,
-    inputs: { "pr-number": options.context.artifact.number },
+    inputs: {
+      ...addressFeedbackWorkflowBudgetInputs(options.config),
+      "pr-number": options.context.artifact.number,
+    },
     logger: options.logger,
     owner,
     ref,

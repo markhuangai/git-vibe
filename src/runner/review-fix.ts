@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { GitHubClient, repositoryDefaultBranch, splitRepository } from "../shared/github.js";
+import { developWorkflowBudgetInputs } from "../shared/budgets.js";
 import { baseBranchFromEnv } from "../shared/config.js";
 import { gitVibeInternalLabels } from "../shared/labels.js";
 import { workflowQueuedMarker, workflowRunIdFromUrl } from "../shared/status-comments.js";
@@ -156,7 +157,7 @@ export async function handleReviewFixRequired(options: {
   const root = currentTrace?.root || options.context.artifact.number;
   const branch = currentTrace?.branch || gitVibeBranchName(root);
   const depth = (currentTrace?.depth || 0) + 1;
-  const maxDepth = reviewMaxIterationsFor(options.config);
+  const maxDepth = reviewFixMaxIterations();
   if (depth > maxDepth) return blockDepthExceeded({ ...options, depth, maxDepth });
 
   const existing = existingReviewFixLink(options.context.timeline, {
@@ -216,8 +217,8 @@ export function appendIssueTraceability(
   return trimmedBody ? `${trimmedBody}\n\n${traceability}` : traceability;
 }
 
-function reviewMaxIterationsFor(config: GitVibeConfig): number {
-  return positiveInteger(configNumber(config.ai?.budgets, "review_max_iterations"), 5);
+function reviewFixMaxIterations(): number {
+  return 5;
 }
 
 async function blockDepthExceeded(options: {
@@ -346,7 +347,10 @@ async function dispatchDevelopWorkflow(options: {
   const ref = await workflowBaseRef({ ...options, owner, repo });
   const dispatch = await dispatchWorkflowWithRunDetails({
     client: options.client,
-    inputs: { "issue-number": options.issueNumber },
+    inputs: {
+      ...developWorkflowBudgetInputs(options.config),
+      "issue-number": options.issueNumber,
+    },
     logger: options.logger,
     owner,
     ref,
@@ -490,17 +494,4 @@ function arrayField(value: unknown): string[] {
 
 function textField(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function positiveInteger(...values: Array<number | undefined>): number {
-  for (const value of values) {
-    if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
-  }
-  return 1;
-}
-
-function configNumber(value: unknown, key: string): number | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const field = (value as Record<string, unknown>)[key];
-  return typeof field === "number" ? field : undefined;
 }

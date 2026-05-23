@@ -28,6 +28,7 @@ const runnerBaseBranch = vi.fn(async () => ({
   defaultBranch: "main",
   targetsDefault: true,
 }));
+const dispatchPullRequestReviewWorkflow = vi.fn(async () => undefined);
 const runValidationCommand = vi.fn();
 const validationRepairAttemptsFor = vi.fn(() => 1);
 
@@ -48,6 +49,9 @@ vi.mock("../src/runner/review-fix.js", () => ({
 vi.mock("../src/runner/stage-branches.js", () => ({
   branchForWriteStage,
   runnerBaseBranch,
+}));
+vi.mock("../src/runner/pr-review-dispatch.js", () => ({
+  dispatchPullRequestReviewWorkflow,
 }));
 vi.mock("../src/runner/validation.js", () => ({
   runValidationCommand,
@@ -74,6 +78,7 @@ beforeEach(() => {
     issueChain,
     branchForWriteStage,
     runnerBaseBranch,
+    dispatchPullRequestReviewWorkflow,
     runValidationCommand,
     validationRepairAttemptsFor,
   ]) {
@@ -390,6 +395,7 @@ describe("stage deterministic git commits", () => {
       expect.objectContaining({ artifact: expect.objectContaining({ type: "pull-request" }) }),
     );
     expect(publishStageResultComment).toHaveBeenCalledTimes(1);
+    expect(dispatchPullRequestReviewWorkflow).not.toHaveBeenCalled();
     expect(client.request).not.toHaveBeenCalled();
   });
 
@@ -415,6 +421,7 @@ describe("stage deterministic git commits", () => {
       expect.arrayContaining(["push"]),
       expect.any(Object),
     );
+    expect(dispatchPullRequestReviewWorkflow).toHaveBeenCalledTimes(1);
   });
 
   it("returns repaired blocked results without committing", async () => {
