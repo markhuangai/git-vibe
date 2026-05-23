@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "bin": {
-    "git-vibe-setup": "./dist/cli.js"
+    "git-vibe-setup": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -12,7 +12,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc --project tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli.js', 0o755)\"",
     "check": "prettier --check . && eslint . && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
     "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit"
