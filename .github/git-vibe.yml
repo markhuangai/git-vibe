@@ -171,8 +171,8 @@ ai:
       enabled: true
       role_group: swarm
     create-pr:
-      enabled: true
+      enabled: false
       profile: codex_5.5_high
     address-pr-feedback:
-      enabled: true
+      enabled: false
       profile: codex_5.4_high
