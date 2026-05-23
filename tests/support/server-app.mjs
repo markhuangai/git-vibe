@@ -94,6 +94,7 @@ function requestResponseFor(request, options) {
     return { default_branch: options.defaultBranch || "main" };
   }
   if (request.method === "GET" && request.path.includes("/contents/.github/git-vibe.yml")) {
+    if (options.configError !== undefined) throw options.configError;
     if (options.configContent !== undefined) {
       return {
         content: Buffer.from(options.configContent).toString("base64"),

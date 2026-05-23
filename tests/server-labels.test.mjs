@@ -317,17 +317,7 @@ describe("GitVibe app server pull request review config gates", () => {
       configContent: "ai:\n  stages:\n    review-matrix:\n      enabled: false\n",
       permission: { role_name: "maintain" },
     });
-    await createApp({ client }).handleWebhook("issues", {
-      action: "labeled",
-      issue: {
-        labels: [{ name: gitVibeLabels.review.name }],
-        number: 12,
-        pull_request: {},
-      },
-      label: { name: gitVibeLabels.review.name },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
+    await createApp({ client }).handleWebhook("issues", reviewPullRequestLabelPayload());
 
     expect(workflowDispatches(client)).toEqual([]);
     expect(requestPaths(client, "DELETE")).toContain(
@@ -343,17 +333,7 @@ describe("GitVibe app server pull request review config gates", () => {
       configContent: "ai:\n  stages:\n    review-matrix:\n      enabled: nope\n",
       permission: { role_name: "maintain" },
     });
-    await createApp({ client }).handleWebhook("issues", {
-      action: "labeled",
-      issue: {
-        labels: [{ name: gitVibeLabels.review.name }],
-        number: 12,
-        pull_request: {},
-      },
-      label: { name: gitVibeLabels.review.name },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
+    await createApp({ client }).handleWebhook("issues", reviewPullRequestLabelPayload());
 
     expect(workflowDispatches(client)).toEqual([]);
     expect(requestPaths(client, "DELETE")).toContain(
@@ -363,7 +343,33 @@ describe("GitVibe app server pull request review config gates", () => {
       "could not be read as valid GitVibe config",
     );
   });
+
+  it("stringifies non-Error review-matrix config failures", async () => {
+    const client = createClient({
+      configError: "raw config failure",
+      permission: { role_name: "maintain" },
+    });
+    await createApp({ client }).handleWebhook("issues", reviewPullRequestLabelPayload());
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Areview",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "raw config failure",
+    );
+  });
 });
+
+function reviewPullRequestLabelPayload() {
+  return {
+    action: "labeled",
+    issue: { labels: [{ name: gitVibeLabels.review.name }], number: 12, pull_request: {} },
+    label: { name: gitVibeLabels.review.name },
+    repository: repositoryPayload(),
+    sender: { login: "maintainer" },
+  };
+}
 
 describe("GitVibe app server managed runtime labels", () => {
   it("accepts trusted managed runtime labels without dispatching workflows", async () => {
