@@ -105,7 +105,7 @@ validation.
 - Run unit tests with Vitest.
 - Enforce coverage with Vitest/V8 thresholds: branches 90%, functions 90%, lines 90%, statements 90%.
 - Run `github-actionlint` against repository workflows and consumer example workflows.
-- Verify setup workflow templates stay aligned with referenced reusable workflow inputs.
+- Verify consumer workflow wrappers stay aligned with referenced reusable workflow inputs.
 - Run `pnpm audit --prod` in PR CI.
 - Enforce JavaScript/MJS size limits through ESLint: 700 lines per file and 100 lines per function. Generated bundles are excluded.
 - Use Husky + lint-staged for staged format/lint checks, then run the workflow template contract check, typecheck, and coverage in pre-commit.
