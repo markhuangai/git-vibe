@@ -4,6 +4,7 @@ import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
+import { fetchConsumerStarterFiles } from "./consumer-starter.js";
 import {
   blockingInstallPaths,
   buildInstallFiles,
@@ -23,7 +24,6 @@ interface SetupCliRuntime {
   error?: (message: string) => void;
   fetchImpl?: typeof fetch;
   log?: (message: string) => void;
-  repositoryRoot?: string;
 }
 
 const usage = `Usage:
@@ -40,9 +40,10 @@ Options:
 
 export async function runSetup(runtime: SetupCliRuntime = {}): Promise<void> {
   const cwd = runtime.cwd || process.cwd();
-  const repositoryRoot = runtime.repositoryRoot || packageRoot();
-  const releaseTag = await latestStableReleaseTag(runtime.fetchImpl || fetch);
-  const files = buildInstallFiles({ cwd, releaseTag, repositoryRoot });
+  const fetchImpl = runtime.fetchImpl || fetch;
+  const releaseTag = await latestStableReleaseTag(fetchImpl);
+  const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, releaseTag });
+  const files = buildInstallFiles({ cwd, releaseTag, sourceFiles });
   const blockingPaths = blockingInstallPaths(files);
 
   if (blockingPaths.length > 0) throw existingFilesError(blockingPaths, cwd);
@@ -53,9 +54,10 @@ export async function runSetup(runtime: SetupCliRuntime = {}): Promise<void> {
 
 export async function runUpdate(runtime: SetupCliRuntime = {}): Promise<void> {
   const cwd = runtime.cwd || process.cwd();
-  const repositoryRoot = runtime.repositoryRoot || packageRoot();
-  const releaseTag = await latestStableReleaseTag(runtime.fetchImpl || fetch);
-  const files = buildWorkflowUpdateFiles({ cwd, releaseTag, repositoryRoot });
+  const fetchImpl = runtime.fetchImpl || fetch;
+  const releaseTag = await latestStableReleaseTag(fetchImpl);
+  const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, releaseTag });
+  const files = buildWorkflowUpdateFiles({ cwd, releaseTag, sourceFiles });
   const unmanagedPaths = unmanagedWorkflowUpdatePaths(files);
 
   if (unmanagedPaths.length > 0) throw unmanagedWorkflowUpdateError(unmanagedPaths, cwd);
@@ -89,10 +91,6 @@ export async function setupCli(runtime: SetupCliRuntime = {}): Promise<number> {
     (runtime.error || console.error)(message);
     return 1;
   }
-}
-
-function packageRoot(): string {
-  return fileURLToPath(new URL("../", import.meta.url));
 }
 
 /* c8 ignore start */

@@ -9,7 +9,7 @@ import { parse } from "yaml";
  */
 
 const sourceWorkflowDirectory = ".github/workflows";
-const templateWorkflowDirectory = "packages/git-vibe-setup/templates/.github/workflows";
+const consumerWorkflowDirectory = "examples/consumer/.github/workflows";
 const internalWorkflowCallInputs = new Set(["action-repository", "action-ref"]);
 const reusableWorkflowPattern = /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@.+$/;
 const inputExpressionPattern = /^\${{\s*inputs\.([A-Za-z0-9_-]+)\s*}}$/;
@@ -19,7 +19,7 @@ const inputMetadataKeys = ["default", "required", "type"];
 /** @type {string[]} */
 const errors = [];
 
-for (const templateFile of workflowFiles(templateWorkflowDirectory)) {
+for (const templateFile of workflowFiles(consumerWorkflowDirectory)) {
   checkTemplateWorkflow(templateFile);
 }
 
@@ -34,7 +34,7 @@ if (errors.length > 0) {
 
 /** @param {string} templateFile */
 function checkTemplateWorkflow(templateFile) {
-  const templatePath = join(templateWorkflowDirectory, templateFile);
+  const templatePath = join(consumerWorkflowDirectory, templateFile);
   const template = readWorkflow(templatePath);
   const reusableJob = findReusableWorkflowJob(template);
   if (!reusableJob) {

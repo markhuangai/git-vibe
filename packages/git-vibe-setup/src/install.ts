@@ -1,15 +1,11 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
+import type { ConsumerStarterFile } from "./consumer-starter.js";
 
 export interface InstallFile {
   content: string;
   sourcePath: string;
   targetPath: string;
-}
-
-interface InstallSource {
-  sourceDirectory: string;
-  targetDirectory: string;
 }
 
 interface FileSnapshot {
@@ -18,43 +14,41 @@ interface FileSnapshot {
   targetPath: string;
 }
 
+const requiredInstallSourcePaths = [
+  ".github/git-vibe.yml",
+  ".github/workflows/address-feedback.yml",
+  ".github/workflows/develop.yml",
+  ".github/workflows/investigate.yml",
+  ".github/workflows/materialize.yml",
+  ".github/workflows/review.yml",
+  ".github/workflows/validate.yml",
+  ".git-vibe/role-group/correctness.md",
+  ".git-vibe/role-group/maintainability.md",
+  ".git-vibe/role-group/security.md",
+];
+
+const requiredWorkflowSourcePaths = requiredInstallSourcePaths.filter(isWorkflowSourcePath);
+
 export function buildInstallFiles(options: {
   cwd: string;
   releaseTag: string;
-  repositoryRoot: string;
+  sourceFiles: ConsumerStarterFile[];
 }): InstallFile[] {
-  return installSources(options.repositoryRoot).flatMap((source) =>
-    listRelativeFiles(source.sourceDirectory).map((relativePath) => {
-      const sourcePath = join(source.sourceDirectory, relativePath);
-      const targetPath = join(options.cwd, source.targetDirectory, relativePath);
-      const content = readFileSync(sourcePath, "utf8");
-
-      return {
-        content: pinWorkflowReleaseRefs(content, options.releaseTag),
-        sourcePath,
-        targetPath,
-      };
-    }),
-  );
+  requireSourcePaths(options.sourceFiles, requiredInstallSourcePaths, options.releaseTag);
+  return options.sourceFiles
+    .filter((file) => isInstallSourcePath(file.relativePath))
+    .map((file) => buildInstallFile(file, options.cwd, options.releaseTag));
 }
 
 export function buildWorkflowUpdateFiles(options: {
   cwd: string;
   releaseTag: string;
-  repositoryRoot: string;
+  sourceFiles: ConsumerStarterFile[];
 }): InstallFile[] {
-  const sourceDirectory = join(options.repositoryRoot, "templates", ".github", "workflows");
-  return listRelativeFiles(sourceDirectory).map((relativePath) => {
-    const sourcePath = join(sourceDirectory, relativePath);
-    const targetPath = join(options.cwd, ".github", "workflows", relativePath);
-    const content = readFileSync(sourcePath, "utf8");
-
-    return {
-      content: pinWorkflowReleaseRefs(content, options.releaseTag),
-      sourcePath,
-      targetPath,
-    };
-  });
+  requireSourcePaths(options.sourceFiles, requiredWorkflowSourcePaths, options.releaseTag);
+  return options.sourceFiles
+    .filter((file) => isWorkflowSourcePath(file.relativePath))
+    .map((file) => buildInstallFile(file, options.cwd, options.releaseTag));
 }
 
 export function blockingInstallPaths(files: InstallFile[]): string[] {
@@ -124,19 +118,6 @@ export function pinWorkflowReleaseRefs(content: string, releaseTag: string): str
   );
 }
 
-function installSources(repositoryRoot: string): InstallSource[] {
-  return [
-    {
-      sourceDirectory: join(repositoryRoot, "templates", ".github"),
-      targetDirectory: ".github",
-    },
-    {
-      sourceDirectory: join(repositoryRoot, "templates", ".git-vibe"),
-      targetDirectory: ".git-vibe",
-    },
-  ];
-}
-
 function isManagedWorkflowTarget(file: InstallFile): boolean {
   try {
     const workflowName = basename(file.targetPath);
@@ -154,19 +135,6 @@ function managedWorkflowPattern(workflowName: string): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-}
-
-function listRelativeFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true })
-    .flatMap((entry) => {
-      const entryPath = join(directory, entry.name);
-      if (entry.isDirectory()) {
-        return listRelativeFiles(entryPath).map((path) => join(entry.name, path));
-      }
-      /* c8 ignore next */
-      return entry.isFile() ? [entry.name] : [];
-    })
-    .sort();
 }
 
 function snapshotFile(targetPath: string): FileSnapshot {
@@ -221,4 +189,53 @@ function rollbackInstall(createdFiles: string[], createdDirectories: string[]): 
   for (const directory of [...createdDirectories].reverse()) {
     rmSync(directory, { force: true, recursive: false });
   }
+}
+
+function buildInstallFile(
+  sourceFile: ConsumerStarterFile,
+  cwd: string,
+  releaseTag: string,
+): InstallFile {
+  return {
+    content: pinWorkflowReleaseRefs(sourceFile.content, releaseTag),
+    sourcePath: sourceFile.sourcePath,
+    targetPath: join(cwd, safeRelativePath(sourceFile.relativePath)),
+  };
+}
+
+function requireSourcePaths(
+  sourceFiles: ConsumerStarterFile[],
+  requiredPaths: string[],
+  releaseTag: string,
+): void {
+  const sourcePaths = new Set(sourceFiles.map((file) => file.relativePath));
+  const missingPaths = requiredPaths.filter((path) => !sourcePaths.has(path));
+
+  if (missingPaths.length === 0) return;
+
+  const listed = missingPaths.map((path) => `- examples/consumer/${path}`).join("\n");
+  throw new Error(
+    `git-vibe-setup found an incomplete GitVibe consumer starter at markhuangai/git-vibe@${releaseTag}. Missing files:\n${listed}\nNo files were written.`,
+  );
+}
+
+function isInstallSourcePath(relativePath: string): boolean {
+  return relativePath.startsWith(".github/") || relativePath.startsWith(".git-vibe/");
+}
+
+function isWorkflowSourcePath(relativePath: string): boolean {
+  return relativePath.startsWith(".github/workflows/") && relativePath.endsWith(".yml");
+}
+
+function safeRelativePath(relativePath: string): string {
+  const segments = relativePath.split("/");
+  const isSafe =
+    relativePath.length > 0 &&
+    !relativePath.startsWith("/") &&
+    !relativePath.includes("\\") &&
+    segments.every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+
+  if (isSafe) return relativePath;
+
+  throw new Error(`git-vibe-setup found an unsafe starter file path: ${relativePath}`);
 }
