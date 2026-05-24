@@ -3,12 +3,12 @@ run-name: "[git-vibe][review-dev]: PR #${{ github.event.pull_request.number }}"
 
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - dev
 
 concurrency:
-  group: git-vibe-review-${{ github.event.pull_request.number }}
+  group: git-vibe-review-dev-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:

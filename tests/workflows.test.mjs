@@ -445,7 +445,7 @@ describe("GitVibe automatic PR review workflow", () => {
     expect(consumer.on?.pull_request_target).toBeUndefined();
     expect(wrapper.on?.pull_request_target).toMatchObject({
       branches: ["dev"],
-      types: ["opened", "reopened", "ready_for_review"],
+      types: ["opened", "reopened", "synchronize", "ready_for_review"],
     });
     expect(wrapper.jobs?.review).toMatchObject({
       if: "${{ !github.event.pull_request.draft }}",
@@ -476,7 +476,7 @@ describe("GitVibe automatic PR review workflow", () => {
       "cancel-in-progress": true,
     });
     expect(wrapper.concurrency).toMatchObject({
-      group: "git-vibe-review-${{ github.event.pull_request.number }}",
+      group: "git-vibe-review-dev-pr-${{ github.event.pull_request.number }}",
       "cancel-in-progress": true,
     });
   });
