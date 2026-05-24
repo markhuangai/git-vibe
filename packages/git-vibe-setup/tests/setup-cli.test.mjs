@@ -1,19 +1,27 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isDirectRun, runSetup, setupCli } from "../src/cli.ts";
-import { existingFilesError, installFiles, pinWorkflowReleaseRefs } from "../src/install.ts";
+import {
+  existingFilesError,
+  installFiles,
+  pinWorkflowReleaseRefs,
+  unmanagedWorkflowUpdatePaths,
+  updateFiles,
+} from "../src/install.ts";
 import { latestStableReleaseTag, selectLatestStableRelease } from "../src/releases.ts";
 
 const repositoryRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
@@ -74,9 +82,21 @@ describe("git-vibe-setup installation", () => {
   });
 
   it("keeps packaged starter workflows aligned with the consumer example", () => {
-    expect(workflowNames(join(repositoryRoot, "templates", ".github"))).toEqual(
-      workflowNames(join(workspaceRoot, "examples", "consumer", ".github")),
-    );
+    const templateDirectory = join(repositoryRoot, "templates", ".github");
+    const exampleDirectory = join(workspaceRoot, "examples", "consumer", ".github");
+    const names = workflowNames(templateDirectory);
+
+    expect(names).toEqual(workflowNames(exampleDirectory));
+    for (const name of names) {
+      const examplePath = join(exampleDirectory, "workflows", name);
+      expect(lstatSync(examplePath).isSymbolicLink()).toBe(true);
+      expect(resolve(dirname(examplePath), readlinkSync(examplePath))).toBe(
+        join(templateDirectory, "workflows", name),
+      );
+      expect(readFileSync(examplePath, "utf8")).toBe(
+        readFileSync(join(templateDirectory, "workflows", name), "utf8"),
+      );
+    }
   });
 
   it("prints the manual secret and variable instructions after installation", async () => {
@@ -96,6 +116,137 @@ describe("git-vibe-setup installation", () => {
     expect(logs[0]).toContain("WEBHOOK_SECRET");
     expect(logs[0]).toContain("GITVIBE_BASE_BRANCH");
     expect(logs[0]).toContain("/blob/v1.2.3/examples/consumer/GITVIBE_AI_ENV_JSON.example.json");
+  });
+});
+
+describe("git-vibe-setup workflow updates", () => {
+  it("updates workflow wrappers without touching config or role prompts", async () => {
+    const cwd = workspace();
+
+    await runSetup({
+      cwd,
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.2" })]),
+      log: () => undefined,
+      repositoryRoot,
+    });
+    writeFileSync(join(cwd, ".github", "git-vibe.yml"), "version: 1\ncustom: true\n");
+    writeFileSync(join(cwd, ".git-vibe", "role-group", "correctness.md"), "custom role\n");
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+      repositoryRoot,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(readFileSync(join(cwd, ".github", "git-vibe.yml"), "utf8")).toBe(
+      "version: 1\ncustom: true\n",
+    );
+    expect(readFileSync(join(cwd, ".git-vibe", "role-group", "correctness.md"), "utf8")).toBe(
+      "custom role\n",
+    );
+    for (const name of workflowNames(join(cwd, ".github"))) {
+      const workflow = readFileSync(join(cwd, ".github", "workflows", name), "utf8");
+      expect(workflow).toContain("@v1.2.3");
+      expect(workflow).not.toContain("@v1.2.2");
+    }
+  });
+
+  it("repairs old workflow wrapper contracts and creates missing wrappers", async () => {
+    const cwd = workspace();
+
+    mkdirSync(join(cwd, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".github", "workflows", "validate.yml"),
+      [
+        "name: GitVibe validate",
+        "on:",
+        "  workflow_dispatch:",
+        "    inputs:",
+        "      issue-number:",
+        "        type: string",
+        "jobs:",
+        "  validate:",
+        "    uses: markhuangai/git-vibe/.github/workflows/validate.yml@v3.0.2",
+        "    with:",
+        "      issue-number: ${{ inputs.issue-number }}",
+        "      timeout_minutes: 60",
+        "      max_turns: 90",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+      repositoryRoot,
+    });
+
+    const validateWorkflow = readFileSync(
+      join(cwd, ".github", "workflows", "validate.yml"),
+      "utf8",
+    );
+    expect(exitCode).toBe(0);
+    expect(workflowNames(join(cwd, ".github"))).toEqual(
+      workflowNames(join(repositoryRoot, "templates", ".github")),
+    );
+    expect(validateWorkflow).toContain("timeout_minutes:");
+    expect(validateWorkflow).toContain("timeout_minutes: ${{ inputs.timeout_minutes }}");
+    expect(validateWorkflow).toContain("@v1.2.3");
+  });
+});
+
+describe("git-vibe-setup workflow update safety", () => {
+  it("refuses to overwrite workflow files that are not GitVibe wrappers", async () => {
+    const cwd = workspace();
+    /** @type {string[]} */
+    const errors = [];
+
+    mkdirSync(join(cwd, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(cwd, ".github", "workflows", "validate.yml"), "name: Custom validate\n");
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      error: (message) => errors.push(message),
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+      repositoryRoot,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors[0]).toContain("do not look like GitVibe wrappers");
+    expect(readFileSync(join(cwd, ".github", "workflows", "validate.yml"), "utf8")).toBe(
+      "name: Custom validate\n",
+    );
+    expect(existsSync(join(cwd, ".github", "workflows", "develop.yml"))).toBe(false);
+  });
+
+  it("rolls back workflow updates when a later write fails", () => {
+    const cwd = workspace();
+    const existing = join(cwd, ".github", "workflows", "validate.yml");
+    const created = join(cwd, ".github", "workflows", "review.yml");
+    const blocked = join(cwd, ".github", "workflows", "blocked.yml");
+
+    mkdirSync(join(cwd, ".github", "workflows"), { recursive: true });
+    writeFileSync(existing, "existing\n");
+    mkdirSync(blocked);
+
+    expect(unmanagedWorkflowUpdatePaths([workflowFile(blocked, "blocked.yml")])).toEqual([blocked]);
+    expect(() =>
+      updateFiles([
+        { content: "updated\n", sourcePath: "source", targetPath: existing },
+        { content: "created\n", sourcePath: "source", targetPath: created },
+        { content: "blocked\n", sourcePath: "source", targetPath: blocked },
+      ]),
+    ).toThrow();
+    expect(readFileSync(existing, "utf8")).toBe("existing\n");
+    expect(existsSync(created)).toBe(false);
+    expect(existsSync(blocked)).toBe(true);
   });
 });
 
@@ -166,6 +317,7 @@ describe("git-vibe-setup CLI execution", () => {
 
     expect(exitCode).toBe(1);
     expect(errors[0]).toContain("Unknown command: install");
+    expect(errors[0]).toContain("git-vibe-setup update");
     expect(existsSync(join(cwd, ".github"))).toBe(false);
   });
 
@@ -177,8 +329,11 @@ describe("git-vibe-setup CLI execution", () => {
     symlinkSync(target, entrypoint);
 
     expect(isDirectRun(pathToFileURL(target).href, entrypoint)).toBe(true);
+    expect(isDirectRun(pathToFileURL(target).href, "")).toBe(false);
   });
+});
 
+describe("git-vibe-setup CLI process defaults", () => {
   it("falls back to process defaults for cwd, fetch, and console logging", async () => {
     const cwd = workspace();
     const originalCwd = process.cwd();
@@ -191,6 +346,28 @@ describe("git-vibe-setup CLI execution", () => {
     try {
       await expect(setupCli()).resolves.toBe(0);
       expect(log).toHaveBeenCalledWith(expect.stringContaining("GitVibe starter files installed"));
+    } finally {
+      process.chdir(originalCwd);
+      globalThis.fetch = originalFetch;
+      log.mockRestore();
+    }
+  });
+
+  it("runs update with process defaults for cwd, fetch, and console logging", async () => {
+    const cwd = workspace();
+    const originalCwd = process.cwd();
+    const originalFetch = globalThis.fetch;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    globalThis.fetch = fetchOk([release({ tag_name: "v1.2.3" })]);
+    process.chdir(cwd);
+
+    try {
+      await expect(setupCli({ argv: ["update"] })).resolves.toBe(0);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("workflow files updated"));
+      expect(workflowNames(join(cwd, ".github"))).toEqual(
+        workflowNames(join(repositoryRoot, "templates", ".github")),
+      );
     } finally {
       process.chdir(originalCwd);
       globalThis.fetch = originalFetch;
@@ -219,6 +396,27 @@ describe("git-vibe-setup failures", () => {
     }
   });
 
+  it("falls back to console.error when update release lookup fails", async () => {
+    const cwd = workspace();
+    const originalCwd = process.cwd();
+    const originalFetch = globalThis.fetch;
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    globalThis.fetch = async () => new globalThis.Response("", { status: 503 });
+    process.chdir(cwd);
+
+    try {
+      await expect(setupCli({ argv: ["update"] })).resolves.toBe(1);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("service is unavailable"));
+    } finally {
+      process.chdir(originalCwd);
+      globalThis.fetch = originalFetch;
+      error.mockRestore();
+    }
+  });
+});
+
+describe("git-vibe-setup setup failures", () => {
   it("fails without writing when any target file already exists", async () => {
     const cwd = workspace();
     /** @type {string[]} */
@@ -406,6 +604,15 @@ function workspace() {
 /** @param {string} directory */
 function workflowNames(directory) {
   return readdirSync(join(directory, "workflows")).sort();
+}
+
+/** @param {string} targetPath @param {string} sourceName */
+function workflowFile(targetPath, sourceName) {
+  return {
+    content: "",
+    sourcePath: join(repositoryRoot, "templates", ".github", "workflows", sourceName),
+    targetPath,
+  };
 }
 
 /** @param {Partial<import("../src/releases.ts").GitHubRelease>} overrides */

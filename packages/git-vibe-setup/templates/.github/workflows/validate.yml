@@ -14,6 +14,16 @@ on:
         required: false
         type: string
         default: ""
+      timeout_minutes:
+        description: Maximum minutes for this job.
+        required: false
+        type: number
+        default: 60
+      max_turns:
+        description: Maximum AI turns for this stage.
+        required: false
+        type: number
+        default: 90
       dry-run:
         description: Validate without writing to GitHub.
         required: false
@@ -32,8 +42,8 @@ jobs:
       issue-number: ${{ inputs.issue-number }}
       discussion-number: ${{ inputs.discussion-number }}
       runner: ubuntu-latest
-      timeout_minutes: 60
-      max_turns: 90
+      timeout_minutes: ${{ inputs.timeout_minutes }}
+      max_turns: ${{ inputs.max_turns }}
       dry-run: ${{ inputs.dry-run }}
       source-comment: ${{ inputs.source-comment }}
     secrets:

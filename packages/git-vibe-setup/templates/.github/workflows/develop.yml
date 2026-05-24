@@ -8,6 +8,41 @@ on:
         description: Approved implementation issue number.
         required: true
         type: string
+      implementation_timeout_minutes:
+        description: Maximum minutes for the implementation job.
+        required: false
+        type: number
+        default: 120
+      review_timeout_minutes:
+        description: Maximum minutes for the review matrix job.
+        required: false
+        type: number
+        default: 60
+      create_pr_timeout_minutes:
+        description: Maximum minutes for the PR creation job.
+        required: false
+        type: number
+        default: 15
+      max_turns:
+        description: Default maximum AI turns for stages in this workflow.
+        required: false
+        type: number
+        default: 90
+      implementation_max_turns:
+        description: Maximum AI turns for implementation and feedback-style coding work.
+        required: false
+        type: number
+        default: 200
+      validation_repair_attempts:
+        description: Maximum validation repair attempts inside each implementation run.
+        required: false
+        type: number
+        default: 3
+      validation_repair_max_turns:
+        description: Maximum AI turns for each validation repair attempt.
+        required: false
+        type: number
+        default: 45
       dry-run:
         description: Validate without writing to GitHub.
         required: false
@@ -25,13 +60,13 @@ jobs:
     with:
       issue-number: ${{ inputs.issue-number }}
       runner: ubuntu-latest
-      implementation_timeout_minutes: 120
-      review_timeout_minutes: 60
-      create_pr_timeout_minutes: 15
-      max_turns: 90
-      implementation_max_turns: 120
-      validation_repair_attempts: 2
-      validation_repair_max_turns: 90
+      implementation_timeout_minutes: ${{ inputs.implementation_timeout_minutes }}
+      review_timeout_minutes: ${{ inputs.review_timeout_minutes }}
+      create_pr_timeout_minutes: ${{ inputs.create_pr_timeout_minutes }}
+      max_turns: ${{ inputs.max_turns }}
+      implementation_max_turns: ${{ inputs.implementation_max_turns }}
+      validation_repair_attempts: ${{ inputs.validation_repair_attempts }}
+      validation_repair_max_turns: ${{ inputs.validation_repair_max_turns }}
       dry-run: ${{ inputs.dry-run }}
       source-comment: ${{ inputs.source-comment }}
     secrets:

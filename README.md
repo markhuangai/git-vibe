@@ -151,6 +151,18 @@ It creates:
 The installer is local-only. It does not authenticate to GitHub, create
 commits, open pull requests, or write secrets and variables for you.
 
+To update existing GitVibe workflow wrappers after upgrading `git-vibe-setup`,
+run:
+
+```bash
+npx git-vibe-setup update
+```
+
+`update` rewrites only `.github/workflows/*.yml` GitVibe wrapper files and pins
+them to the latest stable GitVibe release. It does not touch
+`.github/git-vibe.yml`, `.git-vibe`, secrets, or variables, and it refuses to
+overwrite workflow files that do not look like GitVibe wrappers.
+
 ### 2. Configure the consumer repo
 
 Edit:

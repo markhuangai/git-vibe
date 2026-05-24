@@ -105,9 +105,10 @@ validation.
 - Run unit tests with Vitest.
 - Enforce coverage with Vitest/V8 thresholds: branches 90%, functions 90%, lines 90%, statements 90%.
 - Run `github-actionlint` against repository workflows and consumer example workflows.
+- Verify setup workflow templates stay aligned with referenced reusable workflow inputs.
 - Run `pnpm audit --prod` in PR CI.
 - Enforce JavaScript/MJS size limits through ESLint: 700 lines per file and 100 lines per function. Generated bundles are excluded.
-- Use Husky + lint-staged for staged format/lint checks, then run typecheck and coverage in pre-commit.
+- Use Husky + lint-staged for staged format/lint checks, then run the workflow template contract check, typecheck, and coverage in pre-commit.
 - CI is a PR quality gate plus manual dispatch, runs coverage before build, and uses the `docker-runner` self-hosted runner label for this repository.
 - Reusable GitVibe workflows install Node `22` and pnpm `10.33.3` before invoking source-built composite actions. The composite actions read `.github/git-vibe.yml` and install Codex CLI or Claude Code only when the selected stage profile uses a matching CLI adapter.
 

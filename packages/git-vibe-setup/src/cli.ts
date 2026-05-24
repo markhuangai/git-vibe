@@ -7,8 +7,12 @@ import { fileURLToPath } from "node:url";
 import {
   blockingInstallPaths,
   buildInstallFiles,
+  buildWorkflowUpdateFiles,
   existingFilesError,
   installFiles,
+  unmanagedWorkflowUpdateError,
+  unmanagedWorkflowUpdatePaths,
+  updateFiles,
 } from "./install.js";
 import { renderManualSetupInstructions } from "./instructions.js";
 import { latestStableReleaseTag } from "./releases.js";
@@ -24,10 +28,12 @@ interface SetupCliRuntime {
 
 const usage = `Usage:
   git-vibe-setup setup
+  git-vibe-setup update
   git-vibe-setup
 
 Commands:
   setup   Install GitVibe starter files into the current repository.
+  update  Update GitVibe workflow wrapper files in the current repository.
 
 Options:
   -h, --help   Show this help message.`;
@@ -45,6 +51,21 @@ export async function runSetup(runtime: SetupCliRuntime = {}): Promise<void> {
   (runtime.log || console.log)(renderManualSetupInstructions(releaseTag));
 }
 
+export async function runUpdate(runtime: SetupCliRuntime = {}): Promise<void> {
+  const cwd = runtime.cwd || process.cwd();
+  const repositoryRoot = runtime.repositoryRoot || packageRoot();
+  const releaseTag = await latestStableReleaseTag(runtime.fetchImpl || fetch);
+  const files = buildWorkflowUpdateFiles({ cwd, releaseTag, repositoryRoot });
+  const unmanagedPaths = unmanagedWorkflowUpdatePaths(files);
+
+  if (unmanagedPaths.length > 0) throw unmanagedWorkflowUpdateError(unmanagedPaths, cwd);
+
+  updateFiles(files);
+  (runtime.log || console.log)(
+    `GitVibe workflow files updated with reusable workflows pinned to ${releaseTag}.`,
+  );
+}
+
 export async function setupCli(runtime: SetupCliRuntime = {}): Promise<number> {
   const argv = runtime.argv || process.argv.slice(2);
   const command = argv[0] || "setup";
@@ -54,13 +75,14 @@ export async function setupCli(runtime: SetupCliRuntime = {}): Promise<number> {
     return 0;
   }
 
-  if (command !== "setup") {
+  if (command !== "setup" && command !== "update") {
     (runtime.error || console.error)(`Unknown command: ${command}\n\n${usage}`);
     return 1;
   }
 
   try {
-    await runSetup(runtime);
+    if (command === "update") await runUpdate(runtime);
+    else await runSetup(runtime);
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

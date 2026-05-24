@@ -2,6 +2,7 @@
 set -eu
 
 corepack pnpm exec lint-staged
+corepack pnpm workflow-template-contract
 
 corepack pnpm typecheck &
 typecheck_pid=$!

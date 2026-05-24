@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
@@ -37,6 +38,16 @@ const consumerWorkflows = [
   "examples/consumer/.github/workflows/review.yml",
   "examples/consumer/.github/workflows/validate.yml",
 ];
+
+const consumerWorkflowBudgetConfig = {
+  ai: {
+    budgets: Object.fromEntries(
+      "create_pr_timeout_minutes default_max_turns default_timeout_minutes feedback_max_turns feedback_timeout_minutes implementation_max_turns implementation_timeout_minutes review_timeout_minutes validation_repair_attempts validation_repair_max_turns"
+        .split(" ")
+        .map((key) => [key, 1]),
+    ),
+  },
+};
 
 const actionFiles = [
   "address-pr-feedback/action.yml",
@@ -234,6 +245,30 @@ describe("GitVibe workflow call wiring", () => {
         reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
         `${file} omits old Claude auth`,
       ).toBeUndefined();
+    }
+  });
+
+  it("declares and forwards every budget input the server dispatches to consumer wrappers", () => {
+    for (const file of consumerWorkflows) {
+      const workflowName = file.slice(file.lastIndexOf("/") + 1);
+      const workflow = readWorkflow(file);
+      const budgetInputs = workflowBudgetInputsFor(consumerWorkflowBudgetConfig, workflowName);
+      const reusableJob = Object.values(workflow.jobs || {}).find((job) =>
+        String(job.uses || "").startsWith("markhuangai/git-vibe/.github/workflows/"),
+      );
+
+      for (const inputName of Object.keys(budgetInputs)) {
+        expect(
+          workflow.on?.workflow_dispatch?.inputs?.[inputName],
+          `${file} declares dispatch input ${inputName}`,
+        ).toMatchObject({
+          required: false,
+          type: "number",
+        });
+        expect(reusableJob?.with?.[inputName], `${file} forwards ${inputName}`).toBe(
+          `\${{ inputs.${inputName} }}`,
+        );
+      }
     }
   });
 });

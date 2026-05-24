@@ -8,6 +8,16 @@ on:
         description: Pull request number with feedback to address.
         required: true
         type: string
+      timeout_minutes:
+        description: Maximum minutes for the feedback remediation job.
+        required: false
+        type: number
+        default: 120
+      max_turns:
+        description: Maximum AI turns for feedback remediation.
+        required: false
+        type: number
+        default: 120
       dry-run:
         description: Validate without writing to GitHub.
         required: false
@@ -25,8 +35,8 @@ jobs:
     with:
       pr-number: ${{ inputs.pr-number }}
       runner: ubuntu-latest
-      timeout_minutes: 120
-      max_turns: 120
+      timeout_minutes: ${{ inputs.timeout_minutes }}
+      max_turns: ${{ inputs.max_turns }}
       dry-run: ${{ inputs.dry-run }}
       source-comment: ${{ inputs.source-comment }}
     secrets:
