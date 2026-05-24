@@ -57,7 +57,11 @@ const workflowRunNameSpecs = [
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
   { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
   { file: ".github/workflows/review.yml", stage: "review", artifact: "PR" },
-  { file: ".github/workflows/review-dev-pr.yml", stage: "review-dev", artifact: "PR" },
+  {
+    file: ".github/workflows/automatic-pr-review.yml",
+    stage: "automatic-pr-review",
+    artifact: "PR",
+  },
   { file: ".github/workflows/address-feedback.yml", stage: "address-feedback", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/validate.yml",
@@ -90,7 +94,7 @@ const workflowStaticNames = {
   ".github/workflows/investigate.yml": "GitVibe investigate",
   ".github/workflows/develop.yml": "GitVibe develop",
   ".github/workflows/review.yml": "GitVibe review",
-  ".github/workflows/review-dev-pr.yml": "GitVibe review dev PR",
+  ".github/workflows/automatic-pr-review.yml": "GitVibe automatic PR review",
   ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
@@ -437,14 +441,14 @@ describe("GitVibe workflow write permissions", () => {
 
 describe("GitVibe automatic PR review workflow", () => {
   it("keeps PR-open automation in a repo-local wrapper around review.yml", () => {
-    const wrapper = readWorkflow(".github/workflows/review-dev-pr.yml");
+    const wrapper = readWorkflow(".github/workflows/automatic-pr-review.yml");
     const source = readWorkflow(".github/workflows/review.yml");
     const consumer = readWorkflow("examples/consumer/.github/workflows/review.yml");
 
     expect(source.on?.pull_request_target).toBeUndefined();
     expect(consumer.on?.pull_request_target).toBeUndefined();
     expect(wrapper.on?.pull_request_target).toMatchObject({
-      branches: ["dev"],
+      branches: ["main", "dev"],
       types: ["opened", "reopened", "synchronize", "ready_for_review"],
     });
     expect(wrapper.jobs?.review).toMatchObject({
@@ -469,14 +473,14 @@ describe("GitVibe automatic PR review workflow", () => {
 
   it("cancels older in-progress review runs for the same pull request", () => {
     const source = readWorkflow(".github/workflows/review.yml");
-    const wrapper = readWorkflow(".github/workflows/review-dev-pr.yml");
+    const wrapper = readWorkflow(".github/workflows/automatic-pr-review.yml");
 
     expect(source.concurrency).toMatchObject({
       group: "git-vibe-review-${{ inputs.pr-number }}",
       "cancel-in-progress": true,
     });
     expect(wrapper.concurrency).toMatchObject({
-      group: "git-vibe-review-dev-pr-${{ github.event.pull_request.number }}",
+      group: "git-vibe-automatic-pr-review-${{ github.event.pull_request.number }}",
       "cancel-in-progress": true,
     });
   });

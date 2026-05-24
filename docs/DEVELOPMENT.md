@@ -13,7 +13,7 @@
 - `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.
 - `.github/workflows/develop.yml`: reusable issue development pipeline that implements, creates or updates a PR, then reviews it.
 - `.github/workflows/review.yml`: reusable pull request review pipeline.
-- `.github/workflows/review-dev-pr.yml`: repository-local `pull_request_target` wrapper that reviews non-draft PRs opened against `dev`.
+- `.github/workflows/automatic-pr-review.yml`: repository-local `pull_request_target` wrapper that reviews non-draft PRs opened against `main` or `dev`.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline that updates the existing PR branch before review when fixes are required.
 - `.github/workflows/ci.yml`: PR quality gate plus manual dispatch for format, lint, coverage, build, actionlint, and production audit.
 - `.github/workflows/app-deploy.yml`: app image build and deployment workflow for app/shared runtime changes on `dev`.

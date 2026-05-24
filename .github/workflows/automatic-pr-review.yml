@@ -1,14 +1,15 @@
-name: GitVibe review dev PR
-run-name: "[git-vibe][review-dev]: PR #${{ github.event.pull_request.number }}"
+name: GitVibe automatic PR review
+run-name: "[git-vibe][automatic-pr-review]: PR #${{ github.event.pull_request.number }}"
 
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
     branches:
+      - main
       - dev
 
 concurrency:
-  group: git-vibe-review-dev-pr-${{ github.event.pull_request.number }}
+  group: git-vibe-automatic-pr-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
