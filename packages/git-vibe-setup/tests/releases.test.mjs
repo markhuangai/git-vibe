@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { latestStableReleaseTag, selectLatestStableRelease } from "../src/releases.ts";
+import {
+  latestReleaseTag,
+  latestStableReleaseTag,
+  selectLatestRelease,
+  selectLatestStableRelease,
+} from "../src/releases.ts";
 
 describe("stable release selection", () => {
   it("ignores draft and prerelease releases when choosing the latest stable tag", () => {
@@ -11,6 +16,24 @@ describe("stable release selection", () => {
     ])?.tag_name;
 
     expect(releaseTag).toBe("v1.3.0");
+  });
+
+  it("can include prereleases when choosing the latest release tag", async () => {
+    const releases = [
+      release({ published_at: "2026-05-15T00:00:00Z", tag_name: "v1.3.0" }),
+      release({
+        prerelease: true,
+        published_at: "2026-05-16T00:00:00Z",
+        tag_name: "v1.4.0-rc.1",
+      }),
+    ];
+
+    expect(selectLatestRelease(releases, { includePrereleases: true })?.tag_name).toBe(
+      "v1.4.0-rc.1",
+    );
+    await expect(
+      latestReleaseTag({ fetchImpl: fetchOk(releases), includePrereleases: true }),
+    ).resolves.toBe("v1.4.0-rc.1");
   });
 
   it("falls back to created_at when published_at is unavailable", () => {
@@ -81,6 +104,15 @@ function release(overrides = {}) {
     tag_name: "v1.0.0",
     ...overrides,
   };
+}
+
+/** @param {import("../src/releases.ts").GitHubRelease[]} data */
+function fetchOk(data) {
+  return async () =>
+    new globalThis.Response(JSON.stringify(data), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
 }
 
 /** @param {import("../src/releases.ts").GitHubRelease[][]} pages */

@@ -163,6 +163,15 @@ them to the latest stable GitVibe release. It does not touch
 `.github/git-vibe.yml`, `.git-vibe`, secrets, or variables, and it refuses to
 overwrite workflow files that do not look like GitVibe wrappers.
 
+For prerelease testing, pin an exact release tag from the consumer repository:
+
+```bash
+npx git-vibe-setup update --release v3.0.4-rc.1
+```
+
+Use `--include-prereleases` only when automatic latest-release lookup should be
+allowed to choose prereleases.
+
 ### 2. Configure the consumer repo
 
 Edit:

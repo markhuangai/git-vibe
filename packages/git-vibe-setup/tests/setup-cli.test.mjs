@@ -2,15 +2,11 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  mkdtempSync,
-  readdirSync,
   readFileSync,
-  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isDirectRun, runSetup, setupCli } from "../src/cli.ts";
@@ -21,17 +17,21 @@ import {
   unmanagedWorkflowUpdatePaths,
   updateFiles,
 } from "../src/install.ts";
+import {
+  cleanupTemporaryDirectories,
+  contentRequestRefs,
+  fetchGitHubOk,
+  fetchOk,
+  release,
+  repositoryRoot,
+  requestUrl,
+  workspace,
+  workflowFile,
+  workflowNames,
+  workspaceRoot,
+} from "./helpers.mjs";
 
-const repositoryRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
-const workspaceRoot = dirname(dirname(repositoryRoot));
-/** @type {string[]} */
-const temporaryDirectories = [];
-
-afterEach(() => {
-  for (const directory of temporaryDirectories.splice(0)) {
-    rmSync(directory, { force: true, recursive: true });
-  }
-});
+afterEach(cleanupTemporaryDirectories);
 
 describe("git-vibe-setup", () => {
   it("exposes the setup executable without shipping starter templates", () => {
@@ -107,6 +107,27 @@ describe("git-vibe-setup installation", () => {
     expect(logs[0]).toContain("GITVIBE_BASE_BRANCH");
     expect(logs[0]).toContain("/blob/v1.2.3/examples/consumer/GITVIBE_AI_ENV_JSON.example.json");
   });
+
+  it("installs from an exact prerelease tag without latest-release lookup", async () => {
+    const cwd = workspace();
+    const fetchImpl = vi.fn(fetchGitHubOk([]));
+
+    const exitCode = await setupCli({
+      argv: ["setup", "--release", "v1.2.3-rc.1"],
+      cwd,
+      fetchImpl,
+      log: () => undefined,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(
+      fetchImpl.mock.calls.some(([input]) => requestUrl(input).pathname.endsWith("/releases")),
+    ).toBe(false);
+    expect(contentRequestRefs(fetchImpl)).toEqual(["v1.2.3-rc.1"]);
+    expect(readFileSync(join(cwd, ".github", "workflows", "validate.yml"), "utf8")).toContain(
+      "@v1.2.3-rc.1",
+    );
+  });
 });
 
 describe("git-vibe-setup workflow updates", () => {
@@ -140,6 +161,47 @@ describe("git-vibe-setup workflow updates", () => {
       expect(workflow).toContain("@v1.2.3");
       expect(workflow).not.toContain("@v1.2.2");
     }
+  });
+});
+
+describe("git-vibe-setup prerelease workflow updates", () => {
+  it("updates workflow wrappers from the latest prerelease when explicitly included", async () => {
+    const cwd = workspace();
+
+    const exitCode = await setupCli({
+      argv: ["update", "--include-prereleases"],
+      cwd,
+      fetchImpl: fetchGitHubOk([
+        release({ published_at: "2026-05-14T00:00:00Z", tag_name: "v1.2.3" }),
+        release({
+          prerelease: true,
+          published_at: "2026-05-15T00:00:00Z",
+          tag_name: "v1.2.4-rc.1",
+        }),
+      ]),
+      log: () => undefined,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(readFileSync(join(cwd, ".github", "workflows", "validate.yml"), "utf8")).toContain(
+      "@v1.2.4-rc.1",
+    );
+  });
+
+  it("updates workflow wrappers from an exact prerelease tag", async () => {
+    const cwd = workspace();
+
+    const exitCode = await setupCli({
+      argv: ["update", "--release=v1.2.4-rc.2"],
+      cwd,
+      fetchImpl: fetchGitHubOk([]),
+      log: () => undefined,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(readFileSync(join(cwd, ".github", "workflows", "validate.yml"), "utf8")).toContain(
+      "@v1.2.4-rc.2",
+    );
   });
 
   it("repairs old workflow wrapper contracts and creates missing wrappers", async () => {
@@ -288,7 +350,9 @@ describe("git-vibe-setup CLI execution", () => {
     expect(exitCode).toBe(0);
     expect(existsSync(join(cwd, ".github", "git-vibe.yml"))).toBe(true);
   });
+});
 
+describe("git-vibe-setup CLI options", () => {
   it("prints help without writing files", async () => {
     const cwd = workspace();
     /** @type {string[]} */
@@ -303,6 +367,24 @@ describe("git-vibe-setup CLI execution", () => {
 
     expect(exitCode).toBe(0);
     expect(logs[0]).toContain("git-vibe-setup setup");
+    expect(logs[0]).toContain("--release <tag>");
+    expect(existsSync(join(cwd, ".github"))).toBe(false);
+  });
+
+  it("prints command help without writing files", async () => {
+    const cwd = workspace();
+    /** @type {string[]} */
+    const logs = [];
+
+    const exitCode = await setupCli({
+      argv: ["update", "--help"],
+      cwd,
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: (message) => logs.push(message),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs[0]).toContain("git-vibe-setup update");
     expect(existsSync(join(cwd, ".github"))).toBe(false);
   });
 
@@ -325,6 +407,35 @@ describe("git-vibe-setup CLI execution", () => {
     expect(existsSync(join(cwd, ".github"))).toBe(false);
   });
 
+  it("reports invalid release options without writing files", async () => {
+    const cwd = workspace();
+    /** @type {string[]} */
+    const errors = [];
+
+    const invalidTagExitCode = await setupCli({
+      argv: ["update", "--release", "main"],
+      cwd,
+      error: (message) => errors.push(message),
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+    });
+    const missingTagExitCode = await setupCli({
+      argv: ["update", "--release"],
+      cwd,
+      error: (message) => errors.push(message),
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+    });
+
+    expect(invalidTagExitCode).toBe(1);
+    expect(missingTagExitCode).toBe(1);
+    expect(errors[0]).toContain("Invalid release tag");
+    expect(errors[1]).toContain("--release requires a release tag");
+    expect(existsSync(join(cwd, ".github"))).toBe(false);
+  });
+});
+
+describe("git-vibe-setup direct execution", () => {
   it("recognizes npm bin symlinks as direct CLI execution", () => {
     const cwd = workspace();
     const target = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
@@ -562,117 +673,3 @@ describe("workflow ref pinning", () => {
     );
   });
 });
-
-function workspace() {
-  const directory = mkdtempSync(join(tmpdir(), "git-vibe-setup-"));
-  temporaryDirectories.push(directory);
-  return directory;
-}
-
-/** @param {string} directory */
-function workflowNames(directory) {
-  return readdirSync(join(directory, "workflows")).sort();
-}
-
-/** @param {string} targetPath @param {string} sourceName */
-function workflowFile(targetPath, sourceName) {
-  return {
-    content: "",
-    sourcePath: join("examples", "consumer", ".github", "workflows", sourceName),
-    targetPath,
-  };
-}
-
-/** @param {Partial<import("../src/releases.ts").GitHubRelease>} overrides */
-function release(overrides = {}) {
-  return {
-    created_at: "2026-05-10T00:00:00Z",
-    draft: false,
-    prerelease: false,
-    published_at: "2026-05-10T00:00:00Z",
-    tag_name: "v1.0.0",
-    ...overrides,
-  };
-}
-
-/**
- * @param {import("../src/releases.ts").GitHubRelease[]} releases
- * @param {{ failConsumerFetch?: boolean, missingPaths?: string[] }} [options]
- */
-function fetchGitHubOk(releases, options = {}) {
-  const releaseFetch = fetchOk(releases);
-  const missingPaths = new Set(options.missingPaths || []);
-
-  /** @param {string | URL | globalThis.Request} input */
-  return async (input) => {
-    const url = new URL(input instanceof globalThis.Request ? input.url : String(input));
-    if (url.pathname === "/repos/markhuangai/git-vibe/releases") return releaseFetch();
-    if (!url.pathname.startsWith("/repos/markhuangai/git-vibe/contents/")) {
-      return new globalThis.Response("", { status: 404 });
-    }
-    if (options.failConsumerFetch) return new globalThis.Response("", { status: 503 });
-    return consumerContentResponse(url, missingPaths);
-  };
-}
-
-/** @param {URL} url @param {Set<string>} missingPaths */
-function consumerContentResponse(url, missingPaths) {
-  const repositoryPath = decodeURIComponent(
-    url.pathname.slice("/repos/markhuangai/git-vibe/contents/".length),
-  );
-  const consumerPath = relativeConsumerPath(repositoryPath);
-  if (consumerPath && missingPaths.has(consumerPath)) {
-    return new globalThis.Response("", { status: 404 });
-  }
-
-  const localPath = join(workspaceRoot, repositoryPath);
-  if (!existsSync(localPath)) return new globalThis.Response("", { status: 404 });
-
-  const stat = lstatSync(localPath);
-  if (stat.isDirectory())
-    return jsonResponse(directoryContent(repositoryPath, localPath, missingPaths));
-  if (stat.isFile()) {
-    return jsonResponse({
-      content: readFileSync(localPath).toString("base64"),
-      encoding: "base64",
-      path: repositoryPath,
-      type: "file",
-    });
-  }
-  return new globalThis.Response("", { status: 404 });
-}
-
-/** @param {string} repositoryPath @param {string} localPath @param {Set<string>} missingPaths */
-function directoryContent(repositoryPath, localPath, missingPaths) {
-  return readdirSync(localPath, { withFileTypes: true })
-    .map((entry) => {
-      const entryPath = join(repositoryPath, entry.name);
-      return {
-        path: entryPath,
-        type: entry.isDirectory() ? "dir" : "file",
-      };
-    })
-    .filter((entry) => !missingPaths.has(relativeConsumerPath(entry.path)));
-}
-
-/** @param {string} repositoryPath */
-function relativeConsumerPath(repositoryPath) {
-  return relative(join("examples", "consumer"), repositoryPath);
-}
-
-/** @param {unknown} data */
-function jsonResponse(data) {
-  return new globalThis.Response(JSON.stringify(data), {
-    headers: { "content-type": "application/json" },
-    status: 200,
-  });
-}
-
-/** @param {import("../src/releases.ts").GitHubRelease[]} data */
-function fetchOk(data) {
-  return async () =>
-    new globalThis.Response(JSON.stringify(data), {
-      headers: { "content-type": "application/json" },
-      status: 200,
-    });
-}
