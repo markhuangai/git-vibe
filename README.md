@@ -134,10 +134,10 @@ iterations, defaulting to three.
 Run this from the repository that should use GitVibe:
 
 ```bash
-npx --package=git-vibe-setup git-vibe-setup
+npx git-vibe-setup setup
 ```
 
-`git-vibe-setup` fetches the latest stable `markhuangai/git-vibe` release,
+`git-vibe-setup setup` fetches the latest stable `markhuangai/git-vibe` release,
 copies the consumer starter from this repository, pins generated reusable
 workflow refs to that release tag, and stops without writing if any target file
 already exists.

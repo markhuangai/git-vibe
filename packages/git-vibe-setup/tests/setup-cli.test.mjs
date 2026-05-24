@@ -5,13 +5,14 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runSetup, setupCli } from "../src/cli.ts";
+import { isDirectRun, runSetup, setupCli } from "../src/cli.ts";
 import { existingFilesError, installFiles, pinWorkflowReleaseRefs } from "../src/install.ts";
 import { latestStableReleaseTag, selectLatestStableRelease } from "../src/releases.ts";
 
@@ -96,13 +97,16 @@ describe("git-vibe-setup installation", () => {
     expect(logs[0]).toContain("GITVIBE_BASE_BRANCH");
     expect(logs[0]).toContain("/blob/v1.2.3/examples/consumer/GITVIBE_AI_ENV_JSON.example.json");
   });
+});
 
-  it("returns success from the CLI wrapper and resolves the packaged examples by default", async () => {
+describe("git-vibe-setup CLI execution", () => {
+  it("runs setup explicitly and resolves the packaged examples by default", async () => {
     const cwd = workspace();
     /** @type {string[]} */
     const logs = [];
 
     const exitCode = await setupCli({
+      argv: ["setup"],
       cwd,
       fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
       log: (message) => logs.push(message),
@@ -111,6 +115,68 @@ describe("git-vibe-setup installation", () => {
     expect(exitCode).toBe(0);
     expect(existsSync(join(cwd, ".github", "git-vibe.yml"))).toBe(true);
     expect(logs[0]).toContain("GitVibe starter files installed");
+  });
+
+  it("keeps no-argument setup as a compatibility alias", async () => {
+    const cwd = workspace();
+
+    const exitCode = await setupCli({
+      argv: [],
+      cwd,
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+      repositoryRoot,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(cwd, ".github", "git-vibe.yml"))).toBe(true);
+  });
+
+  it("prints help without writing files", async () => {
+    const cwd = workspace();
+    /** @type {string[]} */
+    const logs = [];
+
+    const exitCode = await setupCli({
+      argv: ["--help"],
+      cwd,
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: (message) => logs.push(message),
+      repositoryRoot,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs[0]).toContain("git-vibe-setup setup");
+    expect(existsSync(join(cwd, ".github"))).toBe(false);
+  });
+
+  it("reports unknown commands without writing files", async () => {
+    const cwd = workspace();
+    /** @type {string[]} */
+    const errors = [];
+
+    const exitCode = await setupCli({
+      argv: ["install"],
+      cwd,
+      error: (message) => errors.push(message),
+      fetchImpl: fetchOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+      repositoryRoot,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors[0]).toContain("Unknown command: install");
+    expect(existsSync(join(cwd, ".github"))).toBe(false);
+  });
+
+  it("recognizes npm bin symlinks as direct CLI execution", () => {
+    const cwd = workspace();
+    const target = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
+    const entrypoint = join(cwd, "git-vibe-setup");
+
+    symlinkSync(target, entrypoint);
+
+    expect(isDirectRun(pathToFileURL(target).href, entrypoint)).toBe(true);
   });
 
   it("falls back to process defaults for cwd, fetch, and console logging", async () => {
