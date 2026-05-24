@@ -31,7 +31,7 @@ Core defaults:
 
 - `/git-vibe ...` is the public command form for command-triggered workflows.
 - Bugs are investigated before any implementation approval.
-- Feature requests start in discussions and are materialized into issues only after refinement and protected approval.
+- Feature requests start in discussions and are materialized into issues only after validation and protected approval.
 - Development automation can be disabled with `ai.stages.implement.enabled: false`; PR review remains separately triggerable through `review.yml` and `git-vibe:review`.
 - Issue implementation and PR feedback remediation share runner-level
   branch-update mechanics, while `develop.yml` and `address-feedback.yml` stay

@@ -2,7 +2,9 @@
 
 ## Context Assembly And Analysis
 
-All investigation, validation, decomposition, materialization, and refinement runs must build context from the full GitHub conversation, not just the initial description.
+All investigation, validation, materialization, implementation, review, and PR
+feedback remediation runs must build context from the full GitHub conversation,
+not just the initial description.
 
 ```mermaid
 flowchart TD
@@ -12,7 +14,7 @@ flowchart TD
   D --> E[Attach parent/thread references]
   E --> F[Classify author authority]
   F --> G[Weighted analysis prompt]
-  G --> H[Questions, validation, decomposition, or implementation brief]
+  G --> H[Questions, validation, materialization, implementation, review, or feedback brief]
 ```
 
 Context assembly rules:
@@ -27,7 +29,9 @@ Context assembly rules:
 - Weight analysis by authority: admin/owner/maintain > write/collaborator/member > contributor > first-time contributor/guest/none.
 - When repository permission and `author_association` disagree, repository permission is stronger for approval and command authorization; `author_association` remains useful analysis metadata.
 
-The same context assembly and weighted analysis pipeline applies to bug investigation, feature discussion validation, decomposition, materialization, and PR feedback handling.
+The same context assembly and weighted analysis pipeline applies to bug
+investigation, feature discussion validation, materialization, implementation,
+review, and PR feedback handling.
 
 ## Stage Contracts
 
@@ -35,12 +39,12 @@ GitVibe should treat AI as a set of stage-specific workers behind stable contrac
 
 ```mermaid
 flowchart TD
-  A[GitHub event or scheduled scan] --> B[Orchestrator]
+  A[GitHub webhook or workflow dispatch] --> B[Orchestrator]
   B --> C[Build context packet]
   C --> D[Select stage contract]
-  D --> E[Plan profile or role-group matrix]
-  E --> F[Run member AI job or jobs]
-  F --> G[Finalizer validates one structured result]
+  D --> E[Select profile or role-group plan]
+  E --> F[Run AI job or role-group member jobs]
+  F --> G[Validate one structured result]
   G --> H{Policy gate}
   H -->|allowed| I[Post comment, update labels, dispatch next workflow, or push branch]
   H -->|blocked| J[Post explanation and wait for human context]
@@ -50,24 +54,29 @@ AI integration layers:
 
 - Orchestrator: deterministic code that validates actor permissions, reads config, builds context, enforces stage gates, and writes GitHub state.
 - Context builder: gathers issue/discussion/PR timelines, repo snapshots, relevant files, reactions, workflow history, and linked artifacts into a stage-specific context packet.
-- Stage contracts: typed task definitions for investigation, refinement, validation, implementation, review, and feedback remediation.
+- Stage contracts: typed task definitions for investigation, validation,
+  materialization, implementation, pull request creation, review, and feedback
+  remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
 - CLI adapters: `cli-codex` and `cli-claude-code` run fixed non-interactive CLI commands, stream CLI output to the action log, and parse structured output.
-- External mention adapter: optional GitHub-visible comments to Codex, Claude, Copilot, or similar apps.
+- External mention adapter: not currently implemented; the shipped config keeps
+  `commands.allow_external_agent_mentions` disabled.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 
-Initial stage contracts:
+Implemented stage contracts:
 
-| Stage                   | Repository scope                     | Output                                                                                  | May advance state                                                 |
-| ----------------------- | ------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Triage classification   | Issue/discussion context             | Suggested type, labels, confidence, missing info                                        | No, except safe labels if configured                              |
-| Bug investigation       | Repo snapshot and issue timeline     | Findings, suspected areas, blocking questions, concrete implementation plan             | No code changes                                                   |
-| Feature validation      | Repo snapshot and discussion thread  | Findings, contradictions, open questions, and readiness decision                        | May mark ready for materialization only if policy allows          |
-| Materialization         | Accepted validated discussion        | Implementation issue drafts with dependencies, acceptance criteria, and review guidance | May create labeled implementation issues                          |
-| Validation              | Repo snapshot and accepted context   | Pass/fail, contradictions, implementation brief                                         | May mark ready only if policy allows                              |
-| Implementation          | `git-vibe/{root-issue}` branch       | Commits, test output, implementation summary                                            | Uses branch-update engine; may update issue branch, not merge     |
-| Review matrix           | Pull request diff and review context | Findings by reviewer role, pass/fail, required fixes, optional inline PR comments       | May mark a PR ready or blocked, and may queue PR feedback retries |
-| PR feedback remediation | Existing PR branch                   | Fix commits or skipped-comment rationale                                                | Uses branch-update engine; may update PR branch, not create PR    |
+| Stage                 | Schema                   | Repository scope                        | Output                                                                           | May advance state                                                |
+| --------------------- | ------------------------ | --------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `investigate`         | `investigate.v1`         | Issue timeline, or PR feedback context  | Findings, blocking questions, implementation plan, or PR feedback classification | May mark issue investigated/blocked or PR feedback state         |
+| `validate`            | `validate.v1`            | Issue or Discussion context             | Readiness decision, contradictions, questions, implementation brief              | May mark issue ready for approval or Discussion validated        |
+| `materialize`         | `materialize.v2`         | Accepted validated Discussion           | One or more implementation issue drafts with dependencies and review guidance    | Creates `gvi:story` implementation issues and closes source      |
+| `implement`           | `implement.v1`           | `git-vibe/{root-issue}` issue branch    | Working tree changes, test rationale, implementation summary                     | Uses branch-update engine; may commit and push issue branch      |
+| `create-pr`           | `create-pr.v1`           | GitVibe issue branch                    | Pull request title and body                                                      | Creates or updates the PR and marks source issue `gvi:pr-opened` |
+| `review-matrix`       | `review-matrix.v1`       | Pull request diff and review context    | Evidence-backed findings, pass/fail result, optional inline PR comments          | May mark a PR ready or blocked, and may queue feedback retries   |
+| `address-pr-feedback` | `address-pr-feedback.v1` | Existing same-repository PR head branch | Fix commits or skipped-feedback rationale                                        | Uses branch-update engine; may update PR branch, not create PR   |
+
+There is no standalone `decompose` stage. Splitting accepted scope into
+multiple implementation issues happens inside `materialize`.
 
 AI result envelope:
 
@@ -131,7 +140,9 @@ Rules:
 - Provider execution uses `ai-sdk-agentool` with Vercel AI SDK, `agentool` 1.5.x, provider SDKs, and Zod schemas.
 - Provider support should include OpenAI, Anthropic, and OpenAI-compatible custom endpoints through the same config shape.
 - Additional providers should be added behind the same adapter contract, not by changing workflow stages.
-- External apps such as Codex, Claude, and Copilot are mention partners. GitVibe may invoke them with configured comments and ingest their visible replies, but GitVibe should not depend on private third-party state or assume they respond to bot mentions.
+- External apps such as Codex, Claude, and Copilot are not active workflow
+  dispatch paths in the current implementation. GitVibe should not depend on
+  private third-party state or assume they respond to bot mentions.
 - Local/self-hosted model support can use the same adapter interface when operators provide an endpoint and credentials.
 
 CLI authentication guidance:
@@ -253,11 +264,15 @@ AI SDK tool policy by stage:
 
 Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters do not receive these tool lists because their native agents own tool selection.
 
-- triage: no tools, GitHub context only.
-- investigation/refinement/validation: read, grep, glob, GitHub-only project search, and read-only `agent` subagents; website fetch/search is disabled by default.
-- implementation: read, grep, glob, edit, write, multi-edit, bash, diff.
-- review: read, grep, glob, diff, and read-only `agent` subagents.
-- PR feedback remediation: implementation tools scoped to the existing PR branch.
+- `investigate`: read, grep, glob, diff, GitHub search, optional web
+  fetch/search after domain allowlisting, and read-only `agent` subagents.
+- `validate`: read, grep, glob, GitHub search, optional web fetch/search after
+  domain allowlisting, and read-only `agent` subagents.
+- `materialize`: read, grep, and glob.
+- `implement`: read, grep, glob, edit, write, multi-edit, bash, and diff.
+- `create-pr`: read, grep, glob, and diff.
+- `review-matrix`: read, grep, glob, diff, and read-only `agent` subagents.
+- `address-pr-feedback`: implementation tools scoped to the existing PR branch.
 
 The `agent` tool is available only to read-only stages (`investigate`, `validate`,
 and `review-matrix`). GitVibe configures child agents with read-only tools and
