@@ -16,6 +16,7 @@ import { existingFilesError, installFiles, pinWorkflowReleaseRefs } from "../src
 import { latestStableReleaseTag, selectLatestStableRelease } from "../src/releases.ts";
 
 const repositoryRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const workspaceRoot = dirname(dirname(repositoryRoot));
 /** @type {string[]} */
 const temporaryDirectories = [];
 
@@ -60,14 +61,21 @@ describe("git-vibe-setup installation", () => {
     expect(existsSync(join(cwd, ".git-vibe", "role-group", "correctness.md"))).toBe(true);
 
     const installedWorkflows = workflowNames(join(cwd, ".github"));
-    const exampleWorkflows = workflowNames(join(repositoryRoot, "templates", ".github"));
+    const exampleWorkflows = workflowNames(join(workspaceRoot, "examples", "consumer", ".github"));
     expect(installedWorkflows).toEqual(exampleWorkflows);
+    expect(installedWorkflows).not.toContain("decompose.yml");
 
     for (const name of installedWorkflows) {
       const workflow = readFileSync(join(cwd, ".github", "workflows", name), "utf8");
       expect(workflow).toContain("@v1.2.3");
       expect(workflow).not.toContain("@main");
     }
+  });
+
+  it("keeps packaged starter workflows aligned with the consumer example", () => {
+    expect(workflowNames(join(repositoryRoot, "templates", ".github"))).toEqual(
+      workflowNames(join(workspaceRoot, "examples", "consumer", ".github")),
+    );
   });
 
   it("prints the manual secret and variable instructions after installation", async () => {
