@@ -16,8 +16,7 @@ flowchart TD
   Route --> Feature[Feature or story]
   Feature --> Discuss[Discussion]
   Discuss --> Validate[Validate]
-  Validate --> Decompose[Decompose]
-  Decompose --> Materialize[Materialize issue]
+  Validate -->|ready| Materialize[Materialize implementation issue or issues]
   Materialize --> ImplementationIssue
 
   ImplementationIssue --> Approval{Implement enabled?}
@@ -71,7 +70,8 @@ flowchart TD
   or result comment.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - GitVibe never auto-merges and never approves its own pull requests.
-- External agents are optional mention partners. GitVibe may post commands like `@codex review` or `@claude ...` only after admin/collaborator opt-in.
+- External agent mentions are not an implemented dispatch path. The shipped
+  config keeps `commands.allow_external_agent_mentions` disabled.
 
 ## Public Interfaces
 
@@ -81,14 +81,20 @@ Consumer config lives at:
 .github/git-vibe.yml
 ```
 
-Initial commands:
+Active dispatching commands:
 
 ```text
 /git-vibe investigate
 /git-vibe address-feedback
+/git-vibe materialize
 ```
 
 GitVibe uses `/git-vibe ...` as the only public command form. `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions. GitHub does not currently provide a stable custom repository command autocomplete contract, so command parsing must work from plain comment text.
+
+Only implemented command dispatch paths start workflows: `/git-vibe investigate`
+on issue comments, `/git-vibe address-feedback` on pull request conversation
+comments, and `/git-vibe materialize` on Discussion comments after validation.
+Validation, approval, and standalone PR review are label-triggered paths.
 
 Active label flow:
 

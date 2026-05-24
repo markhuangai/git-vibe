@@ -13,11 +13,16 @@
 - `.github/workflows/materialize.yml`: reusable Discussion-to-issue materialization pipeline.
 - `.github/workflows/develop.yml`: reusable issue development pipeline that implements, creates or updates a PR, then reviews it.
 - `.github/workflows/review.yml`: reusable pull request review pipeline.
+- `.github/workflows/review-dev-pr.yml`: repository-local `pull_request_target` wrapper that reviews non-draft PRs opened against `dev`.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline that updates the existing PR branch before review when fixes are required.
+- `.github/workflows/ci.yml`: PR quality gate plus manual dispatch for format, lint, coverage, build, actionlint, and production audit.
+- `.github/workflows/app-deploy.yml`: app image build and deployment workflow for app/shared runtime changes on `dev`.
 - `.github/workflows/release.yml`: admin-only manual release workflow that runs from `main`, creates GitHub releases, and promotes the existing GHCR app image to the release tag.
 - Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. Direct dispatch defaults the action source to the current repository/ref, while `workflow_call` defaults to the pinned `markhuangai/git-vibe@v3` release.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
-- `investigate/`, `implement/`, `review-matrix/`, `create-pr`, `address-pr-feedback/`: public composite action entry points.
+- `investigate/`, `validate/`, `materialize/`, `implement/`, `create-pr/`,
+  `review-matrix/`, `address-pr-feedback/`, `plan-stage/`, and
+  `mark-blocked/`: composite action entry points.
 - `src/app/server.ts`: self-hosted repository webhook server source.
 - `src/runner/actions/run-action.ts`: single-stage runner entry point built by composite actions before execution.
 - `src/runner`: config loading, context assembly, prompt rendering, schema validation, stage execution, shared branch-update writes, result publishing, and `ai-sdk-agentool` integration.

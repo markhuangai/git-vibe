@@ -18,7 +18,7 @@ jobs:
     uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
 ```
 
-Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The GitVibe orchestrator is hosted by the repository owner, receives or polls GitHub events, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
+Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The current GitVibe orchestrator is hosted by the repository owner, receives GitHub repository webhooks at `/webhooks`, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
 
 ## Runtime Boundaries
 
@@ -37,10 +37,10 @@ flowchart LR
   U[Guest or contributor] --> GH[GitHub issues, discussions, and PRs]
   M[Admin or collaborator] --> GH
 
-  GH -->|webhooks, relay, workflow events, or polling| APP[Self-hosted GitVibe Orchestrator]
+  GH -->|repository webhooks| APP[Self-hosted GitVibe Orchestrator]
   APP -->|validate actor permissions| GH
   APP -->|labels, comments, backlinks, markers| GH
-  APP -->|workflow_dispatch or repository_dispatch| WF[Consumer repo workflow]
+  APP -->|workflow_dispatch| WF[Consumer repo workflow]
 
   WF -->|uses| GV[markhuangai/git-vibe]
   WF --> RUNNER[GitHub-hosted or self-hosted runner]
@@ -49,8 +49,6 @@ flowchart LR
   RUNNER --> CODE[Repository checkout]
   RUNNER -->|branch, commits, PR, comments| GH
 
-  APP -. optional approved mentions .-> EXT[Codex, Claude, Copilot]
-  EXT -. visible replies and reviews .-> GH
 ```
 
 ## Webhook And Token Model
@@ -70,7 +68,7 @@ sequenceDiagram
   App->>API: Add label, comment, or state marker
   App->>API: Dispatch workflow with target parameters and run details request
   GH->>WF: Start workflow run
-  WF->>Act: Plan stage matrix, run member job(s), then finalizer
+  WF->>Act: Run stage job, or plan members plus finalizer for role-group stages
   Act->>API: Use configured repository PAT for branch, PR, comments, and metadata writes
 ```
 
@@ -87,7 +85,12 @@ Supported workflow auth modes:
 
 ## Event Delivery Modes
 
-Repository webhooks are the production event source when the operator has a reachable HTTPS endpoint. GitHub does not provide a first-party persistent stream where a private client dials out to subscribe to all repository events. GitVibe must therefore support several delivery modes.
+Repository webhooks are the implemented production event source when the operator has a reachable HTTPS endpoint. GitHub does not provide a first-party persistent stream where a private client dials out to subscribe to all repository events.
+
+The repository still ships the `event_delivery` config shape used by examples
+and future planning, but the current server code implements direct webhook
+delivery only. Relay, actions-native receiver, and polling modes are not active
+code paths.
 
 ```mermaid
 flowchart TD
@@ -97,23 +100,23 @@ flowchart TD
   GH --> D[Polling mode]
 
   A --> O[GitVibe orchestrator]
-  B --> O
-  C --> W[GitHub Actions receiver workflow]
-  D --> O
+  B -. planned .-> O
+  C -. planned .-> W[GitHub Actions receiver workflow]
+  D -. planned .-> O
 
   W --> O2[GitVibe action logic in runner]
   O --> API[GitHub API and workflow dispatch]
   O2 --> API
 ```
 
-Supported modes:
+Implemented and planned modes:
 
-- `webhook`: production default and first implemented mode. GitHub sends repository webhooks to a public HTTPS URL owned by the operator.
-- `relay`: deferred no-domain operator mode. GitHub sends webhooks to a relay such as Smee, Hookdeck, Cloudflare Tunnel, ngrok, or a self-hosted relay; the local GitVibe process keeps an outbound connection to receive events.
-- `actions`: deferred no-server mode. Consumer repositories install lightweight receiver workflows triggered by GitHub events and scheduled scans.
-- `polling`: deferred lowest-infrastructure mode. A local or scheduled GitVibe worker periodically queries issues, discussions, comments, reactions, labels, and workflow runs using ETags/cursors.
+- `webhook`: implemented mode. GitHub sends repository webhooks to a public HTTPS URL owned by the operator.
+- `relay`: planned no-domain operator mode. GitHub would send webhooks to a relay such as Smee, Hookdeck, Cloudflare Tunnel, ngrok, or a self-hosted relay; the local GitVibe process would keep an outbound connection to receive events.
+- `actions`: planned no-server mode. Consumer repositories would install lightweight receiver workflows triggered by GitHub events and scheduled scans.
+- `polling`: planned lowest-infrastructure mode. A local or scheduled GitVibe worker would periodically query issues, discussions, comments, reactions, labels, and workflow runs using ETags/cursors.
 
-Recommended defaults:
+Planned defaults:
 
 - Managed or organization deployment: `webhook`.
 - Local development: `relay` with Smee or an equivalent tunnel.
@@ -186,7 +189,8 @@ Required repository or organization secrets/variables:
 - `GITVIBE_GITHUB_TOKEN`: fine-grained PAT used by the server and workflows for GitHub API access.
 - `WEBHOOK_SECRET`: repository webhook shared secret used by the deploy workflow to set runtime `GITHUB_WEBHOOK_SECRET`.
 - `GITVIBE_AI_ENV_JSON`: JSON bundle for AI provider auth, endpoints, CLI auth, and provider-specific environment values.
-- `GITVIBE_DISCUSSION_CATEGORY`, `GITVIBE_RUNNER`, `GITVIBE_LOG_LEVEL`: optional variables.
+- `GITVIBE_DISCUSSION_CATEGORY`: optional variable used by app deployment for feature Discussion conversion category.
+- `GITVIBE_BASE_BRANCH`: optional variable used by reusable workflows as the implementation and review base branch.
 
 Self-hosted server runtime secrets:
 
