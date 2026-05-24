@@ -20,3 +20,16 @@ The `update` command fetches `examples/consumer` from the latest stable
 wrapper files, and pins them to that release. It does not update
 `.github/git-vibe.yml`, `.git-vibe`, secrets, or variables, and it refuses to
 overwrite workflow files that do not look like GitVibe wrappers.
+
+To test a specific release or prerelease from a consumer repository, pass the
+release tag explicitly:
+
+```bash
+npx git-vibe-setup update --release v3.0.4-rc.1
+```
+
+To let automatic latest-release lookup choose prereleases, opt in explicitly:
+
+```bash
+npx git-vibe-setup update --include-prereleases
+```

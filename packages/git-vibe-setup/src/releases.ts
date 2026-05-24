@@ -8,15 +8,28 @@ export interface GitHubRelease {
 
 export class ReleaseLookupError extends Error {}
 
+export interface ReleaseLookupOptions {
+  fetchImpl?: typeof fetch;
+  includePrereleases?: boolean;
+}
+
+export interface ReleaseSelectionOptions {
+  includePrereleases?: boolean;
+}
+
 const releasesUrl = "https://api.github.com/repos/markhuangai/git-vibe/releases";
 const releasesPerPage = 100;
 
 export async function latestStableReleaseTag(fetchImpl: typeof fetch = fetch): Promise<string> {
-  const releases = await fetchReleases(fetchImpl);
-  const release = selectLatestStableRelease(releases);
+  return latestReleaseTag({ fetchImpl });
+}
+
+export async function latestReleaseTag(options: ReleaseLookupOptions = {}): Promise<string> {
+  const releases = await fetchReleases(options.fetchImpl || fetch);
+  const release = selectLatestRelease(releases, options);
   if (!release?.tag_name) {
     throw new ReleaseLookupError(
-      "git-vibe-setup could not check the latest GitVibe update because no stable release is available. No files were written.",
+      `git-vibe-setup could not check the latest GitVibe update because ${missingReleaseReason(options)}. No files were written.`,
     );
   }
 
@@ -24,8 +37,18 @@ export async function latestStableReleaseTag(fetchImpl: typeof fetch = fetch): P
 }
 
 export function selectLatestStableRelease(releases: GitHubRelease[]): GitHubRelease | undefined {
+  return selectLatestRelease(releases);
+}
+
+export function selectLatestRelease(
+  releases: GitHubRelease[],
+  options: ReleaseSelectionOptions = {},
+): GitHubRelease | undefined {
   return releases
-    .filter((release) => !release.draft && !release.prerelease && release.tag_name)
+    .filter(
+      (release) =>
+        !release.draft && (options.includePrereleases || !release.prerelease) && release.tag_name,
+    )
     .sort(compareReleaseFreshness)[0];
 }
 
@@ -84,4 +107,10 @@ function unavailableReleaseError(): ReleaseLookupError {
   return new ReleaseLookupError(
     "git-vibe-setup could not check the latest GitVibe update because the GitHub release service is unavailable. No files were written.",
   );
+}
+
+function missingReleaseReason(options: ReleaseSelectionOptions): string {
+  return options.includePrereleases
+    ? "no stable or prerelease release is available"
+    : "no stable release is available";
 }
