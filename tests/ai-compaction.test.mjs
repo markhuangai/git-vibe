@@ -232,7 +232,7 @@ describe("AI context compaction stage wiring", () => {
     const compacted = [textMessage("summary")];
     compactMessages.mockResolvedValueOnce(compacted);
     generateText.mockImplementationOnce(async (request) => {
-      expect(request.system).toBe("System");
+      expect(request.system).toContain("System\n\nGitVibe web access policy");
       expect(request.prompt).toBe("Prompt");
       const prepared = await request.prepareStep({
         messages: [textMessage("x".repeat(32))],

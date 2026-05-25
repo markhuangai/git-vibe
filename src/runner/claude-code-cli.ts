@@ -42,8 +42,6 @@ export async function runClaudeCodeCliStage({
     "--system-prompt",
     options.system,
     "--no-session-persistence",
-    "--disallowedTools",
-    "WebFetch,WebSearch",
     ...claudeReasoningArgs(profile),
   ];
 

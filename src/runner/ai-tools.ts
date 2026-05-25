@@ -11,8 +11,8 @@ import { createWrite } from "agentool/write";
 import type { LanguageModel, ToolSet } from "ai";
 import type { Stage } from "../shared/types.js";
 import { stageConfigFor, stringValue } from "./ai-config.js";
-import { filterToolsForWebPolicy, webPolicyFor } from "./ai-web-policy.js";
-import { createAllowlistedWebFetch, createAllowlistedWebSearch } from "./ai-web-tools.js";
+import { filterToolsForWebPolicy, webPolicyFor, webPolicySystemPrompt } from "./ai-web-policy.js";
+import { createWebFetch, createWebSearch } from "./ai-web-tools.js";
 import { createGitHubSearch } from "./github-search.js";
 import type { RunAiStageOptions } from "./ai.js";
 
@@ -114,10 +114,8 @@ function addStageTool(options: {
   if (options.toolName === "multi-edit") options.tools.multi_edit = createMultiEdit({ cwd });
   if (options.toolName === "github-search")
     options.tools.github_search = createGitHubSearch(options.options);
-  if (options.toolName === "web-fetch")
-    options.tools.web_fetch = createAllowlistedWebFetch(options.webPolicy);
-  if (options.toolName === "web-search")
-    options.tools.web_search = createAllowlistedWebSearch(options.webPolicy);
+  if (options.toolName === "web-fetch") options.tools.web_fetch = createWebFetch();
+  if (options.toolName === "web-search") options.tools.web_search = createWebSearch();
   if (options.toolName === "agent")
     options.tools.agent = createReadOnlyAgentTool({
       model: requiredAgentModel(options.model),
@@ -224,6 +222,7 @@ function readOnlyAgentSystemPrompt(stage: Stage, focus: string[]): string {
     "Do not produce the final GitVibe stage JSON. Return concise investigation notes for the orchestrator.",
     "Cite concrete files, lines, prompts, schemas, or GitHub context when available.",
     "If evidence is missing, state what is missing instead of guessing.",
+    webPolicySystemPrompt(),
     ...focus,
   ].join("\n");
 }

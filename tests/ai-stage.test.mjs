@@ -69,7 +69,7 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
         prompt: "Prompt",
         providerOptions: { custom: true },
         stopWhen: [expect.any(Function), { count: 3 }],
-        system: "System",
+        system: expect.stringContaining("System\n\nGitVibe web access policy"),
         temperature: 0.5,
       }),
     );

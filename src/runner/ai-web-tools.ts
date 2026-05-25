@@ -1,22 +1,18 @@
 import { z } from "zod";
-import {
-  domainInputAllowedByPolicy,
-  type AiWebPolicy,
-  urlAllowedByPolicy,
-} from "./ai-web-policy.js";
 
 const maxWebFetchChars = 100000;
 
-export function createAllowlistedWebFetch(policy: AiWebPolicy) {
+export function createWebFetch() {
   return {
-    description: `Fetch a URL only when its host matches ai.security.web.allowed_domains: ${policy.allowedDomains.join(", ")}.`,
+    description:
+      "Fetch an HTTP(S) URL for read-only research. Do not submit forms, upload data, or download suspicious files.",
     inputSchema: z.object({
-      url: z.string().url().describe("The allowlisted URL to fetch."),
+      url: z.string().url().describe("The HTTP(S) URL to fetch."),
     }),
     execute: async (input: { url: string }) => {
       const { url } = input;
-      if (!urlAllowedByPolicy(url, policy)) {
-        return "Error [web-fetch]: URL is blocked by ai.security.web.allowed_domains.";
+      if (!httpUrl(url)) {
+        return "Error [web-fetch]: only HTTP(S) URLs are supported.";
       }
 
       try {
@@ -47,22 +43,26 @@ export function createAllowlistedWebFetch(policy: AiWebPolicy) {
   };
 }
 
-export function createAllowlistedWebSearch(policy: AiWebPolicy) {
+export function createWebSearch() {
   return {
-    description: `Validate an allowlisted web search request. General web search requires a configured search backend; use github_search for repository material.`,
+    description:
+      "Request web search for read-only research. General web search requires a configured search backend; use github_search for repository material.",
     inputSchema: z.object({
       allowed_domains: z.array(z.string()).optional(),
       blocked_domains: z.array(z.string()).optional(),
       query: z.string().min(2).describe("The search query to use."),
     }),
-    execute: async (input: { allowed_domains?: string[] }) => {
-      const { allowed_domains } = input;
-      const requested = allowed_domains || policy.allowedDomains;
-      const blocked = requested.filter((domain) => !domainInputAllowedByPolicy(domain, policy));
-      if (blocked.length > 0) {
-        return `Error [web-search]: requested domains are blocked by ai.security.web.allowed_domains: ${blocked.join(", ")}`;
-      }
+    execute: async () => {
       return "Error [web-search]: no external web search backend is configured. Use github_search for repository material.";
     },
   };
+}
+
+function httpUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
 }

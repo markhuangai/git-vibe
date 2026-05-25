@@ -115,14 +115,9 @@ describe("AI stage runner agent tool routing", () => {
     );
 
     const tools = generateText.mock.calls[0][0].tools;
-    expect(Object.keys(tools).sort()).toEqual([
-      "agent",
-      "github_search",
-      "glob",
-      "grep",
-      "output_validator",
-      "read",
-    ]);
+    expect(Object.keys(tools).sort().join(",")).toBe(
+      "agent,github_search,glob,grep,output_validator,read,web_fetch,web_search",
+    );
     expect(createAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         defaultAgent: "code",
@@ -134,12 +129,9 @@ describe("AI stage runner agent tool routing", () => {
     expect(createAgent.mock.calls[0][0].description).toContain(
       "Subagents do not receive the parent prompt or messages",
     );
-    expect(Object.keys(createAgent.mock.calls[0][0].tools).sort()).toEqual([
-      "github_search",
-      "glob",
-      "grep",
-      "read",
-    ]);
+    expect(Object.keys(createAgent.mock.calls[0][0].tools).sort().join(",")).toBe(
+      "github_search,glob,grep,read,web_fetch,web_search",
+    );
   });
 
   it("rejects stage tool overrides that expand canonical stage permissions", async () => {
@@ -320,6 +312,7 @@ describe("AI stage runner stage fallbacks", () => {
     mockCodexOutput('{"stage":"validate","status":"completed"}');
     const schema = {
       additionalProperties: false,
+      allOf: [{ if: { required: ["stage"] }, then: { required: ["working_capabilities"] } }],
       properties: {
         stage: { type: "string" },
         working_capabilities: { items: { type: "string" }, type: "array" },
@@ -352,14 +345,12 @@ describe("AI stage runner stage fallbacks", () => {
       }),
     );
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith(
-      expect.stringContaining("System\n\nPrompt"),
+      expect.stringContaining("System\n\nGitVibe web access policy"),
     );
     expect(process.stdout.write).toHaveBeenCalledWith("codex event\n");
-    expect(JSON.parse(readFileSync(schemaPathFrom(spawn.mock.calls[0][1]), "utf8"))).toEqual(
-      expect.objectContaining({
-        required: ["stage", "working_capabilities"],
-      }),
-    );
+    const writtenSchema = JSON.parse(readFileSync(schemaPathFrom(spawn.mock.calls[0][1]), "utf8"));
+    expect(writtenSchema).toMatchObject({ required: ["stage", "working_capabilities"] });
+    expect(writtenSchema.allOf).toBeUndefined();
     const childEnv = spawn.mock.calls[0][2].env;
     expect(readFileSync(join(childEnv.CODEX_HOME, "auth.json"), "utf8")).toBe(codexAuthJson("old"));
     expect(childEnv.CODEX_AUTH_JSON).toBeUndefined();

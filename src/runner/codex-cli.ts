@@ -5,9 +5,9 @@ import { join } from "node:path";
 import type { RunAiStageOptions } from "./ai.js";
 import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
 import {
+  codexOutputSchema,
   cliModelName,
   runStreamingCommand,
-  strictOutputSchema,
   stringValue,
 } from "./cli-adapter-utils.js";
 import { logCliWebPolicyNotice } from "./ai-web-policy.js";
@@ -24,7 +24,7 @@ export async function runCodexCliStage({
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-codex-"));
   const schemaFile = join(contextDir, `${options.stage}.schema.json`);
   const outputFile = join(contextDir, `${options.stage}.output.json`);
-  writeFileSync(schemaFile, JSON.stringify(strictOutputSchema(options.schema), null, 2));
+  writeFileSync(schemaFile, JSON.stringify(codexOutputSchema(options.schema), null, 2));
 
   const command = "codex";
   const model = cliModelName(profile, "cli-codex");

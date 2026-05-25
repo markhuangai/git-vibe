@@ -31,6 +31,10 @@ export function strictOutputSchema(schema: JsonObject): JsonObject {
   return normalizeSchemaValue(schema) as JsonObject;
 }
 
+export function codexOutputSchema(schema: JsonObject): JsonObject {
+  return normalizeSchemaValue(schema, { omitKeys: new Set(["allOf"]) }) as JsonObject;
+}
+
 export function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
@@ -153,13 +157,15 @@ export async function runStreamingCommand(options: CliCommandOptions): Promise<C
   return { stderr, stdout };
 }
 
-function normalizeSchemaValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((item) => normalizeSchemaValue(item));
+function normalizeSchemaValue(value: unknown, options: { omitKeys?: Set<string> } = {}): unknown {
+  if (Array.isArray(value)) return value.map((item) => normalizeSchemaValue(item, options));
   if (!isRecord(value)) return value;
 
-  const normalized = Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [key, normalizeSchemaValue(entry)]),
-  );
+  const normalized: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (options.omitKeys?.has(key)) continue;
+    normalized[key] = normalizeSchemaValue(entry, options);
+  }
   if (isRecord(normalized.properties)) {
     normalized.required = Object.keys(normalized.properties);
     normalized.additionalProperties ??= false;
