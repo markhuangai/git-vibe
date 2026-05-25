@@ -28,8 +28,6 @@ jobs:
       max_turns: 90
       dry-run: false
       source-comment: ""
-      action-repository: ${{ github.repository }}
-      action-ref: ${{ github.event.pull_request.base.ref }}
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
