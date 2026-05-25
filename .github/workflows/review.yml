@@ -33,16 +33,6 @@ on:
         required: false
         type: string
         default: ""
-      action-repository:
-        description: GitVibe action source repository. Empty means this repository.
-        required: false
-        type: string
-        default: ""
-      action-ref:
-        description: GitVibe action source ref. Empty means this workflow ref.
-        required: false
-        type: string
-        default: ""
   workflow_call:
     inputs:
       pr-number:
@@ -74,16 +64,6 @@ on:
         required: false
         type: string
         default: ""
-      action-repository:
-        description: GitVibe action source repository.
-        required: false
-        type: string
-        default: markhuangai/git-vibe
-      action-ref:
-        description: GitVibe action source ref.
-        required: false
-        type: string
-        default: v3
     secrets:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.
@@ -117,8 +97,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.action-repository || github.repository }}
-          ref: ${{ inputs.action-ref || github.ref_name }}
+          repository: markhuangai/git-vibe
+          ref: ${{ github.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -154,8 +134,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.action-repository || github.repository }}
-          ref: ${{ inputs.action-ref || github.ref_name }}
+          repository: markhuangai/git-vibe
+          ref: ${{ github.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -212,8 +192,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.action-repository || github.repository }}
-          ref: ${{ inputs.action-ref || github.ref_name }}
+          repository: markhuangai/git-vibe
+          ref: ${{ github.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:

@@ -8,7 +8,7 @@ import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
  * @typedef {{ concurrency?: { group?: string, ["cancel-in-progress"]?: boolean }, env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
  * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
- * @typedef {{ env: Record<string, string>, name?: string, uses?: string }} SimulatedStep
+ * @typedef {{ env: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} SimulatedStep
  */
 
 const aiEnv = {
@@ -209,19 +209,22 @@ describe("GitVibe workflow call wiring", () => {
       const workflow = readWorkflow(file);
       const workflowCall = workflow.on?.workflow_call;
       const checkoutSteps = gitVibeActionSteps(workflow, (uses) => uses === "actions/checkout@v4");
+      const actionSourceSteps = checkoutSteps.filter(
+        ({ name }) => name === "Checkout GitVibe action source",
+      );
 
       expect(workflow.on?.workflow_dispatch, `${file} declares workflow_dispatch`).toBeTruthy();
-      expect(
-        workflowCall?.secrets?.GITVIBE_AI_ENV_JSON,
-        `${file} declares AI env bundle`,
-      ).toMatchObject({
-        required: true,
-      });
+      expect(workflow.on?.workflow_dispatch?.inputs?.["action-repository"]).toBeUndefined();
+      expect(workflow.on?.workflow_dispatch?.inputs?.["action-ref"]).toBeUndefined();
+      expect(workflowCall?.inputs?.["action-repository"]).toBeUndefined();
+      expect(workflowCall?.inputs?.["action-ref"]).toBeUndefined();
+      expect(workflowCall?.secrets?.GITVIBE_AI_ENV_JSON).toMatchObject({ required: true });
       expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
-      expect(
-        checkoutSteps.some((step) => step.name === "Checkout GitVibe action source"),
-        `${file} checks out action source`,
-      ).toBe(true);
+      expect(actionSourceSteps.length).toBeGreaterThan(0);
+      for (const step of actionSourceSteps) {
+        expect(step.with?.repository).toBe("markhuangai/git-vibe");
+        expect(step.with?.ref).toBe("${{ github.workflow_sha }}");
+      }
     }
   });
 
@@ -241,10 +244,9 @@ describe("GitVibe workflow call wiring", () => {
       });
       expect(reusableJob?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
       expect(reusableJob?.secrets?.CODEX_AUTH_JSON, `${file} omits old Codex auth`).toBeUndefined();
-      expect(
-        reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN,
-        `${file} omits old Claude auth`,
-      ).toBeUndefined();
+      expect(reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+      expect(reusableJob?.with?.["action-repository"]).toBeUndefined();
+      expect(reusableJob?.with?.["action-ref"]).toBeUndefined();
     }
   });
 
@@ -494,8 +496,6 @@ describe("GitVibe automatic PR review workflow", () => {
       },
       uses: "./.github/workflows/review.yml",
       with: {
-        "action-ref": "${{ github.event.pull_request.base.ref }}",
-        "action-repository": "${{ github.repository }}",
         "dry-run": false,
         max_turns: 90,
         "pr-number": "${{ format('{0}', github.event.pull_request.number) }}",
@@ -684,6 +684,7 @@ function gitVibeActionSteps(workflow, matchesUse) {
         env: { ...(workflow.env || {}), ...(job.env || {}), ...(step.env || {}) },
         name: step.name,
         uses: step.uses,
+        with: step.with,
       })),
   );
 }

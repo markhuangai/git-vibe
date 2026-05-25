@@ -11,8 +11,8 @@ import { parse } from "yaml";
 const sourceWorkflowDirectory = ".github/workflows";
 const consumerWorkflowDirectory = "examples/consumer/.github/workflows";
 const localReusableWorkflowTemplates = [".github/workflows/automatic-pr-review.yml"];
-const internalWorkflowCallInputs = new Set(["action-repository", "action-ref"]);
-const remoteReusableWorkflowPattern = /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@.+$/;
+const remoteReusableWorkflowPattern =
+  /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@([^\s]+)$/;
 const localReusableWorkflowPattern = /^\.\/\.github\/workflows\/([^@\s]+)$/;
 const dispatchInputExpressionPattern = /^\${{\s*github\.event\.inputs\.([A-Za-z0-9_-]+)\s*}}$/;
 const dispatchInputJsonExpressionPattern =
@@ -95,7 +95,6 @@ function checkReusableInputs(templatePath, sourcePath, template, reusableJob, so
  */
 function checkForwardedInputs(templatePath, sourcePath, withInputs, sourceInputs) {
   for (const name of Object.keys(sourceInputs)) {
-    if (internalWorkflowCallInputs.has(name)) continue;
     if (!Object.hasOwn(withInputs, name)) {
       errors.push(`${templatePath} must pass ${name} to ${sourcePath}.`);
     }
