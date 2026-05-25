@@ -31,6 +31,11 @@ on:
 
 jobs:
   review:
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: write
     uses: markhuangai/git-vibe/.github/workflows/review.yml@v3
     with:
       pr-number: ${{ inputs.pr-number }}

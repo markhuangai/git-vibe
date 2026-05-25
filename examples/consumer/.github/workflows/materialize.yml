@@ -31,6 +31,10 @@ on:
 
 jobs:
   materialize:
+    permissions:
+      contents: read
+      discussions: write
+      issues: write
     uses: markhuangai/git-vibe/.github/workflows/materialize.yml@v3
     with:
       discussion-number: ${{ inputs.discussion-number }}

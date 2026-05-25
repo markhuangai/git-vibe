@@ -4,7 +4,7 @@ import { parse } from "yaml";
 
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
- * @typedef {{ uses?: string, with?: Record<string, unknown> }} WorkflowJob
+ * @typedef {{ permissions?: Record<string, unknown>, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ jobs?: Record<string, WorkflowJob>, on?: { workflow_call?: { inputs?: Record<string, WorkflowInput> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } } }} Workflow
  */
 
@@ -13,6 +13,11 @@ const consumerWorkflowDirectory = "examples/consumer/.github/workflows";
 const internalWorkflowCallInputs = new Set(["action-repository", "action-ref"]);
 const reusableWorkflowPattern = /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@.+$/;
 const inputExpressionPattern = /^\${{\s*inputs\.([A-Za-z0-9_-]+)\s*}}$/;
+const permissionLevels = new Map([
+  ["none", 0],
+  ["read", 1],
+  ["write", 2],
+]);
 /** @type {Array<keyof WorkflowInput>} */
 const inputMetadataKeys = ["default", "required", "type"];
 
@@ -51,6 +56,7 @@ function checkTemplateWorkflow(templateFile) {
   const sourcePath = join(sourceWorkflowDirectory, reusableName);
   const source = readWorkflow(sourcePath);
   checkReusableInputs(templatePath, sourcePath, template, reusableJob, source);
+  checkReusablePermissions(templatePath, sourcePath, reusableJob, source);
 }
 
 /**
@@ -163,6 +169,56 @@ function checkInputMetadata(templatePath, sourcePath, name, dispatchInput, sourc
       );
     }
   }
+}
+
+/**
+ * @param {string} templatePath
+ * @param {string} sourcePath
+ * @param {WorkflowJob} reusableJob
+ * @param {Workflow} source
+ */
+function checkReusablePermissions(templatePath, sourcePath, reusableJob, source) {
+  const requiredPermissions = maximumWorkflowPermissions(source);
+  const wrapperPermissions = reusableJob.permissions || {};
+
+  for (const [name, requiredValue] of Object.entries(requiredPermissions)) {
+    if (wrapperPermissions[name] !== requiredValue) {
+      errors.push(
+        `${templatePath} permissions.${name} must match maximum requested by ${sourcePath}: ${requiredValue}.`,
+      );
+    }
+  }
+
+  for (const name of Object.keys(wrapperPermissions)) {
+    if (!Object.hasOwn(requiredPermissions, name)) {
+      errors.push(
+        `${templatePath} grants permissions.${name}, but ${sourcePath} does not request it.`,
+      );
+    }
+  }
+}
+
+/** @param {Workflow} workflow @returns {Record<string, string>} */
+function maximumWorkflowPermissions(workflow) {
+  /** @type {Record<string, string>} */
+  const permissions = {};
+
+  for (const job of Object.values(workflow.jobs || {})) {
+    for (const [name, value] of Object.entries(job.permissions || {})) {
+      const permission = String(value);
+      if (!permissionLevels.has(permission)) continue;
+      if (permissionLevel(permission) > permissionLevel(permissions[name])) {
+        permissions[name] = permission;
+      }
+    }
+  }
+
+  return permissions;
+}
+
+/** @param {string | undefined} permission @returns {number} */
+function permissionLevel(permission) {
+  return permissionLevels.get(permission || "none") || 0;
 }
 
 /** @param {Workflow} workflow @returns {WorkflowJob | undefined} */

@@ -31,6 +31,10 @@ on:
 
 jobs:
   investigate:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     uses: markhuangai/git-vibe/.github/workflows/investigate.yml@v3
     with:
       issue-number: ${{ inputs.issue-number }}

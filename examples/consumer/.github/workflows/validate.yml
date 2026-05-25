@@ -37,6 +37,10 @@ on:
 
 jobs:
   validate:
+    permissions:
+      contents: read
+      discussions: write
+      issues: write
     uses: markhuangai/git-vibe/.github/workflows/validate.yml@v3
     with:
       issue-number: ${{ inputs.issue-number }}
