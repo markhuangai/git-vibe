@@ -94,6 +94,23 @@ describe("stable release selection", () => {
   });
 });
 
+describe("release lookup GitHub API requests", () => {
+  it("authenticates release lookup requests when a token is available", async () => {
+    const fetchImpl = vi.fn(fetchOk([release({ tag_name: "v1.2.3" })]));
+
+    await expect(latestReleaseTag({ fetchImpl, githubToken: "ghs_release" })).resolves.toBe(
+      "v1.2.3",
+    );
+
+    const calls = /** @type {Array<[string | URL | globalThis.Request, RequestInit?]>} */ (
+      /** @type {unknown} */ (fetchImpl.mock.calls)
+    );
+    expect(new globalThis.Headers(calls[0]?.[1]?.headers).get("authorization")).toBe(
+      "Bearer ghs_release",
+    );
+  });
+});
+
 /** @param {Partial<import("../src/releases.ts").GitHubRelease>} overrides */
 function release(overrides = {}) {
   return {

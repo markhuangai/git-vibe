@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fetchConsumerStarterFiles } from "../src/consumer-starter.ts";
 
 /** @type {Array<[string, Record<string, unknown>, string]>} */
@@ -91,6 +91,31 @@ describe("consumer starter fetch", () => {
         sourcePath: "examples/consumer/README.md",
       },
     ]);
+  });
+
+  it("authenticates GitHub content requests when a token is available", async () => {
+    const fetchImpl = vi.fn(
+      fetchRoutes({
+        "examples/consumer": [{ path: "examples/consumer/README.md", type: "file" }],
+        "examples/consumer/README.md": fileContent("# Consumer\n"),
+      }),
+    );
+
+    await fetchConsumerStarterFiles({
+      fetchImpl,
+      githubToken: "ghs_content",
+      releaseTag: "v1.2.3",
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const calls = /** @type {Array<[string | URL | globalThis.Request, RequestInit?]>} */ (
+      /** @type {unknown} */ (fetchImpl.mock.calls)
+    );
+    for (const call of calls) {
+      expect(new globalThis.Headers(call[1]?.headers).get("authorization")).toBe(
+        "Bearer ghs_content",
+      );
+    }
   });
 
   it.each(malformedStarterCases)(

@@ -11,6 +11,10 @@ The `setup` command fetches `examples/consumer` from the latest stable
 pins reusable workflow refs to that release, and fails before writing if release
 lookup, starter fetch, or target-file validation fails.
 
+When `GITHUB_TOKEN` or `GH_TOKEN` is set, `git-vibe-setup` uses it only to
+authenticate GitHub release and starter-file reads. This avoids anonymous API
+throttling in CI and shared-network environments.
+
 ```bash
 npx git-vibe-setup update
 ```
