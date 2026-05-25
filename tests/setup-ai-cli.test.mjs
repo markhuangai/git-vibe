@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -116,11 +116,20 @@ describe("GitVibe AI CLI setup Codex installer", () => {
     });
 
     expect(code).toBe(0);
+    const globalBinDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global", "bin");
+    const installCall = calls.find(
+      (call) =>
+        call.command === "corepack" &&
+        JSON.stringify(call.args) === JSON.stringify(["pnpm", "add", "--global", "@openai/codex"]),
+    );
+
     expectCommand(calls, "corepack", ["pnpm", "add", "--global", "@openai/codex"]);
-    expectCommand(calls, "codex", ["--version"]);
-    expect(readFileSync(env.GITHUB_PATH, "utf8")).toContain(
+    expect(installCall?.env?.PNPM_HOME).toBe(
       join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global"),
     );
+    expect(installCall?.env?.PATH?.split(delimiter)[0]).toBe(globalBinDir);
+    expectCommand(calls, "codex", ["--version"]);
+    expect(readFileSync(env.GITHUB_PATH, "utf8")).toContain(globalBinDir);
   });
 
   it("uses installed pnpm when Corepack is unavailable", () => {
