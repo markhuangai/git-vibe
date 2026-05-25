@@ -15,11 +15,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "actionlint": "github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml",
+    "actionlint": "github-actionlint -ignore 'property \"workflow_(repository|sha)\" is not defined' .github/workflows/*.yml examples/consumer/.github/workflows/*.yml",
     "build": "tsc --project tsconfig.build.json && node scripts/build-actions.mjs && corepack pnpm --filter git-vibe-setup build",
     "build:app": "tsc --project tsconfig.build.json",
     "bundle:actions": "node scripts/build-actions.mjs",
-    "check": "prettier --check . && eslint . && (command -v pnpm >/dev/null 2>&1 || command -v corepack >/dev/null 2>&1 || (echo 'pnpm or Corepack is required.' && exit 127)) && PNPM=\"$(command -v pnpm >/dev/null 2>&1 && echo pnpm || echo 'corepack pnpm')\" && $PNPM workflow-template-contract && $PNPM typecheck && vitest run --coverage && $PNPM build && github-actionlint .github/workflows/*.yml examples/consumer/.github/workflows/*.yml && $PNPM audit --prod",
+    "check": "prettier --check . && eslint . && (command -v pnpm >/dev/null 2>&1 || command -v corepack >/dev/null 2>&1 || (echo 'pnpm or Corepack is required.' && exit 127)) && PNPM=\"$(command -v pnpm >/dev/null 2>&1 && echo pnpm || echo 'corepack pnpm')\" && $PNPM workflow-template-contract && $PNPM typecheck && vitest run --coverage && $PNPM build && $PNPM actionlint && $PNPM audit --prod",
     "coverage": "vitest run --coverage",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -222,8 +222,8 @@ describe("GitVibe workflow call wiring", () => {
       expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
       expect(actionSourceSteps.length).toBeGreaterThan(0);
       for (const step of actionSourceSteps) {
-        expect(step.with?.repository).toBe("markhuangai/git-vibe");
-        expect(step.with?.ref).toBe("${{ github.workflow_sha }}");
+        expect(step.with?.repository).toBe("${{ job.workflow_repository }}");
+        expect(step.with?.ref).toBe("${{ job.workflow_sha }}");
       }
     }
   });

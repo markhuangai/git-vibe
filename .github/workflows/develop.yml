@@ -142,8 +142,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: markhuangai/git-vibe
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -176,8 +176,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: markhuangai/git-vibe
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -213,8 +213,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: markhuangai/git-vibe
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -252,8 +252,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: markhuangai/git-vibe
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -292,8 +292,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: markhuangai/git-vibe
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
@@ -352,8 +352,8 @@ jobs:
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
-          repository: markhuangai/git-vibe
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
       - uses: pnpm/action-setup@v4
         with:
