@@ -244,7 +244,9 @@ describe("git-vibe-setup prerelease workflow updates", () => {
       workflowNames(join(workspaceRoot, "examples", "consumer", ".github")),
     );
     expect(validateWorkflow).toContain("timeout_minutes:");
-    expect(validateWorkflow).toContain("timeout_minutes: ${{ inputs.timeout_minutes }}");
+    expect(validateWorkflow).toContain(
+      "timeout_minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}",
+    );
     expect(validateWorkflow).toContain("@v1.2.3");
   });
 });

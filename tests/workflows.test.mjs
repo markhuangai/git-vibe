@@ -266,7 +266,7 @@ describe("GitVibe workflow call wiring", () => {
           type: "number",
         });
         expect(reusableJob?.with?.[inputName], `${file} forwards ${inputName}`).toBe(
-          `\${{ inputs.${inputName} }}`,
+          `\${{ fromJSON(github.event.inputs.${inputName}) }}`,
         );
       }
     }

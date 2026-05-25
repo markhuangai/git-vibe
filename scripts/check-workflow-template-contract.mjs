@@ -14,7 +14,9 @@ const localReusableWorkflowTemplates = [".github/workflows/automatic-pr-review.y
 const internalWorkflowCallInputs = new Set(["action-repository", "action-ref"]);
 const remoteReusableWorkflowPattern = /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@.+$/;
 const localReusableWorkflowPattern = /^\.\/\.github\/workflows\/([^@\s]+)$/;
-const inputExpressionPattern = /^\${{\s*inputs\.([A-Za-z0-9_-]+)\s*}}$/;
+const dispatchInputExpressionPattern = /^\${{\s*github\.event\.inputs\.([A-Za-z0-9_-]+)\s*}}$/;
+const dispatchInputJsonExpressionPattern =
+  /^\${{\s*fromJSON\(\s*github\.event\.inputs\.([A-Za-z0-9_-]+)\s*\)\s*}}$/;
 const permissionLevels = new Map([
   ["none", 0],
   ["read", 1],
@@ -81,7 +83,7 @@ function checkReusableInputs(templatePath, sourcePath, template, reusableJob, so
 
   checkForwardedInputs(templatePath, sourcePath, withInputs, sourceInputs);
   checkSupportedWithKeys(templatePath, sourcePath, withInputs, sourceInputs);
-  checkDispatchInputForwarding(templatePath, dispatchInputs, withInputs);
+  checkDispatchInputForwarding(templatePath, dispatchInputs, withInputs, sourceInputs);
   checkForwardedInputMetadata(templatePath, sourcePath, dispatchInputs, withInputs, sourceInputs);
 }
 
@@ -118,11 +120,13 @@ function checkSupportedWithKeys(templatePath, sourcePath, withInputs, sourceInpu
  * @param {string} templatePath
  * @param {Record<string, WorkflowInput>} dispatchInputs
  * @param {Record<string, unknown>} withInputs
+ * @param {Record<string, WorkflowInput>} sourceInputs
  */
-function checkDispatchInputForwarding(templatePath, dispatchInputs, withInputs) {
+function checkDispatchInputForwarding(templatePath, dispatchInputs, withInputs, sourceInputs) {
   for (const name of Object.keys(dispatchInputs)) {
-    if (withInputs[name] !== `\${{ inputs.${name} }}`) {
-      errors.push(`${templatePath} dispatch input ${name} must be forwarded to with.${name}.`);
+    const expected = dispatchForwardingExpression(name, sourceInputs[name]);
+    if (withInputs[name] !== expected) {
+      errors.push(`${templatePath} dispatch input ${name} must be forwarded as ${expected}.`);
     }
   }
 }
@@ -145,7 +149,9 @@ function checkForwardedInputMetadata(
     const inputName = expressionInputName(value);
     if (!inputName) continue;
     if (inputName !== withName) {
-      errors.push(`${templatePath} with.${withName} must reference inputs.${withName}.`);
+      errors.push(
+        `${templatePath} with.${withName} must reference github.event.inputs.${withName}.`,
+      );
       continue;
     }
     if (!Object.hasOwn(dispatchInputs, inputName)) {
@@ -249,7 +255,20 @@ function reusableWorkflowPattern(reusableReferenceKind) {
 
 /** @param {unknown} value @returns {string | undefined} */
 function expressionInputName(value) {
-  return inputExpressionPattern.exec(String(value || ""))?.[1];
+  const expression = String(value || "");
+  return (
+    dispatchInputExpressionPattern.exec(expression)?.[1] ||
+    dispatchInputJsonExpressionPattern.exec(expression)?.[1]
+  );
+}
+
+/** @param {string} name @param {WorkflowInput | undefined} sourceInput @returns {string} */
+function dispatchForwardingExpression(name, sourceInput) {
+  const expression = `github.event.inputs.${name}`;
+  if (sourceInput?.type === "number" || sourceInput?.type === "boolean") {
+    return `\${{ fromJSON(${expression}) }}`;
+  }
+  return `\${{ ${expression} }}`;
 }
 
 /** @param {string} directory @returns {string[]} */
