@@ -16,8 +16,8 @@
 - `.github/workflows/automatic-pr-review.yml`: repository-local `pull_request_target` wrapper that reviews non-draft PRs opened against `main` or `dev`.
 - `.github/workflows/address-feedback.yml`: reusable PR feedback pipeline that updates the existing PR branch before review when fixes are required.
 - `.github/workflows/ci.yml`: PR quality gate plus manual dispatch for format, lint, coverage, build, actionlint, and production audit.
-- `.github/workflows/app-deploy.yml`: app image build and deployment workflow for app/shared runtime changes on `dev`.
-- `.github/workflows/release.yml`: admin-only manual release workflow that runs from `main`, creates GitHub releases, and promotes the existing GHCR app image to the release tag.
+- `.github/workflows/app-deploy.yml`: app image build and deployment workflow for app/shared runtime changes on `main`. It pushes the commit-SHA image only; release tags own `latest`.
+- `.github/workflows/release.yml`: admin-only manual release workflow. Stable tags run from `main` and publish the version image plus `latest`; prerelease tags run from `dev`, publish only the prerelease image, and create GitHub prereleases with `latest` disabled.
 - Reusable GitVibe workflows also support `workflow_dispatch` for source-repo testing. GitVibe action source checkouts use the `markhuangai/git-vibe` repository at the commit of the reusable workflow file itself, so called workflows run action code from the same GitVibe ref used in `uses:`.
 - `.github/workflows/ai-smoke.yml`: manual repo-local smoke test for self-hosted AI runner setup.
 - `investigate/`, `validate/`, `materialize/`, `implement/`, `create-pr/`,

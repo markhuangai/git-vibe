@@ -5,13 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag to create, such as v3 or v3.0.0.
+        description: Release tag to create. Stable tags run from main; prerelease tags run from dev.
         required: true
         default: v3
-      source_image_tag:
-        description: Existing GHCR image tag to promote. Defaults to the workflow commit SHA.
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -38,15 +34,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           REQUEST_ACTOR: ${{ github.actor }}
-          SOURCE_IMAGE_TAG: ${{ inputs.source_image_tag }}
         run: |
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "::error::Releases must be dispatched from the main branch."
+          set -euo pipefail
+
+          if [[ "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}-[0-9A-Za-z._-]+$ ]]; then
+            prerelease=true
+            required_ref=refs/heads/dev
+          elif [[ "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}$ ]]; then
+            prerelease=false
+            required_ref=refs/heads/main
+          else
+            echo "::error::release_tag must look like v3, v3.0.0, or v3.0.0-rc.1."
             exit 1
           fi
 
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}([-+][0-9A-Za-z._-]+)?$ ]]; then
-            echo "::error::release_tag must look like v3, v3.0.0, or v3.0.0-rc.1."
+          if [ "$GITHUB_REF" != "$required_ref" ]; then
+            echo "::error::Stable releases must run from main; prereleases must run from dev."
             exit 1
           fi
 
@@ -67,12 +70,20 @@ jobs:
           fi
 
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          source_tag="${SOURCE_IMAGE_TAG:-$GITHUB_SHA}"
+          release_image="$image:$RELEASE_TAG"
+          latest_image="$image:latest"
           {
             echo "image=$image"
+            echo "prerelease=$prerelease"
             echo "release_tag=$RELEASE_TAG"
-            echo "source_image=$image:$source_tag"
-            echo "release_image=$image:$RELEASE_TAG"
+            echo "release_image=$release_image"
+            echo "latest_image=$latest_image"
+            echo "docker_tags<<EOF"
+            echo "$release_image"
+            if [ "$prerelease" = "false" ]; then
+              echo "$latest_image"
+            fi
+            echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker builder
@@ -88,33 +99,51 @@ jobs:
             docker buildx inspect --bootstrap
           fi
 
-      - name: Promote release image
+      - name: Build and push release image
+        env:
+          DOCKER_TAGS: ${{ steps.release.outputs.docker_tags }}
         run: |
-          docker pull "${{ steps.release.outputs.source_image }}"
-          docker tag "${{ steps.release.outputs.source_image }}" "${{ steps.release.outputs.release_image }}"
-          docker push "${{ steps.release.outputs.release_image }}"
+          set -euo pipefail
+
+          tag_args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && tag_args+=(--tag "$tag")
+          done <<< "$DOCKER_TAGS"
+
+          docker buildx build --push "${tag_args[@]}" .
 
       - name: Clean Docker release artifacts
         run: |
-          docker image rm \
-            "${{ steps.release.outputs.source_image }}" \
-            "${{ steps.release.outputs.release_image }}" || true
           docker buildx prune --force --filter until=48h || true
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
-          cat > release-notes.md <<EOF
-          Docker image: \`${{ steps.release.outputs.release_image }}\`
+          set -euo pipefail
 
-          Source image: \`${{ steps.release.outputs.source_image }}\`
-          Release commit: \`$GITHUB_SHA\`
-          EOF
+          {
+            echo "Docker image: \`${{ steps.release.outputs.release_image }}\`"
+            if [ "$IS_PRERELEASE" = "false" ]; then
+              echo "Latest image: \`${{ steps.release.outputs.latest_image }}\`"
+            fi
+            echo
+            echo "Release commit: \`$GITHUB_SHA\`"
+          } > release-notes.md
+
+          release_flags=(
+            --target "$GITHUB_SHA"
+            --title "GitVibe ${{ steps.release.outputs.release_tag }}"
+            --notes-file release-notes.md
+            --generate-notes
+          )
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            release_flags+=(--prerelease --latest=false)
+          else
+            release_flags+=(--latest)
+          fi
 
           gh release create "${{ steps.release.outputs.release_tag }}" \
-            --target "$GITHUB_SHA" \
-            --title "GitVibe ${{ steps.release.outputs.release_tag }}" \
-            --notes-file release-notes.md \
-            --generate-notes \
-            --latest
+            "${release_flags[@]}"
