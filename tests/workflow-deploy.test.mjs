@@ -3,26 +3,36 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 describe("GitVibe app deployment boundary", () => {
-  it("deploys the app only when app, shared, package, or deploy files change", () => {
+  it("deploys only prerelease images passed by the release workflow", () => {
     const workflow = readWorkflow(".github/workflows/app-deploy.yml");
-    const paths = workflow.on?.push?.paths || [];
-    const buildSteps = /** @type {Array<{ uses?: string, with?: Record<string, unknown> }>} */ (
-      workflow.jobs?.build?.steps || []
-    );
-    const tags = String(
-      buildSteps.find((step) => step.uses === "docker/build-push-action@v6")?.with?.tags || "",
+    const content = readFileSync(".github/workflows/app-deploy.yml", "utf8");
+    const deploySteps = /** @type {Array<{ uses?: string, run?: string }>} */ (
+      workflow.jobs?.deploy?.steps || []
     );
 
-    expect(workflow.on?.push?.branches).toEqual(["main"]);
-    expect(paths).toContain("src/app/**");
-    expect(paths).toContain("src/shared/**");
-    expect(paths).toContain(".github/workflows/release.yml");
-    expect(paths).not.toContain("src/**");
-    expect(paths).not.toContain("src/runner/**");
-    expect(paths).not.toContain("prompts/**");
-    expect(paths).not.toContain("schemas/**");
-    expect(tags).toContain("${{ env.GITVIBE_IMAGE }}");
-    expect(tags).not.toContain("latest");
+    expect(workflow.on?.workflow_call?.inputs?.release_tag).toMatchObject({
+      required: true,
+      type: "string",
+    });
+    expect(workflow.on?.release).toBeUndefined();
+    expect(workflow.on?.push).toBeUndefined();
+    expect(workflow.on?.workflow_dispatch).toBeUndefined();
+    expect(workflow.permissions).toMatchObject({
+      contents: "read",
+      packages: "read",
+    });
+    expect(workflow.env?.GITVIBE_IMAGE).toBe(
+      "ghcr.io/markhuangai/git-vibe:${{ inputs.release_tag }}",
+    );
+    expect(workflow.jobs?.build).toBeUndefined();
+    expect(
+      deploySteps.some((step) => step.run?.includes("app-deploy only accepts prerelease tags")),
+    ).toBe(true);
+    expect(deploySteps.some((step) => step.uses === "docker/login-action@v3")).toBe(true);
+    expect(deploySteps.some((step) => step.run?.includes("docker compose"))).toBe(true);
+    expect(content).not.toContain("docker/build-push-action");
+    expect(content).not.toContain("github.sha");
+    expect(content).not.toContain("latest");
   });
 
   it("builds the app image without bundled runner runtime assets", () => {
@@ -76,6 +86,19 @@ describe("GitVibe app deployment boundary", () => {
     expect(content).toContain("docker buildx prune --force --filter until=48h");
     expect(content).toContain("gh release create");
     expect(content).toContain("--generate-notes");
+    expect(workflow.jobs?.release?.outputs).toMatchObject({
+      prerelease: "${{ steps.release.outputs.prerelease }}",
+      release_tag: "${{ steps.release.outputs.release_tag }}",
+    });
+    expect(workflow.jobs?.["deploy-prerelease"]).toMatchObject({
+      needs: "release",
+      if: "needs.release.outputs.prerelease == 'true'",
+      uses: "./.github/workflows/app-deploy.yml",
+      with: {
+        release_tag: "${{ needs.release.outputs.release_tag }}",
+      },
+      secrets: "inherit",
+    });
   });
 });
 

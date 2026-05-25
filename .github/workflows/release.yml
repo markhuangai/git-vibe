@@ -20,6 +20,9 @@ concurrency:
 jobs:
   release:
     runs-on: rootless-docker
+    outputs:
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
     env:
       BUILDX_CONFIG: /tmp/.docker-buildx
       DOCKER_CONTEXT: default
@@ -147,3 +150,11 @@ jobs:
 
           gh release create "${{ steps.release.outputs.release_tag }}" \
             "${release_flags[@]}"
+
+  deploy-prerelease:
+    needs: release
+    if: needs.release.outputs.prerelease == 'true'
+    uses: ./.github/workflows/app-deploy.yml
+    with:
+      release_tag: ${{ needs.release.outputs.release_tag }}
+    secrets: inherit
