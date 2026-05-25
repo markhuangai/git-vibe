@@ -15,6 +15,11 @@ concurrency:
 jobs:
   review:
     if: ${{ !github.event.pull_request.draft }}
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: write
     uses: ./.github/workflows/review.yml
     with:
       pr-number: ${{ format('{0}', github.event.pull_request.number) }}

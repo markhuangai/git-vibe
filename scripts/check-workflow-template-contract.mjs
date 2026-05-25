@@ -10,8 +10,10 @@ import { parse } from "yaml";
 
 const sourceWorkflowDirectory = ".github/workflows";
 const consumerWorkflowDirectory = "examples/consumer/.github/workflows";
+const localReusableWorkflowTemplates = [".github/workflows/automatic-pr-review.yml"];
 const internalWorkflowCallInputs = new Set(["action-repository", "action-ref"]);
-const reusableWorkflowPattern = /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@.+$/;
+const remoteReusableWorkflowPattern = /^markhuangai\/git-vibe\/\.github\/workflows\/([^@\s]+)@.+$/;
+const localReusableWorkflowPattern = /^\.\/\.github\/workflows\/([^@\s]+)$/;
 const inputExpressionPattern = /^\${{\s*inputs\.([A-Za-z0-9_-]+)\s*}}$/;
 const permissionLevels = new Map([
   ["none", 0],
@@ -25,7 +27,11 @@ const inputMetadataKeys = ["default", "required", "type"];
 const errors = [];
 
 for (const templateFile of workflowFiles(consumerWorkflowDirectory)) {
-  checkTemplateWorkflow(templateFile);
+  checkTemplateWorkflow(join(consumerWorkflowDirectory, templateFile), "remote");
+}
+
+for (const templatePath of localReusableWorkflowTemplates) {
+  checkTemplateWorkflow(templatePath, "local");
 }
 
 if (errors.length > 0) {
@@ -37,17 +43,19 @@ if (errors.length > 0) {
   console.log("Workflow template contracts are aligned.");
 }
 
-/** @param {string} templateFile */
-function checkTemplateWorkflow(templateFile) {
-  const templatePath = join(consumerWorkflowDirectory, templateFile);
+/**
+ * @param {string} templatePath
+ * @param {"local" | "remote"} reusableReferenceKind
+ */
+function checkTemplateWorkflow(templatePath, reusableReferenceKind) {
   const template = readWorkflow(templatePath);
-  const reusableJob = findReusableWorkflowJob(template);
+  const reusableJob = findReusableWorkflowJob(template, reusableReferenceKind);
   if (!reusableJob) {
-    errors.push(`${templatePath} must call a markhuangai/git-vibe reusable workflow.`);
+    errors.push(`${templatePath} must call a supported GitVibe reusable workflow.`);
     return;
   }
 
-  const reusableName = reusableWorkflowName(reusableJob.uses);
+  const reusableName = reusableWorkflowName(reusableJob.uses, reusableReferenceKind);
   if (!reusableName) {
     errors.push(`${templatePath} has unsupported reusable workflow reference: ${reusableJob.uses}`);
     return;
@@ -221,16 +229,22 @@ function permissionLevel(permission) {
   return permissionLevels.get(permission || "none") || 0;
 }
 
-/** @param {Workflow} workflow @returns {WorkflowJob | undefined} */
-function findReusableWorkflowJob(workflow) {
-  return Object.values(workflow.jobs || {}).find((job) =>
-    reusableWorkflowPattern.test(String(job.uses || "")),
-  );
+/** @param {Workflow} workflow @param {"local" | "remote"} reusableReferenceKind @returns {WorkflowJob | undefined} */
+function findReusableWorkflowJob(workflow, reusableReferenceKind) {
+  const pattern = reusableWorkflowPattern(reusableReferenceKind);
+  return Object.values(workflow.jobs || {}).find((job) => pattern.test(String(job.uses || "")));
 }
 
-/** @param {unknown} uses @returns {string | undefined} */
-function reusableWorkflowName(uses) {
-  return reusableWorkflowPattern.exec(String(uses || ""))?.[1];
+/** @param {unknown} uses @param {"local" | "remote"} reusableReferenceKind @returns {string | undefined} */
+function reusableWorkflowName(uses, reusableReferenceKind) {
+  return reusableWorkflowPattern(reusableReferenceKind).exec(String(uses || ""))?.[1];
+}
+
+/** @param {"local" | "remote"} reusableReferenceKind @returns {RegExp} */
+function reusableWorkflowPattern(reusableReferenceKind) {
+  return reusableReferenceKind === "local"
+    ? localReusableWorkflowPattern
+    : remoteReusableWorkflowPattern;
 }
 
 /** @param {unknown} value @returns {string | undefined} */
