@@ -31,6 +31,10 @@ on:
 
 jobs:
   address-feedback:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     uses: markhuangai/git-vibe/.github/workflows/address-feedback.yml@v3
     with:
       pr-number: ${{ inputs.pr-number }}
