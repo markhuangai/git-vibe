@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { fetchConsumerStarterFiles } from "./consumer-starter.js";
+import { githubTokenFromEnvironment } from "./github-api.js";
 import {
   blockingInstallPaths,
   buildInstallFiles,
@@ -23,6 +24,7 @@ interface SetupCliRuntime {
   cwd?: string;
   error?: (message: string) => void;
   fetchImpl?: typeof fetch;
+  githubToken?: string;
   includePrereleases?: boolean;
   log?: (message: string) => void;
   releaseTag?: string;
@@ -51,8 +53,9 @@ Options:
 export async function runSetup(runtime: SetupCliRuntime = {}): Promise<void> {
   const cwd = runtime.cwd || process.cwd();
   const fetchImpl = runtime.fetchImpl || fetch;
-  const releaseTag = await resolveReleaseTag(runtime, fetchImpl);
-  const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, releaseTag });
+  const githubToken = runtime.githubToken || githubTokenFromEnvironment();
+  const releaseTag = await resolveReleaseTag(runtime, fetchImpl, githubToken);
+  const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, githubToken, releaseTag });
   const files = buildInstallFiles({ cwd, releaseTag, sourceFiles });
   const blockingPaths = blockingInstallPaths(files);
 
@@ -65,8 +68,9 @@ export async function runSetup(runtime: SetupCliRuntime = {}): Promise<void> {
 export async function runUpdate(runtime: SetupCliRuntime = {}): Promise<void> {
   const cwd = runtime.cwd || process.cwd();
   const fetchImpl = runtime.fetchImpl || fetch;
-  const releaseTag = await resolveReleaseTag(runtime, fetchImpl);
-  const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, releaseTag });
+  const githubToken = runtime.githubToken || githubTokenFromEnvironment();
+  const releaseTag = await resolveReleaseTag(runtime, fetchImpl, githubToken);
+  const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, githubToken, releaseTag });
   const files = buildWorkflowUpdateFiles({ cwd, releaseTag, sourceFiles });
   const unmanagedPaths = unmanagedWorkflowUpdatePaths(files);
 
@@ -120,10 +124,12 @@ export async function setupCli(runtime: SetupCliRuntime = {}): Promise<number> {
 async function resolveReleaseTag(
   runtime: SetupCliRuntime,
   fetchImpl: typeof fetch,
+  githubToken: string | undefined,
 ): Promise<string> {
   if (runtime.releaseTag) return validateReleaseTag(runtime.releaseTag);
   const releaseTag = await latestReleaseTag({
     fetchImpl,
+    githubToken,
     includePrereleases: runtime.includePrereleases,
   });
   return validateReleaseTag(releaseTag);

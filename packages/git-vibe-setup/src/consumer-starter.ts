@@ -1,3 +1,5 @@
+import { githubApiHeaders } from "./github-api.js";
+
 export interface ConsumerStarterFile {
   content: string;
   relativePath: string;
@@ -17,10 +19,16 @@ const maxStarterFileBytes = 128 * 1024;
 
 export async function fetchConsumerStarterFiles(options: {
   fetchImpl?: typeof fetch;
+  githubToken?: string;
   releaseTag: string;
 }): Promise<ConsumerStarterFile[]> {
   const fetchImpl = options.fetchImpl || fetch;
-  const files = await fetchDirectoryFiles(fetchImpl, options.releaseTag, consumerStarterRoot);
+  const files = await fetchDirectoryFiles(
+    fetchImpl,
+    options.releaseTag,
+    consumerStarterRoot,
+    options.githubToken,
+  );
 
   if (files.length === 0) {
     throw invalidStarterBundleError(options.releaseTag, `${consumerStarterRoot} contains no files`);
@@ -33,14 +41,20 @@ async function fetchDirectoryFiles(
   fetchImpl: typeof fetch,
   releaseTag: string,
   path: string,
+  githubToken: string | undefined,
 ): Promise<ConsumerStarterFile[]> {
-  const data = await fetchGitHubJson(fetchImpl, contentsUrl(path, releaseTag), releaseTag);
+  const data = await fetchGitHubJson(
+    fetchImpl,
+    contentsUrl(path, releaseTag),
+    releaseTag,
+    githubToken,
+  );
   if (!Array.isArray(data)) {
     throw invalidStarterBundleError(releaseTag, `${path} is not a directory`);
   }
 
   const fileGroups = await Promise.all(
-    data.map((entry) => fetchEntryFiles(fetchImpl, releaseTag, asContentEntry(entry))),
+    data.map((entry) => fetchEntryFiles(fetchImpl, releaseTag, asContentEntry(entry), githubToken)),
   );
   return fileGroups.flat();
 }
@@ -49,13 +63,14 @@ async function fetchEntryFiles(
   fetchImpl: typeof fetch,
   releaseTag: string,
   entry: GitHubContentEntry,
+  githubToken: string | undefined,
 ): Promise<ConsumerStarterFile[]> {
   const path = entryPath(entry, releaseTag);
   relativeConsumerPath(path, releaseTag);
   const type = entryType(entry, releaseTag, path);
 
-  if (type === "dir") return fetchDirectoryFiles(fetchImpl, releaseTag, path);
-  if (type === "file") return [await fetchFile(fetchImpl, releaseTag, path)];
+  if (type === "dir") return fetchDirectoryFiles(fetchImpl, releaseTag, path, githubToken);
+  if (type === "file") return [await fetchFile(fetchImpl, releaseTag, path, githubToken)];
 
   throw invalidStarterBundleError(releaseTag, `${path} has unsupported type ${type}`);
 }
@@ -64,9 +79,10 @@ async function fetchFile(
   fetchImpl: typeof fetch,
   releaseTag: string,
   path: string,
+  githubToken: string | undefined,
 ): Promise<ConsumerStarterFile> {
   const data = asContentEntry(
-    await fetchGitHubJson(fetchImpl, contentsUrl(path, releaseTag), releaseTag),
+    await fetchGitHubJson(fetchImpl, contentsUrl(path, releaseTag), releaseTag, githubToken),
   );
 
   if (data.type !== "file" || typeof data.content !== "string" || data.encoding !== "base64") {
@@ -94,15 +110,13 @@ async function fetchGitHubJson(
   fetchImpl: typeof fetch,
   url: URL,
   releaseTag: string,
+  githubToken: string | undefined,
 ): Promise<unknown> {
   let response: Response;
+  const headers = githubApiHeaders(githubToken);
   try {
     response = await fetchImpl(url, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "git-vibe-setup",
-        "x-github-api-version": "2022-11-28",
-      },
+      headers,
     });
   } catch {
     throw unavailableStarterBundleError(releaseTag);

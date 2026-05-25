@@ -148,8 +148,10 @@ It creates:
 - `.github/workflows/*.yml`
 - `.git-vibe/role-group/*.md`
 
-The installer is local-only. It does not authenticate to GitHub, create
-commits, open pull requests, or write secrets and variables for you.
+The installer is local-only. It does not create commits, open pull requests, or
+write secrets and variables for you. When `GITHUB_TOKEN` or `GH_TOKEN` is set,
+`git-vibe-setup` uses it only to authenticate GitHub release and starter-file
+reads so CI or shared-network runs avoid anonymous API throttling.
 
 To update existing GitVibe workflow wrappers after upgrading `git-vibe-setup`,
 run:

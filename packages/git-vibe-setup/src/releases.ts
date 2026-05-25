@@ -1,3 +1,5 @@
+import { githubApiHeaders } from "./github-api.js";
+
 export interface GitHubRelease {
   created_at?: string;
   draft?: boolean;
@@ -10,6 +12,7 @@ export class ReleaseLookupError extends Error {}
 
 export interface ReleaseLookupOptions {
   fetchImpl?: typeof fetch;
+  githubToken?: string;
   includePrereleases?: boolean;
 }
 
@@ -25,7 +28,7 @@ export async function latestStableReleaseTag(fetchImpl: typeof fetch = fetch): P
 }
 
 export async function latestReleaseTag(options: ReleaseLookupOptions = {}): Promise<string> {
-  const releases = await fetchReleases(options.fetchImpl || fetch);
+  const releases = await fetchReleases(options.fetchImpl || fetch, options.githubToken);
   const release = selectLatestRelease(releases, options);
   if (!release?.tag_name) {
     throw new ReleaseLookupError(
@@ -52,27 +55,31 @@ export function selectLatestRelease(
     .sort(compareReleaseFreshness)[0];
 }
 
-async function fetchReleases(fetchImpl: typeof fetch): Promise<GitHubRelease[]> {
+async function fetchReleases(
+  fetchImpl: typeof fetch,
+  githubToken: string | undefined,
+): Promise<GitHubRelease[]> {
   const releases: GitHubRelease[] = [];
 
   for (let page = 1; ; page += 1) {
-    const data = await fetchReleasePage(fetchImpl, page);
+    const data = await fetchReleasePage(fetchImpl, page, githubToken);
     releases.push(...data);
 
     if (data.length < releasesPerPage) return releases;
   }
 }
 
-async function fetchReleasePage(fetchImpl: typeof fetch, page: number): Promise<GitHubRelease[]> {
+async function fetchReleasePage(
+  fetchImpl: typeof fetch,
+  page: number,
+  githubToken: string | undefined,
+): Promise<GitHubRelease[]> {
   let response: Response;
+  const headers = githubApiHeaders(githubToken);
 
   try {
     response = await fetchImpl(releasePageUrl(page), {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "git-vibe-setup",
-        "x-github-api-version": "2022-11-28",
-      },
+      headers,
     });
   } catch {
     throw unavailableReleaseError();
