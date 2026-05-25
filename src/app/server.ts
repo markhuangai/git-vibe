@@ -435,6 +435,11 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
 
   const issueNumber = String(options.payload.issue?.number || "");
 
+  if (isGitVibeRuntimeLabel(label)) {
+    options.log(`accepted managed runtime label ${label} on issue #${issueNumber}`);
+    return;
+  }
+
   if (!(await isTrustedActor(options))) {
     await removeIssueLabel({
       client: options.client,
@@ -493,11 +498,6 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (isGitVibeRuntimeLabel(label)) {
-    options.log(`accepted managed runtime label ${label} on issue #${issueNumber}`);
-    return;
-  }
-
   if (isInternalGitVibeLabel(label)) {
     await removeIssueLabel({
       client: options.client,
@@ -538,6 +538,11 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
   if (!isProtectedGitVibeLabel(label)) return;
 
   const discussionNumber = String(options.payload.discussion?.number || "");
+
+  if (isGitVibeRuntimeLabel(label)) {
+    options.log(`accepted managed runtime label ${label} on discussion #${discussionNumber}`);
+    return;
+  }
 
   if (!(await isTrustedActor(options))) {
     await removeDiscussionLabelFromPayload(options, label);
@@ -584,11 +589,6 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
-    return;
-  }
-
-  if (isGitVibeRuntimeLabel(label)) {
-    options.log(`accepted managed runtime label ${label} on discussion #${discussionNumber}`);
     return;
   }
 

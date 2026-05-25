@@ -640,7 +640,6 @@ describe("GitVibe app server discussion label cleanup", () => {
     ]);
     expect(discussionCommentBodies(client).at(-1)).toContain("removed");
   });
-
   it("removes manually applied internal discussion labels", async () => {
     const client = createClient({ permission: { permission: "write" } });
     const app = createApp({ client });
