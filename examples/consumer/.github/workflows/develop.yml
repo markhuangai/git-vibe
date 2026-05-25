@@ -63,17 +63,17 @@ jobs:
       pull-requests: write
     uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
     with:
-      issue-number: ${{ inputs.issue-number }}
+      issue-number: ${{ github.event.inputs.issue-number }}
       runner: ubuntu-latest
-      implementation_timeout_minutes: ${{ inputs.implementation_timeout_minutes }}
-      review_timeout_minutes: ${{ inputs.review_timeout_minutes }}
-      create_pr_timeout_minutes: ${{ inputs.create_pr_timeout_minutes }}
-      max_turns: ${{ inputs.max_turns }}
-      implementation_max_turns: ${{ inputs.implementation_max_turns }}
-      validation_repair_attempts: ${{ inputs.validation_repair_attempts }}
-      validation_repair_max_turns: ${{ inputs.validation_repair_max_turns }}
-      dry-run: ${{ inputs.dry-run }}
-      source-comment: ${{ inputs.source-comment }}
+      implementation_timeout_minutes: ${{ fromJSON(github.event.inputs.implementation_timeout_minutes) }}
+      review_timeout_minutes: ${{ fromJSON(github.event.inputs.review_timeout_minutes) }}
+      create_pr_timeout_minutes: ${{ fromJSON(github.event.inputs.create_pr_timeout_minutes) }}
+      max_turns: ${{ fromJSON(github.event.inputs.max_turns) }}
+      implementation_max_turns: ${{ fromJSON(github.event.inputs.implementation_max_turns) }}
+      validation_repair_attempts: ${{ fromJSON(github.event.inputs.validation_repair_attempts) }}
+      validation_repair_max_turns: ${{ fromJSON(github.event.inputs.validation_repair_max_turns) }}
+      dry-run: ${{ fromJSON(github.event.inputs.dry-run) }}
+      source-comment: ${{ github.event.inputs.source-comment }}
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

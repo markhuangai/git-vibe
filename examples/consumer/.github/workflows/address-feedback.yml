@@ -37,12 +37,12 @@ jobs:
       pull-requests: write
     uses: markhuangai/git-vibe/.github/workflows/address-feedback.yml@v3
     with:
-      pr-number: ${{ inputs.pr-number }}
+      pr-number: ${{ github.event.inputs.pr-number }}
       runner: ubuntu-latest
-      timeout_minutes: ${{ inputs.timeout_minutes }}
-      max_turns: ${{ inputs.max_turns }}
-      dry-run: ${{ inputs.dry-run }}
-      source-comment: ${{ inputs.source-comment }}
+      timeout_minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
+      max_turns: ${{ fromJSON(github.event.inputs.max_turns) }}
+      dry-run: ${{ fromJSON(github.event.inputs.dry-run) }}
+      source-comment: ${{ github.event.inputs.source-comment }}
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
