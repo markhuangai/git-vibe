@@ -22,15 +22,13 @@ vi.mock("@ai-sdk/anthropic", () => ({
 
 const { runAiStage } = await import("../src/runner/ai.ts");
 const {
-  domainInputAllowedByPolicy,
-  domainPatternAllowed,
   filterToolsForWebPolicy,
   logCliWebPolicyNotice,
-  urlAllowedByPolicy,
+  systemWithWebPolicy,
   webPolicyFor,
+  webPolicySystemPrompt,
 } = await import("../src/runner/ai-web-policy.ts");
-const { createAllowlistedWebFetch, createAllowlistedWebSearch } =
-  await import("../src/runner/ai-web-tools.ts");
+const { createWebFetch, createWebSearch } = await import("../src/runner/ai-web-tools.ts");
 const { createGitHubSearch } = await import("../src/runner/github-search.ts");
 const { stageDefinitions } = await import("../src/shared/stages.ts");
 
@@ -55,7 +53,7 @@ afterEach(() => {
 });
 
 describe("AI web policy", () => {
-  it("uses GitHub-only search and disables website tools by default", async () => {
+  it("exposes website tools by default with system-prompt guidance", async () => {
     generateText.mockResolvedValueOnce(aiResult("validate"));
 
     await expect(runAiStage(validateStageOptions(config()))).resolves.toBe(
@@ -69,20 +67,28 @@ describe("AI web policy", () => {
       "grep",
       "output_validator",
       "read",
+      "web_fetch",
+      "web_search",
+    ]);
+    expect(generateText.mock.calls[0][0].system).toContain("GitVibe web access policy");
+    expect(generateText.mock.calls[0][0].system).toContain("Do not submit forms");
+  });
+
+  it("allows explicit stage web tools without domain configuration", async () => {
+    generateText.mockResolvedValueOnce(aiResult("validate"));
+
+    await expect(
+      runAiStage(validateStageOptions(config({ validate: { tools: ["read", "web-fetch"] } }))),
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
+
+    expect(Object.keys(generateText.mock.calls[0][0].tools).sort()).toEqual([
+      "output_validator",
+      "read",
+      "web_fetch",
     ]);
   });
 
-  it("rejects explicit stage web tools when the policy blocks them", async () => {
-    await expect(
-      runAiStage(validateStageOptions(config({ validate: { tools: ["read", "web-fetch"] } }))),
-    ).rejects.toThrow(
-      "ai.stages.validate.tools includes tools blocked by ai.security.web: web-fetch.",
-    );
-
-    expect(generateText).not.toHaveBeenCalled();
-  });
-
-  it("allows website tools only through an explicit domain allowlist", async () => {
+  it("accepts legacy allowed_domains config as a no-op", async () => {
     generateText.mockResolvedValueOnce(aiResult("validate"));
 
     await expect(
@@ -93,7 +99,7 @@ describe("AI web policy", () => {
             {
               security: {
                 web: {
-                  allowed_domains: ["github.com", "*.github.com"],
+                  allowed_domains: "legacy value is ignored",
                 },
               },
             },
@@ -112,35 +118,7 @@ describe("AI web policy", () => {
 });
 
 describe("web policy domain validation", () => {
-  it("validates exact and wildcard domain patterns", () => {
-    const policy = webPolicyFor({
-      ai: {
-        security: {
-          web: {
-            allowed_domains: ["github.com", "*.github.com"],
-          },
-        },
-      },
-    });
-
-    expect(domainPatternAllowed("docs.github.com", "*.github.com")).toBe(true);
-    expect(domainPatternAllowed("github.com", "*.github.com")).toBe(false);
-    expect(domainPatternAllowed("github.com.evil.example", "*.github.com")).toBe(false);
-    expect(domainPatternAllowed("github.com", "github.com")).toBe(true);
-    expect(domainInputAllowedByPolicy("docs.github.com", policy)).toBe(true);
-    expect(domainInputAllowedByPolicy("*.github.com", policy)).toBe(true);
-    expect(domainInputAllowedByPolicy("github.com.evil.example", policy)).toBe(false);
-    expect(domainInputAllowedByPolicy("https://github.com", policy)).toBe(false);
-    expect(urlAllowedByPolicy("https://docs.github.com/actions", policy)).toBe(true);
-    expect(urlAllowedByPolicy("not a url", policy)).toBe(false);
-    expect(() =>
-      webPolicyFor({
-        ai: { security: { web: { allowed_domains: ["https://github.com"] } } },
-      }),
-    ).toThrow("Invalid ai.security.web.allowed_domains entry: https://github.com.");
-  });
-
-  it("rejects malformed web policy config", () => {
+  it("rejects malformed legacy web policy config", () => {
     expect(() => webPolicyFor({ ai: { security: [] } })).toThrow("ai.security must be an object.");
     expect(() => webPolicyFor({ ai: { security: { web: [] } } })).toThrow(
       "ai.security.web must be an object.",
@@ -148,24 +126,11 @@ describe("web policy domain validation", () => {
     expect(() => webPolicyFor({ ai: { security: { web: { allow_fetch: false } } } })).toThrow(
       "ai.security.web.allow_fetch is not supported.",
     );
-    expect(() =>
-      webPolicyFor({ ai: { security: { web: { allowed_domains: "github.com" } } } }),
-    ).toThrow("ai.security.web.allowed_domains must be a string array.");
-    expect(() =>
-      webPolicyFor({
-        ai: { security: { web: { allowed_domains: ["api.*.github.com"] } } },
-      }),
-    ).toThrow("Invalid ai.security.web.allowed_domains wildcard: api.*.github.com.");
-    expect(() =>
-      webPolicyFor({
-        ai: { security: { web: { allowed_domains: ["localhost"] } } },
-      }),
-    ).toThrow("Invalid ai.security.web.allowed_domains entry: localhost.");
   });
 });
 
 describe("web policy tool filtering", () => {
-  it("filters default tools and writes CLI notices", () => {
+  it("keeps stage tools and writes CLI notices", () => {
     const logger = { event: vi.fn() };
     const filtered = filterToolsForWebPolicy({
       config: {},
@@ -174,11 +139,7 @@ describe("web policy tool filtering", () => {
       stage: "validate",
       tools: ["read", "github-search", "web-search", "web-fetch"],
     });
-    expect(filtered).toEqual(["read", "github-search"]);
-    expect(logger.event).toHaveBeenCalledWith("ai.web_policy.tools_disabled", {
-      tools: "web-search,web-fetch",
-      website_access: "disabled",
-    });
+    expect(filtered).toEqual(["read", "github-search", "web-search", "web-fetch"]);
 
     expect(
       filterToolsForWebPolicy({
@@ -193,62 +154,73 @@ describe("web policy tool filtering", () => {
     process.env.GITHUB_STEP_SUMMARY = join(summaryDir, "summary.md");
     logCliWebPolicyNotice({ adapter: "cli-codex", config: {}, logger });
     expect(readFileSync(process.env.GITHUB_STEP_SUMMARY, "utf8")).toContain(
-      "Native CLI web-search/web-fetch tools are disabled",
+      "Website access is governed by GitVibe system-prompt rules",
     );
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.web_policy.cli_notice",
+      expect.objectContaining({ enforcement: "system-prompt" }),
+    );
+  });
+
+  it("appends prompt guidance to system prompts", () => {
+    const system = systemWithWebPolicy({ config: {}, system: "System" });
+
+    expect(system).toContain("System\n\nGitVibe web access policy");
+    expect(webPolicySystemPrompt()).toContain("Do not download or execute suspicious files");
   });
 });
 
-describe("allowlisted web tools", () => {
-  it("blocks fetches outside the configured domain policy", async () => {
+describe("web tools", () => {
+  it("rejects non-HTTP fetch URLs", async () => {
     globalThis.fetch = vi.fn();
-    const fetchTool = createAllowlistedWebFetch(allowlistPolicy());
+    const fetchTool = createWebFetch();
 
-    await expect(fetchTool.execute({ url: "https://example.com" })).resolves.toContain(
-      "URL is blocked",
+    await expect(fetchTool.execute({ url: "file:///tmp/secret" })).resolves.toContain(
+      "only HTTP(S) URLs",
     );
 
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("fetches allowlisted URLs and reports request failures", async () => {
+  it("fetches HTTP(S) URLs and reports request failures", async () => {
     globalThis.fetch = vi
       .fn()
       .mockResolvedValueOnce(response("hello", "text/plain"))
       .mockRejectedValueOnce(new Error("network down"));
-    const fetchTool = createAllowlistedWebFetch(allowlistPolicy());
+    const fetchTool = createWebFetch();
 
-    await expect(fetchTool.execute({ url: "https://docs.github.com/actions" })).resolves.toContain(
+    await expect(fetchTool.execute({ url: "https://example.com/actions" })).resolves.toContain(
       "Status: 200",
     );
-    await expect(fetchTool.execute({ url: "https://docs.github.com/actions" })).resolves.toContain(
+    await expect(fetchTool.execute({ url: "https://example.com/actions" })).resolves.toContain(
       "network down",
     );
   });
 
-  it("reports truncated allowlisted fetches and non-error failures", async () => {
+  it("reports truncated fetches and non-error failures", async () => {
     globalThis.fetch = vi
       .fn()
       .mockResolvedValueOnce(response("x".repeat(100001)))
       .mockRejectedValueOnce("string failure");
-    const fetchTool = createAllowlistedWebFetch(allowlistPolicy());
+    const fetchTool = createWebFetch();
 
-    const truncated = await fetchTool.execute({ url: "https://docs.github.com/actions" });
+    const truncated = await fetchTool.execute({ url: "https://example.com/actions" });
     expect(truncated).toContain("(Content truncated to 100,000 characters)");
     expect(truncated).toContain("Content-Type: ");
-    await expect(fetchTool.execute({ url: "https://docs.github.com/actions" })).resolves.toContain(
+    await expect(fetchTool.execute({ url: "https://example.com/actions" })).resolves.toContain(
       "string failure",
     );
   });
 
-  it("validates web search domain filters before execution", async () => {
-    const searchTool = createAllowlistedWebSearch(allowlistPolicy());
+  it("leaves web search unblocked but reports the missing backend", async () => {
+    const searchTool = createWebSearch();
 
     await expect(
       searchTool.execute({ allowed_domains: ["github.com"], query: "actions" }),
     ).resolves.toContain("no external web search backend");
     await expect(
       searchTool.execute({ allowed_domains: ["example.com"], query: "actions" }),
-    ).resolves.toContain("requested domains are blocked");
+    ).resolves.toContain("no external web search backend");
     await expect(searchTool.execute({ query: "actions" })).resolves.toContain(
       "no external web search backend",
     );
@@ -382,12 +354,6 @@ function aiResult(stage) {
   return {
     steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
     text: content,
-  };
-}
-
-function allowlistPolicy() {
-  return {
-    allowedDomains: ["github.com", "*.github.com"],
   };
 }
 

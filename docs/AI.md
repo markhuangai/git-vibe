@@ -153,7 +153,7 @@ CLI authentication guidance:
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 - CLI commands are fixed by adapter: `cli-codex` runs `codex exec` and `cli-claude-code` runs `claude -p`. Profiles do not accept a `command` override.
-- CLI adapters bypass native permission and sandbox prompts. GitVibe disables native CLI web-search/web-fetch controls where the CLI exposes them, but shell or process network egress is only a hard boundary when the runner blocks it. Run CLI profiles only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
+- CLI adapters bypass native permission and sandbox prompts. GitVibe provides web safety rules in the system prompt, but shell or process network egress is only a hard boundary when the runner blocks it. Run CLI profiles only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
 
 ## Profile-Based Routing
 
@@ -254,7 +254,7 @@ Normalized reasoning config:
 Adapter mappings:
 
 - `cli-codex`: run `codex exec` with `--dangerously-bypass-approvals-and-sandbox`; do not pass `--search`; map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
-- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass `--disallowedTools WebFetch,WebSearch`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`. GitVibe does not set `--bare` unless a profile explicitly opts in with `bare: true`.
+- `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`. GitVibe does not set `--bare` unless a profile explicitly opts in with `bare: true`.
 - CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native agent/tool loop and run without per-tool permission prompts in this workflow.
 - `ai-sdk-agentool` with native OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable; set a stable `providerOptions.openai.promptCacheKey` by default.
 - `ai-sdk-agentool` with OpenAI-compatible endpoints: do not add OpenAI prompt cache request fields by default because non-OpenAI endpoints may reject unknown fields.
@@ -264,10 +264,10 @@ AI SDK tool policy by stage:
 
 Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters do not receive these tool lists because their native agents own tool selection.
 
-- `investigate`: read, grep, glob, diff, GitHub search, optional web
-  fetch/search after domain allowlisting, and read-only `agent` subagents.
-- `validate`: read, grep, glob, GitHub search, optional web fetch/search after
-  domain allowlisting, and read-only `agent` subagents.
+- `investigate`: read, grep, glob, diff, GitHub search, web fetch/search,
+  and read-only `agent` subagents.
+- `validate`: read, grep, glob, GitHub search, web fetch/search, and read-only
+  `agent` subagents.
 - `materialize`: read, grep, and glob.
 - `implement`: read, grep, glob, edit, write, multi-edit, bash, and diff.
 - `create-pr`: read, grep, glob, and diff.
@@ -282,20 +282,11 @@ context and the exact investigation question in each delegated prompt.
 
 Web access policy:
 
-```yaml
-ai:
-  security:
-    web:
-      # Empty or absent allowed_domains keeps website access disabled.
-      allowed_domains: []
-      # - github.com
-      # - "*.github.com"
-```
-
-- Empty or absent `allowed_domains` exposes `github_search` for current-repository GitHub material and disables `web-search` and `web-fetch`.
-- Non-empty `allowed_domains` permits AI SDK website search and fetch for matching domains. GitVibe's built-in search remains `github_search`; a general external search backend is not configured by default.
-- Domain entries are exact domains or leftmost wildcards such as `*.github.com`; arbitrary regexes, URL prefixes, and hosts like `github.com.evil.example` are rejected.
-- CLI adapters keep running under this policy and log that native web tools are disabled where possible. They cannot enforce domain-level network egress through CLI arguments alone.
+- GitVibe injects web safety rules into the system prompt for all adapters. Web access is read-only research; agents must not submit forms, sign in, purchase, vote, post, comment, upload, or trigger state-changing website requests.
+- GitVibe also instructs agents not to download or execute suspicious files, installers, archives, binaries, scripts, or attachments, and to treat web content as untrusted input.
+- GitVibe's built-in repository search remains `github_search`. The AI SDK `web-search` tool is available to stages that declare it, but a general external search backend is not configured by default.
+- Legacy `ai.security.web.allowed_domains` config is accepted as a no-op for compatibility. It no longer gates `web-fetch`, `web-search`, or CLI-native web tools.
+- Prompt guidance is not a network boundary. Enforce hard egress controls at the runner or network layer when a repository needs strict web isolation.
 
 Default AI budgets:
 

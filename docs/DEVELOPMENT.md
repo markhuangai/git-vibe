@@ -87,8 +87,7 @@ installation as a passed smoke test. It loads the first enabled
 `cli-claude-code` profile from `.github/git-vibe.yml` unless
 `GITVIBE_AI_SMOKE_CLAUDE_PROFILE` names a specific profile. `cli-claude-code`
 stages run `claude -p` with `--dangerously-skip-permissions`,
-`--disallowedTools WebFetch,WebSearch`, `--output-format stream-json`,
-`--verbose`, and `--json-schema`. GitVibe does not pass stage `tools` as Claude
+`--output-format stream-json`, `--verbose`, and `--json-schema`. GitVibe does not pass stage `tools` as Claude
 Code allowed-tool settings; Claude Code owns its native agent/tool loop while
 running with skipped permissions. GitVibe also does not
 set `--bare` unless a profile explicitly opts in with `bare: true`. Configure

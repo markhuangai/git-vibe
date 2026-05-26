@@ -88,7 +88,8 @@ describe("Claude Code CLI adapter", () => {
     );
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--tools");
-    expect(args).toEqual(expect.arrayContaining(["--disallowedTools", "WebFetch,WebSearch"]));
+    expect(args).not.toContain("--disallowedTools");
+    expect(args[args.indexOf("--system-prompt") + 1]).toContain("GitVibe web access policy");
     expect(JSON.parse(jsonSchemaFrom(args))).toEqual(
       expect.objectContaining({ required: ["stage", "status", "questions"] }),
     );
@@ -109,7 +110,7 @@ describe("Claude Code CLI adapter", () => {
       expect.stringContaining("ai.claude.init model=opus"),
     );
     expect(process.stdout.write).toHaveBeenCalledWith(
-      expect.stringContaining('ai.claude.prompt kind=system preview="System" chars=6'),
+      expect.stringContaining('ai.claude.prompt kind=system preview="System'),
     );
     expect(process.stdout.write).toHaveBeenCalledWith(
       expect.stringContaining('ai.claude.prompt kind=user preview="Prompt" chars=6'),
@@ -191,7 +192,7 @@ describe("Claude Code CLI adapter defaults", () => {
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--effort");
     expect(args).not.toContain("--tools");
-    expect(args).toEqual(expect.arrayContaining(["--disallowedTools", "WebFetch,WebSearch"]));
+    expect(args).not.toContain("--disallowedTools");
     expect(spawn.mock.calls[0][2].env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 

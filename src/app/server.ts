@@ -434,8 +434,10 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
   if (!isProtectedGitVibeLabel(label)) return;
 
   const issueNumber = String(options.payload.issue?.number || "");
+  const runtimeLabel = isGitVibeRuntimeLabel(label);
+  const githubActionsActor = options.payload.sender?.login === "github-actions[bot]";
 
-  if (!(await isTrustedActor(options))) {
+  if (!(runtimeLabel && githubActionsActor) && !(await isTrustedActor(options))) {
     await removeIssueLabel({
       client: options.client,
       issueNumber,
@@ -445,6 +447,11 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
       token: options.token,
     });
     await createIssueComment(options, issueNumber, protectedLabelRejectionBody(options, label));
+    return;
+  }
+
+  if (runtimeLabel) {
+    options.log(`accepted managed runtime label ${label} on issue #${issueNumber}`);
     return;
   }
 
@@ -493,11 +500,6 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (isGitVibeRuntimeLabel(label)) {
-    options.log(`accepted managed runtime label ${label} on issue #${issueNumber}`);
-    return;
-  }
-
   if (isInternalGitVibeLabel(label)) {
     await removeIssueLabel({
       client: options.client,
@@ -538,10 +540,17 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
   if (!isProtectedGitVibeLabel(label)) return;
 
   const discussionNumber = String(options.payload.discussion?.number || "");
+  const runtimeLabel = isGitVibeRuntimeLabel(label);
+  const githubActionsActor = options.payload.sender?.login === "github-actions[bot]";
 
-  if (!(await isTrustedActor(options))) {
+  if (!(runtimeLabel && githubActionsActor) && !(await isTrustedActor(options))) {
     await removeDiscussionLabelFromPayload(options, label);
     await createDiscussionComment(options, protectedLabelRejectionBody(options, label));
+    return;
+  }
+
+  if (runtimeLabel) {
+    options.log(`accepted managed runtime label ${label} on discussion #${discussionNumber}`);
     return;
   }
 
@@ -584,11 +593,6 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
-    return;
-  }
-
-  if (isGitVibeRuntimeLabel(label)) {
-    options.log(`accepted managed runtime label ${label} on discussion #${discussionNumber}`);
     return;
   }
 

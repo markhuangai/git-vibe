@@ -139,9 +139,8 @@ function installCodex(
   }
 
   const installDir = join(runnerTemp(env), "git-vibe-pnpm-global");
-  const binDir = join(installDir, "bin");
   mkdirSync(installDir, { recursive: true });
-  const installEnv = prependPath({ ...env, PNPM_HOME: installDir }, binDir);
+  const installEnv = prependPath({ ...env, PNPM_HOME: installDir }, installDir);
   const packageManager = pnpmCommand(runtime, installEnv);
 
   log("Installing Codex CLI from @openai/codex.");
@@ -151,7 +150,7 @@ function installCodex(
     [...packageManager.args, "add", "--global", "@openai/codex"],
     installEnv,
   );
-  addPath(runtime, binDir, env);
+  addPath(runtime, installDir, env);
   verifyCommand(runtime, "codex", installEnv);
 }
 

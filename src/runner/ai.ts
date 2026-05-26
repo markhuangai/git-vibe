@@ -20,6 +20,7 @@ import { runCodexCliStage } from "./codex-cli.js";
 import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
 import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
 import { createTools, stageToolNames } from "./ai-tools.js";
+import { systemWithWebPolicy } from "./ai-web-policy.js";
 import { systemWithProfileContext } from "./profile-context.js";
 import {
   extractValidatedOutput,
@@ -125,14 +126,15 @@ async function runAiStageWithProfile(
 ): Promise<string> {
   const profile = activeProfileByName(options.config, profileName);
   const adapter = adapterName(profile);
+  const system = systemWithProfileContext({
+    cwd: options.cwd,
+    profile,
+    profileName,
+    system: options.system,
+  });
   const profileOptions = {
     ...options,
-    system: systemWithProfileContext({
-      cwd: options.cwd,
-      profile,
-      profileName,
-      system: options.system,
-    }),
+    system: systemWithWebPolicy({ config: options.config, system }),
   };
   if (adapter === "cli-codex") {
     return runCodexCliStage({
