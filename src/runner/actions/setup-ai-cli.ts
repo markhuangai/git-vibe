@@ -139,17 +139,36 @@ function installCodex(
   }
 
   const installDir = join(runnerTemp(env), "git-vibe-pnpm-global");
-  mkdirSync(installDir, { recursive: true });
-  const installEnv = prependPath({ ...env, PNPM_HOME: installDir }, installDir);
+  const binDir = join(installDir, "bin");
+  mkdirSync(binDir, { recursive: true });
+  // Some self-hosted runners carry pnpm global-bin-dir config in the environment.
+  // Keep pnpm's configured bin dir, PATH, and GITHUB_PATH on the same explicit path,
+  // otherwise `pnpm add --global` fails before installing the CLI.
+  const installEnv = prependPaths(
+    {
+      ...env,
+      NPM_CONFIG_GLOBAL_BIN_DIR: binDir,
+      PNPM_HOME: installDir,
+      npm_config_global_bin_dir: binDir,
+    },
+    [binDir, installDir],
+  );
   const packageManager = pnpmCommand(runtime, installEnv);
 
   log("Installing Codex CLI from @openai/codex.");
   runCommand(
     runtime,
     packageManager.command,
-    [...packageManager.args, "add", "--global", "@openai/codex"],
+    [
+      ...packageManager.args,
+      `--config.global-bin-dir=${binDir}`,
+      "add",
+      "--global",
+      "@openai/codex",
+    ],
     installEnv,
   );
+  addPath(runtime, binDir, env);
   addPath(runtime, installDir, env);
   verifyCommand(runtime, "codex", installEnv);
 }
@@ -249,6 +268,10 @@ function addPath(runtime: SetupAiCliRuntime, path: string, env: NodeJS.ProcessEn
 
 function prependPath(env: NodeJS.ProcessEnv, path: string): NodeJS.ProcessEnv {
   return { ...env, PATH: [path, env.PATH].filter(Boolean).join(delimiter) };
+}
+
+function prependPaths(env: NodeJS.ProcessEnv, paths: string[]): NodeJS.ProcessEnv {
+  return { ...env, PATH: [...paths, env.PATH].filter(Boolean).join(delimiter) };
 }
 
 function firstLine(output: Buffer | string): string | undefined {

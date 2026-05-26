@@ -101,7 +101,9 @@ describe("GitVibe AI CLI setup Codex installer", () => {
     expectNoCommand(calls, "corepack");
     expectNoCommand(calls, "pnpm");
   });
+});
 
+describe("GitVibe AI CLI setup Codex pnpm installer", () => {
   it("installs Codex CLI with pnpm when a selected stage uses cli-codex", () => {
     const cwd = configuredWorkspace(codexConfig());
     const env = runtimeEnv(cwd);
@@ -116,36 +118,88 @@ describe("GitVibe AI CLI setup Codex installer", () => {
     });
 
     expect(code).toBe(0);
-    const globalBinDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global");
+    const installDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global");
+    const globalBinDir = join(installDir, "bin");
     const installCall = calls.find(
       (call) =>
         call.command === "corepack" &&
-        JSON.stringify(call.args) === JSON.stringify(["pnpm", "add", "--global", "@openai/codex"]),
+        JSON.stringify(call.args) ===
+          JSON.stringify([
+            "pnpm",
+            `--config.global-bin-dir=${globalBinDir}`,
+            "add",
+            "--global",
+            "@openai/codex",
+          ]),
     );
 
-    expectCommand(calls, "corepack", ["pnpm", "add", "--global", "@openai/codex"]);
-    expect(installCall?.env?.PNPM_HOME).toBe(
-      join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global"),
-    );
+    expectCommand(calls, "corepack", [
+      "pnpm",
+      `--config.global-bin-dir=${globalBinDir}`,
+      "add",
+      "--global",
+      "@openai/codex",
+    ]);
+    expect(installCall?.env?.PNPM_HOME).toBe(installDir);
+    expect(installCall?.env?.NPM_CONFIG_GLOBAL_BIN_DIR).toBe(globalBinDir);
+    expect(installCall?.env?.npm_config_global_bin_dir).toBe(globalBinDir);
     expect(installCall?.env?.PATH?.split(delimiter)[0]).toBe(globalBinDir);
+    expect(installCall?.env?.PATH?.split(delimiter)[1]).toBe(installDir);
     expectCommand(calls, "codex", ["--version"]);
     expect(readFileSync(env.GITHUB_PATH, "utf8")).toContain(globalBinDir);
+    expect(readFileSync(env.GITHUB_PATH, "utf8")).toContain(installDir);
   });
 
-  it("uses installed pnpm when Corepack is unavailable", () => {
+  it("overrides preconfigured pnpm global bin directories", () => {
     const cwd = configuredWorkspace(codexConfig());
+    const env = {
+      ...runtimeEnv(cwd),
+      NPM_CONFIG_GLOBAL_BIN_DIR: "/runner/pnpm/bin",
+      npm_config_global_bin_dir: "/runner/pnpm/bin",
+    };
     /** @type {CommandCall[]} */
     const calls = [];
 
     const code = setupAiCli({
       argv: ["validate"],
-      env: runtimeEnv(cwd),
+      env,
+      execFileSync: execMock(calls, ["codex"]),
+      log: () => undefined,
+    });
+
+    expect(code).toBe(0);
+    const globalBinDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global", "bin");
+    const installCall = calls.find((call) => call.command === "corepack");
+
+    expect(installCall?.args).toContain(`--config.global-bin-dir=${globalBinDir}`);
+    expect(installCall?.env?.NPM_CONFIG_GLOBAL_BIN_DIR).toBe(globalBinDir);
+    expect(installCall?.env?.npm_config_global_bin_dir).toBe(globalBinDir);
+    expect(installCall?.env?.PATH?.split(delimiter)[0]).toBe(globalBinDir);
+  });
+});
+
+describe("GitVibe AI CLI setup Codex pnpm provider selection", () => {
+  it("uses installed pnpm when Corepack is unavailable", () => {
+    const cwd = configuredWorkspace(codexConfig());
+    const env = runtimeEnv(cwd);
+    /** @type {CommandCall[]} */
+    const calls = [];
+
+    const code = setupAiCli({
+      argv: ["validate"],
+      env,
       execFileSync: execMock(calls, ["codex", "corepack"]),
       log: () => undefined,
     });
 
     expect(code).toBe(0);
-    expectCommand(calls, "pnpm", ["add", "--global", "@openai/codex"]);
+    const globalBinDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global", "bin");
+    expectCommand(calls, "pnpm", [
+      `--config.global-bin-dir=${globalBinDir}`,
+      "add",
+      "--global",
+      "@openai/codex",
+    ]);
   });
 
   it("reports an install error when no pnpm provider is available", () => {
