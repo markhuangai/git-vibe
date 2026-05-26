@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const repositoryActionsVariable = vi.fn();
 const repositoryDefaultBranch = vi.fn();
+const paginatedGitHubRequest = vi.fn();
 const addDiscussionComment = vi.fn();
 const deleteDiscussionComment = vi.fn();
 const discussionComments = vi.fn();
@@ -10,6 +11,7 @@ const removeIssueLabel = vi.fn();
 
 vi.mock("../src/shared/github.js", () => ({
   GitHubClient: class GitHubClient {},
+  paginatedGitHubRequest,
   repositoryActionsVariable,
   repositoryDefaultBranch,
 }));
@@ -27,6 +29,7 @@ beforeEach(() => {
   for (const mock of [
     repositoryActionsVariable,
     repositoryDefaultBranch,
+    paginatedGitHubRequest,
     addDiscussionComment,
     deleteDiscussionComment,
     discussionComments,
@@ -37,6 +40,7 @@ beforeEach(() => {
   }
   repositoryActionsVariable.mockResolvedValue("main");
   repositoryDefaultBranch.mockResolvedValue("default");
+  paginatedGitHubRequest.mockImplementation((client, request) => client.request(request));
   removeIssueLabel.mockResolvedValue(undefined);
 });
 

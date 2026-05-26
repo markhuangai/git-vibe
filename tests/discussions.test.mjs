@@ -154,6 +154,34 @@ describe("discussion comment helpers", () => {
       discussionComments({ client, discussionId: "discussion-node", token: "token" }),
     ).resolves.toEqual([{ body: "Top-level", id: "comment-node", url: "comment-url" }]);
   });
+
+  it("paginates discussion comments and replies", async () => {
+    const client = createClient({ paginatedDiscussionComments: true });
+
+    await expect(
+      discussionComments({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual([
+      {
+        body: "Top-level 1",
+        id: "comment-1",
+        replies: {
+          nodes: [
+            { body: "Reply 1", id: "reply-1", url: "reply-url-1" },
+            { body: "Reply 2", id: "reply-2", url: "reply-url-2" },
+          ],
+        },
+        url: "comment-url-1",
+      },
+      { body: "Reply 1", id: "reply-1", url: "reply-url-1" },
+      { body: "Reply 2", id: "reply-2", url: "reply-url-2" },
+      {
+        body: "Top-level 2",
+        id: "comment-2",
+        replies: { nodes: [] },
+        url: "comment-url-2",
+      },
+    ]);
+  });
 });
 
 describe("discussion label listing", () => {
@@ -163,6 +191,14 @@ describe("discussion label listing", () => {
     await expect(
       discussionLabels({ client, discussionId: "discussion-node", token: "token" }),
     ).resolves.toEqual(["gvi:validated", "git-vibe:approved"]);
+  });
+
+  it("paginates discussion label names", async () => {
+    const client = createClient({ paginatedDiscussionLabels: true });
+
+    await expect(
+      discussionLabels({ client, discussionId: "discussion-node", token: "token" }),
+    ).resolves.toEqual(["first", "second"]);
   });
 
   it("returns an empty label list when labels are unavailable", async () => {
@@ -176,48 +212,135 @@ describe("discussion label listing", () => {
 
 function createClient(options = {}) {
   return {
-    graphql: vi.fn(async (query) => {
-      if (query.includes("GitVibeDiscussionLabelId")) {
-        return {
-          repository: { label: options.missingLabel ? null : { id: "resolved-label-node" } },
-        };
-      }
-      if (query.includes("GitVibeAddDiscussionComment")) {
-        return { addDiscussionComment: { comment: { id: "comment-node", url: "comment-url" } } };
-      }
-      if (query.includes("GitVibeDiscussionComments")) {
-        if (options.missingDiscussionComments) return { node: null };
-        return {
-          node: {
-            comments: {
-              nodes: [
-                {
-                  body: "Top-level",
-                  id: "comment-node",
-                  replies: options.noDiscussionReplies
-                    ? undefined
-                    : { nodes: [{ body: "Reply", id: "reply-node", url: "reply-url" }] },
-                  url: "comment-url",
-                },
-              ],
+    graphql: vi.fn(async (query, variables = {}) =>
+      discussionGraphqlResponse(query, variables, options),
+    ),
+  };
+}
+
+function discussionGraphqlResponse(query, variables, options) {
+  if (query.includes("GitVibeDiscussionLabelId")) {
+    return {
+      repository: { label: options.missingLabel ? null : { id: "resolved-label-node" } },
+    };
+  }
+  if (query.includes("GitVibeAddDiscussionComment")) {
+    return { addDiscussionComment: { comment: { id: "comment-node", url: "comment-url" } } };
+  }
+  if (query.includes("GitVibeDiscussionCommentReplies")) return paginatedRepliesResponse();
+  if (query.includes("GitVibeDiscussionComments")) {
+    return discussionCommentsResponse(options, variables);
+  }
+  if (query.includes("GitVibeDiscussionLabels")) {
+    return discussionLabelsResponse(options, variables);
+  }
+  if (query.includes("GitVibeAddDiscussionLabel")) {
+    return { addLabelsToLabelable: { clientMutationId: null } };
+  }
+  return {};
+}
+
+function paginatedRepliesResponse() {
+  return {
+    node: {
+      replies: {
+        nodes: [{ body: "Reply 2", id: "reply-2", url: "reply-url-2" }],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+    },
+  };
+}
+
+function discussionCommentsResponse(options, variables) {
+  if (options.missingDiscussionComments) return { node: null };
+  if (options.paginatedDiscussionComments && variables.commentsAfter) {
+    return {
+      node: {
+        comments: {
+          nodes: [
+            {
+              body: "Top-level 2",
+              id: "comment-2",
+              replies: { nodes: [] },
+              url: "comment-url-2",
             },
-          },
-        };
-      }
-      if (query.includes("GitVibeDiscussionLabels")) {
-        if (options.missingDiscussionLabels) return { node: null };
-        return {
-          node: {
-            labels: {
-              nodes: [{ name: "gvi:validated" }, { name: "git-vibe:approved" }],
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    };
+  }
+  if (options.paginatedDiscussionComments) return paginatedCommentsResponse();
+  return standardCommentsResponse(options);
+}
+
+function paginatedCommentsResponse() {
+  return {
+    node: {
+      comments: {
+        nodes: [
+          {
+            body: "Top-level 1",
+            id: "comment-1",
+            replies: {
+              nodes: [{ body: "Reply 1", id: "reply-1", url: "reply-url-1" }],
+              pageInfo: { hasNextPage: true, endCursor: "reply-cursor" },
             },
+            url: "comment-url-1",
           },
-        };
-      }
-      if (query.includes("GitVibeAddDiscussionLabel")) {
-        return { addLabelsToLabelable: { clientMutationId: null } };
-      }
-      return {};
-    }),
+        ],
+        pageInfo: { hasNextPage: true, endCursor: "comment-cursor" },
+      },
+    },
+  };
+}
+
+function standardCommentsResponse(options) {
+  return {
+    node: {
+      comments: {
+        nodes: [
+          {
+            body: "Top-level",
+            id: "comment-node",
+            replies: options.noDiscussionReplies
+              ? undefined
+              : { nodes: [{ body: "Reply", id: "reply-node", url: "reply-url" }] },
+            url: "comment-url",
+          },
+        ],
+      },
+    },
+  };
+}
+
+function discussionLabelsResponse(options, variables) {
+  if (options.missingDiscussionLabels) return { node: null };
+  if (options.paginatedDiscussionLabels && variables.labelsAfter) {
+    return {
+      node: {
+        labels: {
+          nodes: [{ name: "second" }],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    };
+  }
+  if (options.paginatedDiscussionLabels) {
+    return {
+      node: {
+        labels: {
+          nodes: [{ name: "first" }],
+          pageInfo: { hasNextPage: true, endCursor: "label-cursor" },
+        },
+      },
+    };
+  }
+  return {
+    node: {
+      labels: {
+        nodes: [{ name: "gvi:validated" }, { name: "git-vibe:approved" }],
+      },
+    },
   };
 }

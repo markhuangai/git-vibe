@@ -90,12 +90,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3
@@ -127,12 +130,15 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3
@@ -178,6 +184,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Download feedback investigation member results
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -190,6 +198,7 @@ jobs:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3
@@ -236,6 +245,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          persist-credentials: false
       - name: Download feedback investigation handoff
         uses: actions/download-artifact@v4
         with:
@@ -247,6 +257,7 @@ jobs:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3

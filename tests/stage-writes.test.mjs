@@ -421,6 +421,10 @@ describe("stage deterministic git commits", () => {
       expect.arrayContaining(["push"]),
       expect.any(Object),
     );
+    const pushCall = execFileSync.mock.calls.find(([, args]) => args?.includes("push"));
+    expect(pushCall).toBeTruthy();
+    expect(pushCall?.[1].join(" ")).not.toContain("token");
+    expect(pushCall?.[2].env.GIT_CONFIG_VALUE_0).toBe("AUTHORIZATION: bearer token");
     expect(dispatchPullRequestReviewWorkflow).toHaveBeenCalledTimes(1);
   });
 

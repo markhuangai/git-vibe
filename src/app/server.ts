@@ -51,14 +51,9 @@ import {
 } from "./server-actions.js";
 import { handleApprovedIssueLabel } from "./approval-labels.js";
 import { handleReviewPullRequestLabel } from "./review-labels.js";
-import {
-  firstHeader,
-  readBody,
-  requiredEnv,
-  sendJson,
-  toHttpError,
-  verifyGitHubSignature,
-} from "./server-http.js";
+import { createDeliveryDeduplicator, type DeliveryDeduplicator } from "./delivery-dedup.js";
+import { handleRequest as handleHttpRequest } from "./request-handler.js";
+import { requiredEnv } from "./server-http.js";
 import type { WebhookPayload } from "./types.js";
 
 export interface GitVibeApp {
@@ -86,6 +81,7 @@ interface AppState {
     githubToken: string;
     webhookSecret: string;
   };
+  deliveries: DeliveryDeduplicator;
   errorLog: (message: string) => void;
   log: (message: string) => void;
 }
@@ -107,12 +103,14 @@ export function createGitVibeApp(options: GitVibeAppOptions): GitVibeApp {
       githubToken: options.githubToken,
       webhookSecret: options.webhookSecret,
     },
+    deliveries: createDeliveryDeduplicator(),
     errorLog: options.errorLog || ((message) => console.error(`[git-vibe] ${message}`)),
     log: options.log || ((message) => console.log(`[git-vibe] ${message}`)),
   };
 
   return {
-    handleRequest: (req, res) => handleRequest(state, req, res),
+    handleRequest: (req, res) =>
+      handleHttpRequest(state, req, res, (event, payload) => handleWebhook(state, event, payload)),
     handleWebhook: (event, payload) => handleWebhook(state, event, payload),
     runStartupPreflight: () => runStartupPreflight(state),
   };
@@ -136,39 +134,6 @@ export function startServerFromEnv(env: NodeJS.ProcessEnv = process.env): Server
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {
   if (!moduleUrl) return Boolean(entrypoint && /(?:^|[/\\])server\.(?:c?js|ts)$/.test(entrypoint));
   return Boolean(entrypoint && moduleUrl === pathToFileURL(resolve(entrypoint)).href);
-}
-
-async function handleRequest(
-  state: AppState,
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  try {
-    if (req.method === "GET" && req.url === "/health") {
-      sendJson(res, 200, { ok: true });
-      return;
-    }
-
-    if (req.method !== "POST" || req.url !== "/webhooks") {
-      sendJson(res, 404, { error: "not_found" });
-      return;
-    }
-
-    const body = await readBody(req);
-    verifyGitHubSignature(
-      body,
-      firstHeader(req.headers["x-hub-signature-256"]),
-      state.config.webhookSecret,
-    );
-    const event = String(req.headers["x-github-event"] || "");
-    const payload = JSON.parse(body) as WebhookPayload;
-    await handleWebhook(state, event, payload);
-    sendJson(res, 202, { accepted: true, event });
-  } catch (error) {
-    const httpError = toHttpError(error);
-    state.errorLog(`app error: ${httpError.message}`);
-    sendJson(res, httpError.statusCode || 500, { error: httpError.message });
-  }
 }
 
 async function runStartupPreflight(state: AppState): Promise<void> {

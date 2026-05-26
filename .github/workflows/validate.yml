@@ -102,12 +102,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3
@@ -139,12 +142,15 @@ jobs:
       issues: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Checkout GitVibe action source
         uses: actions/checkout@v4
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3
@@ -186,6 +192,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Download validation member results
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -198,6 +206,7 @@ jobs:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3

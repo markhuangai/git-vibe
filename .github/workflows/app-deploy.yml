@@ -20,6 +20,8 @@ jobs:
     runs-on: app
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Validate prerelease tag
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}

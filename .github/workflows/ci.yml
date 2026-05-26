@@ -12,6 +12,8 @@ jobs:
     runs-on: docker-runner
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3

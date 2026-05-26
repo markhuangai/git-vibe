@@ -15,6 +15,7 @@ import {
 } from "../shared/discussions.js";
 import {
   GitHubClient,
+  paginatedGitHubRequest,
   repositoryActionsVariable,
   repositoryDefaultBranch,
 } from "../shared/github.js";
@@ -339,9 +340,9 @@ export async function issueComments(
   options: WebhookActionContext,
   issueNumber: string,
 ): Promise<IntakeComment[]> {
-  return options.client.request<IntakeComment[]>({
+  return paginatedGitHubRequest<IntakeComment>(options.client, {
     method: "GET",
-    path: `/repos/${options.owner}/${options.repo}/issues/${issueNumber}/comments?per_page=100`,
+    path: `/repos/${options.owner}/${options.repo}/issues/${issueNumber}/comments`,
     token: options.token,
   });
 }

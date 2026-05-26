@@ -12,6 +12,7 @@ import {
   reviewFixTraceFromBody,
 } from "../shared/traceability.js";
 import type { StageLogger } from "./logging.js";
+import { gitAuthEnv } from "./git-auth.js";
 import { applyStageLabelTransition, publishStageResultComment } from "./stage-publishing.js";
 import type {
   ContextPacket,
@@ -100,17 +101,11 @@ function fetchRemoteBranch(options: {
   token: string;
 }): boolean {
   try {
-    execFileSync(
-      "git",
-      [
-        "-c",
-        `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
-        "fetch",
-        "origin",
-        `+refs/heads/${options.branch}:${options.remoteRef}`,
-      ],
-      { cwd: options.cwd, stdio: "ignore" },
-    );
+    execFileSync("git", ["fetch", "origin", `+refs/heads/${options.branch}:${options.remoteRef}`], {
+      cwd: options.cwd,
+      env: gitAuthEnv(options.token),
+      stdio: "ignore",
+    });
     return true;
   } catch {
     return false;
@@ -125,14 +120,8 @@ function fetchBaseBranch(options: {
 }): void {
   execFileSync(
     "git",
-    [
-      "-c",
-      `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
-      "fetch",
-      "origin",
-      `+refs/heads/${options.baseBranch}:${options.baseRemoteRef}`,
-    ],
-    { cwd: options.cwd, stdio: "ignore" },
+    ["fetch", "origin", `+refs/heads/${options.baseBranch}:${options.baseRemoteRef}`],
+    { cwd: options.cwd, env: gitAuthEnv(options.token), stdio: "ignore" },
   );
 }
 

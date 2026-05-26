@@ -3,6 +3,7 @@ import { testCommandsFor } from "./config.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { createImplementationIssues } from "./materialize-issues.js";
+import { gitAuthEnv } from "./git-auth.js";
 import {
   ensureGitIdentity,
   summarizeGitStatus,
@@ -350,17 +351,11 @@ function pushGitBranch(branch: string, logger: StageLogger, options: RunnerOptio
   logger.event("git.commit.done", { commit });
   logger.event("token.use");
   logger.event("git.push.start", { branch });
-  execFileSync(
-    "git",
-    [
-      "-c",
-      `http.extraheader=AUTHORIZATION: bearer ${options.token}`,
-      "push",
-      `https://github.com/${options.repository}.git`,
-      branch,
-    ],
-    { cwd: options.cwd, stdio: "inherit" },
-  );
+  execFileSync("git", ["push", `https://github.com/${options.repository}.git`, branch], {
+    cwd: options.cwd,
+    env: gitAuthEnv(options.token),
+    stdio: "inherit",
+  });
   logger.event("git.push.done", { branch });
 }
 

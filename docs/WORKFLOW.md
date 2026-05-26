@@ -70,8 +70,7 @@ flowchart TD
   or result comment.
 - Guests can submit issues, discussions, and feedback, but cannot approve work or start write automation.
 - GitVibe never auto-merges and never approves its own pull requests.
-- External agent mentions are not an implemented dispatch path. The shipped
-  config keeps `commands.allow_external_agent_mentions` disabled.
+- External agent mentions are not an implemented dispatch path.
 
 ## Public Interfaces
 
@@ -89,7 +88,11 @@ Active dispatching commands:
 /git-vibe materialize
 ```
 
-GitVibe uses `/git-vibe ...` as the only public command form. `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub account mentions. GitHub does not currently provide a stable custom repository command autocomplete contract, so command parsing must work from plain comment text.
+GitVibe uses `/git-vibe ...` as the only public command form. The command prefix
+is fixed. `@git-vibe ...` is intentionally unsupported so commands do not look
+like GitHub account mentions. GitHub does not currently provide a stable custom
+repository command autocomplete contract, so command parsing must work from
+plain comment text.
 
 Only implemented command dispatch paths start workflows: `/git-vibe investigate`
 on issue comments, `/git-vibe address-feedback` on pull request conversation

@@ -1,34 +1,5 @@
 version: 1
 
-permissions:
-  approver_roles:
-    - write
-    - maintain
-    - admin
-
-labels:
-  story: gvi:story
-  needs_discussion: gvi:needs-discussion
-  investigate: git-vibe:investigate
-  investigating: gvi:investigating
-  investigated: gvi:investigated
-  ready_for_approval: gvi:ready-for-approval
-  approved: git-vibe:approved
-  review: git-vibe:review
-  reviewing: gvi:reviewing
-  in_progress: gvi:in-progress
-  blocked: gvi:blocked
-  pr_opened: gvi:pr-opened
-  pr_approved: gvi:pr-approved
-  pr_merged: gvi:pr-merged
-  validate: git-vibe:validate
-  validating: gvi:validating
-  validated: gvi:validated
-
-commands:
-  prefix: /git-vibe
-  allow_external_agent_mentions: false
-
 event_delivery:
   mode: webhook
   relay:

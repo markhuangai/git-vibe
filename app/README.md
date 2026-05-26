@@ -10,7 +10,7 @@ It currently handles:
 - GitVibe label bootstrap for webhook repositories.
 - Feature request issue-form intake conversion into linked GitHub Discussions.
 - `/git-vibe investigate` on issue comments.
-- `/git-vibe summarize` on discussion comments.
+- `/git-vibe materialize` on discussion comments.
 - `/git-vibe address-feedback` on pull request comments.
 - `/git-vibe ...` as the only supported public command prefix.
 - Accepted admin/collaborator comment commands get a `rocket` reaction before workflow dispatch.

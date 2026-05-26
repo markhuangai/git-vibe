@@ -85,9 +85,34 @@ export class GitHubClient {
   }
 }
 
+export async function paginatedGitHubRequest<T = unknown>(
+  client: Pick<GitHubClient, "request">,
+  request: GitHubRequest,
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const pageItems = await client.request<T[]>({
+      ...request,
+      path: paginatedPath(request.path, page),
+    });
+    items.push(...pageItems);
+    if (pageItems.length < 100) return items;
+  }
+}
+
 function retryAttempts(method: string, retry: GitHubRetryOptions | undefined): number {
   if (retry?.attempts !== undefined) return Math.max(1, retry.attempts);
   return method === "GET" ? 3 : 1;
+}
+
+function paginatedPath(path: string, page: number): string {
+  const separatorIndex = path.indexOf("?");
+  const pathname = separatorIndex >= 0 ? path.slice(0, separatorIndex) : path;
+  const query = separatorIndex >= 0 ? path.slice(separatorIndex + 1) : "";
+  const params = new URLSearchParams(query);
+  params.set("page", String(page));
+  params.set("per_page", "100");
+  return `${pathname}?${params.toString()}`;
 }
 
 function shouldRetry(status: number, attempt: number, attempts: number): boolean {

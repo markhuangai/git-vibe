@@ -348,9 +348,6 @@ Minimal shape:
 ```yaml
 version: 1
 
-commands:
-  prefix: /git-vibe
-
 github_auth:
   mode: webhook-pat
   token_secret: GITVIBE_GITHUB_TOKEN
@@ -401,6 +398,9 @@ ai:
 tests:
   commands: []
 ```
+
+GitVibe uses `/git-vibe ...` as the fixed public command form. Command prefixes,
+external agent mentions, permissions, and label names are not configurable.
 
 Each AI stage must define `profile` or `role_group`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.
@@ -479,6 +479,8 @@ Detailed docs:
 ```yaml
 steps:
   - uses: actions/checkout@v4
+    with:
+      persist-credentials: false
   - uses: markhuangai/git-vibe/investigate@v3
     with:
       token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}

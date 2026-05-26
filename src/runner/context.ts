@@ -1,9 +1,15 @@
-import { GitHubClient, splitRepository } from "../shared/github.js";
+import { GitHubClient, paginatedGitHubRequest, splitRepository } from "../shared/github.js";
 import {
   gitVibeTraceabilityIssueNumbers,
   sourceDiscussionTraceFromBody,
 } from "../shared/traceability.js";
 import type { ContextPacket, JsonObject, TimelineItem } from "../shared/types.js";
+import {
+  discussionContext,
+  openPullRequestReviewComments,
+  type DiscussionNode,
+  type PullRequestReviewCommentNode,
+} from "./context-graphql.js";
 
 interface IssueResponse extends JsonObject {
   author_association?: string;
@@ -54,9 +60,9 @@ export async function buildIssueContext(options: {
     path: `/repos/${owner}/${repo}/issues/${options.issueNumber}`,
     token: options.token,
   });
-  const comments = await options.client.request<CommentResponse[]>({
+  const comments = await paginatedGitHubRequest<CommentResponse>(options.client, {
     method: "GET",
-    path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/comments?per_page=100`,
+    path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/comments`,
     token: options.token,
   });
   const pullRequest =
@@ -220,9 +226,9 @@ async function issueTimeline(options: {
     path: `/repos/${options.owner}/${options.name}/issues/${options.issueNumber}`,
     token: options.token,
   });
-  const comments = await options.client.request<CommentResponse[]>({
+  const comments = await paginatedGitHubRequest<CommentResponse>(options.client, {
     method: "GET",
-    path: `/repos/${options.owner}/${options.name}/issues/${options.issueNumber}/comments?per_page=100`,
+    path: `/repos/${options.owner}/${options.name}/issues/${options.issueNumber}/comments`,
     token: options.token,
   });
   return {
@@ -277,33 +283,6 @@ function relatedTimelineItem(role: string, item: TimelineItem): TimelineItem {
   return { ...item, id: `${role}-${item.id}`, kind: `${role}-${item.kind}` };
 }
 
-async function openPullRequestReviewComments(options: {
-  client: GitHubClient;
-  name: string;
-  owner: string;
-  pullNumber: string;
-  token: string;
-}): Promise<PullRequestReviewCommentNode[]> {
-  const data = await options.client.graphql<PullRequestReviewThreadsQueryResult>(
-    pullRequestReviewThreadsQuery,
-    {
-      name: options.name,
-      number: Number(options.pullNumber),
-      owner: options.owner,
-    },
-    options.token,
-  );
-  const threads = data.repository.pullRequest.reviewThreads.nodes;
-  return threads
-    .filter((thread) => !thread.isResolved && !thread.isOutdated)
-    .flatMap((thread) =>
-      thread.comments.nodes.map((comment) => ({
-        ...comment,
-        path: comment.path || thread.path,
-      })),
-    );
-}
-
 async function pullRequestReviews(options: {
   client: GitHubClient;
   name: string;
@@ -311,9 +290,9 @@ async function pullRequestReviews(options: {
   pullNumber: string;
   token: string;
 }): Promise<PullRequestReviewResponse[]> {
-  const reviews = await options.client.request<PullRequestReviewResponse[]>({
+  const reviews = await paginatedGitHubRequest<PullRequestReviewResponse>(options.client, {
     method: "GET",
-    path: `/repos/${options.owner}/${options.name}/pulls/${options.pullNumber}/reviews?per_page=100`,
+    path: `/repos/${options.owner}/${options.name}/pulls/${options.pullNumber}/reviews`,
     token: options.token,
   });
   return reviews.filter((review) => Boolean(review.body?.trim()));
@@ -326,13 +305,18 @@ export async function buildDiscussionContext(options: {
   token: string;
 }): Promise<ContextPacket> {
   const { owner, repo } = splitRepository(options.repository);
-  const data = await options.client.graphql<DiscussionQueryResult>(
-    discussionQuery,
-    { name: repo, number: Number(options.discussionNumber), owner },
-    options.token,
-  );
-  const discussion = data.repository.discussion;
-  const comments = discussion.comments.nodes.flatMap((comment) => [
+  const {
+    comments: discussionComments,
+    discussion,
+    labels,
+  } = await discussionContext({
+    client: options.client,
+    discussionNumber: options.discussionNumber,
+    name: repo,
+    owner,
+    token: options.token,
+  });
+  const comments = discussionComments.flatMap((comment) => [
     discussionNodeToTimelineItem("comment", comment.id, comment),
     ...(comment.replies?.nodes || []).map((reply) =>
       discussionNodeToTimelineItem("reply", reply.id, reply, comment.id),
@@ -343,7 +327,7 @@ export async function buildDiscussionContext(options: {
     artifact: {
       body: discussion.body || "",
       id: discussion.id,
-      labels: (discussion.labels?.nodes || []).map((label) => label.name),
+      labels: labels.map((label) => label.name),
       number: options.discussionNumber,
       title: discussion.title || "",
       type: "discussion",
@@ -420,53 +404,6 @@ function compareTimelineItems(left: TimelineItem, right: TimelineItem): number {
   return left.createdAt.localeCompare(right.createdAt);
 }
 
-interface DiscussionNode {
-  author?: { login?: string };
-  body?: string;
-  createdAt?: string;
-  id: string;
-  labels?: { nodes: Array<{ name: string }> };
-  replies?: { nodes: DiscussionNode[] };
-  title?: string;
-  url?: string;
-}
-
-interface DiscussionQueryResult {
-  repository: {
-    discussion: DiscussionNode & {
-      comments: { nodes: DiscussionNode[] };
-    };
-  };
-}
-
-interface PullRequestReviewCommentNode {
-  author?: { login?: string };
-  authorAssociation?: string;
-  body?: string;
-  createdAt?: string;
-  databaseId?: number;
-  diffHunk?: string;
-  id: string;
-  path?: string;
-  replyTo?: { id?: string } | null;
-  url?: string;
-}
-
-interface PullRequestReviewThreadNode {
-  comments: { nodes: PullRequestReviewCommentNode[] };
-  isOutdated: boolean;
-  isResolved: boolean;
-  path: string;
-}
-
-interface PullRequestReviewThreadsQueryResult {
-  repository: {
-    pullRequest: {
-      reviewThreads: { nodes: PullRequestReviewThreadNode[] };
-    };
-  };
-}
-
 interface RelatedIssueNode {
   number?: number;
 }
@@ -479,75 +416,6 @@ interface RelatedIssuesQueryResult {
     };
   };
 }
-
-const discussionQuery = `
-  query GitVibeDiscussion($owner: String!, $name: String!, $number: Int!) {
-    repository(owner: $owner, name: $name) {
-      discussion(number: $number) {
-        id
-        title
-        body
-        createdAt
-        url
-        author { login }
-        labels(first: 100) {
-          nodes {
-            name
-          }
-        }
-        comments(first: 100) {
-          nodes {
-            id
-            body
-            createdAt
-            url
-            author { login }
-            replies(first: 100) {
-              nodes {
-                id
-                databaseId
-                body
-                createdAt
-                url
-                author { login }
-                replies(first: 0) { nodes { id } }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-const pullRequestReviewThreadsQuery = `
-  query GitVibePullRequestReviewThreads($owner: String!, $name: String!, $number: Int!) {
-    repository(owner: $owner, name: $name) {
-      pullRequest(number: $number) {
-        reviewThreads(first: 100) {
-          nodes {
-            isOutdated
-            isResolved
-            path
-            comments(first: 100) {
-              nodes {
-                id
-                body
-                createdAt
-                url
-                authorAssociation
-                diffHunk
-                path
-                author { login }
-                replyTo { id }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
 
 const relatedIssuesQuery = `
   query GitVibeRelatedIssues($owner: String!, $name: String!, $number: Int!) {

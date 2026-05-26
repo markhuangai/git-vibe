@@ -59,8 +59,7 @@ AI integration layers:
   remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
 - CLI adapters: `cli-codex` and `cli-claude-code` run fixed non-interactive CLI commands, stream CLI output to the action log, and parse structured output.
-- External mention adapter: not currently implemented; the shipped config keeps
-  `commands.allow_external_agent_mentions` disabled.
+- External mention adapter: not currently implemented.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 
 Implemented stage contracts:

@@ -14,12 +14,22 @@ export interface CreatedDiscussionComment {
 export interface DiscussionCommentNode {
   body: string;
   id: string;
-  replies?: { nodes: DiscussionCommentNode[] };
+  replies?: DiscussionCommentConnection;
   url: string;
+}
+
+export interface DiscussionCommentConnection {
+  nodes: DiscussionCommentNode[];
+  pageInfo?: PageInfo;
 }
 
 export interface DiscussionLabelNode {
   name: string;
+}
+
+interface PageInfo {
+  endCursor?: string | null;
+  hasNextPage?: boolean;
 }
 
 export interface DiscussionSetupCheck {
@@ -92,17 +102,8 @@ export async function discussionComments(options: {
   discussionId: string;
   token: string;
 }): Promise<DiscussionCommentNode[]> {
-  const result = await options.client.graphql<DiscussionCommentsResult>(
-    discussionCommentsQuery,
-    { discussionId: options.discussionId },
-    options.token,
-  );
-  const discussion = result.node;
-  if (!discussion?.comments?.nodes) return [];
-  return discussion.comments.nodes.flatMap((comment) => [
-    comment,
-    ...(comment.replies?.nodes || []),
-  ]);
+  const comments = await paginatedDiscussionComments(options);
+  return comments.flatMap((comment) => [comment, ...(comment.replies?.nodes || [])]);
 }
 
 export async function deleteDiscussionComment(options: {
@@ -160,14 +161,20 @@ export async function discussionLabels(options: {
   discussionId: string;
   token: string;
 }): Promise<string[]> {
-  const result = await options.client.graphql<DiscussionLabelsResult>(
-    discussionLabelsQuery,
-    { discussionId: options.discussionId },
-    options.token,
-  );
-  const discussion = result.node;
-  if (!discussion?.labels?.nodes) return [];
-  return discussion.labels.nodes.map((label) => label.name.trim()).filter(Boolean);
+  const labels: DiscussionLabelNode[] = [];
+  let after: string | null = null;
+  do {
+    const result = await options.client.graphql<DiscussionLabelsResult>(
+      discussionLabelsQuery,
+      { discussionId: options.discussionId, labelsAfter: after },
+      options.token,
+    );
+    const connection = result.node?.labels;
+    labels.push(...(connection?.nodes || []));
+    after = nextPageCursor(connection?.pageInfo);
+  } while (after);
+
+  return labels.map((label) => label.name.trim()).filter(Boolean);
 }
 
 export async function closeDiscussion(options: {
@@ -244,6 +251,55 @@ function normalizeCategory(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
+async function paginatedDiscussionComments(options: {
+  client: GitHubClient;
+  discussionId: string;
+  token: string;
+}): Promise<DiscussionCommentNode[]> {
+  const comments: DiscussionCommentNode[] = [];
+  let after: string | null = null;
+  do {
+    const result = await options.client.graphql<DiscussionCommentsResult>(
+      discussionCommentsQuery,
+      { commentsAfter: after, discussionId: options.discussionId },
+      options.token,
+    );
+    const connection = result.node?.comments;
+    for (const comment of connection?.nodes || []) {
+      const replies = await paginatedDiscussionReplies(options, comment);
+      comments.push(
+        replies.length || comment.replies ? { ...comment, replies: { nodes: replies } } : comment,
+      );
+    }
+    after = nextPageCursor(connection?.pageInfo);
+  } while (after);
+
+  return comments;
+}
+
+async function paginatedDiscussionReplies(
+  options: { client: GitHubClient; token: string },
+  comment: DiscussionCommentNode,
+): Promise<DiscussionCommentNode[]> {
+  const replies = [...(comment.replies?.nodes || [])];
+  let after = nextPageCursor(comment.replies?.pageInfo);
+  while (after) {
+    const result = await options.client.graphql<DiscussionCommentRepliesResult>(
+      discussionCommentRepliesQuery,
+      { commentId: comment.id, repliesAfter: after },
+      options.token,
+    );
+    const connection = result.node?.replies;
+    replies.push(...(connection?.nodes || []));
+    after = nextPageCursor(connection?.pageInfo);
+  }
+  return replies;
+}
+
+function nextPageCursor(pageInfo: PageInfo | undefined): string | null {
+  return pageInfo?.hasNextPage && pageInfo.endCursor ? pageInfo.endCursor : null;
+}
+
 interface DiscussionCategory {
   id: string;
   name: string;
@@ -273,13 +329,22 @@ interface AddDiscussionCommentResult {
 
 interface DiscussionCommentsResult {
   node?: {
-    comments?: { nodes: DiscussionCommentNode[] };
+    comments?: DiscussionCommentConnection;
   } | null;
 }
 
 interface DiscussionLabelsResult {
   node?: {
-    labels?: { nodes: DiscussionLabelNode[] };
+    labels?: {
+      nodes: DiscussionLabelNode[];
+      pageInfo?: PageInfo;
+    };
+  } | null;
+}
+
+interface DiscussionCommentRepliesResult {
+  node?: {
+    replies?: DiscussionCommentConnection;
   } | null;
 }
 
@@ -342,21 +407,49 @@ const addDiscussionCommentMutation = `
 `;
 
 const discussionCommentsQuery = `
-  query GitVibeDiscussionComments($discussionId: ID!) {
+  query GitVibeDiscussionComments($discussionId: ID!, $commentsAfter: String) {
     node(id: $discussionId) {
       ... on Discussion {
-        comments(first: 100) {
+        comments(first: 100, after: $commentsAfter) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           nodes {
             id
             body
             url
             replies(first: 100) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
               nodes {
                 id
                 body
                 url
               }
             }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const discussionCommentRepliesQuery = `
+  query GitVibeDiscussionCommentReplies($commentId: ID!, $repliesAfter: String) {
+    node(id: $commentId) {
+      ... on DiscussionComment {
+        replies(first: 100, after: $repliesAfter) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            id
+            body
+            url
           }
         }
       }
@@ -373,10 +466,14 @@ const deleteDiscussionCommentMutation = `
 `;
 
 const discussionLabelsQuery = `
-  query GitVibeDiscussionLabels($discussionId: ID!) {
+  query GitVibeDiscussionLabels($discussionId: ID!, $labelsAfter: String) {
     node(id: $discussionId) {
       ... on Discussion {
-        labels(first: 100) {
+        labels(first: 100, after: $labelsAfter) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           nodes {
             name
           }

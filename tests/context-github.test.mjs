@@ -447,7 +447,6 @@ describe("GitHub client", () => {
       }),
     );
   });
-
   it("throws clear REST, GraphQL, and repository parsing errors", async () => {
     globalThis.fetch = vi
       .fn()
