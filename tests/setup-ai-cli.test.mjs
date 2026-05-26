@@ -116,7 +116,7 @@ describe("GitVibe AI CLI setup Codex installer", () => {
     });
 
     expect(code).toBe(0);
-    const globalBinDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global", "bin");
+    const globalBinDir = join(env.RUNNER_TEMP, "git-vibe-cli", "git-vibe-pnpm-global");
     const installCall = calls.find(
       (call) =>
         call.command === "corepack" &&
