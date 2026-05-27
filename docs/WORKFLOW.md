@@ -85,10 +85,10 @@ flowchart TD
   any planner, role-group member, finalizer, or stage LLM job can start. The
   runner keeps the same deterministic gate before each LLM call, including
   initial stage calls, validation-repair calls, and role-group synthesis calls.
-  High-risk multilingual, encoded, suffix, secret-seeking, or image/OCR-derived
-  instruction attacks are blocked with `gvi:blocked`; GitVibe removes stale
-  `git-vibe:approved` by default and waits for trusted maintainer clarification
-  plus fresh approval.
+  High-risk multilingual, encoded, suffix, pull request patch, risky linked
+  payload, secret-seeking, or image/OCR-derived instruction attacks are blocked
+  with `gvi:blocked`; GitVibe removes stale `git-vibe:approved` by default and
+  waits for trusted maintainer clarification plus fresh approval.
 - If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.

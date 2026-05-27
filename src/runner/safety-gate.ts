@@ -96,6 +96,11 @@ const mediumRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
 ];
 
 const base64CandidatePattern = /(?:[A-Za-z0-9+/]{24,}={0,2})(?:\s+[A-Za-z0-9+/]{24,}={0,2})*/g;
+const urlPattern = /\bhttps?:\/\/[^\s<>)\]]+/giu;
+const suspiciousLinkedFilePattern =
+  /\.(?:7z|apk|app|bat|bash|cmd|deb|dmg|exe|jar|msi|pkg|ps1|rar|rpm|sh|tar|tgz|war|xz|zip)(?:[?#]|$)/iu;
+const riskyLinkActionPattern =
+  /\b(?:curl|download|execute|fetch|install|open|read|run|source|wget)\b/iu;
 
 export function safetyGateForStage(options: {
   config: GitVibeConfig;
@@ -127,6 +132,17 @@ export function safetyGateForStage(options: {
 
 export function removeApprovalOnSafetyBlock(config: GitVibeConfig): boolean {
   return config.safety?.remove_approval_on_block !== false;
+}
+
+export function safetyFindingsForText(source: SafetySource): Omit<SafetyGateResult, "allowed"> {
+  const matches = analyzeSource({
+    ...source,
+    text: boundedSourceText(source.text),
+  });
+  return {
+    findings: unique(matches.map((match) => match.finding)),
+    severity: highestSeverity(matches.map((match) => match.severity)),
+  };
 }
 
 export function safetyBlockedOutput(options: {
@@ -227,6 +243,7 @@ function analyzeSource(source: SafetySource): PatternMatch[] {
     ...patternMatches(source.label, normalizedText(text), highRiskPatterns, "high"),
     ...patternMatches(source.label, text, mediumRiskPatterns, "medium"),
     ...base64Matches(source),
+    ...linkMatches(source),
     ...mixedScriptMatches(source),
   ];
 }
@@ -296,6 +313,37 @@ function mixedScriptMatches(source: SafetySource): PatternMatch[] {
   ];
 }
 
+function linkMatches(source: SafetySource): PatternMatch[] {
+  const matches: PatternMatch[] = [];
+  for (const match of source.text.matchAll(urlPattern)) {
+    const url = trimmedUrl(String(match[0] || ""));
+    if (!url) continue;
+    if (suspiciousLinkedFilePattern.test(url)) {
+      matches.push({
+        finding: `${source.label}: references a suspicious linked file type`,
+        severity: nearbyRiskyLinkAction(source.text, match.index || 0) ? "high" : "medium",
+      });
+    }
+    if (url.includes("github.com/user-attachments/assets/")) {
+      matches.push({
+        finding: `${source.label}: references a GitHub user attachment`,
+        severity: "medium",
+      });
+    }
+  }
+  return matches;
+}
+
+function trimmedUrl(value: string): string {
+  return value.replace(/[.,;:'"`]+$/u, "");
+}
+
+function nearbyRiskyLinkAction(text: string, index: number): boolean {
+  const start = Math.max(0, index - 160);
+  const end = Math.min(text.length, index + 240);
+  return riskyLinkActionPattern.test(text.slice(start, end));
+}
+
 function sourcesFor(
   context: ContextPacket,
   output: JsonObject | undefined,
@@ -315,9 +363,32 @@ function sourcesFor(
       label: `${handoff.stage} handoff`,
       text: [handoff.summary, handoff.commentBody, JSON.stringify(handoff.parsedOutput)].join("\n"),
     })),
+    ...(context.pullRequestFiles || []).map((file) => ({
+      label: `pull request file ${file.filename}`,
+      text: pullRequestFileSafetyText(file),
+    })),
     ...(output ? [{ label: "stage output", text: JSON.stringify(output) }] : []),
     ...extraSources,
   ].map((source) => ({ ...source, text: boundedSourceText(source.text) }));
+}
+
+function pullRequestFileSafetyText(
+  file: NonNullable<ContextPacket["pullRequestFiles"]>[number],
+): string {
+  return [
+    `filename: ${file.filename}`,
+    `status: ${file.status}`,
+    file.previousFilename ? `previous filename: ${file.previousFilename}` : "",
+    file.additions === undefined ? "" : `additions: ${file.additions}`,
+    file.deletions === undefined ? "" : `deletions: ${file.deletions}`,
+    file.changes === undefined ? "" : `changes: ${file.changes}`,
+    file.blobUrl ? `blob URL: ${file.blobUrl}` : "",
+    file.rawUrl ? `raw URL: ${file.rawUrl}` : "",
+    file.contentsUrl ? `contents URL: ${file.contentsUrl}` : "",
+    file.patch ? `patch:\n${file.patch}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function normalizedText(value: string): string {

@@ -59,6 +59,40 @@ describe("GitHub context builders", () => {
       kind: "pull-request-review-comment",
       parentId: "8",
     });
+    expect(context.pullRequestFiles).toEqual([
+      expect.objectContaining({
+        filename: "src/file.ts",
+        patch: "@@ -1 +1 @@\n-old\n+new",
+        status: "modified",
+      }),
+    ]);
+  });
+
+  it("bounds pull request changed-file patches in context", async () => {
+    const longPatch = `@@ -1 +1 @@\n-${"a".repeat(21_000)}\n+replacement`;
+    const client = mockGitHubClient({
+      request: vi
+        .fn()
+        .mockResolvedValueOnce(issueFixture())
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(pullRequestFixture())
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { filename: "docs/large.md", patch: longPatch, status: "modified" },
+        ]),
+      graphql: vi.fn().mockResolvedValueOnce(reviewThreadFixtures()),
+    });
+
+    const context = await buildIssueContext({
+      client,
+      issueNumber: "4",
+      repository: "example/repo",
+      token: "token",
+      type: "pull-request",
+    });
+
+    expect(context.pullRequestFiles?.[0].patch).toContain("pull request patch truncated");
+    expect(context.pullRequestFiles?.[0].patch?.length).toBeLessThan(longPatch.length);
   });
 
   it("uses stable fallbacks for sparse issue payloads", async () => {
@@ -105,7 +139,8 @@ describe("GitHub pull request feedback context", () => {
         .mockResolvedValueOnce({ ...issueFixture(), body: "Parent issue body", number: 8 })
         .mockResolvedValueOnce([{ body: "Parent issue comment", id: 8 }])
         .mockResolvedValueOnce({ ...issueFixture(), body: "Sub-issue body", number: 16 })
-        .mockResolvedValueOnce([{ body: "Sub-issue comment", id: 16 }]),
+        .mockResolvedValueOnce([{ body: "Sub-issue comment", id: 16 }])
+        .mockResolvedValueOnce(pullRequestFileFixtures()),
       graphql: vi
         .fn()
         .mockResolvedValueOnce(reviewThreadFixtures())
@@ -151,7 +186,8 @@ function pullRequestContextClient() {
       .mockResolvedValueOnce(issueFixture())
       .mockResolvedValueOnce(commentFixtures())
       .mockResolvedValueOnce(pullRequestFixture())
-      .mockResolvedValueOnce(reviewFixtures()),
+      .mockResolvedValueOnce(reviewFixtures())
+      .mockResolvedValueOnce(pullRequestFileFixtures()),
     graphql: vi.fn().mockResolvedValueOnce(reviewThreadFixtures()),
   });
 }
@@ -163,6 +199,21 @@ function pullRequestFixture() {
       repo: { full_name: "example/repo" },
     },
   };
+}
+
+function pullRequestFileFixtures() {
+  return [
+    {
+      additions: 1,
+      blob_url: "https://github.com/example/repo/blob/git-vibe/4/src/file.ts",
+      changes: 2,
+      deletions: 1,
+      filename: "src/file.ts",
+      patch: "@@ -1 +1 @@\n-old\n+new",
+      raw_url: "https://github.com/example/repo/raw/git-vibe/4/src/file.ts",
+      status: "modified",
+    },
+  ];
 }
 
 function issueFixture() {
@@ -342,7 +393,7 @@ function filteredReviewThreadFixture(options) {
 }
 
 describe("GitHub discussion context builders", () => {
-  it("builds discussion context with replies and parent ids", async () => {
+  it("builds discussion context with labels, replies, and parent ids", async () => {
     const client = mockGitHubClient({
       graphql: vi.fn().mockResolvedValueOnce({
         repository: {
@@ -373,6 +424,7 @@ describe("GitHub discussion context builders", () => {
             },
             createdAt: "2026-01-02T00:00:00Z",
             id: "discussion-id",
+            labels: { nodes: [{ name: "git-vibe:approved" }] },
             title: "Discussion title",
             url: "discussion-url",
           },
@@ -388,6 +440,7 @@ describe("GitHub discussion context builders", () => {
     });
 
     expect(context.artifact).toMatchObject({ id: "discussion-id", type: "discussion" });
+    expect(context.artifact.labels).toEqual(["git-vibe:approved"]);
     expect(context.timeline.map((item) => [item.kind, item.id, item.parentId])).toEqual([
       ["body", "discussion-5", undefined],
       ["comment", "comment-id", undefined],

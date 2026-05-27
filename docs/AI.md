@@ -131,8 +131,8 @@ AI result envelope:
 GitVibe does not try to make untrusted text safe by sanitizing it and then
 continuing. Sanitization can normalize text for detection, but jailbreaks are
 authority-confusion attacks: malicious content tries to make the model treat
-issue text, comments, diffs, encoded payloads, or image text as higher-priority
-instructions.
+issue text, comments, pull request patches, encoded payloads, linked assets, or
+image text as higher-priority instructions.
 
 Every reusable workflow begins with a no-AI `security-review` job. That job
 builds the target issue, discussion, or pull request context and blocks
@@ -144,7 +144,7 @@ validation:
 
 ```mermaid
 flowchart TD
-  A[GitHub artifact, comments, diffs, and files] --> B[security-review context builder]
+  A[GitHub artifact, comments, PR patches, handoffs, and links] --> B[security-review context builder]
   B --> W[Workflow security-review gate]
   W -->|high-risk context| G[Blocked result]
   W -->|safe| P[Planner or stage job context builder]
@@ -167,6 +167,10 @@ The gate looks for high-risk combinations such as:
   tool-control instructions;
 - suffix attacks in later comments that try to replace validation, approval,
   branch, token, or write rules;
+- high-risk instructions inside pull request changed-file patches before review
+  or feedback-remediation LLMs start;
+- suspicious downloadable links or GitHub attachment references in issues,
+  discussions, pull requests, reviews, or comments;
 - requests to reveal secrets, provider keys, tokens, hidden prompts, or runner
   credentials;
 - future image/OCR-derived text that attempts to act as instructions rather
@@ -177,6 +181,10 @@ stage prompt to an LLM. Post-output safety still runs after schema validation so
 GitVibe can block risky model output before handing off to implementation,
 materialization, PR readiness, feedback automation, or write-capable stages
 (`materialize`, `implement`, `create-pr`, and `address-pr-feedback`).
+The workflow security-review gate does not fetch arbitrary external URLs or run
+OCR on attached images. It scans the link/attachment text that GitHub exposes,
+and the `web-fetch` tool scans fetched text before returning high-risk web
+content to an LLM.
 
 When blocked, GitVibe posts the evidence, applies `gvi:blocked`, and removes
 `git-vibe:approved` by default through the normal blocked-label transition. A
