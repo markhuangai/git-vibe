@@ -3,7 +3,7 @@ import {
   gitVibeTraceabilityIssueNumbers,
   sourceDiscussionTraceFromBody,
 } from "../shared/traceability.js";
-import type { ContextPacket, JsonObject, TimelineItem } from "../shared/types.js";
+import type { ContextPacket, JsonObject, PullRequestFile, TimelineItem } from "../shared/types.js";
 import {
   discussionContext,
   openPullRequestReviewComments,
@@ -35,6 +35,19 @@ interface PullRequestResponse extends JsonObject {
       owner?: { login?: string };
     } | null;
   };
+}
+
+interface PullRequestFileResponse extends JsonObject {
+  additions?: number;
+  blob_url?: string;
+  changes?: number;
+  contents_url?: string;
+  deletions?: number;
+  filename?: string;
+  patch?: string;
+  previous_filename?: string;
+  raw_url?: string;
+  status?: string;
 }
 
 interface PullRequestReviewResponse extends JsonObject {
@@ -107,6 +120,16 @@ export async function buildIssueContext(options: {
           token: options.token,
         })
       : [];
+  const pullRequestFiles =
+    options.type === "pull-request"
+      ? await pullRequestFilesFor({
+          client: options.client,
+          issueNumber: options.issueNumber,
+          name: repo,
+          owner,
+          token: options.token,
+        })
+      : [];
   const timeline = [
     toTimelineItem("body", `issue-${options.issueNumber}`, issue),
     ...comments.map((comment) => toTimelineItem("comment", String(comment.id || ""), comment)),
@@ -125,6 +148,7 @@ export async function buildIssueContext(options: {
       pullRequestHead: pullRequestHead(pullRequest),
     },
     generatedAt: new Date().toISOString(),
+    pullRequestFiles: pullRequestFiles.length ? pullRequestFiles : undefined,
     repository: options.repository,
     timeline,
   };
@@ -144,6 +168,21 @@ async function pullRequestDetails(options: {
   });
 }
 
+async function pullRequestFilesFor(options: {
+  client: GitHubClient;
+  issueNumber: string;
+  name: string;
+  owner: string;
+  token: string;
+}): Promise<PullRequestFile[]> {
+  const files = await paginatedGitHubRequest<PullRequestFileResponse>(options.client, {
+    method: "GET",
+    path: `/repos/${options.owner}/${options.name}/pulls/${options.issueNumber}/files`,
+    token: options.token,
+  });
+  return files.map(toPullRequestFile).filter((file): file is PullRequestFile => Boolean(file));
+}
+
 function pullRequestHead(
   pullRequest: PullRequestResponse | undefined,
 ): ContextPacket["artifact"]["pullRequestHead"] {
@@ -155,6 +194,23 @@ function pullRequestHead(
       : "");
   if (!branch || !repository) return undefined;
   return { branch, repository };
+}
+
+function toPullRequestFile(file: PullRequestFileResponse): PullRequestFile | undefined {
+  const filename = stringField(file.filename);
+  if (!filename) return undefined;
+  return {
+    additions: numberField(file.additions),
+    blobUrl: stringField(file.blob_url),
+    changes: numberField(file.changes),
+    contentsUrl: stringField(file.contents_url),
+    deletions: numberField(file.deletions),
+    filename,
+    patch: stringField(file.patch),
+    previousFilename: stringField(file.previous_filename),
+    rawUrl: stringField(file.raw_url),
+    status: stringField(file.status) || "modified",
+  };
 }
 
 async function pullRequestRelatedTimeline(options: {
@@ -402,6 +458,14 @@ function discussionNodeToTimelineItem(
 
 function compareTimelineItems(left: TimelineItem, right: TimelineItem): number {
   return left.createdAt.localeCompare(right.createdAt);
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function numberField(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 interface RelatedIssueNode {

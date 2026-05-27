@@ -1,0 +1,84 @@
+name: GitVibe security review
+description: Deterministically review untrusted context before any GitVibe LLM call.
+
+inputs:
+  token:
+    description: GitHub token used for API access.
+    required: true
+  stage:
+    description: GitVibe stage whose context should be reviewed.
+    required: true
+  issue-number:
+    description: Issue number to review.
+    required: false
+    default: ""
+  discussion-number:
+    description: Discussion number to review.
+    required: false
+    default: ""
+  pr-number:
+    description: Pull request number to review.
+    required: false
+    default: ""
+  stage-timeout-minutes:
+    description: Maximum minutes allocated to this review.
+    required: false
+    default: "10"
+  dry-run:
+    description: Describe work without mutating GitHub.
+    required: false
+    default: "false"
+  source-comment:
+    description: JSON source comment metadata for replying to command comments.
+    required: false
+    default: ""
+  handoff-dir:
+    description: Directory containing previous GitVibe stage result JSON files to review.
+    required: false
+    default: ""
+
+outputs:
+  allowed:
+    description: Whether downstream LLM jobs may run.
+    value: ${{ steps.review.outputs.allowed }}
+  summary:
+    description: Short review summary.
+    value: ${{ steps.review.outputs.summary }}
+  status:
+    description: Review status.
+    value: ${{ steps.review.outputs.status }}
+  result-file:
+    description: Path to the persisted blocked result JSON file, when blocked.
+    value: ${{ steps.review.outputs.result-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build GitVibe action runtime
+      shell: bash
+      run: |
+        cd "$GITHUB_ACTION_PATH/.."
+        if command -v corepack >/dev/null 2>&1 && corepack enable; then
+          pnpm_cmd=(corepack pnpm)
+        elif command -v pnpm >/dev/null 2>&1; then
+          pnpm_cmd=(pnpm)
+        else
+          echo "::error::GitVibe requires pnpm or Corepack on the runner."
+          exit 127
+        fi
+        echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
+        "${pnpm_cmd[@]}" install --frozen-lockfile
+        "${pnpm_cmd[@]}" build
+    - id: review
+      shell: bash
+      env:
+        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
+        GITVIBE_STAGE: ${{ inputs.stage }}
+        GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        GITVIBE_DISCUSSION_NUMBER: ${{ inputs.discussion-number }}
+        GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
+        GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
+        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
+        GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
+        GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
+      run: node "$GITHUB_ACTION_PATH/../dist/actions/security-review.js" "${{ inputs.stage }}"

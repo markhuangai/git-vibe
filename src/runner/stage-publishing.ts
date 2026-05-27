@@ -27,6 +27,7 @@ export interface StagePublishingOptions {
   links?: StageResultLink[];
   logger: StageLogger;
   parsedOutput: JsonObject;
+  preserveApproval?: boolean;
   runner: RunnerOptions;
   transientComments?: PublishedArtifactComment[];
 }
@@ -106,7 +107,11 @@ export async function applyStageStartLabelTransition(
 }
 
 async function applyIssueLabelTransition(options: LabelTransitionOptions): Promise<void> {
-  for (const staleLabel of staleLabelsForTransition(options.context, options.label)) {
+  for (const staleLabel of staleLabelsForTransition(
+    options.context,
+    options.label,
+    options.preserveApproval,
+  )) {
     await removeIssueLabel({
       client: options.client,
       issueNumber: options.context.artifact.number,
@@ -550,10 +555,14 @@ function labelForStageStart(context: ContextPacket, runner: RunnerOptions): stri
   return undefined;
 }
 
-function staleLabelsForTransition(context: ContextPacket, label: string): string[] {
+function staleLabelsForTransition(
+  context: ContextPacket,
+  label: string,
+  preserveApproval = false,
+): string[] {
   const isPullRequest = context.artifact.type === "pull-request";
   if (label === gitVibeLabels.blocked.name) {
-    return isPullRequest
+    const staleLabels = isPullRequest
       ? [
           gitVibeLabels.investigating.name,
           gitVibeLabels.inProgress.name,
@@ -562,6 +571,9 @@ function staleLabelsForTransition(context: ContextPacket, label: string): string
           gitVibeLabels.readyForApproval.name,
         ]
       : [gitVibeLabels.inProgress.name, gitVibeLabels.approved.name];
+    return preserveApproval
+      ? staleLabels.filter((staleLabel) => staleLabel !== gitVibeLabels.approved.name)
+      : staleLabels;
   }
   if (label === gitVibeLabels.inProgress.name) {
     return isPullRequest

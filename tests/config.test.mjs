@@ -32,4 +32,21 @@ describe("GitVibe stage config gates", () => {
   it("parses empty GitVibe config as defaults", () => {
     expect(parseGitVibeConfig("")).toEqual({});
   });
+
+  it("parses prompt-injection safety config", () => {
+    expect(
+      parseGitVibeConfig(`
+safety:
+  prompt_injection_gate: true
+  block_write_stages_on_high_risk: true
+  remove_approval_on_block: false
+`),
+    ).toEqual({
+      safety: {
+        block_write_stages_on_high_risk: true,
+        prompt_injection_gate: true,
+        remove_approval_on_block: false,
+      },
+    });
+  });
 });

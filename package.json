@@ -37,7 +37,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/openai": "^3.0.60",
-    "agentool": "^1.5.1",
+    "agentool": "^1.5.2",
     "ai": "^6.0.175",
     "libsodium-wrappers": "^0.8.4",
     "yaml": "^2.8.4",

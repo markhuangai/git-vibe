@@ -89,6 +89,7 @@ describe("stage result PR replies", () => {
       pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
       pullRequestReviewsResponse(),
+      pullRequestFilesResponse([]),
       response(200, {}),
     ]);
     globalThis.fetch = fetch;
@@ -127,6 +128,7 @@ describe("stage result PR replies", () => {
       pullRequestResponse("git-vibe/12"),
       reviewThreadsResponse(),
       pullRequestReviewsResponse(),
+      pullRequestFilesResponse([]),
       response(200, {}),
     ]);
     globalThis.fetch = fetch;
@@ -329,6 +331,11 @@ function reviewThreadsResponse() {
 
 function pullRequestReviewsResponse() {
   return response(200, []);
+}
+
+/** @param {unknown[]} files */
+function pullRequestFilesResponse(files) {
+  return response(200, files);
 }
 
 /**

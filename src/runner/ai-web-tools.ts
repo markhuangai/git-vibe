@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safetyFindingsForText } from "./safety-gate.js";
 
 const maxWebFetchChars = 100000;
 
@@ -24,6 +25,20 @@ export function createWebFetch() {
         const text = await response.text();
         const truncated = text.length > maxWebFetchChars;
         const body = truncated ? text.slice(0, maxWebFetchChars) : text;
+        const safety = safetyFindingsForText({
+          label: `web fetch response ${url}`,
+          text: body,
+        });
+        if (safety.severity === "high") {
+          return [
+            `Error [web-fetch]: high-risk prompt-injection content detected at ${url}.`,
+            `Status: ${response.status}`,
+            `Content-Type: ${contentType}`,
+            "",
+            "Detected risk:",
+            ...safety.findings.map((finding) => `- ${finding}`),
+          ].join("\n");
+        }
         return [
           `URL: ${url}`,
           `Status: ${response.status}`,
