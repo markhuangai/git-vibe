@@ -68,7 +68,7 @@ describe("GitHub context builders", () => {
     ]);
   });
 
-  it("bounds pull request changed-file patches in context", async () => {
+  it("keeps pull request changed-file patches available for chunking", async () => {
     const longPatch = `@@ -1 +1 @@\n-${"a".repeat(21_000)}\n+replacement`;
     const client = mockGitHubClient({
       request: vi
@@ -91,8 +91,7 @@ describe("GitHub context builders", () => {
       type: "pull-request",
     });
 
-    expect(context.pullRequestFiles?.[0].patch).toContain("pull request patch truncated");
-    expect(context.pullRequestFiles?.[0].patch?.length).toBeLessThan(longPatch.length);
+    expect(context.pullRequestFiles?.[0].patch).toBe(longPatch);
   });
 
   it("uses stable fallbacks for sparse issue payloads", async () => {

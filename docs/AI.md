@@ -13,8 +13,11 @@ flowchart TD
   C --> D[Sort by created time ascending]
   D --> E[Attach parent/thread references]
   E --> F[Classify author authority]
-  F --> S[No-AI security-review job]
-  S -->|safe| G[Weighted analysis prompt]
+  F --> U[Normalize into content units]
+  U --> K[Chunk every unit with overlap]
+  K --> S[No-AI security-review job scans every chunk]
+  S -->|safe| M[Prompt manifest plus budgeted included_context_chunks]
+  M --> G[Weighted analysis prompt]
   S -->|risky| BQ[Blocked maintainer review]
   G --> H[Questions, validation, materialization, implementation, review, or feedback brief]
 ```
@@ -30,6 +33,11 @@ Context assembly rules:
 - Treat newer maintainer clarification as stronger than older lower-authority speculation, but do not discard contributor or guest reports; they may contain reproduction details.
 - Weight analysis by authority: admin/owner/maintain > write/collaborator/member > contributor > first-time contributor/guest/none.
 - When repository permission and `author_association` disagree, repository permission is stronger for approval and command authorization; `author_association` remains useful analysis metadata.
+- Keep the context packet complete. GitVibe converts GitHub content into content
+  units, scans all overlapping chunks before LLM execution, and renders prompts
+  with `github_context.context_manifest` plus budgeted
+  `included_context_chunks`. Pending chunks remain listed by id and block
+  `completed` stage results until GitVibe can process them.
 
 The same context assembly and weighted analysis pipeline applies to bug
 investigation, feature discussion validation, materialization, implementation,
@@ -159,6 +167,15 @@ flowchart TD
   G --> H[Remove stale approval when configured]
   H --> I[Maintainer clarifies scope and reapplies approval]
 ```
+
+The safety gate scans normalized content units rather than a shortened prompt
+string. Issue bodies, discussion replies, source comments, handoffs, PR review
+threads, and pull request changed-file patches are split into overlapping
+chunks for detection. Prompt rendering is a separate budget step: the LLM sees
+a manifest for all units and the selected `included_context_chunks`, not a raw
+unbounded dump of every GitHub field. If prompt packing leaves
+`pending_chunks`, the stage must return `blocked`; the runner enforces that
+deterministically before writes, labels, PR creation, or workflow dispatch.
 
 The gate looks for high-risk combinations such as:
 
@@ -379,4 +396,7 @@ Default AI budgets:
 - `ai.budgets.pr_feedback_max_iterations`: `3` `address-feedback.yml` redispatches before the PR remains blocked.
 - `ai.budgets.request_retry_attempts`: `3` provider API retries.
 - `ai.budgets.request_retry_delay_seconds`: `60` second default provider API retry delay; `429` retry headers override this when present.
-- ai-sdk-agentool context window: each profile may set `context_window_tokens`; profiles that omit it use `200000` estimated tokens. Compaction runs before a model call when messages reach `90%` of that profile window.
+- ai-sdk-agentool context window: each profile may set `context_window_tokens`;
+  profiles that omit it use `200000` estimated tokens. GitHub context is packed
+  into a manifest plus budgeted chunks before prompt rendering; compaction runs
+  later, before a model call, when messages reach `90%` of that profile window.

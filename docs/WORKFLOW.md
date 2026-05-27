@@ -7,7 +7,7 @@ flowchart TD
   Intake([Issue, Discussion, or PR]) --> Route{Request path}
 
   Route --> Bug[Bug issue]
-  Bug --> InvestigationSecurity[security-review job: investigation context]
+  Bug --> InvestigationSecurity[security-review job: chunk-scan investigation context]
   InvestigationSecurity -->|safe| Investigate[Investigate]
   Investigate --> BugReady{Ready?}
   BugReady -->|needs context| BugQuestions[Maintainer answers]
@@ -16,16 +16,16 @@ flowchart TD
 
   Route --> Feature[Feature or story]
   Feature --> Discuss[Discussion]
-  Discuss --> ValidationSecurity[security-review job: validation context]
+  Discuss --> ValidationSecurity[security-review job: chunk-scan validation context]
   ValidationSecurity -->|safe| Validate[Validate]
-  Validate -->|ready| MaterializeSecurity[security-review job: materialization context]
+  Validate -->|ready| MaterializeSecurity[security-review job: chunk-scan materialization context]
   MaterializeSecurity -->|safe| Materialize[Materialize implementation issue or issues]
   Materialize --> ImplementationIssue
 
   ImplementationIssue --> Approval{Implement enabled?}
   Approval -->|yes| Develop[develop.yml]
-  Develop --> DevelopSecurity[security-review job: issue context]
-  DevelopSecurity -->|safe| Context[Build GitHub, repository, and handoff context]
+  Develop --> DevelopSecurity[security-review job: chunk-scan issue context]
+  DevelopSecurity -->|safe| Context[Build GitHub, repository, handoffs, and chunk manifest]
   Context --> RuntimeGate{In-runner pre-LLM prompt-injection safety gate}
   RuntimeGate -->|safe| AIStage[AI stage]
   AIStage --> SchemaValidation[Schema validation]
@@ -50,7 +50,7 @@ flowchart TD
   DevEngine -->|PR head branch| UpdatePRBranch[Update existing PR branch]
   CreatedPR --> ReviewSecurity
   ManualPR --> ReviewSecurity
-  ExistingPR --> ReviewSecurity[security-review job: PR context]
+  ExistingPR --> ReviewSecurity[security-review job: chunk-scan PR context]
   ReviewSecurity -->|safe| Review
   ReviewSecurity -->|risky| MaintainerGate
   Review --> ReviewResult{Review result}
@@ -59,7 +59,7 @@ flowchart TD
   Ready --> HumanReview[Human review]
   HumanReview -->|approved and merged| Merged([Merged])
   HumanReview -->|changes requested| Feedback
-  Feedback --> FeedbackSecurity[security-review job: PR feedback context]
+  Feedback --> FeedbackSecurity[security-review job: chunk-scan PR feedback context]
   FeedbackSecurity -->|safe| FeedbackInvestigation[Investigate PR feedback]
   FeedbackSecurity -->|risky| MaintainerGate
   FeedbackInvestigation -->|no fixes needed| Ready
@@ -81,14 +81,18 @@ flowchart TD
   orchestration and branch target: implementation uses `git-vibe/{root-issue}`;
   feedback remediation uses the existing PR head branch and never creates a PR.
 - Every reusable workflow starts with a no-AI `security-review` job that builds
-  the target GitHub context and blocks high-risk prompt-injection content before
-  any planner, role-group member, finalizer, or stage LLM job can start. The
-  runner keeps the same deterministic gate before each LLM call, including
-  initial stage calls, validation-repair calls, and role-group synthesis calls.
-  High-risk multilingual, encoded, suffix, pull request patch, risky linked
-  payload, secret-seeking, or image/OCR-derived instruction attacks are blocked
-  with `gvi:blocked`; GitVibe removes stale `git-vibe:approved` by default and
-  waits for trusted maintainer clarification plus fresh approval.
+  the target GitHub context, normalizes it into content units, scans all
+  overlapping chunks, and blocks high-risk prompt-injection content before any
+  planner, role-group member, finalizer, or stage LLM job can start. Prompt
+  rendering then supplies `github_context.context_manifest` plus budgeted
+  `included_context_chunks`; pending chunks remain listed by id and prevent a
+  `completed` result until GitVibe can process them. The runner keeps the same
+  deterministic gate before each LLM call, including initial stage calls,
+  validation-repair calls, and role-group synthesis calls. High-risk
+  multilingual, encoded, suffix, pull request patch, risky linked payload,
+  secret-seeking, or image/OCR-derived instruction attacks are blocked with
+  `gvi:blocked`; GitVibe removes stale `git-vibe:approved` by default and waits
+  for trusted maintainer clarification plus fresh approval.
 - If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.
@@ -257,9 +261,9 @@ not add `gvi:review-fix` to the PR.
 ```mermaid
 flowchart TD
   subgraph ParentRun[Develop run for current issue]
-    A[Investigated approved issue] --> SR[security-review job: issue context]
+    A[Investigated approved issue] --> SR[security-review job: chunk-scan issue context]
     SR -->|risky| Block[Blocked result and maintainer gate]
-    SR -->|safe| E[Build issue timeline, handoffs, and repository prompt input]
+    SR -->|safe| E[Build issue timeline, handoffs, repository prompt input, and chunk manifest]
     E --> Guard{Pre-LLM prompt-injection safety gate}
     Guard -->|risky| Block
     Guard -->|safe| IA[Implement LLM stage]
@@ -287,7 +291,7 @@ flowchart TD
   end
 
   subgraph FeedbackRun[Address feedback run for existing PR]
-    P[Trusted changes-requested review or command] --> FeedbackSecurity[security-review job: PR feedback context]
+    P[Trusted changes-requested review or command] --> FeedbackSecurity[security-review job: chunk-scan PR feedback context]
     FeedbackSecurity -->|risky| Block
     FeedbackSecurity -->|safe| FeedbackGuard{Pre-LLM prompt-injection safety gate}
     FeedbackGuard -->|risky| Block
@@ -302,7 +306,7 @@ flowchart TD
 
   subgraph ManualReview[Standalone PR review run]
     V[PR labeled git-vibe:review] --> W[Dispatch review.yml]
-    W --> ReviewSecurity[security-review job: PR context]
+    W --> ReviewSecurity[security-review job: chunk-scan PR context]
     ReviewSecurity -->|risky| Block
     ReviewSecurity -->|safe| X[Remove stale ready or blocked state and add gvi:reviewing]
     X --> Y[Run PR review-matrix]

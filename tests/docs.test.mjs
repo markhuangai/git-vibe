@@ -19,13 +19,16 @@ describe("documentation workflow descriptions", () => {
 
     expect(workflow).toContain("Feedback[address-feedback.yml]");
     expect(lifecycle.match(/```mermaid/g)).toHaveLength(1);
-    expect(lifecycle).toContain("Develop --> DevelopSecurity[security-review job: issue context]");
+    expect(lifecycle).toContain(
+      "Develop --> DevelopSecurity[security-review job: chunk-scan issue context]",
+    );
     expect(lifecycle).toContain("DevelopSecurity -->|safe| Context");
     expect(lifecycle).toContain(
       "Context --> RuntimeGate{In-runner pre-LLM prompt-injection safety gate}",
     );
     expect(lifecycle).toContain("RuntimeGate -->|safe| AIStage[AI stage]");
-    expect(lifecycle).toContain("ReviewSecurity[security-review job: PR context]");
+    expect(lifecycle).toContain("ReviewSecurity[security-review job: chunk-scan PR context]");
+    expect(workflow).toContain("github_context.context_manifest");
     expect(lifecycle).toContain("OutputGate -->|safe| DevEngine");
     expect(lifecycle).toContain("RepairGate{Pre-repair LLM safety gate}");
     expect(lifecycle).toContain("FeedbackInvestigation -->|fixes required| DevEngine");

@@ -8,6 +8,7 @@ import { withStageHandoffs } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { renderPrompts } from "./prompts.js";
+import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
 import { type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
 import {
   promptSafetySources,
@@ -15,6 +16,7 @@ import {
   validationRepairRunner,
 } from "./stage-ai-results.js";
 import { stageRunResult } from "./stage-results.js";
+import { contextCoverageBlockedOutput } from "./stage-blocked-outputs.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
 import type { SafetySource } from "./safety-gate.js";
@@ -48,6 +50,7 @@ import type {
 } from "../shared/types.js";
 
 type RunnerStageDefinition = (typeof stageDefinitions)[RunnerOptions["stage"]];
+type PreparedBranch = Awaited<ReturnType<typeof prepareBranchForStage>>;
 type StageSafetyOptions = Omit<
   Parameters<typeof blockUnsafePromptInjection>[0],
   "extraSources" | "phase" | "result"
@@ -167,38 +170,64 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const promptSafetyResult = await blockPromptInput(safetyOptions, promptSafetySources(prompts));
   if (promptSafetyResult) return promptSafetyResult;
 
-  let result = await runStageResultForMode({
+  const result = await runCheckedStageResult({
     aiRunOptions,
+    branchState,
+    client,
     config,
     context,
     definition,
     executionMode,
     logger,
     options,
+    safetyOptions,
+    transientComments,
   });
-  if (executionMode === "member") {
-    return finishStage(logger, result);
-  }
+  return finishStage(logger, result);
+}
+
+async function runCheckedStageResult(options: {
+  aiRunOptions: RunAiStageOptions;
+  branchState: PreparedBranch;
+  client: GitHubClient;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  executionMode: RunnerOptions["executionMode"];
+  logger: StageLogger;
+  options: RunnerOptions;
+  safetyOptions: StageSafetyOptions;
+  transientComments: PublishedArtifactComment[];
+}): Promise<StageRunResult> {
+  let result = await runStageResultForMode(options);
+  result = await enforceContextCoverage({
+    context: options.context,
+    coverage: contextPromptCoverageForContext(options.context),
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+    result,
+  });
+  if (options.executionMode === "member") return result;
+
   const outputSafetyResult = await blockUnsafePromptInjection({
-    ...safetyOptions,
+    ...options.safetyOptions,
     phase: "output",
     result,
   });
   if (outputSafetyResult) return outputSafetyResult;
 
-  result = await applyDeterministicWrites({
-    client,
-    config,
-    context,
-    logger,
-    options,
-    repair: validationRepairRunner({ aiRunOptions, config, context, definition, logger, options }),
+  return applyDeterministicWrites({
+    client: options.client,
+    config: options.config,
+    context: options.context,
+    logger: options.logger,
+    options: options.options,
+    repair: validationRepairRunner(options),
     result,
-    runnerBaseBranch: branchState.baseBranch,
-    transientComments,
+    runnerBaseBranch: options.branchState.baseBranch,
+    transientComments: options.transientComments,
   });
-
-  return finishStage(logger, result);
 }
 
 function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResult {
@@ -213,6 +242,46 @@ function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResul
 function finishStage(logger: StageLogger, result: StageRunResult): StageRunResult {
   logger.event("stage.done", { status: result.status });
   return result;
+}
+
+async function enforceContextCoverage(options: {
+  context: ContextPacket;
+  coverage: ContextPromptCoverage;
+  definition: RunnerStageDefinition;
+  logger: StageLogger;
+  options: RunnerOptions;
+  result: StageRunResult;
+}): Promise<StageRunResult> {
+  options.logger.event("context.coverage.checked", {
+    complete: options.coverage.complete,
+    included_chunks: options.coverage.includedChunkIds.length,
+    pending_chunks: options.coverage.pendingChunkIds.length,
+    total_chunks: options.coverage.totalChunks,
+  });
+  if (
+    options.options.dryRun ||
+    options.coverage.complete ||
+    options.result.status !== "completed"
+  ) {
+    return options.result;
+  }
+  options.logger.event("context.coverage.block", {
+    pending_chunks: options.coverage.pendingChunkIds.length,
+    total_chunks: options.coverage.totalChunks,
+  });
+  return stageRunResult({
+    content: JSON.stringify(
+      contextCoverageBlockedOutput({
+        context: options.context,
+        coverage: options.coverage,
+        runner: options.options,
+      }),
+    ),
+    context: options.context,
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+  });
 }
 
 function persistContext(options: {

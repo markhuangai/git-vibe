@@ -6,6 +6,7 @@ import type {
   RunnerOptions,
   Stage,
 } from "../shared/types.js";
+import { chunkContentUnits, contentUnitsForContext, type ContentUnit } from "./content-units.js";
 import { issueBranch } from "./review-fix.js";
 
 export type SafetySeverity = "none" | "low" | "medium" | "high";
@@ -135,10 +136,7 @@ export function removeApprovalOnSafetyBlock(config: GitVibeConfig): boolean {
 }
 
 export function safetyFindingsForText(source: SafetySource): Omit<SafetyGateResult, "allowed"> {
-  const matches = analyzeSource({
-    ...source,
-    text: boundedSourceText(source.text),
-  });
+  const matches = analyzeChunkedSource(safetySourceUnit(source, "safety-text-0"));
   return {
     findings: unique(matches.map((match) => match.finding)),
     severity: highestSeverity(matches.map((match) => match.severity)),
@@ -227,13 +225,25 @@ function readOnlyOutputAdvancesPrivilegedState(
   return Boolean(privilegedStates[stage]?.includes(nextState));
 }
 
-function analyzeSources(sources: SafetySource[]): Omit<SafetyGateResult, "allowed"> {
-  const matches = sources.flatMap((source) => analyzeSource(source));
+function analyzeSources(sources: ContentUnit[]): Omit<SafetyGateResult, "allowed"> {
+  const matches = sources.flatMap((source) => analyzeChunkedSource(source));
   const findings = unique(matches.map((match) => match.finding));
   return {
     findings,
     severity: highestSeverity(matches.map((match) => match.severity)),
   };
+}
+
+function analyzeChunkedSource(source: ContentUnit): PatternMatch[] {
+  const chunks = chunkContentUnits([source]);
+  const chunkMatches = chunks.flatMap((chunk) =>
+    analyzeSource({
+      label:
+        chunk.total === 1 ? source.label : `${source.label} chunk ${chunk.index}/${chunk.total}`,
+      text: chunk.text,
+    }),
+  );
+  return [...chunkMatches, ...wholeSourceMatches(source)];
 }
 
 function analyzeSource(source: SafetySource): PatternMatch[] {
@@ -246,6 +256,10 @@ function analyzeSource(source: SafetySource): PatternMatch[] {
     ...linkMatches(source),
     ...mixedScriptMatches(source),
   ];
+}
+
+function wholeSourceMatches(source: SafetySource): PatternMatch[] {
+  return [...base64Matches(source), ...linkMatches(source)];
 }
 
 function patternMatches(
@@ -348,55 +362,27 @@ function sourcesFor(
   context: ContextPacket,
   output: JsonObject | undefined,
   extraSources: SafetySource[] = [],
-): SafetySource[] {
+): ContentUnit[] {
   return [
-    { label: "artifact title", text: context.artifact.title },
-    { label: "artifact body", text: context.artifact.body },
-    ...context.timeline.map((item) => ({
-      label: `${item.kind} ${item.id || item.url || "timeline item"}`,
-      text: item.body,
-    })),
-    ...(context.source?.comment?.body
-      ? [{ label: "source command comment", text: context.source.comment.body }]
+    ...contentUnitsForContext(context),
+    ...(output
+      ? [safetySourceUnit({ label: "stage output", text: JSON.stringify(output) }, "stage-output")]
       : []),
-    ...(context.handoffs || []).map((handoff) => ({
-      label: `${handoff.stage} handoff`,
-      text: [handoff.summary, handoff.commentBody, JSON.stringify(handoff.parsedOutput)].join("\n"),
-    })),
-    ...(context.pullRequestFiles || []).map((file) => ({
-      label: `pull request file ${file.filename}`,
-      text: pullRequestFileSafetyText(file),
-    })),
-    ...(output ? [{ label: "stage output", text: JSON.stringify(output) }] : []),
-    ...extraSources,
-  ].map((source) => ({ ...source, text: boundedSourceText(source.text) }));
+    ...extraSources.map((source, index) => safetySourceUnit(source, `extra-source-${index}`)),
+  ].filter((source) => source.text.trim());
 }
 
-function pullRequestFileSafetyText(
-  file: NonNullable<ContextPacket["pullRequestFiles"]>[number],
-): string {
-  return [
-    `filename: ${file.filename}`,
-    `status: ${file.status}`,
-    file.previousFilename ? `previous filename: ${file.previousFilename}` : "",
-    file.additions === undefined ? "" : `additions: ${file.additions}`,
-    file.deletions === undefined ? "" : `deletions: ${file.deletions}`,
-    file.changes === undefined ? "" : `changes: ${file.changes}`,
-    file.blobUrl ? `blob URL: ${file.blobUrl}` : "",
-    file.rawUrl ? `raw URL: ${file.rawUrl}` : "",
-    file.contentsUrl ? `contents URL: ${file.contentsUrl}` : "",
-    file.patch ? `patch:\n${file.patch}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+function safetySourceUnit(source: SafetySource, id: string): ContentUnit {
+  return {
+    id,
+    kind: "safety-source",
+    label: source.label,
+    text: source.text,
+  };
 }
 
 function normalizedText(value: string): string {
   return value.normalize("NFKC").replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069]/gu, "");
-}
-
-function boundedSourceText(value: string): string {
-  return value.length <= 20_000 ? value : `${value.slice(0, 10_000)}\n${value.slice(-10_000)}`;
 }
 
 function validBase64Candidate(value: string): boolean {

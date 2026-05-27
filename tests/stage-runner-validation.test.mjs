@@ -39,6 +39,68 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("stage runner context coverage", () => {
+  it("blocks completed results when context chunks remain pending", async () => {
+    const cwd = await workspace();
+    generateText.mockResolvedValueOnce({
+      steps: [
+        {
+          toolCalls: [
+            {
+              input: {
+                content: JSON.stringify({
+                  assumptions: [],
+                  comment_body: "Ready.",
+                  findings: [],
+                  next_state: "ready-for-implementation",
+                  references: [],
+                  stage: "validate",
+                  status: "completed",
+                  summary: "Ready.",
+                }),
+              },
+              toolName: "output_validator",
+            },
+          ],
+        },
+      ],
+      text: "{}",
+    });
+    const fetch = fetchMock([
+      issueResponse("x".repeat(120_000)),
+      commentsResponse([]),
+      response(200, {}),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "validate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result).toMatchObject({
+      parsedOutput: {
+        next_state: "blocked",
+        status: "blocked",
+        summary: "GitVibe blocked this run because context coverage is incomplete.",
+      },
+      status: "blocked",
+    });
+    expect(/** @type {any} */ (result.parsedOutput).findings[0]).toContain(
+      "context chunks were included",
+    );
+    expect(issueCommentCall(fetch)?.[0]).toContain("/repos/example/repo/issues/12/comments");
+    expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
+  });
+});
+
 describe("stage runner write skips and branch validation", () => {
   it("skips deterministic writes for non-completed statuses and rejects invalid branch numbers", async () => {
     const cwd = await workspace();

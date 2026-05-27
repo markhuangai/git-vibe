@@ -39,8 +39,11 @@ Core defaults:
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
 - AI returns structured results; deterministic GitVibe code performs GitHub writes.
 - Reusable workflows start with a no-AI `security-review` job, and runner-level
-  safety gates block high-risk multilingual, encoded, suffix, pull request patch,
-  risky linked payload, and image/OCR-derived instruction attacks before LLM
-  execution, privileged writes, or state advancement.
+  safety gates scan chunked context units and block high-risk multilingual,
+  encoded, suffix, pull request patch, risky linked payload, and image/OCR-derived
+  instruction attacks before LLM execution, privileged writes, or state
+  advancement. Prompt rendering uses a context manifest plus budgeted included
+  chunks instead of an unbounded raw GitHub dump; pending chunks fail closed and
+  block `completed` stage results until processed.
 - App, runner, and shared TypeScript live in one package but separate source boundaries so runner-only changes do not redeploy the app.
 - The repository uses pnpm, TypeScript source, runner-built action runtimes, PR-only CI on the `docker-runner` self-hosted runner label, 90% function/line/statement coverage, and ESLint-enforced JavaScript/MJS size limits of 700 lines per file and 100 lines per function.

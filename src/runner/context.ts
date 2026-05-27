@@ -11,8 +11,6 @@ import {
   type PullRequestReviewCommentNode,
 } from "./context-graphql.js";
 
-const maxPullRequestPatchChars = 20_000;
-
 interface IssueResponse extends JsonObject {
   author_association?: string;
   body?: string;
@@ -208,7 +206,7 @@ function toPullRequestFile(file: PullRequestFileResponse): PullRequestFile | und
     contentsUrl: stringField(file.contents_url),
     deletions: numberField(file.deletions),
     filename,
-    patch: boundedPullRequestPatch(stringField(file.patch)),
+    patch: stringField(file.patch),
     previousFilename: stringField(file.previous_filename),
     rawUrl: stringField(file.raw_url),
     status: stringField(file.status) || "modified",
@@ -468,12 +466,6 @@ function stringField(value: unknown): string | undefined {
 
 function numberField(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function boundedPullRequestPatch(value: string | undefined): string | undefined {
-  if (!value || value.length <= maxPullRequestPatchChars) return value;
-  const half = maxPullRequestPatchChars / 2;
-  return `${value.slice(0, half)}\n[git-vibe: pull request patch truncated]\n${value.slice(-half)}`;
 }
 
 interface RelatedIssueNode {

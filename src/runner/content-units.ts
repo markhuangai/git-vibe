@@ -1,0 +1,389 @@
+import { createHash } from "node:crypto";
+import type { ContextPacket, JsonObject, PullRequestFile, TimelineItem } from "../shared/types.js";
+
+export interface ContentUnit {
+  id: string;
+  kind: string;
+  label: string;
+  metadata?: JsonObject;
+  path?: string;
+  sourceUrl?: string;
+  text: string;
+}
+
+export interface ContentChunk {
+  charEnd: number;
+  charStart: number;
+  id: string;
+  index: number;
+  kind: string;
+  label: string;
+  metadata?: JsonObject;
+  path?: string;
+  sha256: string;
+  sourceUrl?: string;
+  text: string;
+  total: number;
+  unitId: string;
+}
+
+export interface ContextPromptCoverage {
+  complete: boolean;
+  includedChunkIds: string[];
+  pendingChunkIds: string[];
+  totalChunks: number;
+}
+
+interface PackContextOptions {
+  budgetChars?: number;
+  chunkOverlapChars?: number;
+  chunkSizeChars?: number;
+}
+
+const defaultChunkSizeChars = 12_000;
+const defaultChunkOverlapChars = 1_000;
+const defaultPromptBudgetChars = 80_000;
+
+export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
+  return [
+    unit("artifact-title", "artifact", "artifact title", context.artifact.title, {
+      sourceUrl: context.artifact.url,
+    }),
+    unit("artifact-body", "artifact", "artifact body", context.artifact.body, {
+      sourceUrl: context.artifact.url,
+    }),
+    ...context.timeline.flatMap(timelineUnits),
+    ...(context.source?.comment?.body
+      ? [
+          unit(
+            "source-command-comment",
+            "source-comment",
+            "source command comment",
+            context.source.comment.body,
+            {
+              metadata: {
+                id: context.source.comment.id,
+                kind: context.source.comment.kind,
+                nodeId: context.source.comment.nodeId,
+              },
+              sourceUrl: context.source.comment.url,
+            },
+          ),
+        ]
+      : []),
+    ...(context.handoffs || []).flatMap((handoff, index) => [
+      unit(
+        `handoff-${index}-${handoff.stage}-summary`,
+        "handoff",
+        `${handoff.stage} handoff summary`,
+        handoff.summary,
+        {
+          metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status },
+        },
+      ),
+      unit(
+        `handoff-${index}-${handoff.stage}-comment`,
+        "handoff",
+        `${handoff.stage} handoff comment`,
+        handoff.commentBody || "",
+        { metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status } },
+      ),
+      unit(
+        `handoff-${index}-${handoff.stage}-output`,
+        "handoff",
+        `${handoff.stage} handoff output`,
+        JSON.stringify(handoff.parsedOutput),
+        { metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status } },
+      ),
+    ]),
+    ...(context.pullRequestFiles || []).map((file, index) => pullRequestFileUnit(file, index)),
+  ].filter((item) => item.text.trim());
+}
+
+export function chunkContentUnits(
+  units: ContentUnit[],
+  options: PackContextOptions = {},
+): ContentChunk[] {
+  const chunkSize = options.chunkSizeChars || defaultChunkSizeChars;
+  const overlap = Math.min(options.chunkOverlapChars ?? defaultChunkOverlapChars, chunkSize - 1);
+  return units.flatMap((item) =>
+    chunkText(item.text, { chunkSize, overlap }).map((chunk, index, chunks) => ({
+      charEnd: chunk.end,
+      charStart: chunk.start,
+      id: `${item.id}:chunk-${index + 1}`,
+      index: index + 1,
+      kind: item.kind,
+      label: item.label,
+      metadata: item.metadata,
+      path: item.path,
+      sha256: sha256(chunk.text),
+      sourceUrl: item.sourceUrl,
+      text: chunk.text,
+      total: chunks.length,
+      unitId: item.id,
+    })),
+  );
+}
+
+export function packedContextForPrompt(
+  context: ContextPacket,
+  options: PackContextOptions = {},
+): JsonObject {
+  const units = contentUnitsForContext(context);
+  const chunks = chunkContentUnits(units, options);
+  const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
+  const includedIds = new Set(included.map((chunk) => chunk.id));
+  const pending = chunks.filter((chunk) => !includedIds.has(chunk.id));
+  return {
+    artifact: packedArtifact(context),
+    context_manifest: {
+      chunk_overlap_chars: options.chunkOverlapChars ?? defaultChunkOverlapChars,
+      chunk_size_chars: options.chunkSizeChars || defaultChunkSizeChars,
+      included_chunks: included.length,
+      pending_chunks: pending.length,
+      pending_chunk_ids: pending.map((chunk) => chunk.id),
+      total_chunks: chunks.length,
+      total_units: units.length,
+      units: units.map((item) => unitManifest(item, chunks, includedIds)),
+    },
+    generatedAt: context.generatedAt,
+    handoffs: packedHandoffs(context),
+    included_context_chunks: included.map(packedChunk),
+    pullRequestFiles: packedPullRequestFiles(context),
+    repository: context.repository,
+    source: packedSource(context),
+    timeline: context.timeline.map(packedTimelineItem),
+  };
+}
+
+export function contextPromptCoverageForContext(
+  context: ContextPacket,
+  options: PackContextOptions = {},
+): ContextPromptCoverage {
+  const chunks = chunkContentUnits(contentUnitsForContext(context), options);
+  const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
+  const includedIds = new Set(included.map((chunk) => chunk.id));
+  const pendingChunkIds = chunks
+    .filter((chunk) => !includedIds.has(chunk.id))
+    .map((chunk) => chunk.id);
+  return {
+    complete: pendingChunkIds.length === 0,
+    includedChunkIds: included.map((chunk) => chunk.id),
+    pendingChunkIds,
+    totalChunks: chunks.length,
+  };
+}
+
+export function pullRequestFileText(file: PullRequestFile): string {
+  return [
+    `filename: ${file.filename}`,
+    `status: ${file.status}`,
+    file.previousFilename ? `previous filename: ${file.previousFilename}` : "",
+    file.additions === undefined ? "" : `additions: ${file.additions}`,
+    file.deletions === undefined ? "" : `deletions: ${file.deletions}`,
+    file.changes === undefined ? "" : `changes: ${file.changes}`,
+    file.blobUrl ? `blob URL: ${file.blobUrl}` : "",
+    file.rawUrl ? `raw URL: ${file.rawUrl}` : "",
+    file.contentsUrl ? `contents URL: ${file.contentsUrl}` : "",
+    file.patch ? `patch:\n${file.patch}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function unit(
+  id: string,
+  kind: string,
+  label: string,
+  text: string,
+  options: Omit<ContentUnit, "id" | "kind" | "label" | "text"> = {},
+): ContentUnit {
+  return { id, kind, label, text, ...options };
+}
+
+function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {
+  const id = `timeline-${index}-${slug(item.kind)}-${slug(item.id || item.url || "item")}`;
+  return [
+    unit(id, "timeline", `${item.kind} ${item.id || item.url || "timeline item"}`, item.body, {
+      metadata: {
+        author: item.author,
+        authorAssociation: item.authorAssociation,
+        createdAt: item.createdAt,
+        databaseId: item.databaseId,
+        id: item.id,
+        kind: item.kind,
+        parentId: item.parentId,
+      },
+      sourceUrl: item.url,
+    }),
+  ];
+}
+
+function pullRequestFileUnit(file: PullRequestFile, index: number): ContentUnit {
+  return unit(
+    `pull-request-file-${index}-${slug(file.filename)}`,
+    "pull-request-file",
+    `pull request file ${file.filename}`,
+    pullRequestFileText(file),
+    {
+      metadata: {
+        additions: file.additions,
+        changes: file.changes,
+        deletions: file.deletions,
+        status: file.status,
+      },
+      path: file.filename,
+      sourceUrl: file.blobUrl || file.rawUrl || file.contentsUrl,
+    },
+  );
+}
+
+function chunkText(text: string, options: { chunkSize: number; overlap: number }) {
+  if (text.length <= options.chunkSize) return [{ end: text.length, start: 0, text }];
+  const chunks: Array<{ end: number; start: number; text: string }> = [];
+  const step = Math.max(1, options.chunkSize - options.overlap);
+  for (let start = 0; start < text.length; start += step) {
+    const end = Math.min(text.length, start + options.chunkSize);
+    chunks.push({ end, start, text: text.slice(start, end) });
+    if (end >= text.length) break;
+  }
+  return chunks;
+}
+
+function selectPromptChunks(chunks: ContentChunk[], budget: number): ContentChunk[] {
+  const included: ContentChunk[] = [];
+  let used = 0;
+  for (const chunk of chunks) {
+    const cost = chunk.text.length + chunk.label.length + 80;
+    if (included.length > 0 && used + cost > budget) continue;
+    included.push(chunk);
+    used += cost;
+  }
+  return included;
+}
+
+function unitManifest(unitItem: ContentUnit, chunks: ContentChunk[], includedIds: Set<string>) {
+  const unitChunks = chunks.filter((chunk) => chunk.unitId === unitItem.id);
+  return {
+    chars: unitItem.text.length,
+    chunk_ids: unitChunks.map((chunk) => chunk.id),
+    id: unitItem.id,
+    included_chunk_ids: unitChunks
+      .filter((chunk) => includedIds.has(chunk.id))
+      .map((chunk) => chunk.id),
+    kind: unitItem.kind,
+    label: unitItem.label,
+    metadata: unitItem.metadata,
+    pending_chunk_ids: unitChunks
+      .filter((chunk) => !includedIds.has(chunk.id))
+      .map((chunk) => chunk.id),
+    pending_chunks: unitChunks.filter((chunk) => !includedIds.has(chunk.id)).length,
+    path: unitItem.path,
+    sha256: sha256(unitItem.text),
+    sourceUrl: unitItem.sourceUrl,
+  };
+}
+
+function packedChunk(chunk: ContentChunk): JsonObject {
+  return {
+    charEnd: chunk.charEnd,
+    charStart: chunk.charStart,
+    id: chunk.id,
+    index: chunk.index,
+    kind: chunk.kind,
+    label: chunk.label,
+    metadata: chunk.metadata,
+    path: chunk.path,
+    sha256: chunk.sha256,
+    sourceUrl: chunk.sourceUrl,
+    text: chunk.text,
+    total: chunk.total,
+    unitId: chunk.unitId,
+  };
+}
+
+function packedArtifact(context: ContextPacket): JsonObject {
+  return {
+    body_chars: context.artifact.body.length,
+    body_unit_id: "artifact-body",
+    id: context.artifact.id,
+    labels: context.artifact.labels,
+    number: context.artifact.number,
+    pullRequestHead: context.artifact.pullRequestHead,
+    title: context.artifact.title,
+    type: context.artifact.type,
+    url: context.artifact.url,
+  };
+}
+
+function packedTimelineItem(item: TimelineItem, index: number): JsonObject {
+  return {
+    author: item.author,
+    authorAssociation: item.authorAssociation,
+    body_chars: item.body.length,
+    body_unit_id: `timeline-${index}-${slug(item.kind)}-${slug(item.id || item.url || "item")}`,
+    createdAt: item.createdAt,
+    databaseId: item.databaseId,
+    id: item.id,
+    kind: item.kind,
+    parentId: item.parentId,
+    reactions: item.reactions,
+    url: item.url,
+  };
+}
+
+function packedHandoffs(context: ContextPacket): JsonObject[] {
+  return (context.handoffs || []).map((handoff, index) => ({
+    comment_body_unit_id: `handoff-${index}-${handoff.stage}-comment`,
+    parsed_output_unit_id: `handoff-${index}-${handoff.stage}-output`,
+    schemaId: handoff.schemaId,
+    stage: handoff.stage,
+    status: handoff.status,
+    summary_unit_id: `handoff-${index}-${handoff.stage}-summary`,
+  }));
+}
+
+function packedPullRequestFiles(context: ContextPacket): JsonObject[] {
+  return (context.pullRequestFiles || []).map((file, index) => ({
+    additions: file.additions,
+    blobUrl: file.blobUrl,
+    changes: file.changes,
+    contentsUrl: file.contentsUrl,
+    deletions: file.deletions,
+    filename: file.filename,
+    patch_chars: file.patch?.length || 0,
+    previousFilename: file.previousFilename,
+    rawUrl: file.rawUrl,
+    status: file.status,
+    unit_id: `pull-request-file-${index}-${slug(file.filename)}`,
+  }));
+}
+
+function packedSource(context: ContextPacket): JsonObject | undefined {
+  const comment = context.source?.comment;
+  if (!comment) return undefined;
+  return {
+    comment: {
+      body_chars: comment.body?.length || 0,
+      body_unit_id: comment.body ? "source-command-comment" : undefined,
+      id: comment.id,
+      kind: comment.kind,
+      nodeId: comment.nodeId,
+      url: comment.url,
+    },
+  };
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function slug(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 80) || "item"
+  );
+}
