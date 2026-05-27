@@ -69,7 +69,7 @@ export function validationRepairRunner({
     });
     if (blocked) return blocked;
 
-    return buildResult(
+    const repaired = await buildResult(
       await runAiStage({
         ...aiRunOptions,
         maxTurns: validationRepairMaxTurnsFor(config, options),
@@ -83,6 +83,16 @@ export function validationRepairRunner({
         }),
       }),
     );
+    const outputBlocked = await promptInjectionBlockedResult({
+      buildResult,
+      config,
+      context,
+      logger,
+      phase: "output",
+      result: repaired,
+      runner: options,
+    });
+    return outputBlocked || repaired;
   };
 }
 
