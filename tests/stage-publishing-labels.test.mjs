@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { applySafetyBlockedLabelTransition } from "../src/runner/stage-safety-labels.ts";
 import {
   applyStageLabelTransition,
   applyStageStartLabelTransition,
@@ -167,6 +168,246 @@ describe("stage label investigation blocking", () => {
     expect(logger.event).toHaveBeenCalledWith(
       "github.issue.label.remove.failed",
       expect.objectContaining({ issue: "12", label: "gvi:investigating" }),
+    );
+  });
+});
+
+describe("stage label safety block approval cleanup", () => {
+  it("removes approval and active labels when an issue safety block fires", async () => {
+    const client = createClient();
+
+    await applySafetyBlockedLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      runner: runner({ stage: "investigate" }),
+    });
+
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval"],
+      ["POST", "/repos/example/repo/issues/12/labels"],
+    ]);
+    expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:blocked"]);
+  });
+
+  it("removes approval and active labels when a pull request safety block fires", async () => {
+    const client = createClient();
+
+    await applySafetyBlockedLabelTransition({
+      client,
+      context: context("pull-request"),
+      logger: createLogger(),
+      runner: runner({ stage: "review-matrix" }),
+    });
+
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Areviewing"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/git-vibe%3Aapproved"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval"],
+      ["POST", "/repos/example/repo/issues/12/labels"],
+    ]);
+    expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:blocked"]);
+  });
+
+  it("removes approval and validation labels when a discussion safety block fires", async () => {
+    const client = createClient();
+
+    await applySafetyBlockedLabelTransition({
+      client,
+      context: context("discussion"),
+      logger: createLogger(),
+      runner: runner({ stage: "materialize" }),
+    });
+
+    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+});
+
+describe("stage label safety block approval preservation", () => {
+  it("can preserve discussion approval when a safety block opts out", async () => {
+    const client = createClient();
+
+    await applySafetyBlockedLabelTransition({
+      client,
+      context: context("discussion"),
+      logger: createLogger(),
+      preserveApproval: true,
+      runner: runner({ stage: "materialize" }),
+    });
+
+    expect(discussionLabelMutations(client, "GitVibeRemoveDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+
+  it("can preserve approval when a safety block opts out of approval cleanup", async () => {
+    const client = createClient();
+
+    await applySafetyBlockedLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      preserveApproval: true,
+      runner: runner({ stage: "implement" }),
+    });
+
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval"],
+      ["POST", "/repos/example/repo/issues/12/labels"],
+    ]);
+  });
+
+  it("can preserve approval when a blocked transition opts out of approval cleanup", async () => {
+    const client = createClient();
+
+    await applyStageLabelTransition({
+      client,
+      context: context("issue"),
+      logger: createLogger(),
+      parsedOutput: { ...output(), status: "blocked" },
+      preserveApproval: true,
+      runner: runner({ stage: "implement" }),
+    });
+
+    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
+      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ain-progress"],
+      ["POST", "/repos/example/repo/issues/12/labels"],
+    ]);
+  });
+});
+
+describe("stage label safety block guards", () => {
+  it("skips discussion safety label changes without a discussion node id", async () => {
+    const client = createClient();
+    const logger = createLogger();
+
+    await applySafetyBlockedLabelTransition({
+      client,
+      context: context("discussion", { id: undefined }),
+      logger,
+      runner: runner({ stage: "materialize" }),
+    });
+
+    expect(client.graphql).not.toHaveBeenCalled();
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.discussion.label.skip",
+      expect.objectContaining({ discussion: "12", reason: "missing-discussion-id" }),
+    );
+  });
+
+  it("ignores missing issue labels while applying a safety block", async () => {
+    const client = createClient();
+    client.request = vi.fn(async (request) => {
+      if (request.method === "DELETE") throw new Error("GitHub API DELETE label failed: 404");
+      return {};
+    });
+
+    await expect(
+      applySafetyBlockedLabelTransition({
+        client,
+        context: context("issue"),
+        logger: createLogger(),
+        runner: runner({ stage: "implement" }),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:blocked"]);
+  });
+
+  it("logs and rethrows unexpected issue label removal failures", async () => {
+    const client = createClient();
+    const logger = createLogger();
+    client.request = vi.fn(async (request) => {
+      if (request.method === "DELETE") throw new Error("delete unavailable");
+      return {};
+    });
+
+    await expect(
+      applySafetyBlockedLabelTransition({
+        client,
+        context: context("issue"),
+        logger,
+        runner: runner({ stage: "implement" }),
+      }),
+    ).rejects.toThrow("delete unavailable");
+
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.issue.label.remove.failed",
+      expect.objectContaining({ issue: "12", label: "gvi:investigating" }),
+    );
+  });
+});
+
+describe("stage label safety discussion block guards", () => {
+  it("ignores missing discussion labels while applying a safety block", async () => {
+    const client = createClient();
+    client.graphql = vi.fn(async (query) => {
+      if (query.includes("GitVibeDiscussionLabelId")) {
+        return { repository: { label: { id: "resolved-label-node" } } };
+      }
+      if (query.includes("GitVibeRemoveDiscussionLabel")) {
+        throw new Error("GitHub API DELETE label failed: 404");
+      }
+      return {};
+    });
+
+    await expect(
+      applySafetyBlockedLabelTransition({
+        client,
+        context: context("discussion"),
+        logger: createLogger(),
+        runner: runner({ stage: "materialize" }),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(discussionLabelMutations(client, "GitVibeAddDiscussionLabel")).toEqual([
+      { discussionId: "discussion-node", labelIds: ["resolved-label-node"] },
+    ]);
+  });
+
+  it("logs and rethrows unexpected discussion label removal failures", async () => {
+    const client = createClient();
+    const logger = createLogger();
+    client.graphql = vi.fn(async (query) => {
+      if (query.includes("GitVibeDiscussionLabelId")) {
+        return { repository: { label: { id: "resolved-label-node" } } };
+      }
+      if (query.includes("GitVibeRemoveDiscussionLabel")) {
+        throw new Error("delete unavailable");
+      }
+      return {};
+    });
+
+    await expect(
+      applySafetyBlockedLabelTransition({
+        client,
+        context: context("discussion"),
+        logger,
+        runner: runner({ stage: "materialize" }),
+      }),
+    ).rejects.toThrow("delete unavailable");
+
+    expect(logger.event).toHaveBeenCalledWith(
+      "github.discussion.label.remove.failed",
+      expect.objectContaining({ error: "delete unavailable", label: "gvi:validating" }),
     );
   });
 });
