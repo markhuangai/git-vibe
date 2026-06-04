@@ -95,8 +95,8 @@ async function startGateway(config: GatewayConfig): Promise<void> {
     if (!config.allowTools.includes(tool)) {
       return mcpErrorResult(`Error [mcp-gateway]: tool is not allowed: ${tool}`);
     }
-    const connected = await connection();
     try {
+      const connected = await connection();
       const result = (await connected.client.callTool(request.params)) as CallToolResult;
       return safetyCheckedMcpResult({
         result,

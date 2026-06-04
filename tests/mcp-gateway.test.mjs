@@ -123,6 +123,23 @@ describe("MCP gateway runtime", () => {
       isError: true,
     });
   });
+
+  it("redacts upstream connection failures returned to the model", async () => {
+    mocks.connectMcpServer.mockRejectedValue(new Error("dense-token offline"));
+
+    await expect(runMcpGateway(runtime())).resolves.toBe(0);
+
+    const callHandler = mocks.serverInstances[0].handlers[1];
+    await expect(callHandler({ params: { name: "search_memory" } })).resolves.toMatchObject({
+      content: [
+        {
+          text: "Error [mcp-gateway]: dense_mem.search_memory failed: <redacted:mcp-secret> offline",
+          type: "text",
+        },
+      ],
+      isError: true,
+    });
+  });
 });
 
 describe("MCP gateway startup validation", () => {
