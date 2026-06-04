@@ -26,6 +26,7 @@ export async function buildMcpPromptContext(options: {
   runner: RunnerOptions;
 }): Promise<McpPromptContextResult> {
   const servers = stageMcpServers({
+    captureRequiredResolutionErrors: true,
     config: options.config,
     stage: options.runner.stage,
   }).filter((entry) => entry.contextCalls.length > 0 || entry.allowModelTools.length > 0);
@@ -36,8 +37,8 @@ export async function buildMcpPromptContext(options: {
   for (const stageServer of servers) {
     if (!stageServer.server) {
       const reason = `MCP server ${stageServer.name} failed: ${stageServer.resolutionError}`;
-      warnings.push(reason);
-      options.logger.event("mcp.context.warning", { reason });
+      const blocked = requiredFailure(stageServer.required, reason, options, warnings);
+      if (blocked) return blocked;
       continue;
     }
     try {

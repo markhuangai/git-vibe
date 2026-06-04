@@ -208,6 +208,36 @@ describe("MCP deterministic prompt context secret handling", () => {
     });
     expect(mocks.connectMcpServer).not.toHaveBeenCalled();
   });
+
+  it("blocks required MCP credential resolution failures with a stage-shaped output", async () => {
+    const logger = { event: vi.fn() };
+    vi.stubEnv("GITVIBE_MCP_ENV_JSON", "{}");
+
+    const result = await buildMcpPromptContext({
+      config: secretMcpConfig({ required: true }),
+      context: contextPacket(),
+      logger,
+      runner: runnerOptions(),
+    });
+
+    expect(result.promptAddition).toBe("");
+    expect(result.blocked).toMatchObject({
+      inline_comments: [],
+      next_state: "blocked",
+      stage: "review-matrix",
+      status: "blocked",
+      tests: [],
+    });
+    expect(result.blocked.comment_body).toContain(
+      "MCP server dense_mem failed: GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required",
+    );
+    expect(logger.event).toHaveBeenCalledWith("mcp.context.block", {
+      reason: expect.stringContaining(
+        "MCP server dense_mem failed: GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required",
+      ),
+    });
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
+  });
 });
 
 describe("MCP model tool preflight", () => {

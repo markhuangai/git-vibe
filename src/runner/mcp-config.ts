@@ -43,6 +43,7 @@ export interface McpContextCall {
 const safeNamePattern = /^[A-Za-z][A-Za-z0-9_-]*$/;
 
 export function stageMcpServers(options: {
+  captureRequiredResolutionErrors?: boolean;
   config: GitVibeConfig;
   env?: NodeJS.ProcessEnv;
   stage: Stage;
@@ -68,7 +69,7 @@ export function stageMcpServers(options: {
         server: parseServerConfig(serverValue, `ai.mcp.servers.${name}`, name, options.env),
       };
     } catch (error) {
-      if (stageServer.required) throw error;
+      if (stageServer.required && !options.captureRequiredResolutionErrors) throw error;
       return {
         ...stageServer,
         name,
