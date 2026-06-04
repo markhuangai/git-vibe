@@ -27,7 +27,14 @@ export function prepareCliMcpConfig(options: {
 
   const gatewayDir = join(options.contextDir, "mcp-gateway");
   mkdirSync(gatewayDir, { recursive: true });
-  const files = stageServers.map((stageServer) => {
+  const files = stageServers.flatMap((stageServer) => {
+    if (!stageServer.server) {
+      options.options.logger?.event("mcp.cli_config.warning", {
+        reason: stageServer.resolutionError,
+        server: stageServer.name,
+      });
+      return [];
+    }
     const path = join(gatewayDir, `${stageServer.server.name}.json`);
     writeFileSync(
       path,
@@ -42,8 +49,9 @@ export function prepareCliMcpConfig(options: {
       ),
       { mode: 0o600 },
     );
-    return { path, serverName: stageServer.server.name, tools: stageServer.allowModelTools };
+    return [{ path, serverName: stageServer.server.name, tools: stageServer.allowModelTools }];
   });
+  if (files.length === 0) return { claudeArgs: [], codexConfigArgs: [] };
 
   options.options.logger?.event("mcp.cli_config.ready", {
     servers: files.map((file) => file.serverName).join(","),

@@ -1,6 +1,12 @@
 import type { ContextPacket, GitVibeConfig, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
-import { connectMcpServer, callMcpTool, listMcpTools, mcpResultText } from "./mcp-client.js";
+import {
+  connectMcpServer,
+  callMcpTool,
+  listMcpTools,
+  mcpResultText,
+  redactMcpText,
+} from "./mcp-client.js";
 import { renderMcpTemplateValue, stageMcpServers } from "./mcp-config.js";
 import type { ConnectedMcpServer } from "./mcp-client.js";
 import type { ResolvedStageMcpServer } from "./mcp-config.js";
@@ -28,6 +34,12 @@ export async function buildMcpPromptContext(options: {
   const results: JsonObject[] = [];
   const warnings: string[] = [];
   for (const stageServer of servers) {
+    if (!stageServer.server) {
+      const reason = `MCP server ${stageServer.name} failed: ${stageServer.resolutionError}`;
+      warnings.push(reason);
+      options.logger.event("mcp.context.warning", { reason });
+      continue;
+    }
     try {
       const connection = await connectMcpServer({
         logger: options.logger,
@@ -47,9 +59,12 @@ export async function buildMcpPromptContext(options: {
             logger: options.logger,
             tool: call.tool,
           });
-          const text = truncateContextText(mcpResultText(result));
+          const text = redactMcpText(
+            truncateContextText(mcpResultText(result)),
+            stageServer.server.secretValues,
+          );
           if (result.isError) {
-            const reason = `MCP context call ${stageServer.server.name}.${call.tool} failed: ${text}`;
+            const reason = `MCP context call ${stageServer.name}.${call.tool} failed: ${text}`;
             const blocked = requiredFailure(stageServer.required, reason, options, warnings);
             if (blocked) return blocked;
             continue;
@@ -57,7 +72,7 @@ export async function buildMcpPromptContext(options: {
           results.push({
             arguments: args,
             result_text: text,
-            server: stageServer.server.name,
+            server: stageServer.name,
             tool: call.tool,
           });
         }
@@ -68,9 +83,10 @@ export async function buildMcpPromptContext(options: {
         await connection.close();
       }
     } catch (error) {
-      const reason = `MCP server ${stageServer.server.name} failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      const reason = `MCP server ${stageServer.name} failed: ${redactMcpText(
+        error instanceof Error ? error.message : String(error),
+        stageServer.server.secretValues,
+      )}`;
       const blocked = requiredFailure(stageServer.required, reason, options, warnings);
       if (blocked) return blocked;
     }
@@ -99,9 +115,7 @@ async function ensureModelToolsAvailable(
   const available = new Set(listed.tools.map((tool) => tool.name));
   const missing = stageServer.allowModelTools.filter((tool) => !available.has(tool));
   if (missing.length > 0) {
-    throw new Error(
-      `missing allowed model tools on ${stageServer.server.name}: ${missing.join(", ")}`,
-    );
+    throw new Error(`missing allowed model tools on ${stageServer.name}: ${missing.join(", ")}`);
   }
 }
 

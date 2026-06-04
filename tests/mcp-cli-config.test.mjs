@@ -143,6 +143,27 @@ describe("CLI MCP gateway configuration fallbacks", () => {
       rmSync(contextDir, { force: true, recursive: true });
     }
   });
+
+  it("skips optional model MCP gateway config when credentials are missing", () => {
+    process.env = { ...originalEnv, GITVIBE_MCP_ENV_JSON: "{}" };
+    const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-mcp-cli-missing-optional-"));
+    const logger = { event: vi.fn() };
+
+    try {
+      expect(
+        prepareCliMcpConfig({
+          contextDir,
+          options: runAiStageOptions(optionalMcpConfig(), { logger }),
+        }),
+      ).toEqual({ claudeArgs: [], codexConfigArgs: [] });
+      expect(logger.event).toHaveBeenCalledWith("mcp.cli_config.warning", {
+        reason: expect.stringContaining("GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required"),
+        server: "dense_mem",
+      });
+    } finally {
+      rmSync(contextDir, { force: true, recursive: true });
+    }
+  });
 });
 
 /**
@@ -191,6 +212,12 @@ function mcpConfig() {
       },
     },
   };
+}
+
+function optionalMcpConfig() {
+  const config = mcpConfig();
+  /** @type {any} */ (config.ai.stages.validate.mcp.dense_mem).required = false;
+  return config;
 }
 
 function gatewayScriptPath() {

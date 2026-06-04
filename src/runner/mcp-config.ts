@@ -29,8 +29,10 @@ export interface ResolvedStageMcpServer {
   allowContextTools: string[];
   allowModelTools: string[];
   contextCalls: McpContextCall[];
+  name: string;
   required: boolean;
-  server: ResolvedMcpServer;
+  resolutionError?: string;
+  server?: ResolvedMcpServer;
 }
 
 export interface McpContextCall {
@@ -55,10 +57,24 @@ export function stageMcpServers(options: {
     if (serverValue === undefined) {
       throw new Error(`ai.stages.${options.stage}.mcp.${name} references an unknown MCP server.`);
     }
-    return {
-      ...parseStageServerConfig(stageValue, `ai.stages.${options.stage}.mcp.${name}`),
-      server: parseServerConfig(serverValue, `ai.mcp.servers.${name}`, name, options.env),
-    };
+    const stageServer = parseStageServerConfig(
+      stageValue,
+      `ai.stages.${options.stage}.mcp.${name}`,
+    );
+    try {
+      return {
+        ...stageServer,
+        name,
+        server: parseServerConfig(serverValue, `ai.mcp.servers.${name}`, name, options.env),
+      };
+    } catch (error) {
+      if (stageServer.required) throw error;
+      return {
+        ...stageServer,
+        name,
+        resolutionError: error instanceof Error ? error.message : String(error),
+      };
+    }
   });
 }
 
@@ -109,7 +125,7 @@ function allServerEntries(config: GitVibeConfig): Record<string, unknown> {
 function parseStageServerConfig(
   value: unknown,
   path: string,
-): Omit<ResolvedStageMcpServer, "server"> {
+): Omit<ResolvedStageMcpServer, "name" | "resolutionError" | "server"> {
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   const required =
     value.required === undefined ? true : booleanValue(value.required, `${path}.required`);

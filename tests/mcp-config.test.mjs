@@ -37,14 +37,14 @@ describe("MCP stage configuration resolution", () => {
         transport: "stdio",
       },
     });
-    expect(servers[0].server.env).toMatchObject({
+    expect(servers[0].server?.env).toMatchObject({
       DENSE_MEM_TOKEN: "dense-token",
       LITERAL_VALUE: "literal",
       PATH: "/bin",
     });
-    expect(servers[0].server.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
-    expect(servers[0].server.env.GITVIBE_GITHUB_TOKEN).toBeUndefined();
-    expect(servers[0].server.env.GITVIBE_MCP_ENV_JSON).toBeUndefined();
+    expect(servers[0].server?.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
+    expect(servers[0].server?.env.GITVIBE_GITHUB_TOKEN).toBeUndefined();
+    expect(servers[0].server?.env.GITVIBE_MCP_ENV_JSON).toBeUndefined();
     expect(servers[1]).toMatchObject({
       allowContextTools: [],
       allowModelTools: ["lookup"],
@@ -261,11 +261,28 @@ describe("MCP stage tool field validation", () => {
 });
 
 describe("MCP stage credential validation", () => {
-  it("rejects missing MCP bundle keys and env on HTTP servers", () => {
+  it("captures missing optional MCP bundle keys without throwing", () => {
+    const servers = stageMcpServers({
+      config: mcpConfig(),
+      env: { GITVIBE_MCP_ENV_JSON: JSON.stringify({ DOCS_TOKEN: "docs-token" }) },
+      stage: "review-matrix",
+    });
+
+    expect(servers[0]).toMatchObject({
+      name: "dense_mem",
+      required: false,
+      resolutionError:
+        "GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required by ai.mcp.servers.dense_mem.env.DENSE_MEM_TOKEN.from_bundle.",
+    });
+    expect(servers[0].server).toBeUndefined();
+    expect(servers[1].server?.name).toBe("docs");
+  });
+
+  it("rejects missing required MCP bundle keys and env on HTTP servers", () => {
     expect(() =>
       stageMcpServers({
-        config: mcpConfig(),
-        env: { GITVIBE_MCP_ENV_JSON: JSON.stringify({ DOCS_TOKEN: "docs-token" }) },
+        config: requiredDenseMemConfig(),
+        env: { GITVIBE_MCP_ENV_JSON: "{}" },
         stage: "review-matrix",
       }),
     ).toThrow(
@@ -295,7 +312,9 @@ describe("MCP stage credential validation", () => {
       }),
     ).toThrow("ai.mcp.servers.docs.env is supported only for stdio MCP servers.");
   });
+});
 
+describe("MCP stage credential source validation", () => {
   it("rejects invalid transport and credential source shapes", () => {
     expect(() =>
       stageMcpServers({
@@ -391,6 +410,14 @@ function mcpConfig() {
       },
     },
   };
+}
+
+function requiredDenseMemConfig() {
+  const config = mcpConfig();
+  const stageMcp = /** @type {any} */ (config.ai.stages["review-matrix"].mcp);
+  stageMcp.dense_mem.required = true;
+  delete stageMcp.docs;
+  return config;
 }
 
 /**

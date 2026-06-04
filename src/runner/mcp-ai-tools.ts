@@ -1,6 +1,6 @@
 import { jsonSchema, type ToolSet } from "ai";
 import type { RunAiStageOptions } from "./ai.js";
-import { callMcpTool, connectMcpServer, mcpResultText } from "./mcp-client.js";
+import { callMcpTool, connectMcpServer, mcpResultText, redactMcpText } from "./mcp-client.js";
 import { modelMcpServersForStage } from "./mcp-config.js";
 import type { ConnectedMcpServer } from "./mcp-client.js";
 
@@ -20,6 +20,14 @@ export async function createMcpAiTools(options: RunAiStageOptions): Promise<McpA
   const tools: ToolSet = {};
   try {
     for (const stageServer of stageServers) {
+      if (!stageServer.server) {
+        handleSetupError({
+          error: stageServer.resolutionError,
+          options,
+          stageServer,
+        });
+        continue;
+      }
       let connection: ConnectedMcpServer | undefined;
       try {
         connection = await connectMcpServer({
@@ -55,11 +63,7 @@ export async function createMcpAiTools(options: RunAiStageOptions): Promise<McpA
         }
       } catch (error) {
         if (connection && !connections.includes(connection)) await connection.close();
-        if (stageServer.required) throw error;
-        options.logger?.event("mcp.ai_tools.warning", {
-          reason: error instanceof Error ? error.message : String(error),
-          server: stageServer.server.name,
-        });
+        handleSetupError({ error, options, stageServer });
       }
     }
   } catch (error) {
@@ -68,7 +72,7 @@ export async function createMcpAiTools(options: RunAiStageOptions): Promise<McpA
   }
 
   options.logger?.event("mcp.ai_tools.ready", {
-    servers: stageServers.map((entry) => entry.server.name).join(","),
+    servers: stageServers.map((entry) => entry.name).join(","),
     tools: Object.keys(tools).join(","),
   });
   return {
@@ -79,6 +83,21 @@ export async function createMcpAiTools(options: RunAiStageOptions): Promise<McpA
 
 export function namespacedToolName(server: string, tool: string): string {
   return `mcp__${server}__${tool}`;
+}
+
+function handleSetupError(options: {
+  error: unknown;
+  options: RunAiStageOptions;
+  stageServer: ReturnType<typeof modelMcpServersForStage>[number];
+}): void {
+  if (options.stageServer.required) throw options.error;
+  options.options.logger?.event("mcp.ai_tools.warning", {
+    reason: redactMcpText(
+      options.error instanceof Error ? options.error.message : String(options.error),
+      options.stageServer.server?.secretValues || [],
+    ),
+    server: options.stageServer.name,
+  });
 }
 
 function emptyMcpAiTools(): McpAiToolSet {

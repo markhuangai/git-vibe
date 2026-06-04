@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   mcpResultText: vi.fn((result) =>
     (result.content || []).map((item) => ("text" in item ? item.text : "")).join("\n"),
   ),
+  redactMcpText: vi.fn((text, secrets = []) =>
+    secrets.reduce((value, secret) => value.split(secret).join("<redacted:mcp-secret>"), text),
+  ),
 }));
 
 vi.mock("../src/runner/mcp-client.js", () => mocks);
@@ -19,7 +22,9 @@ afterEach(() => {
   mocks.connectMcpServer.mockReset();
   mocks.listMcpTools.mockReset();
   mocks.mcpResultText.mockClear();
+  mocks.redactMcpText.mockClear();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("MCP deterministic prompt context", () => {
@@ -160,6 +165,48 @@ describe("MCP deterministic prompt context failures", () => {
     expect(logger.event).toHaveBeenCalledWith("mcp.context.warning", {
       reason: "MCP context call dense_mem.recall failed: tool denied",
     });
+  });
+});
+
+describe("MCP deterministic prompt context secret handling", () => {
+  it("redacts MCP secrets from required connection failures before publishing", async () => {
+    const logger = { event: vi.fn() };
+    vi.stubEnv("GITVIBE_MCP_ENV_JSON", JSON.stringify({ DENSE_MEM_TOKEN: "dense-token" }));
+    mocks.connectMcpServer.mockRejectedValue(new Error("dense-token offline"));
+
+    const result = await buildMcpPromptContext({
+      config: secretMcpConfig({ required: true }),
+      context: contextPacket(),
+      logger,
+      runner: runnerOptions(),
+    });
+
+    expect(result.blocked.comment_body).not.toContain("dense-token");
+    expect(result.blocked.comment_body).toContain(
+      "MCP server dense_mem failed: <redacted:mcp-secret> offline",
+    );
+    expect(logger.event).toHaveBeenCalledWith("mcp.context.block", {
+      reason: "MCP server dense_mem failed: <redacted:mcp-secret> offline",
+    });
+  });
+
+  it("warns instead of throwing when optional MCP credentials are missing", async () => {
+    const logger = { event: vi.fn() };
+    vi.stubEnv("GITVIBE_MCP_ENV_JSON", "{}");
+
+    const result = await buildMcpPromptContext({
+      config: secretMcpConfig({ required: false }),
+      context: contextPacket(),
+      logger,
+      runner: runnerOptions(),
+    });
+
+    expect(result.blocked).toBeUndefined();
+    expect(result.promptAddition).toContain("GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required");
+    expect(logger.event).toHaveBeenCalledWith("mcp.context.warning", {
+      reason: expect.stringContaining("GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required"),
+    });
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
   });
 });
 
@@ -310,6 +357,14 @@ function modelMcpConfig({ required }) {
       },
     },
   };
+}
+
+function secretMcpConfig({ required }) {
+  const config = mcpConfig({ required });
+  config.ai.mcp.servers.dense_mem.env = {
+    DENSE_MEM_TOKEN: { from_bundle: "DENSE_MEM_TOKEN" },
+  };
+  return config;
 }
 
 function contextPacket() {

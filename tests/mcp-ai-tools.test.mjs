@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
   callMcpTool: vi.fn(),
   connectMcpServer: vi.fn(),
   mcpResultText: vi.fn(),
+  redactMcpText: vi.fn((text, secrets = []) =>
+    secrets.reduce((value, secret) => value.split(secret).join("<redacted:mcp-secret>"), text),
+  ),
 }));
 
 vi.mock("../src/runner/mcp-client.js", () => mocks);
@@ -15,7 +18,9 @@ afterEach(() => {
   mocks.callMcpTool.mockReset();
   mocks.connectMcpServer.mockReset();
   mocks.mcpResultText.mockReset();
+  mocks.redactMcpText.mockClear();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("AI SDK MCP tools", () => {
@@ -104,6 +109,24 @@ describe("AI SDK optional MCP tools", () => {
     });
   });
 
+  it("redacts optional MCP setup failures before logging warnings", async () => {
+    const logger = { event: vi.fn() };
+    vi.stubEnv("GITVIBE_MCP_ENV_JSON", JSON.stringify({ DENSE_MEM_TOKEN: "dense-token" }));
+    mocks.connectMcpServer.mockRejectedValue(new Error("dense-token offline"));
+
+    await expect(
+      createMcpAiTools({
+        config: optionalMcpBundleConfig(),
+        logger,
+        stage: "validate",
+      }),
+    ).resolves.toMatchObject({ tools: {} });
+    expect(logger.event).toHaveBeenCalledWith("mcp.ai_tools.warning", {
+      reason: "<redacted:mcp-secret> offline",
+      server: "dense_mem",
+    });
+  });
+
   it("renders non-Error optional MCP setup failures as warnings", async () => {
     const logger = { event: vi.fn() };
     mocks.connectMcpServer.mockRejectedValue("offline");
@@ -119,6 +142,24 @@ describe("AI SDK optional MCP tools", () => {
       reason: "offline",
       server: "dense_mem",
     });
+  });
+
+  it("warns without connecting when optional MCP credentials are missing", async () => {
+    const logger = { event: vi.fn() };
+    vi.stubEnv("GITVIBE_MCP_ENV_JSON", "{}");
+
+    await expect(
+      createMcpAiTools({
+        config: optionalMcpBundleConfig(),
+        logger,
+        stage: "validate",
+      }),
+    ).resolves.toMatchObject({ tools: {} });
+    expect(logger.event).toHaveBeenCalledWith("mcp.ai_tools.warning", {
+      reason: expect.stringContaining("GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required"),
+      server: "dense_mem",
+    });
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
   });
 
   it("closes optional MCP connections when tool listing fails", async () => {
@@ -218,6 +259,14 @@ function mcpConfig() {
 function optionalMcpConfig() {
   const config = mcpConfig();
   config.ai.stages.validate.mcp.dense_mem.required = false;
+  return config;
+}
+
+function optionalMcpBundleConfig() {
+  const config = optionalMcpConfig();
+  config.ai.mcp.servers.dense_mem.env = {
+    DENSE_MEM_TOKEN: { from_bundle: "DENSE_MEM_TOKEN" },
+  };
   return config;
 }
 
