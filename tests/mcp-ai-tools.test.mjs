@@ -245,9 +245,7 @@ function mcpConfig() {
         validate: {
           mcp: {
             dense_mem: {
-              allow_tools: {
-                model: ["search_memory"],
-              },
+              tools: ["search_memory"],
             },
           },
         },
@@ -274,9 +272,7 @@ function twoServerMcpConfig() {
   const config = mcpConfig();
   config.ai.mcp.servers.docs = { command: "node" };
   config.ai.stages.validate.mcp.docs = {
-    allow_tools: {
-      model: ["lookup"],
-    },
+    tools: ["lookup"],
   };
   return config;
 }

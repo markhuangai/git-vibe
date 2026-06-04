@@ -113,8 +113,38 @@ describe("MCP stage configuration validation", () => {
         stage: "review-matrix",
       }),
     ).toThrow(
-      "ai.stages.review-matrix.mcp.dense_mem.context_calls includes tools not listed in allow_tools.context: search_memory.",
+      "ai.stages.review-matrix.mcp.dense_mem.context_calls includes tools not listed in tools or allow_tools.context: search_memory.",
     );
+  });
+});
+
+describe("MCP stage simple tool allowlists", () => {
+  it("accepts a flat tools list for model tools and context-call allowlisting", () => {
+    const servers = stageMcpServers({
+      config: denseMemConfig({
+        context_calls: [{ tool: "recall" }],
+        tools: ["search_memory", "recall", "search_memory"],
+      }),
+      stage: "review-matrix",
+    });
+
+    expect(servers[0]).toMatchObject({
+      allowContextTools: ["search_memory", "recall"],
+      allowModelTools: ["search_memory", "recall"],
+      contextCalls: [{ arguments: {}, tool: "recall" }],
+    });
+  });
+
+  it("accepts allow_tools as a flat model-tool list", () => {
+    const servers = stageMcpServers({
+      config: denseMemConfig({ allow_tools: ["search_memory"] }),
+      stage: "review-matrix",
+    });
+
+    expect(servers[0]).toMatchObject({
+      allowContextTools: [],
+      allowModelTools: ["search_memory"],
+    });
   });
 });
 
@@ -198,10 +228,10 @@ describe("MCP stage tool field validation", () => {
   it("rejects malformed MCP tool lists and context calls", () => {
     expect(() =>
       stageMcpServers({
-        config: denseMemConfig({ allow_tools: [] }),
+        config: denseMemConfig({ allow_tools: [""] }),
         stage: "review-matrix",
       }),
-    ).toThrow("ai.stages.review-matrix.mcp.dense_mem.allow_tools must be an object.");
+    ).toThrow("ai.stages.review-matrix.mcp.dense_mem.allow_tools[0] must be a non-empty string.");
 
     expect(() =>
       stageMcpServers({
@@ -241,6 +271,22 @@ describe("MCP stage tool field validation", () => {
     ).toThrow(
       "ai.stages.review-matrix.mcp.dense_mem.context_calls[0].tool values must be safe MCP tool names.",
     );
+  });
+
+  it("rejects malformed flat MCP tool lists", () => {
+    expect(() =>
+      stageMcpServers({
+        config: denseMemConfig({ tools: "search_memory" }),
+        stage: "review-matrix",
+      }),
+    ).toThrow("ai.stages.review-matrix.mcp.dense_mem.tools must be a string array.");
+
+    expect(() =>
+      stageMcpServers({
+        config: denseMemConfig({ tools: ["bad tool"] }),
+        stage: "review-matrix",
+      }),
+    ).toThrow("ai.stages.review-matrix.mcp.dense_mem.tools values must be safe MCP tool names.");
   });
 
   it("rejects malformed MCP server args", () => {

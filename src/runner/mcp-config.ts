@@ -129,21 +129,24 @@ function parseStageServerConfig(
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   const required =
     value.required === undefined ? true : booleanValue(value.required, `${path}.required`);
+  const tools = uniqueToolNames(stringArray(value.tools, `${path}.tools`, false), `${path}.tools`);
   const allowTools = allowToolsConfig(value.allow_tools, `${path}.allow_tools`);
   const contextCalls = contextCallsConfig(value.context_calls, `${path}.context_calls`);
+  const contextTools = uniqueToolNames([...tools, ...allowTools.context], `${path}.tools`);
+  const modelTools = uniqueToolNames([...tools, ...allowTools.model], `${path}.tools`);
   const disallowedContextCalls = contextCalls
     .map((call) => call.tool)
-    .filter((tool) => !allowTools.context.includes(tool));
+    .filter((tool) => !contextTools.includes(tool));
   if (disallowedContextCalls.length > 0) {
     throw new Error(
-      `${path}.context_calls includes tools not listed in allow_tools.context: ${[
+      `${path}.context_calls includes tools not listed in tools or allow_tools.context: ${[
         ...new Set(disallowedContextCalls),
       ].join(", ")}.`,
     );
   }
   return {
-    allowContextTools: allowTools.context,
-    allowModelTools: allowTools.model,
+    allowContextTools: contextTools,
+    allowModelTools: modelTools,
     contextCalls,
     required,
   };
@@ -191,6 +194,11 @@ function parseServerConfig(
 
 function allowToolsConfig(value: unknown, path: string): { context: string[]; model: string[] } {
   if (value === undefined) return { context: [], model: [] };
+  if (Array.isArray(value))
+    return {
+      context: [],
+      model: uniqueToolNames(stringArray(value, path, true), path),
+    };
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   return {
     context: uniqueToolNames(

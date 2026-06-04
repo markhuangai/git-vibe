@@ -125,17 +125,11 @@ ai:
       profile: local_proxy
     review-matrix:
       role_group: review_gate
-      # Optional stage-scoped MCP context and model-callable tools.
+      # Optional stage-scoped MCP model-callable tools.
       # mcp:
       #   dense_mem:
       #     required: false
-      #     allow_tools:
-      #       context: ["recall"]
-      #       model: ["search_memory"]
-      #     context_calls:
-      #       - tool: recall
-      #         arguments:
-      #           query: "{{repository}} PR {{pr_number}} review decisions"
+      #     tools: ["search_memory"]
     create-pr:
       profile: local_proxy
     address-pr-feedback:

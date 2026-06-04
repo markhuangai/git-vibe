@@ -415,13 +415,7 @@ ai:
       # mcp:
       #   dense_mem:
       #     required: false
-      #     allow_tools:
-      #       context: ["recall"]
-      #       model: ["search_memory"]
-      #     context_calls:
-      #       - tool: recall
-      #         arguments:
-      #           query: "{{repository}} PR {{pr_number}} review decisions"
+      #     tools: ["search_memory"]
     create-pr:
       profile: local_proxy
     address-pr-feedback:
@@ -445,11 +439,12 @@ system prompt for that profile across `ai-sdk-agentool`, `cli-codex`, and
 `cli-claude-code`; GitVibe never auto-loads `AGENTS.md` or `CLAUDE.md`.
 
 Stages may also opt into MCP servers through `ai.stages.<stage>.mcp`. Each
-server has separate `allow_tools.context` and `allow_tools.model` lists. Context
-calls run before the model and are injected into the prompt; model tools are
-exposed to AI SDK, Codex CLI, and Claude Code through a GitVibe gateway that
-enforces the stage allowlist. `required` defaults to `true`; set it to `false`
-when missing MCP context should warn instead of blocking the stage.
+server can expose a flat `tools` list to the model. For advanced deterministic
+pre-model context, use `allow_tools.context` with `context_calls`; those results
+are injected into the prompt before the model runs. Model tools are exposed to AI
+SDK, Codex CLI, and Claude Code through a GitVibe gateway that enforces the stage
+allowlist. `required` defaults to `true`; set it to `false` when missing MCP
+context should warn instead of blocking the stage.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.

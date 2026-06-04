@@ -369,17 +369,10 @@ ai:
       mcp:
         dense_mem:
           required: false
-          allow_tools:
-            context: ["recall"]
-            model: ["search_memory"]
-          context_calls:
-            - tool: recall
-              arguments:
-                query: "{{repository}} PR {{pr_number}} review decisions"
+          tools: ["search_memory"]
         private_docs:
           required: true
-          allow_tools:
-            model: ["lookup"]
+          tools: ["lookup"]
 ```
 
 MCP rules:
@@ -388,11 +381,14 @@ MCP rules:
   `sse`.
 - Server names and tool names must be safe names because GitVibe maps model
   tools to names like `mcp__dense_mem__search_memory`.
-- `allow_tools.context` controls deterministic pre-model context calls.
-  `context_calls` may only call tools in this list.
-- `allow_tools.model` controls model-callable tools. AI SDK tools are exposed
-  directly; Codex CLI and Claude Code receive a GitVibe MCP gateway that proxies
-  only the allowed tools.
+- `tools` is the normal stage-level allowlist for model-callable MCP tools. AI
+  SDK tools are exposed directly; Codex CLI and Claude Code receive a GitVibe MCP
+  gateway that proxies only the allowed tools. `allow_tools: ["tool_name"]` is
+  accepted as an alias for the same simple shape.
+- Advanced deterministic pre-model context may use `allow_tools.context` plus
+  `context_calls`; those calls run before the model and are injected into the
+  prompt. `context_calls` may only call tools listed in `tools` or
+  `allow_tools.context`.
 - `required` defaults to `true`. Required MCP connection or context-call
   failures produce a schema-valid blocked stage result before any model call.
   Optional failures are logged and included as prompt warnings.

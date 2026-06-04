@@ -347,9 +347,7 @@ function modelMcpConfig({ required }) {
         "review-matrix": {
           mcp: {
             dense_mem: {
-              allow_tools: {
-                model: ["search_memory"],
-              },
+              tools: ["search_memory"],
               required,
             },
           },
