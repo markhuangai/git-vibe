@@ -210,6 +210,7 @@ Required repository or organization secrets/variables:
 - `GITVIBE_GITHUB_TOKEN`: fine-grained PAT used by the server and workflows for GitHub API access.
 - `WEBHOOK_SECRET`: repository webhook shared secret used by the deploy workflow to set runtime `GITHUB_WEBHOOK_SECRET`.
 - `GITVIBE_AI_ENV_JSON`: JSON bundle for AI provider auth, endpoints, CLI auth, and provider-specific environment values.
+- `GITVIBE_MCP_ENV_JSON`: optional JSON bundle for configured MCP server credentials.
 - `GITVIBE_DISCUSSION_CATEGORY`: optional variable used by app deployment for feature Discussion conversion category.
 - `GITVIBE_BASE_BRANCH`: optional variable used by reusable workflows as the implementation and review base branch.
 

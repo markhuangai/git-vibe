@@ -72,6 +72,9 @@ AI integration layers:
   remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
 - CLI adapters: `cli-codex` and `cli-claude-code` run fixed non-interactive CLI commands, stream CLI output to the action log, and parse structured output.
+- MCP gateway: stage-scoped MCP servers can provide deterministic prompt context
+  and model-callable tools. GitVibe resolves credentials, enforces per-stage
+  allowlists, and scans MCP tool output before it reaches a model.
 - External mention adapter: not currently implemented.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
 - Prompt-injection safety gate: deterministic policy that runs once as a no-AI
@@ -244,6 +247,10 @@ CLI authentication guidance:
 - AI profiles should read provider auth and endpoints from the `GITVIBE_AI_ENV_JSON` bundle secret. CLI profile `env` values may use either `{ from_bundle: KEY }` or literal strings when the repository owner intentionally wants the value committed in config.
 - Codex CLI can use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner. When `auth_json.from_bundle` is configured, GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret, so `GITVIBE_GITHUB_TOKEN` needs repository Actions secrets read/write permission.
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
+- MCP server credentials should read from the optional `GITVIBE_MCP_ENV_JSON`
+  bundle secret, not from `GITVIBE_AI_ENV_JSON`. Stdio MCP servers may map
+  `env.<NAME>` from that bundle; HTTP and SSE servers may map `headers.<NAME>`
+  from that bundle.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 - CLI commands are fixed by adapter: `cli-codex` runs `codex exec` and `cli-claude-code` runs `claude -p`. Profiles do not accept a `command` override.
 - CLI adapters bypass native permission and sandbox prompts. GitVibe provides web safety rules in the system prompt, but shell or process network egress is only a hard boundary when the runner blocks it. Run CLI profiles only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
@@ -331,6 +338,73 @@ workspace-relative file is appended to the system prompt inside a
 fallback retries, role-group members, and finalizers. Missing files, empty files,
 absolute paths, `..` traversal, symlinks, directories, and paths resolving
 outside the workspace fail fast.
+
+## MCP Context And Tools
+
+MCP server definitions live under `ai.mcp.servers`. Stage entries under
+`ai.stages.<stage>.mcp` choose which servers are active and which tools each
+server can expose for that stage.
+
+```yaml
+ai:
+  mcp:
+    servers:
+      dense_mem:
+        transport: stdio
+        command: node
+        args: ["./scripts/dense-mem-mcp.js"]
+        env:
+          DENSE_MEM_API_KEY:
+            from_bundle: DENSE_MEM_API_KEY
+      private_docs:
+        transport: http
+        url: https://mcp.example.test
+        headers:
+          Authorization:
+            from_bundle: PRIVATE_DOCS_TOKEN
+
+  stages:
+    review-matrix:
+      role_group: review_gate
+      mcp:
+        dense_mem:
+          required: false
+          allow_tools:
+            context: ["recall"]
+            model: ["search_memory"]
+          context_calls:
+            - tool: recall
+              arguments:
+                query: "{{repository}} PR {{pr_number}} review decisions"
+        private_docs:
+          required: true
+          allow_tools:
+            model: ["lookup"]
+```
+
+MCP rules:
+
+- `transport` defaults to `stdio`; supported values are `stdio`, `http`, and
+  `sse`.
+- Server names and tool names must be safe names because GitVibe maps model
+  tools to names like `mcp__dense_mem__search_memory`.
+- `allow_tools.context` controls deterministic pre-model context calls.
+  `context_calls` may only call tools in this list.
+- `allow_tools.model` controls model-callable tools. AI SDK tools are exposed
+  directly; Codex CLI and Claude Code receive a GitVibe MCP gateway that proxies
+  only the allowed tools.
+- `required` defaults to `true`. Required MCP connection or context-call
+  failures produce a schema-valid blocked stage result before any model call.
+  Optional failures are logged and included as prompt warnings.
+- Context-call arguments may use `{{repository}}`, `{{artifact_type}}`,
+  `{{artifact_number}}`, `{{artifact_title}}`, `{{issue_number}}`,
+  `{{pr_number}}`, and `{{stage}}`.
+- MCP tool results are scanned by the same prompt-injection detector before they
+  are injected into prompts or returned to models.
+- Secret values referenced with `from_bundle` come from `GITVIBE_MCP_ENV_JSON`.
+  GitVibe strips both AI and MCP bundle secrets from spawned child environments
+  unless a configured MCP server env mapping explicitly adds a resolved value,
+  and redacts those resolved MCP credential values from MCP tool results.
 
 Normalized reasoning config:
 

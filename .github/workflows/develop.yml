@@ -121,6 +121,9 @@ on:
       GITVIBE_AI_ENV_JSON:
         description: JSON env bundle for AI provider config and CLI profiles.
         required: true
+      GITVIBE_MCP_ENV_JSON:
+        description: Optional JSON env bundle for MCP server credentials.
+        required: false
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
@@ -172,6 +175,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     permissions:
       contents: write
       issues: write
@@ -242,6 +246,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.create_pr_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     outputs:
       pr-number: ${{ steps.create.outputs.pr-number }}
       pr-url: ${{ steps.create.outputs.pr-url }}
@@ -286,6 +291,7 @@ jobs:
     timeout-minutes: 10
     env:
       GITVIBE_AI_ENV_JSON: ""
+      GITVIBE_MCP_ENV_JSON: ""
     outputs:
       indexes: ${{ steps.plan.outputs.indexes }}
       labels: ${{ steps.plan.outputs.labels }}
@@ -326,6 +332,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -383,6 +390,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     outputs:
       next-state: ${{ steps.review.outputs.next-state }}
       result-file: ${{ steps.review.outputs.result-file }}

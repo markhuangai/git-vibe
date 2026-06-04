@@ -206,6 +206,7 @@ store secret values.
 | ---------------------- | -------- | --------------------------------------------------------------------------- |
 | `GITVIBE_AI_ENV_JSON`  | Yes      | JSON env bundle for AI provider config, CLI auth, and provider variables    |
 | `GITVIBE_GITHUB_TOKEN` | Yes      | Fine-grained PAT for server-side and workflow GitHub writes                 |
+| `GITVIBE_MCP_ENV_JSON` | No       | JSON env bundle for configured MCP server credentials                       |
 | `WEBHOOK_SECRET`       | Yes      | GitHub webhook shared secret; deployment maps it to `GITHUB_WEBHOOK_SECRET` |
 
 Useful variables:
@@ -227,6 +228,16 @@ Store AI provider values in `GITVIBE_AI_ENV_JSON`:
   "GITVIBE_AI_BASE_URL": "https://api.provider.example/v1",
   "MINIMAX_API_KEY": "...",
   "MINIMAX_ANTHROPIC_BASE_URL": "https://api.minimax.example/anthropic"
+}
+```
+
+Store MCP credentials separately in `GITVIBE_MCP_ENV_JSON` when stages use
+`ai.mcp.servers`:
+
+```json
+{
+  "DENSE_MEM_API_KEY": "...",
+  "PRIVATE_DOCS_TOKEN": "..."
 }
 ```
 
@@ -370,6 +381,17 @@ ai:
       # context:
       #   files:
       #     - AGENTS.md
+  # Optional MCP servers. Stage entries decide which server tools are available.
+  # Credentials referenced with from_bundle are read from GITVIBE_MCP_ENV_JSON.
+  # mcp:
+  #   servers:
+  #     dense_mem:
+  #       transport: stdio
+  #       command: node
+  #       args: ["./scripts/dense-mem-mcp.js"]
+  #       env:
+  #         DENSE_MEM_API_KEY:
+  #           from_bundle: DENSE_MEM_API_KEY
   role_groups:
     review_gate:
       synthesizer: local_proxy
@@ -390,6 +412,16 @@ ai:
       profile: local_proxy
     review-matrix:
       role_group: review_gate
+      # mcp:
+      #   dense_mem:
+      #     required: false
+      #     allow_tools:
+      #       context: ["recall"]
+      #       model: ["search_memory"]
+      #     context_calls:
+      #       - tool: recall
+      #         arguments:
+      #           query: "{{repository}} PR {{pr_number}} review decisions"
     create-pr:
       profile: local_proxy
     address-pr-feedback:
@@ -411,6 +443,13 @@ Profiles may opt into shared repository guidance with
 `ai.profiles.<name>.context.files`. Listed files are appended to the rendered
 system prompt for that profile across `ai-sdk-agentool`, `cli-codex`, and
 `cli-claude-code`; GitVibe never auto-loads `AGENTS.md` or `CLAUDE.md`.
+
+Stages may also opt into MCP servers through `ai.stages.<stage>.mcp`. Each
+server has separate `allow_tools.context` and `allow_tools.model` lists. Context
+calls run before the model and are injected into the prompt; model tools are
+exposed to AI SDK, Codex CLI, and Claude Code through a GitVibe gateway that
+enforces the stage allowlist. `required` defaults to `true`; set it to `false`
+when missing MCP context should warn instead of blocking the stage.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.
@@ -499,6 +538,7 @@ jobs:
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
 ```
 
 For source-repo testing, dispatch `investigate.yml`, `validate.yml`,

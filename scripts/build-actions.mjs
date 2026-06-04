@@ -7,6 +7,7 @@ mkdirSync("dist/actions", { recursive: true });
 
 for (const action of [
   "mark-blocked",
+  "mcp-gateway",
   "plan-stage",
   "run-action",
   "security-review",

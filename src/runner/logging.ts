@@ -69,8 +69,8 @@ export function redactLogText(value: string): string {
     redacted = redacted.split(secret).join(`<redacted:${name}>`);
   }
 
-  for (const [name, secret] of aiEnvBundleSecrets()) {
-    redacted = redacted.split(secret).join(`<redacted:GITVIBE_AI_ENV_JSON.${name}>`);
+  for (const [bundle, name, secret] of envBundleSecrets()) {
+    redacted = redacted.split(secret).join(`<redacted:${bundle}.${name}>`);
   }
 
   return redacted;
@@ -80,16 +80,21 @@ function sensitiveName(name: string): boolean {
   return /(^|_)(AUTH|AUTHORIZATION|CREDENTIALS?|KEY|PASSWORD|SECRET|TOKEN)(_|$)/i.test(name);
 }
 
-function aiEnvBundleSecrets(): Array<[string, string]> {
-  const raw = process.env.GITVIBE_AI_ENV_JSON;
+function envBundleSecrets(): Array<[string, string, string]> {
+  return ["GITVIBE_AI_ENV_JSON", "GITVIBE_MCP_ENV_JSON"].flatMap((bundle) => bundleSecrets(bundle));
+}
+
+function bundleSecrets(bundle: string): Array<[string, string, string]> {
+  const raw = process.env[bundle];
   if (!raw) return [];
 
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
-    return Object.entries(parsed as Record<string, unknown>).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length >= 6,
-    );
+    return Object.entries(parsed as Record<string, unknown>)
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+      .filter(([, value]) => value.length >= 6)
+      .map(([name, value]): [string, string, string] => [bundle, name, value]);
   } catch {
     return [];
   }

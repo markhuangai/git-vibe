@@ -78,6 +78,17 @@ ai:
       model: opus
       reasoning:
         effort: xhigh
+  # Optional MCP servers. Stage entries choose which server tools are available.
+  # Credentials referenced with from_bundle are read from GITVIBE_MCP_ENV_JSON.
+  # mcp:
+  #   servers:
+  #     dense_mem:
+  #       transport: stdio
+  #       command: node
+  #       args: ["./scripts/dense-mem-mcp.js"]
+  #       env:
+  #         DENSE_MEM_API_KEY:
+  #           from_bundle: DENSE_MEM_API_KEY
   role_groups:
     review_gate:
       synthesizer: local_proxy
@@ -114,6 +125,17 @@ ai:
       profile: local_proxy
     review-matrix:
       role_group: review_gate
+      # Optional stage-scoped MCP context and model-callable tools.
+      # mcp:
+      #   dense_mem:
+      #     required: false
+      #     allow_tools:
+      #       context: ["recall"]
+      #       model: ["search_memory"]
+      #     context_calls:
+      #       - tool: recall
+      #         arguments:
+      #           query: "{{repository}} PR {{pr_number}} review decisions"
     create-pr:
       profile: local_proxy
     address-pr-feedback:

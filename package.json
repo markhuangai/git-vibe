@@ -36,7 +36,9 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",
+    "@ai-sdk/mcp": "^1.0.46",
     "@ai-sdk/openai": "^3.0.60",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "agentool": "^1.5.2",
     "ai": "^6.0.175",
     "libsodium-wrappers": "^0.8.4",
