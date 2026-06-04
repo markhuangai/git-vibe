@@ -4,6 +4,7 @@ import { basename } from "node:path";
 import { join } from "node:path";
 import type { RunAiStageOptions } from "./ai.js";
 import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
+import { prepareCliMcpConfig } from "./mcp-cli-config.js";
 import {
   codexOutputSchema,
   cliModelName,
@@ -25,12 +26,14 @@ export async function runCodexCliStage({
   const schemaFile = join(contextDir, `${options.stage}.schema.json`);
   const outputFile = join(contextDir, `${options.stage}.output.json`);
   writeFileSync(schemaFile, JSON.stringify(codexOutputSchema(options.schema), null, 2));
+  const mcpConfig = prepareCliMcpConfig({ contextDir, options });
 
   const command = "codex";
   const model = cliModelName(profile, "cli-codex");
   const args = [
     "exec",
     "--dangerously-bypass-approvals-and-sandbox",
+    "--ignore-user-config",
     "--cd",
     options.cwd,
     "--model",
@@ -40,6 +43,7 @@ export async function runCodexCliStage({
     "--output-last-message",
     outputFile,
     ...codexReasoningArgs(profile),
+    ...mcpConfig.codexConfigArgs,
   ];
   options.logger?.event("ai.request.start", {
     adapter: "cli-codex",

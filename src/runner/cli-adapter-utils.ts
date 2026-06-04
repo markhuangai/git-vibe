@@ -20,6 +20,7 @@ interface CliCommandResult {
 }
 
 export const aiEnvBundleVariable = "GITVIBE_AI_ENV_JSON";
+export const mcpEnvBundleVariable = "GITVIBE_MCP_ENV_JSON";
 
 export function cliModelName(profile: Record<string, unknown>, adapter: string): string {
   const model = stringValue(profile.model);
@@ -69,7 +70,12 @@ export function cliProfileEnv(
 export function sanitizedChildEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env = { ...baseEnv };
   for (const name of Object.keys(env)) {
-    if (name === aiEnvBundleVariable || legacyAiEnvNames.has(name) || sensitiveEnvName(name)) {
+    if (
+      name === aiEnvBundleVariable ||
+      name === mcpEnvBundleVariable ||
+      legacyAiEnvNames.has(name) ||
+      sensitiveEnvName(name)
+    ) {
       delete env[name];
     }
   }
@@ -97,7 +103,20 @@ export function bundleKeyFromSource(source: unknown, sourcePath: string): string
 export function optionalAiEnvBundleSecretValues(
   baseEnv: NodeJS.ProcessEnv = process.env,
 ): string[] {
-  const raw = baseEnv[aiEnvBundleVariable];
+  return optionalEnvBundleSecretValues(aiEnvBundleVariable, baseEnv);
+}
+
+export function optionalMcpEnvBundleSecretValues(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): string[] {
+  return optionalEnvBundleSecretValues(mcpEnvBundleVariable, baseEnv);
+}
+
+function optionalEnvBundleSecretValues(
+  variable: string,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const raw = baseEnv[variable];
   if (!raw) return [];
 
   try {
@@ -191,20 +210,45 @@ export function parseRequiredAiEnvBundle(
   baseEnv: NodeJS.ProcessEnv,
   requiredBy: string,
 ): Record<string, string> {
-  const raw = baseEnv[aiEnvBundleVariable];
-  if (!raw) throw new Error(`${aiEnvBundleVariable} is required by ${requiredBy}.`);
+  return parseRequiredEnvBundle(aiEnvBundleVariable, baseEnv, requiredBy);
+}
+
+export function parseRequiredMcpEnvBundle(
+  baseEnv: NodeJS.ProcessEnv,
+  requiredBy: string,
+): Record<string, string> {
+  return parseRequiredEnvBundle(mcpEnvBundleVariable, baseEnv, requiredBy);
+}
+
+export function bundleValueFromMcpSource(
+  source: unknown,
+  sourcePath: string,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (source === undefined) return undefined;
+  const bundle = parseRequiredMcpEnvBundle(baseEnv, sourcePath);
+  return bundleValueForVariable(source, sourcePath, bundle, mcpEnvBundleVariable);
+}
+
+function parseRequiredEnvBundle(
+  variable: string,
+  baseEnv: NodeJS.ProcessEnv,
+  requiredBy: string,
+): Record<string, string> {
+  const raw = baseEnv[variable];
+  if (!raw) throw new Error(`${variable} is required by ${requiredBy}.`);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;
   } catch (error) {
-    throw new Error(`${aiEnvBundleVariable} must be valid JSON: ${String(error)}.`);
+    throw new Error(`${variable} must be valid JSON: ${String(error)}.`);
   }
 
-  if (!isRecord(parsed)) throw new Error(`${aiEnvBundleVariable} must be a JSON object.`);
+  if (!isRecord(parsed)) throw new Error(`${variable} must be a JSON object.`);
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value !== "string") {
-      throw new Error(`${aiEnvBundleVariable}.${key} must be a string.`);
+      throw new Error(`${variable}.${key} must be a string.`);
     }
   }
   return parsed as Record<string, string>;
@@ -213,11 +257,20 @@ export function parseRequiredAiEnvBundle(
 const legacyAiEnvNames = new Set(["GITVIBE_AI_BASE_URL"]);
 
 function bundleValue(source: unknown, sourcePath: string, bundle: Record<string, string>): string {
+  return bundleValueForVariable(source, sourcePath, bundle, aiEnvBundleVariable);
+}
+
+function bundleValueForVariable(
+  source: unknown,
+  sourcePath: string,
+  bundle: Record<string, string>,
+  variable: string,
+): string {
   if (!isRecord(source)) throw new Error(`${sourcePath} must be an object with from_bundle.`);
   const key = stringValue(source.from_bundle);
   if (!key) throw new Error(`${sourcePath}.from_bundle must be a non-empty string.`);
   if (!(key in bundle)) {
-    throw new Error(`GITVIBE_AI_ENV_JSON key ${key} is required by ${sourcePath}.from_bundle.`);
+    throw new Error(`${variable} key ${key} is required by ${sourcePath}.from_bundle.`);
   }
   return bundle[key];
 }

@@ -128,3 +128,54 @@ export function contextCoverageBlockedOutput(options: {
   }
   return base;
 }
+
+export function mcpBlockedOutput(options: {
+  context: ContextPacket;
+  reason: string;
+  runner: RunnerOptions;
+}): JsonObject {
+  const summary = "GitVibe blocked this run because required MCP context was unavailable.";
+  const question = {
+    options: ["Fix the MCP configuration or mark the MCP server optional, then rerun the stage."],
+    question: options.reason,
+  };
+  const base = {
+    assumptions: [],
+    comment_body: [summary, "", options.reason].join("\n"),
+    findings: [options.reason],
+    next_state: "blocked",
+    questions: [question],
+    references: [options.context.artifact.url, options.runner.workflowRunUrl].filter(
+      (value): value is string => Boolean(value),
+    ),
+    stage: options.runner.stage,
+    status: "blocked",
+    summary,
+  };
+
+  if (options.runner.stage === "investigate") {
+    return { ...base, blocking_questions: [question], implementation_plan: [] };
+  }
+  if (options.runner.stage === "materialize") return { ...base, issues: [] };
+  if (options.runner.stage === "implement") {
+    return {
+      ...base,
+      branch: issueBranch(options.context),
+      tests: ["Not run because required MCP context was unavailable."],
+    };
+  }
+  if (options.runner.stage === "create-pr") {
+    return { ...base, branch: issueBranch(options.context), pr_body: "", pr_title: "" };
+  }
+  if (options.runner.stage === "review-matrix") {
+    return { ...base, inline_comments: [], tests: [] };
+  }
+  if (options.runner.stage === "address-pr-feedback") {
+    return {
+      ...base,
+      skipped_feedback: [options.reason],
+      tests: ["Not run because required MCP context was unavailable."],
+    };
+  }
+  return base;
+}

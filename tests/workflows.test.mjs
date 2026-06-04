@@ -14,6 +14,9 @@ import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
 const aiEnv = {
   GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
 };
+const mcpEnv = {
+  GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
+};
 const legacyAiEnvNames = [
   "GITVIBE_AI_API_KEY",
   "GITVIBE_AI_BASE_URL",
@@ -151,7 +154,7 @@ describe("GitVibe workflow run names", () => {
 });
 
 describe("GitVibe workflow wiring", () => {
-  it("passes AI environment only into reusable AI action source runs", () => {
+  it("passes AI and MCP environment only into reusable AI action source runs", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
       const steps = gitVibeActionSteps(workflow, (uses) => uses.startsWith("./.git-vibe/actions/"));
@@ -163,6 +166,7 @@ describe("GitVibe workflow wiring", () => {
       for (const step of steps) {
         if (step.uses === "./.git-vibe/actions/plan-stage") {
           expect(step.env?.GITVIBE_AI_ENV_JSON, `${file} ${step.uses} omits AI env`).toBe("");
+          expect(step.env?.GITVIBE_MCP_ENV_JSON, `${file} ${step.uses} omits MCP env`).toBe("");
           continue;
         }
         if (
@@ -173,9 +177,16 @@ describe("GitVibe workflow wiring", () => {
             step.env?.GITVIBE_AI_ENV_JSON,
             `${file} ${step.uses} omits AI env`,
           ).toBeUndefined();
+          expect(
+            step.env?.GITVIBE_MCP_ENV_JSON,
+            `${file} ${step.uses} omits MCP env`,
+          ).toBeUndefined();
           continue;
         }
-        expect(step.env, `${file} ${step.uses} receives AI env`).toMatchObject(aiEnv);
+        expect(step.env, `${file} ${step.uses} receives AI and MCP env`).toMatchObject({
+          ...aiEnv,
+          ...mcpEnv,
+        });
         for (const name of legacyAiEnvNames) {
           expect(step.env?.[name], `${file} ${step.uses} omits ${name}`).toBeUndefined();
         }
@@ -203,6 +214,10 @@ describe("GitVibe workflow wiring", () => {
         workflow.env?.GITVIBE_AI_ENV_JSON,
         `${file} omits AI bundle at workflow scope`,
       ).toBeUndefined();
+      expect(
+        workflow.env?.GITVIBE_MCP_ENV_JSON,
+        `${file} omits MCP bundle at workflow scope`,
+      ).toBeUndefined();
     }
   });
 });
@@ -223,6 +238,7 @@ describe("GitVibe workflow call wiring", () => {
       expect(workflowCall?.inputs?.["action-repository"]).toBeUndefined();
       expect(workflowCall?.inputs?.["action-ref"]).toBeUndefined();
       expect(workflowCall?.secrets?.GITVIBE_AI_ENV_JSON).toMatchObject({ required: true });
+      expect(workflowCall?.secrets?.GITVIBE_MCP_ENV_JSON).toMatchObject({ required: false });
       expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
       expect(actionSourceSteps.length).toBeGreaterThan(0);
       for (const step of actionSourceSteps) {
@@ -245,6 +261,7 @@ describe("GitVibe workflow call wiring", () => {
       expect(reusableJob?.secrets).toMatchObject({
         GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
         GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
+        GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
       });
       expect(reusableJob?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
       expect(reusableJob?.secrets?.CODEX_AUTH_JSON, `${file} omits old Codex auth`).toBeUndefined();
@@ -503,6 +520,7 @@ describe("GitVibe automatic PR review workflow", () => {
       secrets: {
         GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
         GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
+        GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
       },
       uses: "./.github/workflows/review.yml",
       with: {

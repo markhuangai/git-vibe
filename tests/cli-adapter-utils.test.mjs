@@ -2,9 +2,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bundleKeyFromSource,
+  bundleValueFromMcpSource,
   bundleValueFromSource,
   cliProfileEnv,
   optionalAiEnvBundleSecretValues,
+  optionalMcpEnvBundleSecretValues,
   runStreamingCommand,
   sanitizedChildEnv,
 } from "../src/runner/cli-adapter-utils.ts";
@@ -80,6 +82,7 @@ describe("CLI profile environment bundle", () => {
       sanitizedChildEnv({
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-token",
         GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
+        GITVIBE_MCP_ENV_JSON: JSON.stringify({ MCP_KEY: "mcp-value" }),
         INPUT_TOKEN: "action-input-token",
         NORMAL_VALUE: "kept",
         PATH: "/bin",
@@ -128,6 +131,39 @@ describe("CLI profile environment bundle values", () => {
     expect(
       bundleKeyFromSource({ from_bundle: "CODEX_AUTH_JSON" }, "ai.profiles.codex.auth_json"),
     ).toBe("CODEX_AUTH_JSON");
+  });
+
+  it("resolves MCP env bundle sources from GITVIBE_MCP_ENV_JSON", () => {
+    expect(
+      bundleValueFromMcpSource(
+        { from_bundle: "DENSE_MEM_TOKEN" },
+        "ai.mcp.servers.dense.env.TOKEN",
+        {
+          GITVIBE_MCP_ENV_JSON: JSON.stringify({ DENSE_MEM_TOKEN: "dense-token" }),
+        },
+      ),
+    ).toBe("dense-token");
+    expect(
+      bundleValueFromMcpSource(undefined, "ai.mcp.servers.dense.env.TOKEN", {}),
+    ).toBeUndefined();
+    expect(() =>
+      bundleValueFromMcpSource(
+        { from_bundle: "DENSE_MEM_TOKEN" },
+        "ai.mcp.servers.dense.env.TOKEN",
+        {},
+      ),
+    ).toThrow("GITVIBE_MCP_ENV_JSON is required by ai.mcp.servers.dense.env.TOKEN.");
+    expect(() =>
+      bundleValueFromMcpSource(
+        { from_bundle: "DENSE_MEM_TOKEN" },
+        "ai.mcp.servers.dense.env.TOKEN",
+        {
+          GITVIBE_MCP_ENV_JSON: JSON.stringify({ OTHER_TOKEN: "value" }),
+        },
+      ),
+    ).toThrow(
+      "GITVIBE_MCP_ENV_JSON key DENSE_MEM_TOKEN is required by ai.mcp.servers.dense.env.TOKEN.from_bundle.",
+    );
   });
 });
 
@@ -204,6 +240,12 @@ describe("AI env bundle redaction helpers", () => {
       }),
     ).toEqual(["secret-a", "secret-c"]);
     expect(optionalAiEnvBundleSecretValues({ GITVIBE_AI_ENV_JSON: "{" })).toEqual([]);
+    expect(
+      optionalMcpEnvBundleSecretValues({
+        GITVIBE_MCP_ENV_JSON: JSON.stringify({ DENSE_TOKEN: "dense-secret", OTHER: 12 }),
+      }),
+    ).toEqual(["dense-secret"]);
+    expect(optionalMcpEnvBundleSecretValues({ GITVIBE_MCP_ENV_JSON: "[]" })).toEqual([]);
   });
 });
 

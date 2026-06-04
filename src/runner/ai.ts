@@ -21,6 +21,7 @@ import { createRetryingFetch, retryDelayMsForHeaders } from "./ai-retry.js";
 import { logAiSdkAssistantStep, logAiSdkIoInput, logAiSdkIoOutput } from "./ai-sdk-io.js";
 import { createTools, stageToolNames } from "./ai-tools.js";
 import { systemWithWebPolicy } from "./ai-web-policy.js";
+import { createMcpAiTools } from "./mcp-ai-tools.js";
 import { systemWithProfileContext } from "./profile-context.js";
 import {
   extractValidatedOutput,
@@ -164,45 +165,51 @@ async function runAiSdkStageWithProfile(
 ): Promise<string> {
   const toolNames = stageToolNames(options);
   const runtime = aiSdkRuntime({ options, profile, profileName });
-  const tools = createTools(options, runtime.model, toolNames);
-  const primaryTurnBudget = primaryTurnBudgetFor(options);
+  const mcpTools = await createMcpAiTools(options);
+  try {
+    const tools = { ...createTools(options, runtime.model, toolNames), ...mcpTools.tools };
+    const primaryTurnBudget = primaryTurnBudgetFor(options);
 
-  const primaryResult = await runAiSdkRequest(runtime, {
-    maxTurns: primaryTurnBudget,
-    phase: "primary",
-    prompt: options.prompt,
-    tools,
-  });
-  const primary = await validatedOutputOrError(primaryResult, options);
-  if (primary.ok) {
-    logAiSdkIoOutput({ options, output: primary.output, profileName, result: primaryResult });
-    return primary.output;
-  }
-
-  const finalizationTurns = options.maxTurns - primaryTurnBudget;
-  if (!structuredOutputFinalizationEnabled(options) || finalizationTurns <= 0) throw primary.error;
-
-  options.logger?.event("ai.continuation.start", {
-    max_turns: finalizationTurns,
-    reason: continuationReason(primaryResult, primaryTurnBudget),
-  });
-  const finalTools = { output_validator: tools.output_validator };
-  const finalResult = await runAiSdkRequest(runtime, {
-    activeTools: ["output_validator"],
-    maxTurns: finalizationTurns,
-    messages: continuationMessages({
-      instruction: structuredOutputContinuationInstruction(primary.error),
+    const primaryResult = await runAiSdkRequest(runtime, {
+      maxTurns: primaryTurnBudget,
+      phase: "primary",
       prompt: options.prompt,
-      result: primaryResult,
-    }),
-    phase: "structured_output_continuation",
-    toolChoice: { type: "tool", toolName: "output_validator" },
-    tools: finalTools,
-  });
-  const final = await validatedOutputOrError(finalResult, options);
-  if (!final.ok) throw final.error;
-  logAiSdkIoOutput({ options, output: final.output, profileName, result: finalResult });
-  return final.output;
+      tools,
+    });
+    const primary = await validatedOutputOrError(primaryResult, options);
+    if (primary.ok) {
+      logAiSdkIoOutput({ options, output: primary.output, profileName, result: primaryResult });
+      return primary.output;
+    }
+
+    const finalizationTurns = options.maxTurns - primaryTurnBudget;
+    if (!structuredOutputFinalizationEnabled(options) || finalizationTurns <= 0)
+      throw primary.error;
+
+    options.logger?.event("ai.continuation.start", {
+      max_turns: finalizationTurns,
+      reason: continuationReason(primaryResult, primaryTurnBudget),
+    });
+    const finalTools = { output_validator: tools.output_validator };
+    const finalResult = await runAiSdkRequest(runtime, {
+      activeTools: ["output_validator"],
+      maxTurns: finalizationTurns,
+      messages: continuationMessages({
+        instruction: structuredOutputContinuationInstruction(primary.error),
+        prompt: options.prompt,
+        result: primaryResult,
+      }),
+      phase: "structured_output_continuation",
+      toolChoice: { type: "tool", toolName: "output_validator" },
+      tools: finalTools,
+    });
+    const final = await validatedOutputOrError(finalResult, options);
+    if (!final.ok) throw final.error;
+    logAiSdkIoOutput({ options, output: final.output, profileName, result: finalResult });
+    return final.output;
+  } finally {
+    await mcpTools.close();
+  }
 }
 
 function aiSdkRuntime(options: {

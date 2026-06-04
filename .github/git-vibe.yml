@@ -97,6 +97,17 @@ ai:
       model: opus
       reasoning:
         effort: max
+  mcp:
+    servers:
+      dense_mem:
+        transport: stdio
+        command: npx
+        args: ["-y", "dense-mem-mcp-proxy"]
+        env:
+          DENSE_MEM_MCP_URL:
+            from_bundle: DENSE_MEM_MCP_URL
+          DENSE_MEM_API_KEY:
+            from_bundle: DENSE_MEM_API_KEY
   role_groups:
     swarm:
       synthesizer: codex_5.5_high
@@ -111,8 +122,16 @@ ai:
   stages:
     investigate:
       role_group: swarm
+      mcp:
+        dense_mem:
+          required: false
+          tools: ["search_memory"]
     validate:
       role_group: swarm
+      mcp:
+        dense_mem:
+          required: false
+          tools: ["search_memory"]
     materialize:
       profile: codex_5.5_high
     implement:
@@ -120,6 +139,10 @@ ai:
       profile: codex_5.4_high
     review-matrix:
       role_group: swarm
+      mcp:
+        dense_mem:
+          required: false
+          tools: ["search_memory"]
     create-pr:
       enabled: false
       profile: codex_5.5_high

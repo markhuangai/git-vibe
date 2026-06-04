@@ -7,6 +7,7 @@ import { GitHubClient } from "../shared/github.js";
 import { withStageHandoffs } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
+import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
 import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
 import { type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
@@ -141,6 +142,17 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const inputSafetyResult = await blockPromptInput(safetyOptions);
   if (inputSafetyResult) return inputSafetyResult;
 
+  const mcpContext = await resolveMcpContext({
+    client,
+    config,
+    context,
+    definition,
+    logger,
+    options,
+    transientComments,
+  });
+  if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
+
   const branchState = await prepareBranchForStage({ client, context, logger, options });
 
   const schema = loadStageSchema(definition.schemaFile);
@@ -151,6 +163,9 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     options,
     schema,
   });
+  if (mcpContext.promptAddition) {
+    prompts.prompt = `${prompts.prompt}\n\n${mcpContext.promptAddition}`;
+  }
   logger.event("prompt.ready", {
     schema_id: definition.schemaId,
     tools: definition.tools.join(","),
@@ -242,6 +257,35 @@ function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResul
 function finishStage(logger: StageLogger, result: StageRunResult): StageRunResult {
   logger.event("stage.done", { status: result.status });
   return result;
+}
+
+async function resolveMcpContext(options: {
+  client: GitHubClient;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  logger: StageLogger;
+  options: RunnerOptions;
+  transientComments: PublishedArtifactComment[];
+}): Promise<{ blockedResult?: StageRunResult; promptAddition: string }> {
+  const mcpContext = await buildMcpPromptContext({
+    config: options.config,
+    context: options.context,
+    logger: options.logger,
+    runner: options.options,
+  });
+  if (!mcpContext.blocked) return { promptAddition: mcpContext.promptAddition };
+
+  const blockedResult = await publishPreAiBlockedResult({
+    client: options.client,
+    context: options.context,
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+    output: mcpContext.blocked,
+    transientComments: options.transientComments,
+  });
+  return { blockedResult, promptAddition: "" };
 }
 
 async function enforceContextCoverage(options: {
@@ -497,6 +541,42 @@ async function publishBlockedPullRequestHead(options: {
     runner: options.options,
     transientComments: options.transientComments,
   });
+}
+
+async function publishPreAiBlockedResult(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+  output: JsonObject;
+  transientComments: PublishedArtifactComment[];
+}): Promise<StageRunResult> {
+  const result = await stageRunResult({
+    content: JSON.stringify(options.output),
+    context: options.context,
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+  });
+  if (options.options.executionMode === "member" || options.options.dryRun) return result;
+  await publishStageResultComment({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    parsedOutput: result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+  await applyStageLabelTransition({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    parsedOutput: result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+  return result;
 }
 
 async function prepareBranchForStage(options: {

@@ -8,4 +8,7 @@ npm-debug.log*
 .git-vibe/*
 !.git-vibe/role-group/
 !.git-vibe/role-group/*.md
+!.git-vibe/prompts/
+!.git-vibe/prompts/*/
+!.git-vibe/prompts/*/*.md
 .vcp

@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunAiStageOptions } from "./ai.js";
+import { prepareCliMcpConfig } from "./mcp-cli-config.js";
 import {
   cliProfileEnv,
   cliModelName,
@@ -28,6 +29,7 @@ export async function runClaudeCodeCliStage({
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-claude-"));
   const outputFile = join(contextDir, `${options.stage}.output.json`);
   const streamFile = join(contextDir, `${options.stage}.stream.jsonl`);
+  const mcpConfig = prepareCliMcpConfig({ contextDir, options });
   const args = [
     "-p",
     ...claudeModeArgs(profile),
@@ -43,6 +45,7 @@ export async function runClaudeCodeCliStage({
     options.system,
     "--no-session-persistence",
     ...claudeReasoningArgs(profile),
+    ...mcpConfig.claudeArgs,
   ];
 
   options.logger?.event("ai.request.start", {
