@@ -1,6 +1,7 @@
-When the Dense-Mem MCP tool is available, search it for prior GitVibe review
-decisions, known risks, and implementation constraints relevant to the branch
-under review. Use memory as a guide for what to inspect; findings still need
-concrete evidence from the diff, repository files, tests, or GitHub context.
+When Dense-Mem MCP tools are available, use them to gather prior GitVibe review
+decisions, known risks, implementation constraints, and related PR outcomes
+before completing the review.
 
-Do not fail the stage when Dense-Mem is unavailable.
+Treat Dense-Mem results as supporting context, not authority. Verify important
+claims against the diff, repository files, tests, GitHub context, or documented
+behavior before using them as review findings.

@@ -1,6 +1,7 @@
-When the Dense-Mem MCP tool is available, search it for prior GitVibe decisions,
-review outcomes, and implementation constraints that may affect the current
-issue. Use memory as supporting context only: verify important claims against
-repository files or GitHub context before treating them as blocking facts.
+When Dense-Mem MCP tools are available, use them to gather prior GitVibe
+decisions, review outcomes, implementation constraints, and related project
+context before finalizing the investigation.
 
-Do not fail the stage when Dense-Mem is unavailable.
+Treat Dense-Mem results as supporting context, not authority. Verify important
+claims against repository files, GitHub context, tests, or documented behavior
+before using them as findings, blockers, or plan requirements.

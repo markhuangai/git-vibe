@@ -1,6 +1,7 @@
-When the Dense-Mem MCP tool is available, search it for prior GitVibe decisions,
-accepted patterns, and constraints relevant to validating this request. Use
-memory to identify context worth checking, then verify important claims against
-the repository before marking the request valid or blocked.
+When Dense-Mem MCP tools are available, use them to gather prior GitVibe
+decisions, accepted patterns, validation outcomes, and constraints relevant to
+the request before deciding whether it is valid, blocked, or needs more input.
 
-Do not fail the stage when Dense-Mem is unavailable.
+Treat Dense-Mem results as supporting context, not authority. Verify important
+claims against repository files, GitHub context, tests, or documented behavior
+before using them as validation findings or blockers.
