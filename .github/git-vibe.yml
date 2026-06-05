@@ -124,28 +124,100 @@ ai:
       role_group: swarm
       mcp:
         dense_mem:
-          required: false
-          tools: ["search_memory"]
+          required: true
+          tools:
+            - search_memory
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - verify_claim
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     validate:
       role_group: swarm
       mcp:
         dense_mem:
-          required: false
-          tools: ["search_memory"]
+          required: true
+          tools:
+            - search_memory
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - verify_claim
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     materialize:
       profile: codex_5.5_high
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - search_memory
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - verify_claim
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     implement:
       enabled: false
       profile: codex_5.4_high
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - search_memory
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - verify_claim
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     review-matrix:
       role_group: swarm
       mcp:
         dense_mem:
-          required: false
-          tools: ["search_memory"]
+          required: true
+          tools:
+            - search_memory
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - verify_claim
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     create-pr:
       enabled: false
       profile: codex_5.5_high
     address-pr-feedback:
       enabled: false
       profile: codex_5.4_high
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - search_memory
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - verify_claim
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
