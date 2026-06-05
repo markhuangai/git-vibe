@@ -79,7 +79,7 @@ describe("stage contracts", () => {
     expect(prompts.prompt).toContain('"context_manifest"');
     expect(prompts.prompt).toContain('"included_context_chunks"');
     expect(prompts.prompt).toContain('"pending_chunks"');
-    expect(prompts.prompt).toContain("return a blocked result instead of `completed`");
+    expect(prompts.prompt).toContain("do not return `blocked` solely");
     expect(prompts.prompt).toContain("artifact-body:chunk-1");
     expect(prompts.prompt).not.toContain("x".repeat(120_000));
   });

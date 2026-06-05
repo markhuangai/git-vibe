@@ -16,7 +16,7 @@
 
 1. Identify the GitHub artifact, requested outcome, and any labels or comments that affect authorization.
 2. Read the `github_context.context_manifest` first. `included_context_chunks` contains the chunk text supplied within the prompt budget; `pending_chunks` are listed by id and are not yet semantically processed.
-3. If `github_context.context_manifest.pending_chunks` is greater than zero, return a blocked result instead of `completed`; GitVibe cannot safely advance workflow state until every context chunk is processed.
+3. If `github_context.context_manifest.pending_chunks` is greater than zero, do not return `blocked` solely for that static prompt-budget gap. Use tools when missing chunks are material to the decision; otherwise state the context limit in assumptions or findings.
 4. Read or inspect only the context needed for this stage. Use tools when the supplied context chunks are not enough to support the conclusion.
 5. Separate facts, assumptions, questions, and risks. Do not merge them into vague prose.
 6. Decide whether the stage is `completed` or `blocked`. If blocked, explain the blocking condition and do not trigger downstream work through a completed status.

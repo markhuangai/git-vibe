@@ -1,4 +1,3 @@
-import { gitVibeLabels } from "../shared/labels.js";
 import type {
   ContextPacket,
   GitVibeConfig,
@@ -151,7 +150,7 @@ export function safetyBlockedOutput(options: {
   const summary = "GitVibe paused this run for maintainer review.";
   const question = {
     options: [
-      `Clarify the intended scope and reapply ${gitVibeLabels.approved.name} if automation should continue.`,
+      "Change the flagged content or safety configuration, then rerun GitVibe; approval labels do not override this gate.",
     ],
     question:
       options.gate.blockedReason ||
@@ -430,7 +429,7 @@ function safetyBlockedComment(gate: SafetyGateResult): string {
     gate.blockedReason ||
       "High-risk prompt-injection content was detected before GitVibe could safely continue.",
     "",
-    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must clarify the intended scope before automation continues.",
+    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, or handle the case manually before automation continues.",
     "",
     "Detected risk:",
     ...gate.findings.map((finding) => `- ${finding}`),

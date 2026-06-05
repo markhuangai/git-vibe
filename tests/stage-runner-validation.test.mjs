@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe("stage runner context coverage", () => {
-  it("blocks completed results when context chunks remain pending", async () => {
+  it("allows completed results when context chunks remain pending", async () => {
     const cwd = await workspace();
     generateText.mockResolvedValueOnce({
       steps: [
@@ -87,17 +87,17 @@ describe("stage runner context coverage", () => {
 
     expect(result).toMatchObject({
       parsedOutput: {
-        next_state: "blocked",
-        status: "blocked",
-        summary: "GitVibe blocked this run because context coverage is incomplete.",
+        next_state: "ready-for-implementation",
+        status: "completed",
+        summary: "Ready.",
       },
-      status: "blocked",
+      status: "completed",
     });
-    expect(/** @type {any} */ (result.parsedOutput).findings[0]).toContain(
-      "context chunks were included",
-    );
     expect(issueCommentCall(fetch)?.[0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
+    expect(labelRequestBody(fetch, "gvi:ready-for-approval")?.labels).toEqual([
+      "gvi:ready-for-approval",
+    ]);
+    expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
   });
 });
 

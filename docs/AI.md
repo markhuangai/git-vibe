@@ -36,8 +36,9 @@ Context assembly rules:
 - Keep the context packet complete. GitVibe converts GitHub content into content
   units, scans all overlapping chunks before LLM execution, and renders prompts
   with `github_context.context_manifest` plus budgeted
-  `included_context_chunks`. Pending chunks remain listed by id and block
-  `completed` stage results until GitVibe can process them.
+  `included_context_chunks`. Pending chunks remain listed by id for traceability
+  and runner telemetry; they do not block `completed` results solely because the
+  fixed prompt budget omitted them.
 
 The same context assembly and weighted analysis pipeline applies to bug
 investigation, feature discussion validation, materialization, implementation,
@@ -168,7 +169,7 @@ flowchart TD
   F -->|another LLM call is needed| R
   E -->|risky write or state advance| G
   G --> H[Remove stale approval when configured]
-  H --> I[Maintainer clarifies scope and reapplies approval]
+  H --> I[Maintainer changes flagged content or safety config]
 ```
 
 The safety gate scans normalized content units rather than a shortened prompt
@@ -177,8 +178,10 @@ threads, and pull request changed-file patches are split into overlapping
 chunks for detection. Prompt rendering is a separate budget step: the LLM sees
 a manifest for all units and the selected `included_context_chunks`, not a raw
 unbounded dump of every GitHub field. If prompt packing leaves
-`pending_chunks`, the stage must return `blocked`; the runner enforces that
-deterministically before writes, labels, PR creation, or workflow dispatch.
+`pending_chunks`, the stage should inspect missing chunks with tools when they
+are material to the decision; the runner records incomplete prompt coverage but
+does not convert completed results to blocked solely from the static packing
+manifest.
 
 The gate looks for high-risk combinations such as:
 
@@ -207,8 +210,9 @@ and the `web-fetch` tool scans fetched text before returning high-risk web
 content to an LLM.
 
 When blocked, GitVibe posts the evidence, applies `gvi:blocked`, and removes
-`git-vibe:approved` by default through the normal blocked-label transition. A
-trusted maintainer must clarify the intended scope and reapply approval before
+`git-vibe:approved` by default through the normal blocked-label transition.
+Approval labels alone do not override this gate; a maintainer must change the
+flagged content, adjust safety configuration, or handle the case manually before
 automation continues.
 
 ## Repository Prompt Additions

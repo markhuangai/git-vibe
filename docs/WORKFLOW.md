@@ -85,14 +85,16 @@ flowchart TD
   overlapping chunks, and blocks high-risk prompt-injection content before any
   planner, role-group member, finalizer, or stage LLM job can start. Prompt
   rendering then supplies `github_context.context_manifest` plus budgeted
-  `included_context_chunks`; pending chunks remain listed by id and prevent a
-  `completed` result until GitVibe can process them. The runner keeps the same
+  `included_context_chunks`; pending chunks remain listed by id for traceability
+  and runner telemetry, but they do not block `completed` results solely because
+  the fixed prompt budget omitted them. The runner keeps the same
   deterministic gate before each LLM call, including initial stage calls,
   validation-repair calls, and role-group synthesis calls. High-risk
   multilingual, encoded, suffix, pull request patch, risky linked payload,
   secret-seeking, or image/OCR-derived instruction attacks are blocked with
   `gvi:blocked`; GitVibe removes stale `git-vibe:approved` by default and waits
-  for trusted maintainer clarification plus fresh approval.
+  for a maintainer to change the flagged content, adjust safety configuration,
+  or handle the case manually. Approval labels alone do not override the gate.
 - If validation does not make sense, GitVibe aborts the session, posts its concern, removes the ready/approved automation flag, and waits for more clarification.
 - Stories and feature requests begin as discussions.
 - Feature requests opened through the feature request issue form are converted by creating a discussion, linking back, labeling the issue as needing discussion, and closing the issue.

@@ -94,8 +94,9 @@ calls, and role-group synthesis calls. AI output remains structured advice until
 deterministic GitVibe code validates the schema, applies the post-output safety
 gate, runs configured checks for write stages, and performs GitHub writes with
 the repository PAT. High-risk jailbreak content blocks LLM execution,
-privileged state advancement, and write-capable stages behind maintainer
-clarification and fresh approval.
+privileged state advancement, and write-capable stages until a maintainer
+changes the flagged content, adjusts safety configuration, or handles the case
+manually; approval labels alone do not override the gate.
 
 Webhook dispatch includes serialized source metadata when automation came from an issue comment, Discussion comment, pull request conversation comment, or submitted pull request review. Runner publishing uses that metadata to choose Discussion `replyToId` or flat issue/PR comments with a source link. Pull request review-comment replies remain supported for existing metadata, but automatic feedback remediation is triggered by trusted `changes_requested` review submissions rather than individual review-comment webhooks. Protected PR review labels dispatch `review.yml`, then the server removes stale PR state and marks the PR `gvi:reviewing`.
 

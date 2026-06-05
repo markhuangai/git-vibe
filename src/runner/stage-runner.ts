@@ -17,7 +17,6 @@ import {
   validationRepairRunner,
 } from "./stage-ai-results.js";
 import { stageRunResult } from "./stage-results.js";
-import { contextCoverageBlockedOutput } from "./stage-blocked-outputs.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
 import type { SafetySource } from "./safety-gate.js";
@@ -214,14 +213,10 @@ async function runCheckedStageResult(options: {
   safetyOptions: StageSafetyOptions;
   transientComments: PublishedArtifactComment[];
 }): Promise<StageRunResult> {
-  let result = await runStageResultForMode(options);
-  result = await enforceContextCoverage({
-    context: options.context,
+  const result = await runStageResultForMode(options);
+  recordContextCoverage({
     coverage: contextPromptCoverageForContext(options.context),
-    definition: options.definition,
     logger: options.logger,
-    options: options.options,
-    result,
   });
   if (options.executionMode === "member") return result;
 
@@ -288,43 +283,21 @@ async function resolveMcpContext(options: {
   return { blockedResult, promptAddition: "" };
 }
 
-async function enforceContextCoverage(options: {
-  context: ContextPacket;
+function recordContextCoverage(options: {
   coverage: ContextPromptCoverage;
-  definition: RunnerStageDefinition;
   logger: StageLogger;
-  options: RunnerOptions;
-  result: StageRunResult;
-}): Promise<StageRunResult> {
+}): void {
   options.logger.event("context.coverage.checked", {
     complete: options.coverage.complete,
     included_chunks: options.coverage.includedChunkIds.length,
     pending_chunks: options.coverage.pendingChunkIds.length,
     total_chunks: options.coverage.totalChunks,
   });
-  if (
-    options.options.dryRun ||
-    options.coverage.complete ||
-    options.result.status !== "completed"
-  ) {
-    return options.result;
-  }
-  options.logger.event("context.coverage.block", {
+  if (options.coverage.complete) return;
+  options.logger.event("context.coverage.incomplete", {
+    included_chunks: options.coverage.includedChunkIds.length,
     pending_chunks: options.coverage.pendingChunkIds.length,
     total_chunks: options.coverage.totalChunks,
-  });
-  return stageRunResult({
-    content: JSON.stringify(
-      contextCoverageBlockedOutput({
-        context: options.context,
-        coverage: options.coverage,
-        runner: options.options,
-      }),
-    ),
-    context: options.context,
-    definition: options.definition,
-    logger: options.logger,
-    options: options.options,
   });
 }
 
