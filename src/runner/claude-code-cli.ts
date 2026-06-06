@@ -267,9 +267,16 @@ function logClaudeProgress(
 
   const rendered = Object.entries(fields)
     .filter(([, value]) => value !== undefined && value !== "")
-    .map(([key, value]) => `${key}=${compactText(String(value))}`)
+    .map(([key, value]) => `${key}=${formatClaudeProgressValue(key, value)}`)
     .join(" ");
   process.stdout.write(redactLogText(`[git-vibe] ${name}${rendered ? ` ${rendered}` : ""}\n`));
+}
+
+function formatClaudeProgressValue(key: string, value: unknown): string {
+  if (typeof value === "number" && isDurationField(key) && Number.isFinite(value)) {
+    return value.toFixed(2);
+  }
+  return compactText(String(value));
 }
 
 function logClaudePromptPreview(
@@ -300,6 +307,10 @@ function previewText(text: string): string {
 function compactText(text: string): string {
   const compact = text.replace(/\s+/g, " ").trim();
   return compact.length <= 180 ? compact : `${compact.slice(0, 177)}...`;
+}
+
+function isDurationField(key: string): boolean {
+  return key.toLowerCase().includes("duration");
 }
 
 function claudeOutput(stdout: string): string {

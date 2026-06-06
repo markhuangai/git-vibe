@@ -17,12 +17,14 @@ describe("stage logging", () => {
 
     logger.event("ai.tool.start", {
       detail: "line\nbreak",
+      duration_ms: 2.885905000002822,
+      total_duration_seconds: 1.2345,
       skipped: undefined,
       tool: "read",
     });
 
     expect(messages).toEqual([
-      '[git-vibe] investigate ai.tool.start detail="line break" tool="read"',
+      '[git-vibe] investigate ai.tool.start detail="line break" duration_ms=2.89 total_duration_seconds=1.23 tool="read"',
     ]);
   });
 

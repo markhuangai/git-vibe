@@ -525,7 +525,7 @@ describe("GitVibe automatic PR review workflow", () => {
       uses: "./.github/workflows/review.yml",
       with: {
         "dry-run": false,
-        max_turns: 90,
+        max_turns: 200,
         "pr-number": "${{ format('{0}', github.event.pull_request.number) }}",
         runner: "docker-runner",
         "source-comment": "",

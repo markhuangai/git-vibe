@@ -39,17 +39,24 @@ export function summarizeError(error: unknown): string {
 function formatFields(fields: Record<string, unknown>): string {
   const parts = Object.entries(fields)
     .filter(([, value]) => value !== undefined && value !== "")
-    .map(([key, value]) => `${key}=${formatValue(value)}`);
+    .map(([key, value]) => `${key}=${formatValue(key, value)}`);
 
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
 
-function formatValue(value: unknown): string {
+function formatValue(key: string, value: unknown): string {
   if (typeof value === "number" || typeof value === "boolean") {
+    if (typeof value === "number" && isDurationField(key) && Number.isFinite(value)) {
+      return value.toFixed(2);
+    }
     return String(value);
   }
 
   return JSON.stringify(sanitizeValue(String(value)));
+}
+
+function isDurationField(key: string): boolean {
+  return key.toLowerCase().includes("duration");
 }
 
 function sanitizeValue(value: string): string {
