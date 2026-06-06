@@ -78,7 +78,12 @@ export async function buildMcpPromptContext(options: {
           });
         }
         if (stageServer.allowModelTools.length > 0) {
-          await ensureModelToolsAvailable(connection, stageServer);
+          await warnMissingModelTools({
+            connection,
+            logger: options.logger,
+            stageServer,
+            warnings,
+          });
         }
       } finally {
         await connection.close();
@@ -108,16 +113,20 @@ ${JSON.stringify(
   };
 }
 
-async function ensureModelToolsAvailable(
-  connection: ConnectedMcpServer,
-  stageServer: ResolvedStageMcpServer,
-): Promise<void> {
-  const listed = await listMcpTools(connection);
+async function warnMissingModelTools(options: {
+  connection: ConnectedMcpServer;
+  logger: StageLogger;
+  stageServer: ResolvedStageMcpServer;
+  warnings: string[];
+}): Promise<void> {
+  const listed = await listMcpTools(options.connection);
   const available = new Set(listed.tools.map((tool) => tool.name));
-  const missing = stageServer.allowModelTools.filter((tool) => !available.has(tool));
-  if (missing.length > 0) {
-    throw new Error(`missing allowed model tools on ${stageServer.name}: ${missing.join(", ")}`);
-  }
+  const missing = options.stageServer.allowModelTools.filter((tool) => !available.has(tool));
+  if (missing.length === 0) return;
+
+  const reason = `MCP server ${options.stageServer.name} did not provide allowlisted model tools: ${missing.join(", ")}`;
+  options.warnings.push(reason);
+  options.logger.event("mcp.context.warning", { reason });
 }
 
 function requiredFailure(

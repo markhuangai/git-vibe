@@ -388,7 +388,9 @@ MCP rules:
 - `tools` is the normal stage-level allowlist for model-callable MCP tools. AI
   SDK tools are exposed directly; Codex CLI and Claude Code receive a GitVibe MCP
   gateway that proxies only the allowed tools. `allow_tools: ["tool_name"]` is
-  accepted as an alias for the same simple shape.
+  accepted as an alias for the same simple shape. If an allowlisted model tool is
+  not provided by the MCP server, GitVibe logs a warning and continues without
+  exposing that tool.
 - Advanced deterministic pre-model context may use `allow_tools.context` plus
   `context_calls`; those calls run before the model and are injected into the
   prompt. `context_calls` may only call tools listed in `tools` or

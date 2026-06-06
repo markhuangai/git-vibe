@@ -314,9 +314,11 @@ describe("MCP model tool preflight", () => {
     expect(result.promptAddition).toContain("MCP server dense_mem failed: offline");
   });
 
-  it("blocks when required model tools are missing from the MCP server", async () => {
+  it("warns when required model tools are missing from the MCP server", async () => {
+    const close = vi.fn();
+    const logger = { event: vi.fn() };
     mocks.connectMcpServer.mockResolvedValue({
-      close: vi.fn(),
+      close,
       server: { name: "dense_mem" },
     });
     mocks.listMcpTools.mockResolvedValue({ tools: [] });
@@ -324,13 +326,18 @@ describe("MCP model tool preflight", () => {
     const result = await buildMcpPromptContext({
       config: modelMcpConfig({ required: true }),
       context: contextPacket(),
-      logger: { event: vi.fn() },
+      logger,
       runner: runnerOptions(),
     });
 
-    expect(result.blocked.comment_body).toContain(
-      "MCP server dense_mem failed: missing allowed model tools on dense_mem: search_memory",
+    expect(result.blocked).toBeUndefined();
+    expect(result.promptAddition).toContain(
+      "MCP server dense_mem did not provide allowlisted model tools: search_memory",
     );
+    expect(logger.event).toHaveBeenCalledWith("mcp.context.warning", {
+      reason: "MCP server dense_mem did not provide allowlisted model tools: search_memory",
+    });
+    expect(close).toHaveBeenCalled();
   });
 });
 
