@@ -26,6 +26,7 @@ export function createTools(
   const webPolicy = webPolicyFor(options.config);
   const tools: ToolSet = {
     output_validator: createOutputValidator({
+      errorMode: "all",
       schema: options.schema as never,
       schemaId: options.schemaId,
     }),

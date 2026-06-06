@@ -43,11 +43,15 @@ flowchart LR
   APP -->|workflow_dispatch| WF[Consumer repo workflow]
 
   WF -->|uses| GV[markhuangai/git-vibe]
-  WF --> RUNNER[GitHub-hosted or self-hosted runner]
+  GV --> SR[No-AI security-review job]
+  SR -->|blocked result| GH
+  SR -->|allowed| RUNNER[GitHub-hosted or self-hosted runner]
 
-  RUNNER --> LLM[Configured hosted LLM provider]
   RUNNER --> CODE[Repository checkout]
-  RUNNER -->|branch, commits, PR, comments| GH
+  RUNNER --> SAFE[In-runner prompt-injection safety gate]
+  SAFE -->|allowed| LLM[Configured hosted LLM provider]
+  SAFE -->|blocked result| GH
+  RUNNER -->|allowed branch, commits, PR, comments| GH
 
 ```
 
@@ -68,13 +72,31 @@ sequenceDiagram
   App->>API: Add label, comment, or state marker
   App->>API: Dispatch workflow with target parameters and run details request
   GH->>WF: Start workflow run
-  WF->>Act: Run stage job, or plan members plus finalizer for role-group stages
-  Act->>API: Use configured repository PAT for branch, PR, comments, and metadata writes
+  WF->>Act: Run no-AI security-review job against full target context
+  Act->>API: Publish blocked result, or expose allowed output
+  WF->>Act: If allowed, run stage job or plan members plus finalizer
+  Act->>Act: Run in-runner pre-LLM gate, validate structured output, and run post-output safety gate
+  Act->>API: Use configured repository PAT for allowed branch, PR, comments, and metadata writes
 ```
 
 Use `GITHUB_TOKEN` only for simple read operations. Use the self-hosted server's fine-grained PAT when GitVibe must trigger follow-up workflows, push branches, create pull requests, or avoid `GITHUB_TOKEN` event recursion limits.
 
 The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes and must never log or render the token.
+
+The runner treats all GitHub and repository content as untrusted data. Issue
+bodies, comments, diffs, repository files, handoffs, and future image/OCR text
+can provide evidence, but they cannot grant authority. Every reusable workflow
+starts with a no-AI `security-review` job that builds the target context and
+must expose `allowed=true` before any planner, role-group member, finalizer, or
+stage LLM job can start. The runner also applies the prompt-injection safety
+gate before every LLM call, including initial stage calls, validation-repair
+calls, and role-group synthesis calls. AI output remains structured advice until
+deterministic GitVibe code validates the schema, applies the post-output safety
+gate, runs configured checks for write stages, and performs GitHub writes with
+the repository PAT. High-risk jailbreak content blocks LLM execution,
+privileged state advancement, and write-capable stages until a maintainer
+changes the flagged content, adjusts safety configuration, or handles the case
+manually; approval labels alone do not override the gate.
 
 Webhook dispatch includes serialized source metadata when automation came from an issue comment, Discussion comment, pull request conversation comment, or submitted pull request review. Runner publishing uses that metadata to choose Discussion `replyToId` or flat issue/PR comments with a source link. Pull request review-comment replies remain supported for existing metadata, but automatic feedback remediation is triggered by trusted `changes_requested` review submissions rather than individual review-comment webhooks. Protected PR review labels dispatch `review.yml`, then the server removes stale PR state and marks the PR `gvi:reviewing`.
 
@@ -189,6 +211,7 @@ Required repository or organization secrets/variables:
 - `GITVIBE_GITHUB_TOKEN`: fine-grained PAT used by the server and workflows for GitHub API access.
 - `WEBHOOK_SECRET`: repository webhook shared secret used by the deploy workflow to set runtime `GITHUB_WEBHOOK_SECRET`.
 - `GITVIBE_AI_ENV_JSON`: JSON bundle for AI provider auth, endpoints, CLI auth, and provider-specific environment values.
+- `GITVIBE_MCP_ENV_JSON`: optional JSON bundle for configured MCP server credentials.
 - `GITVIBE_DISCUSSION_CATEGORY`: optional variable used by app deployment for feature Discussion conversion category.
 - `GITVIBE_BASE_BRANCH`: optional variable used by reusable workflows as the implementation and review base branch.
 

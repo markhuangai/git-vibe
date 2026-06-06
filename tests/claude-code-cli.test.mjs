@@ -126,7 +126,7 @@ describe("Claude Code CLI adapter", () => {
     );
     expect(process.stdout.write).not.toHaveBeenCalledWith(expect.stringContaining("text=1 code"));
     expect(process.stdout.write).toHaveBeenCalledWith(
-      expect.stringContaining("ai.claude.result duration_ms=12 reason=completed"),
+      expect.stringContaining("ai.claude.result duration_ms=12.00 reason=completed"),
     );
     expect(schema.required).toEqual(["stage", "status"]);
     expect(generateText).not.toHaveBeenCalled();

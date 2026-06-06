@@ -47,6 +47,11 @@ export interface RunnerOptions {
 
 export interface GitVibeConfig {
   ai?: JsonObject;
+  safety?: {
+    block_write_stages_on_high_risk?: boolean;
+    prompt_injection_gate?: boolean;
+    remove_approval_on_block?: boolean;
+  };
   tests?: {
     commands?: string[];
   };
@@ -82,6 +87,19 @@ export interface SourceComment {
   url?: string;
 }
 
+export interface PullRequestFile {
+  additions?: number;
+  blobUrl?: string;
+  changes?: number;
+  contentsUrl?: string;
+  deletions?: number;
+  filename: string;
+  patch?: string;
+  previousFilename?: string;
+  rawUrl?: string;
+  status: string;
+}
+
 export interface ContextPacket {
   artifact: {
     body: string;
@@ -98,6 +116,7 @@ export interface ContextPacket {
   };
   generatedAt: string;
   handoffs?: StageHandoff[];
+  pullRequestFiles?: PullRequestFile[];
   repository: string;
   source?: {
     comment?: SourceComment;

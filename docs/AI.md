@@ -13,7 +13,12 @@ flowchart TD
   C --> D[Sort by created time ascending]
   D --> E[Attach parent/thread references]
   E --> F[Classify author authority]
-  F --> G[Weighted analysis prompt]
+  F --> U[Normalize into content units]
+  U --> K[Chunk every unit with overlap]
+  K --> S[No-AI security-review job scans every chunk]
+  S -->|safe| M[Prompt manifest plus budgeted included_context_chunks]
+  M --> G[Weighted analysis prompt]
+  S -->|risky| BQ[Blocked maintainer review]
   G --> H[Questions, validation, materialization, implementation, review, or feedback brief]
 ```
 
@@ -28,6 +33,12 @@ Context assembly rules:
 - Treat newer maintainer clarification as stronger than older lower-authority speculation, but do not discard contributor or guest reports; they may contain reproduction details.
 - Weight analysis by authority: admin/owner/maintain > write/collaborator/member > contributor > first-time contributor/guest/none.
 - When repository permission and `author_association` disagree, repository permission is stronger for approval and command authorization; `author_association` remains useful analysis metadata.
+- Keep the context packet complete. GitVibe converts GitHub content into content
+  units, scans all overlapping chunks before LLM execution, and renders prompts
+  with `github_context.context_manifest` plus budgeted
+  `included_context_chunks`. Pending chunks remain listed by id for traceability
+  and runner telemetry; they do not block `completed` results solely because the
+  fixed prompt budget omitted them.
 
 The same context assembly and weighted analysis pipeline applies to bug
 investigation, feature discussion validation, materialization, implementation,
@@ -40,14 +51,17 @@ GitVibe should treat AI as a set of stage-specific workers behind stable contrac
 ```mermaid
 flowchart TD
   A[GitHub webhook or workflow dispatch] --> B[Orchestrator]
-  B --> C[Build context packet]
-  C --> D[Select stage contract]
+  B --> C[security-review job builds context packet]
+  C -->|safe| D[Select stage contract]
+  C -->|risky| J[Post blocked result and require maintainer clarification]
   D --> E[Select profile or role-group plan]
-  E --> F[Run AI job or role-group member jobs]
+  E --> P{In-runner pre-LLM safety gate}
+  P -->|safe| F[Run AI job or role-group member jobs]
+  P -->|risky| J
   F --> G[Validate one structured result]
-  G --> H{Policy gate}
+  G --> H{Post-output safety gate}
   H -->|allowed| I[Post comment, update labels, dispatch next workflow, or push branch]
-  H -->|blocked| J[Post explanation and wait for human context]
+  H -->|risky write or state advance| J
 ```
 
 AI integration layers:
@@ -59,8 +73,14 @@ AI integration layers:
   remediation.
 - AI adapter: `ai-sdk-agentool` is the primary adapter for all AI SDK-backed work. Structured-only stages use the same adapter with no tools or read-only tools.
 - CLI adapters: `cli-codex` and `cli-claude-code` run fixed non-interactive CLI commands, stream CLI output to the action log, and parse structured output.
+- MCP gateway: stage-scoped MCP servers can provide deterministic prompt context
+  and model-callable tools. GitVibe resolves credentials, enforces per-stage
+  allowlists, and scans MCP tool output before it reaches a model.
 - External mention adapter: not currently implemented.
 - Result validator: checks that AI output matches the stage schema, references the supplied context, and does not request disallowed actions.
+- Prompt-injection safety gate: deterministic policy that runs once as a no-AI
+  workflow job before any LLM-capable job starts, then runs again inside the
+  runner before each LLM call and after validated stage output.
 
 Implemented stage contracts:
 
@@ -101,6 +121,10 @@ AI result envelope:
 
 - AI cannot authorize itself. Approval, merge, protected-label acceptance, and release decisions always require admin/collaborator authority.
 - Non-write stages may publish deterministic comments and label transitions, but GitVibe applies branch and file mutations only for write stages.
+- GitVibe treats issue bodies, comments, diffs, repository files, and future
+  image/OCR text as untrusted data. They may describe desired behavior, but
+  they must never override GitVibe system prompts, stage contracts, schemas,
+  tool policy, validation, approval labels, or GitHub write boundaries.
 - Implementation and feedback stages share deterministic branch-update mechanics
   for validation, commit, and push. Implementation targets
   `git-vibe/{root-issue}`; PR feedback targets the existing PR head branch and
@@ -113,6 +137,83 @@ AI result envelope:
 - Prompt templates and result schemas should be versioned so old workflow runs remain understandable.
 - System and user prompt templates live under `prompts/<stage>/`. User prompts use XML sections for GitHub context, repository context, stage contract, and output schema.
 - Stage output contracts live under `schemas/stages/` as JSON Schema files. Runner code binds each schema to `createOutputValidator` from `agentool/output-validator` and validates the final JSON again before deterministic writes.
+
+## Prompt Injection And Jailbreak Defense
+
+GitVibe does not try to make untrusted text safe by sanitizing it and then
+continuing. Sanitization can normalize text for detection, but jailbreaks are
+authority-confusion attacks: malicious content tries to make the model treat
+issue text, comments, pull request patches, encoded payloads, linked assets, or
+image text as higher-priority instructions.
+
+Every reusable workflow begins with a no-AI `security-review` job. That job
+builds the target issue, discussion, or pull request context and blocks
+high-risk context before any planner, role-group member, finalizer, or stage LLM
+job can start. The runner then applies the same deterministic safety gate before
+every LLM call, including initial stage prompts, validation-repair prompts, and
+role-group synthesis prompts, then runs the gate again after structured output
+validation:
+
+```mermaid
+flowchart TD
+  A[GitHub artifact, comments, PR patches, handoffs, and links] --> B[security-review context builder]
+  B --> W[Workflow security-review gate]
+  W -->|high-risk context| G[Blocked result]
+  W -->|safe| P[Planner or stage job context builder]
+  P --> R[In-runner pre-LLM prompt-injection safety gate]
+  R -->|safe| C[LLM call: stage, repair, or synthesis]
+  R -->|high-risk input| G
+  C --> D[Schema validation]
+  D --> E[Post-output safety gate]
+  E -->|safe| F[Deterministic orchestration, checks, writes, and labels]
+  F -->|another LLM call is needed| R
+  E -->|risky write or state advance| G
+  G --> H[Remove stale approval when configured]
+  H --> I[Maintainer changes flagged content or safety config]
+```
+
+The safety gate scans normalized content units rather than a shortened prompt
+string. Issue bodies, discussion replies, source comments, handoffs, PR review
+threads, and pull request changed-file patches are split into overlapping
+chunks for detection. Prompt rendering is a separate budget step: the LLM sees
+a manifest for all units and the selected `included_context_chunks`, not a raw
+unbounded dump of every GitHub field. If prompt packing leaves
+`pending_chunks`, the stage should inspect missing chunks with tools when they
+are material to the decision; the runner records incomplete prompt coverage but
+does not convert completed results to blocked solely from the static packing
+manifest.
+
+The gate looks for high-risk combinations such as:
+
+- multilingual instruction overrides that ask the model to ignore GitVibe rules;
+- base64, hex, escaped, or otherwise encoded payloads that decode to stage or
+  tool-control instructions;
+- suffix attacks in later comments that try to replace validation, approval,
+  branch, token, or write rules;
+- high-risk instructions inside pull request changed-file patches before review
+  or feedback-remediation LLMs start;
+- suspicious downloadable links or GitHub attachment references in issues,
+  discussions, pull requests, reviews, or comments;
+- requests to reveal secrets, provider keys, tokens, hidden prompts, or runner
+  credentials;
+- future image/OCR-derived text that attempts to act as instructions rather
+  than evidence.
+
+High-risk input produces a schema-valid blocked result before GitVibe sends any
+stage prompt to an LLM. Post-output safety still runs after schema validation so
+GitVibe can block risky model output before handing off to implementation,
+materialization, PR readiness, feedback automation, or write-capable stages
+(`materialize`, `implement`, `create-pr`, and `address-pr-feedback`).
+The workflow security-review gate does not fetch arbitrary external URLs or run
+OCR on attached images. It scans the link/attachment text that GitHub exposes,
+and the `web-fetch` tool scans fetched text before returning high-risk web
+content to an LLM.
+
+When blocked, GitVibe posts the evidence, applies `gvi:blocked`, and removes
+`git-vibe:approved` by default through the normal blocked-label transition.
+Approval labels alone do not override this gate; a maintainer must change the
+flagged content, adjust safety configuration, or handle the case manually before
+automation continues.
 
 ## Repository Prompt Additions
 
@@ -150,6 +251,10 @@ CLI authentication guidance:
 - AI profiles should read provider auth and endpoints from the `GITVIBE_AI_ENV_JSON` bundle secret. CLI profile `env` values may use either `{ from_bundle: KEY }` or literal strings when the repository owner intentionally wants the value committed in config.
 - Codex CLI can use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner. When `auth_json.from_bundle` is configured, GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret, so `GITVIBE_GITHUB_TOKEN` needs repository Actions secrets read/write permission.
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
+- MCP server credentials should read from the optional `GITVIBE_MCP_ENV_JSON`
+  bundle secret, not from `GITVIBE_AI_ENV_JSON`. Stdio MCP servers may map
+  `env.<NAME>` from that bundle; HTTP and SSE servers may map `headers.<NAME>`
+  from that bundle.
 - Reusable workflows install Codex CLI or Claude Code only when the selected stage profile uses `cli-codex` or `cli-claude-code`.
 - CLI commands are fixed by adapter: `cli-codex` runs `codex exec` and `cli-claude-code` runs `claude -p`. Profiles do not accept a `command` override.
 - CLI adapters bypass native permission and sandbox prompts. GitVibe provides web safety rules in the system prompt, but shell or process network egress is only a hard boundary when the runner blocks it. Run CLI profiles only on dedicated self-hosted runners with narrow tokens and no unnecessary host mounts.
@@ -238,6 +343,71 @@ fallback retries, role-group members, and finalizers. Missing files, empty files
 absolute paths, `..` traversal, symlinks, directories, and paths resolving
 outside the workspace fail fast.
 
+## MCP Context And Tools
+
+MCP server definitions live under `ai.mcp.servers`. Stage entries under
+`ai.stages.<stage>.mcp` choose which servers are active and which tools each
+server can expose for that stage.
+
+```yaml
+ai:
+  mcp:
+    servers:
+      dense_mem:
+        transport: stdio
+        command: node
+        args: ["./scripts/dense-mem-mcp.js"]
+        env:
+          DENSE_MEM_API_KEY:
+            from_bundle: DENSE_MEM_API_KEY
+      private_docs:
+        transport: http
+        url: https://mcp.example.test
+        headers:
+          Authorization:
+            from_bundle: PRIVATE_DOCS_TOKEN
+
+  stages:
+    review-matrix:
+      role_group: review_gate
+      mcp:
+        dense_mem:
+          required: false
+          tools: ["search_memory"]
+        private_docs:
+          required: true
+          tools: ["lookup"]
+```
+
+MCP rules:
+
+- `transport` defaults to `stdio`; supported values are `stdio`, `http`, and
+  `sse`.
+- Server names and tool names must be safe names because GitVibe maps model
+  tools to names like `mcp__dense_mem__search_memory`.
+- `tools` is the normal stage-level allowlist for model-callable MCP tools. AI
+  SDK tools are exposed directly; Codex CLI and Claude Code receive a GitVibe MCP
+  gateway that proxies only the allowed tools. `allow_tools: ["tool_name"]` is
+  accepted as an alias for the same simple shape. If an allowlisted model tool is
+  not provided by the MCP server, GitVibe logs a warning and continues without
+  exposing that tool.
+- Advanced deterministic pre-model context may use `allow_tools.context` plus
+  `context_calls`; those calls run before the model and are injected into the
+  prompt. `context_calls` may only call tools listed in `tools` or
+  `allow_tools.context`.
+- `required` defaults to `true`. Required MCP connection or context-call
+  failures produce a schema-valid blocked stage result before any model call.
+  Optional failures are logged and included as prompt warnings.
+- Context-call arguments may use `{{repository}}`, `{{artifact_type}}`,
+  `{{artifact_number}}`, `{{artifact_title}}`, `{{issue_number}}`,
+  `{{pr_number}}`, and `{{stage}}`.
+- MCP tool results are scanned by the same prompt-injection detector before they
+  are injected into prompts or returned to models.
+- Secret values referenced with `from_bundle` come from `GITVIBE_MCP_ENV_JSON`.
+  GitVibe strips both AI and MCP bundle secrets from spawned child environments
+  unless a configured MCP server env mapping explicitly adds a resolved value,
+  and redacts those resolved MCP credential values from MCP tool results.
+
 Normalized reasoning config:
 
 - `reasoning.effort`: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`. Adapters should reject unsupported values for the selected provider/model with a clear config error.
@@ -302,4 +472,7 @@ Default AI budgets:
 - `ai.budgets.pr_feedback_max_iterations`: `3` `address-feedback.yml` redispatches before the PR remains blocked.
 - `ai.budgets.request_retry_attempts`: `3` provider API retries.
 - `ai.budgets.request_retry_delay_seconds`: `60` second default provider API retry delay; `429` retry headers override this when present.
-- ai-sdk-agentool context window: each profile may set `context_window_tokens`; profiles that omit it use `200000` estimated tokens. Compaction runs before a model call when messages reach `90%` of that profile window.
+- ai-sdk-agentool context window: each profile may set `context_window_tokens`;
+  profiles that omit it use `200000` estimated tokens. GitHub context is packed
+  into a manifest plus budgeted chunks before prompt rendering; compaction runs
+  later, before a model call, when messages reach `90%` of that profile window.

@@ -10,6 +10,13 @@ export const gitVibeBaseBranchVariable = "GITVIBE_BASE_BRANCH";
 const configSchema = z
   .object({
     ai: z.record(z.string(), z.unknown()).optional(),
+    safety: z
+      .object({
+        block_write_stages_on_high_risk: z.boolean().optional(),
+        prompt_injection_gate: z.boolean().optional(),
+        remove_approval_on_block: z.boolean().optional(),
+      })
+      .optional(),
     tests: z
       .object({
         commands: z.array(z.string()).optional(),

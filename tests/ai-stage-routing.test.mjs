@@ -330,6 +330,7 @@ describe("AI stage runner stage fallbacks", () => {
       expect.arrayContaining([
         "exec",
         "--dangerously-bypass-approvals-and-sandbox",
+        "--ignore-user-config",
         "--cd",
         process.cwd(),
         "--model",
@@ -388,6 +389,7 @@ describe("AI stage runner Codex CLI defaults", () => {
     expect(spawn.mock.calls[0][0]).toBe("codex");
     expect(args).toEqual(expect.arrayContaining(["exec", "--model", "codex-test-model"]));
     expect(args).toContain("--dangerously-bypass-approvals-and-sandbox");
+    expect(args).toContain("--ignore-user-config");
     expect(args).not.toContain("--sandbox");
     expect(args).not.toContain("-c");
     expect(spawn.mock.calls[0][2].env.CODEX_HOME).toBeUndefined();

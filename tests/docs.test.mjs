@@ -19,8 +19,21 @@ describe("documentation workflow descriptions", () => {
 
     expect(workflow).toContain("Feedback[address-feedback.yml]");
     expect(lifecycle.match(/```mermaid/g)).toHaveLength(1);
-    expect(lifecycle).toContain("Develop --> DevEngine");
+    expect(lifecycle).toContain(
+      "Develop --> DevelopSecurity[security-review job: chunk-scan issue context]",
+    );
+    expect(lifecycle).toContain("DevelopSecurity -->|safe| Context");
+    expect(lifecycle).toContain(
+      "Context --> RuntimeGate{In-runner pre-LLM prompt-injection safety gate}",
+    );
+    expect(lifecycle).toContain("RuntimeGate -->|safe| AIStage[AI stage]");
+    expect(lifecycle).toContain("ReviewSecurity[security-review job: chunk-scan PR context]");
+    expect(workflow).toContain("github_context.context_manifest");
+    expect(lifecycle).toContain("OutputGate -->|safe| DevEngine");
+    expect(lifecycle).toContain("RepairGate{Pre-repair LLM safety gate}");
     expect(lifecycle).toContain("FeedbackInvestigation -->|fixes required| DevEngine");
+    expect(workflow).toContain("Pre-synthesis LLM safety gate");
+    expect(workflow).toContain("gvi:blocked, remove git-vibe:approved");
     expect(workflow).toContain("UpdatePRBranch[Update existing PR branch]");
     expect(workflow).not.toContain("Feedback --> PR");
     expect(workflow).toContain("PR gvi:ready-for-approval");

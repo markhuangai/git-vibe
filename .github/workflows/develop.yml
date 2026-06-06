@@ -121,16 +121,61 @@ on:
       GITVIBE_AI_ENV_JSON:
         description: JSON env bundle for AI provider config and CLI profiles.
         required: true
+      GITVIBE_MCP_ENV_JSON:
+        description: Optional JSON env bundle for MCP server credentials.
+        required: false
 
 env:
   GITVIBE_BASE_BRANCH: ${{ vars.GITVIBE_BASE_BRANCH }}
 
 jobs:
+  security-review:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 10
+    outputs:
+      allowed: ${{ steps.security.outputs.allowed }}
+      result-file: ${{ steps.security.outputs.result-file }}
+      status: ${{ steps.security.outputs.status }}
+      summary: ${{ steps.security.outputs.summary }}
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout GitVibe action source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .git-vibe/actions
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: security
+        uses: ./.git-vibe/actions/security-review
+        with:
+          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
+          stage: implement
+          issue-number: ${{ inputs.issue-number }}
+          stage-timeout-minutes: 10
+          dry-run: ${{ inputs.dry-run }}
+          source-comment: ${{ inputs.source-comment }}
+
   implement:
     runs-on: ${{ inputs.runner }}
+    needs: security-review
+    if: needs.security-review.outputs.allowed == 'true'
     timeout-minutes: ${{ fromJSON(inputs.implementation_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     permissions:
       contents: write
       issues: write
@@ -201,6 +246,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.create_pr_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     outputs:
       pr-number: ${{ steps.create.outputs.pr-number }}
       pr-url: ${{ steps.create.outputs.pr-url }}
@@ -245,6 +291,7 @@ jobs:
     timeout-minutes: 10
     env:
       GITVIBE_AI_ENV_JSON: ""
+      GITVIBE_MCP_ENV_JSON: ""
     outputs:
       indexes: ${{ steps.plan.outputs.indexes }}
       labels: ${{ steps.plan.outputs.labels }}
@@ -285,6 +332,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -342,6 +390,7 @@ jobs:
     timeout-minutes: ${{ fromJSON(inputs.review_timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+      GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     outputs:
       next-state: ${{ steps.review.outputs.next-state }}
       result-file: ${{ steps.review.outputs.result-file }}

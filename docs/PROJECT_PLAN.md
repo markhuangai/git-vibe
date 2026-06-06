@@ -6,7 +6,7 @@ This file is the index for the GitVibe plan. The detailed plan is split into foc
 
 - [Architecture](ARCHITECTURE.md): system shape, webhook/PAT token model, event delivery modes, and consumer setup.
 - [Workflow](WORKFLOW.md): issue/discussion lifecycle, public commands, labels, bug and feature flows, PR feedback, and traceability.
-- [AI](AI.md): context assembly, AI stage contracts, execution rules, provider strategy, tool policy, and budgets.
+- [AI](AI.md): context assembly, AI stage contracts, execution rules, prompt-injection safety, provider strategy, tool policy, and budgets.
 - [Development](DEVELOPMENT.md): repository shape, test plan, AI smoke tests, quality gates, and assumptions.
 
 ## Quick Summary
@@ -38,5 +38,13 @@ Core defaults:
   separate workflow orchestrators.
 - GitHub-native labels, comments, links, and hidden markers are the source of truth.
 - AI returns structured results; deterministic GitVibe code performs GitHub writes.
+- Reusable workflows start with a no-AI `security-review` job, and runner-level
+  safety gates scan chunked context units and block high-risk multilingual,
+  encoded, suffix, pull request patch, risky linked payload, and image/OCR-derived
+  instruction attacks before LLM execution, privileged writes, or state
+  advancement. Prompt rendering uses a context manifest plus budgeted included
+  chunks instead of an unbounded raw GitHub dump; pending chunks stay listed for
+  traceability while the runner logs incomplete prompt coverage instead of
+  blocking solely because a fixed prompt budget omitted chunks.
 - App, runner, and shared TypeScript live in one package but separate source boundaries so runner-only changes do not redeploy the app.
 - The repository uses pnpm, TypeScript source, runner-built action runtimes, PR-only CI on the `docker-runner` self-hosted runner label, 90% function/line/statement coverage, and ESLint-enforced JavaScript/MJS size limits of 700 lines per file and 100 lines per function.

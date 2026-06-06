@@ -59,6 +59,30 @@ describe("stage contracts", () => {
     expect(prompts.prompt).toContain("<stage_goal>");
     expect(prompts.prompt).toContain("<investigation_focus>");
   });
+
+  it("renders GitHub context as a bounded chunk manifest", () => {
+    const schema = loadStageSchema(stageDefinitions.investigate.schemaFile);
+    const prompts = renderPrompts({
+      context: {
+        ...baseContext,
+        artifact: {
+          ...baseContext.artifact,
+          body: `start-${"x".repeat(160_000)}-end`,
+        },
+      },
+      outputSchema: schema,
+      promptDir: stageDefinitions.investigate.promptDir,
+      repositoryContext: "## main",
+      stageContract: "Return JSON.",
+    });
+
+    expect(prompts.prompt).toContain('"context_manifest"');
+    expect(prompts.prompt).toContain('"included_context_chunks"');
+    expect(prompts.prompt).toContain('"pending_chunks"');
+    expect(prompts.prompt).toContain("do not return `blocked` solely");
+    expect(prompts.prompt).toContain("artifact-body:chunk-1");
+    expect(prompts.prompt).not.toContain("x".repeat(120_000));
+  });
 });
 
 describe("stage contract prompt loading", () => {

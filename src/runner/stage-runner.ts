@@ -1,25 +1,26 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runAiStage, type RunAiStageOptions } from "./ai.js";
+import type { RunAiStageOptions } from "./ai.js";
 import { loadConfig } from "./config.js";
 import { buildDiscussionContext, buildIssueContext } from "./context.js";
 import { GitHubClient } from "../shared/github.js";
-import { withStageHandoffs, writeStageResultFile, writeStageResultSummary } from "./handoffs.js";
+import { withStageHandoffs } from "./handoffs.js";
 import type { StageLogger } from "./logging.js";
-import { createStageLogger, summarizeError } from "./logging.js";
+import { createStageLogger } from "./logging.js";
+import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
-import { issueBranch, type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
-import { renderStageResultComment } from "./result-comments.js";
+import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
+import { type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
 import {
-  loadMatrixStageResults,
-  matrixResultMetadata,
-  readRoleDefinition,
-  roleGroupSynthesisMembers,
-  stageExecutionPlan,
-  synthesisPromptAddition,
-  synthesizerSystemAddition,
-} from "./role-groups.js";
-import { loadStageSchema, validateOutput } from "./schemas.js";
+  promptSafetySources,
+  runStageResultForMode,
+  validationRepairRunner,
+} from "./stage-ai-results.js";
+import { stageRunResult } from "./stage-results.js";
+import { readRoleDefinition } from "./role-groups.js";
+import { loadStageSchema } from "./schemas.js";
+import type { SafetySource } from "./safety-gate.js";
+import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
 import {
   applyStageLabelTransition,
   applyStageStartLabelTransition,
@@ -33,17 +34,12 @@ import {
   pullRequestHeadBlockReason,
   runnerBaseBranch,
 } from "./stage-branches.js";
-import { dryRunContent, stageContract } from "./stage-dry-run.js";
+import { stageContract } from "./stage-dry-run.js";
 import { repositoryContext } from "./stage-git.js";
 import {
   applyDeterministicWrites,
   markPullRequestFeedbackInvestigationStarted,
 } from "./stage-writes.js";
-import {
-  buildValidationRepairPrompt,
-  validationRepairMaxTurnsFor,
-  type ValidationCommandFailure,
-} from "./validation.js";
 import { stageDefinitions } from "../shared/stages.js";
 import type {
   ContextPacket,
@@ -54,6 +50,59 @@ import type {
 } from "../shared/types.js";
 
 type RunnerStageDefinition = (typeof stageDefinitions)[RunnerOptions["stage"]];
+type PreparedBranch = Awaited<ReturnType<typeof prepareBranchForStage>>;
+type StageSafetyOptions = Omit<
+  Parameters<typeof blockUnsafePromptInjection>[0],
+  "extraSources" | "phase" | "result"
+>;
+
+export interface StageSecurityReviewResult {
+  allowed: boolean;
+  result?: StageRunResult;
+  status: string;
+  summary: string;
+}
+
+export async function runStageSecurityReview(
+  options: RunnerOptions,
+): Promise<StageSecurityReviewResult> {
+  const logger = createStageLogger(options.stage);
+  logger.event("security.review.start", {
+    dry_run: options.dryRun,
+    repository: options.repository,
+  });
+
+  const config = loadConfig(options.cwd);
+  const definition = stageDefinitions[options.stage];
+  const client = new GitHubClient();
+  const context = await loadRunnerContext({ client, definition, logger, options });
+  const transientComments: PublishedArtifactComment[] = [];
+  const blockedHeadResult = await blockUnsafePullRequestHead({
+    client,
+    context,
+    definition,
+    logger,
+    options,
+    transientComments,
+  });
+  if (blockedHeadResult) return blockedSecurityReview(blockedHeadResult);
+
+  const inputSafetyResult = await blockPromptInput(
+    stageSafetyOptions({
+      client,
+      config,
+      context,
+      definition,
+      logger,
+      options,
+      transientComments,
+    }),
+  );
+  if (inputSafetyResult) return blockedSecurityReview(inputSafetyResult);
+
+  logger.event("security.review.done", { allowed: true });
+  return { allowed: true, status: "allowed", summary: "Security review passed." };
+}
 
 export async function runStage(options: RunnerOptions): Promise<StageRunResult> {
   const logger = createStageLogger(options.stage);
@@ -80,18 +129,42 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   });
   if (blockedResult) return blockedResult;
 
+  const safetyOptions = stageSafetyOptions({
+    client,
+    config,
+    context,
+    definition,
+    logger,
+    options,
+    transientComments,
+  });
+  const inputSafetyResult = await blockPromptInput(safetyOptions);
+  if (inputSafetyResult) return inputSafetyResult;
+
+  const mcpContext = await resolveMcpContext({
+    client,
+    config,
+    context,
+    definition,
+    logger,
+    options,
+    transientComments,
+  });
+  if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
+
   const branchState = await prepareBranchForStage({ client, context, logger, options });
 
   const schema = loadStageSchema(definition.schemaFile);
-  const prompts = renderPrompts({
+  const prompts = buildRenderedPrompts({
+    branchState: branchState.branchState,
     context,
-    cwd: options.cwd,
-    outputSchema: schema,
-    promptDir: definition.promptDir,
-    repositoryContext: repositoryContext(options.cwd, branchState.branchState),
-    roleDefinition: roleDefinitionFor(options),
-    stageContract: stageContract(options.stage, context),
+    definition,
+    options,
+    schema,
   });
+  if (mcpContext.promptAddition) {
+    prompts.prompt = `${prompts.prompt}\n\n${mcpContext.promptAddition}`;
+  }
   logger.event("prompt.ready", {
     schema_id: definition.schemaId,
     tools: definition.tools.join(","),
@@ -108,37 +181,124 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     prompts,
     schema,
   });
-  let result = await runStageResultForMode({
+  const promptSafetyResult = await blockPromptInput(safetyOptions, promptSafetySources(prompts));
+  if (promptSafetyResult) return promptSafetyResult;
+
+  const result = await runCheckedStageResult({
     aiRunOptions,
+    branchState,
+    client,
     config,
     context,
     definition,
     executionMode,
     logger,
     options,
-  });
-  if (executionMode === "member") {
-    logger.event("stage.done", {
-      status: result.status,
-    });
-    return result;
-  }
-  result = await applyDeterministicWrites({
-    client,
-    config,
-    context,
-    logger,
-    options,
-    repair: validationRepairRunner({ aiRunOptions, config, context, definition, logger, options }),
-    result,
-    runnerBaseBranch: branchState.baseBranch,
+    safetyOptions,
     transientComments,
   });
+  return finishStage(logger, result);
+}
 
-  logger.event("stage.done", {
-    status: result.status,
+async function runCheckedStageResult(options: {
+  aiRunOptions: RunAiStageOptions;
+  branchState: PreparedBranch;
+  client: GitHubClient;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  executionMode: RunnerOptions["executionMode"];
+  logger: StageLogger;
+  options: RunnerOptions;
+  safetyOptions: StageSafetyOptions;
+  transientComments: PublishedArtifactComment[];
+}): Promise<StageRunResult> {
+  const result = await runStageResultForMode(options);
+  recordContextCoverage({
+    coverage: contextPromptCoverageForContext(options.context),
+    logger: options.logger,
   });
+  if (options.executionMode === "member") return result;
+
+  const outputSafetyResult = await blockUnsafePromptInjection({
+    ...options.safetyOptions,
+    phase: "output",
+    result,
+  });
+  if (outputSafetyResult) return outputSafetyResult;
+
+  return applyDeterministicWrites({
+    client: options.client,
+    config: options.config,
+    context: options.context,
+    logger: options.logger,
+    options: options.options,
+    repair: validationRepairRunner(options),
+    result,
+    runnerBaseBranch: options.branchState.baseBranch,
+    transientComments: options.transientComments,
+  });
+}
+
+function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResult {
+  return {
+    allowed: false,
+    result,
+    status: result.status,
+    summary: result.summary,
+  };
+}
+
+function finishStage(logger: StageLogger, result: StageRunResult): StageRunResult {
+  logger.event("stage.done", { status: result.status });
   return result;
+}
+
+async function resolveMcpContext(options: {
+  client: GitHubClient;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  logger: StageLogger;
+  options: RunnerOptions;
+  transientComments: PublishedArtifactComment[];
+}): Promise<{ blockedResult?: StageRunResult; promptAddition: string }> {
+  const mcpContext = await buildMcpPromptContext({
+    config: options.config,
+    context: options.context,
+    logger: options.logger,
+    runner: options.options,
+  });
+  if (!mcpContext.blocked) return { promptAddition: mcpContext.promptAddition };
+
+  const blockedResult = await publishPreAiBlockedResult({
+    client: options.client,
+    context: options.context,
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+    output: mcpContext.blocked,
+    transientComments: options.transientComments,
+  });
+  return { blockedResult, promptAddition: "" };
+}
+
+function recordContextCoverage(options: {
+  coverage: ContextPromptCoverage;
+  logger: StageLogger;
+}): void {
+  options.logger.event("context.coverage.checked", {
+    complete: options.coverage.complete,
+    included_chunks: options.coverage.includedChunkIds.length,
+    pending_chunks: options.coverage.pendingChunkIds.length,
+    total_chunks: options.coverage.totalChunks,
+  });
+  if (options.coverage.complete) return;
+  options.logger.event("context.coverage.incomplete", {
+    included_chunks: options.coverage.includedChunkIds.length,
+    pending_chunks: options.coverage.pendingChunkIds.length,
+    total_chunks: options.coverage.totalChunks,
+  });
 }
 
 function persistContext(options: {
@@ -184,21 +344,6 @@ function buildAiRunOptions(options: {
     stageDefinition: options.definition,
     system: options.prompts.system,
   };
-}
-
-async function runStageResultForMode(options: {
-  aiRunOptions: RunAiStageOptions;
-  config: GitVibeConfig;
-  context: ContextPacket;
-  definition: RunnerStageDefinition;
-  executionMode: RunnerOptions["executionMode"];
-  logger: StageLogger;
-  options: RunnerOptions;
-}): Promise<StageRunResult> {
-  if (options.executionMode === "finalizer") {
-    return runMatrixFinalizerResult(options);
-  }
-  return runStageAiResult(options);
 }
 
 async function loadRunnerContext(options: {
@@ -271,6 +416,58 @@ function roleDefinitionFor(options: RunnerOptions): string | undefined {
   return readRoleDefinition(options.cwd, options.roleName);
 }
 
+function buildRenderedPrompts(options: {
+  branchState?: IssueBranchState;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  options: RunnerOptions;
+  schema: JsonObject;
+}): { prompt: string; system: string } {
+  return renderPrompts({
+    context: options.context,
+    cwd: options.options.cwd,
+    outputSchema: options.schema,
+    promptDir: options.definition.promptDir,
+    repositoryContext: repositoryContext(options.options.cwd, options.branchState),
+    roleDefinition: roleDefinitionFor(options.options),
+    stageContract: stageContract(options.options.stage, options.context),
+  });
+}
+
+function blockPromptInput(
+  options: StageSafetyOptions,
+  extraSources?: SafetySource[],
+): Promise<StageRunResult | undefined> {
+  return blockUnsafePromptInjection({ ...options, extraSources, phase: "input" });
+}
+
+function stageSafetyOptions(options: {
+  client: GitHubClient;
+  config: GitVibeConfig;
+  context: ContextPacket;
+  definition: RunnerStageDefinition;
+  logger: StageLogger;
+  options: RunnerOptions;
+  transientComments: PublishedArtifactComment[];
+}): StageSafetyOptions {
+  return {
+    buildResult: (content: string) =>
+      stageRunResult({
+        content,
+        context: options.context,
+        definition: options.definition,
+        logger: options.logger,
+        options: options.options,
+      }),
+    client: options.client,
+    config: options.config,
+    context: options.context,
+    logger: options.logger,
+    runner: options.options,
+    transientComments: options.transientComments,
+  };
+}
+
 async function blockUnsafePullRequestHead(options: {
   client: GitHubClient;
   context: ContextPacket;
@@ -319,6 +516,42 @@ async function publishBlockedPullRequestHead(options: {
   });
 }
 
+async function publishPreAiBlockedResult(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
+  logger: StageLogger;
+  options: RunnerOptions;
+  output: JsonObject;
+  transientComments: PublishedArtifactComment[];
+}): Promise<StageRunResult> {
+  const result = await stageRunResult({
+    content: JSON.stringify(options.output),
+    context: options.context,
+    definition: options.definition,
+    logger: options.logger,
+    options: options.options,
+  });
+  if (options.options.executionMode === "member" || options.options.dryRun) return result;
+  await publishStageResultComment({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    parsedOutput: result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+  await applyStageLabelTransition({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    parsedOutput: result.parsedOutput,
+    runner: options.options,
+    transientComments: options.transientComments,
+  });
+  return result;
+}
+
 async function prepareBranchForStage(options: {
   client: GitHubClient;
   context: ContextPacket;
@@ -349,259 +582,6 @@ async function prepareBranchForStage(options: {
         })
       : undefined;
   return { baseBranch, branchState };
-}
-
-function validationRepairRunner({
-  aiRunOptions,
-  config,
-  context,
-  definition,
-  logger,
-  options,
-}: {
-  aiRunOptions: Parameters<typeof runAiStage>[0];
-  config: GitVibeConfig;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  logger: StageLogger;
-  options: RunnerOptions;
-}) {
-  return async (
-    failure: ValidationCommandFailure,
-    attempt: number,
-    maxAttempts: number,
-  ): Promise<StageRunResult> =>
-    stageRunResult({
-      content: await runAiStage({
-        ...aiRunOptions,
-        maxTurns: validationRepairMaxTurnsFor(config, options),
-        prompt: buildValidationRepairPrompt({
-          attempt,
-          basePrompt: aiRunOptions.prompt,
-          cwd: options.cwd,
-          failure,
-          maxAttempts,
-          runner: options,
-        }),
-      }),
-      context,
-      definition,
-      logger,
-      options,
-    });
-}
-
-async function runStageAiResult({
-  aiRunOptions,
-  context,
-  definition,
-  logger,
-  options,
-}: {
-  aiRunOptions: RunAiStageOptions;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  logger: StageLogger;
-  options: RunnerOptions;
-}): Promise<StageRunResult> {
-  const buildResult = (content: string): Promise<StageRunResult> =>
-    stageRunResult({
-      content,
-      context,
-      definition,
-      logger,
-      options,
-    });
-
-  if (options.dryRun) return buildResult(dryRunContent(options.stage, context, logger));
-
-  try {
-    return await buildResult(await runAiStage(aiRunOptions));
-  } catch (error) {
-    if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
-    logger.event("output.finalize.failed", {
-      error: summarizeError(error),
-      recovery: "same_session_exhausted",
-    });
-    return stageRunResult({
-      content: JSON.stringify(
-        blockedImplementOutput({
-          context,
-          finalError: error,
-          firstError: error,
-          options,
-        }),
-      ),
-      context,
-      definition,
-      logger,
-      options,
-    });
-  }
-}
-
-async function runMatrixFinalizerResult({
-  aiRunOptions,
-  config,
-  context,
-  definition,
-  logger,
-  options,
-}: {
-  aiRunOptions: RunAiStageOptions;
-  config: GitVibeConfig;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  logger: StageLogger;
-  options: RunnerOptions;
-}): Promise<StageRunResult> {
-  const plan = stageExecutionPlan(config, options.stage, options.cwd);
-  const results = loadMatrixStageResults(options.memberResultsDir, options.stage);
-  const expected = plan.matrix.include.length;
-  const failed = Math.max(0, expected - results.length);
-
-  logger.event("matrix.finalize.start", {
-    expected,
-    failed,
-    mode: plan.mode,
-    successful: results.length,
-  });
-  if (results.length === 0) {
-    return stageRunResult({
-      content: JSON.stringify(zeroMatrixResultsOutput({ context, expected, options })),
-      context,
-      definition,
-      logger,
-      options,
-    });
-  }
-  if (options.dryRun || plan.mode === "profile") {
-    return stageRunResult({
-      content: JSON.stringify(results[0]?.parsedOutput),
-      context,
-      definition,
-      logger,
-      options,
-    });
-  }
-
-  const prompt = [
-    aiRunOptions.prompt,
-    synthesisPromptAddition({
-      expected,
-      failed,
-      members: roleGroupSynthesisMembers(options.cwd, plan),
-      results,
-      roleGroup: plan.roleGroup,
-      stage: options.stage,
-    }),
-  ].join("\n\n");
-  return stageRunResult({
-    content: await runAiStage({
-      ...aiRunOptions,
-      profileName: plan.synthesizerProfile,
-      prompt,
-      system: [aiRunOptions.system, synthesizerSystemAddition()].join("\n\n"),
-    }),
-    context,
-    definition,
-    logger,
-    options,
-  });
-}
-
-function isStructuredOutputFailure(error: unknown): boolean {
-  const message = summarizeError(error);
-  return (
-    message === "AI response did not call output_validator" ||
-    message === "AI response did not contain a JSON object" ||
-    /^AI output failed .+ validation:/.test(message)
-  );
-}
-
-async function stageRunResult({
-  content,
-  context,
-  definition,
-  logger,
-  options,
-}: {
-  content: string;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  logger: StageLogger;
-  options: RunnerOptions;
-}): Promise<StageRunResult> {
-  logger.event("output.validation.start", { schema_id: definition.schemaId });
-  const schema = loadStageSchema(definition.schemaFile);
-  const parsedOutput = await validateOutput({ content, schema, schemaId: definition.schemaId });
-  logger.event("output.validation.done", {
-    status: String(parsedOutput.status || "completed"),
-  });
-  const result: StageRunResult = {
-    commentBody: renderStageResultComment({
-      context,
-      parsedOutput,
-      stage: options.stage,
-      workflowRunUrl: options.workflowRunUrl,
-    }),
-    parsedOutput,
-    schemaId: definition.schemaId,
-    status: String(parsedOutput.status || "completed"),
-    summary: String(parsedOutput.summary || `${options.stage} completed`),
-    validationErrors: [],
-  };
-  const contextDir = process.env.RUNNER_TEMP || options.cwd;
-  const metadata =
-    options.executionMode === "member"
-      ? matrixResultMetadata({
-          profileName: options.profileName,
-          result,
-          roleName: options.roleName,
-        })
-      : undefined;
-  result.resultFile = writeStageResultFile({
-    directory: contextDir,
-    metadata,
-    result,
-    stage: options.stage,
-  });
-  writeStageResultSummary({
-    metadata,
-    result,
-    stage: options.stage,
-    summaryPath: process.env.GITHUB_STEP_SUMMARY,
-  });
-  logger.event("result.persisted", { file: `git-vibe-${options.stage}-result.json` });
-  return result;
-}
-
-function zeroMatrixResultsOutput(options: {
-  context: ContextPacket;
-  expected: number;
-  options: RunnerOptions;
-}): JsonObject {
-  const reason = `No ${options.options.stage} matrix member results were available for synthesis. Expected ${options.expected}.`;
-  const question = {
-    options: ["Rerun the stage after matrix member results are available."],
-    question: reason,
-  };
-  const base = {
-    assumptions: [],
-    comment_body: reason,
-    findings: [reason],
-    next_state: "blocked",
-    references: [options.context.artifact.url, options.options.workflowRunUrl].filter(
-      (value): value is string => Boolean(value),
-    ),
-    stage: options.options.stage,
-    status: "blocked",
-    summary: reason,
-  };
-  if (options.options.stage === "investigate") {
-    return { ...base, blocking_questions: [question], implementation_plan: [], questions: [] };
-  }
-  return base;
 }
 
 async function contextFor({
@@ -657,36 +637,4 @@ async function contextFor({
 function withSourceComment(context: ContextPacket, options: RunnerOptions): ContextPacket {
   if (!options.sourceComment) return context;
   return { ...context, source: { ...(context.source || {}), comment: options.sourceComment } };
-}
-
-function blockedImplementOutput(options: {
-  context: ContextPacket;
-  finalError: unknown;
-  firstError: unknown;
-  options: RunnerOptions;
-}): JsonObject {
-  const initial = summarizeError(options.firstError);
-  const final = summarizeError(options.finalError);
-  const summary = "Implementation stopped because the stage did not return schema-valid JSON.";
-  return {
-    assumptions: [],
-    branch: issueBranch(options.context),
-    comment_body: [
-      summary,
-      "",
-      `Initial structured output failure: ${initial}`,
-      `Finalization failure: ${final}`,
-      "",
-      "GitVibe left the working tree uncommitted so the next run can inspect and recover safely.",
-    ].join("\n"),
-    findings: [`Initial structured output failure: ${initial}`, `Finalization failure: ${final}`],
-    next_state: "blocked",
-    references: [options.context.artifact.url, options.options.workflowRunUrl].filter(
-      (value): value is string => Boolean(value),
-    ),
-    stage: "implement",
-    status: "blocked",
-    summary,
-    tests: ["Not run after the implement stage failed to produce schema-valid JSON."],
-  };
 }

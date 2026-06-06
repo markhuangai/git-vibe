@@ -28,7 +28,7 @@ ai:
     implementation_timeout_minutes: 120
     feedback_timeout_minutes: 120
     create_pr_timeout_minutes: 15
-    default_max_turns: 90
+    default_max_turns: 200
     implementation_max_turns: 200
     feedback_max_turns: 120
     validation_repair_attempts: 3
@@ -97,6 +97,17 @@ ai:
       model: opus
       reasoning:
         effort: max
+  mcp:
+    servers:
+      dense_mem:
+        transport: stdio
+        command: npx
+        args: ["-y", "dense-mem-mcp-proxy"]
+        env:
+          DENSE_MEM_MCP_URL:
+            from_bundle: DENSE_MEM_MCP_URL
+          DENSE_MEM_API_KEY:
+            from_bundle: DENSE_MEM_API_KEY
   role_groups:
     swarm:
       synthesizer: codex_5.5_high
@@ -111,18 +122,90 @@ ai:
   stages:
     investigate:
       role_group: swarm
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     validate:
       role_group: swarm
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     materialize:
       profile: codex_5.5_high
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     implement:
       enabled: false
       profile: codex_5.4_high
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     review-matrix:
       role_group: swarm
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary
     create-pr:
       enabled: false
       profile: codex_5.5_high
     address-pr-feedback:
       enabled: false
       profile: codex_5.4_high
+      mcp:
+        dense_mem:
+          required: true
+          tools:
+            - recall_memory
+            - assemble_context
+            - get_memory
+            - get_fact
+            - keyword_search
+            - semantic_search
+            - list_communities
+            - get_community_summary

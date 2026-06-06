@@ -17,12 +17,14 @@ describe("stage logging", () => {
 
     logger.event("ai.tool.start", {
       detail: "line\nbreak",
+      duration_ms: 2.885905000002822,
+      total_duration_seconds: 1.2345,
       skipped: undefined,
       tool: "read",
     });
 
     expect(messages).toEqual([
-      '[git-vibe] investigate ai.tool.start detail="line break" tool="read"',
+      '[git-vibe] investigate ai.tool.start detail="line break" duration_ms=2.89 total_duration_seconds=1.23 tool="read"',
     ]);
   });
 
@@ -44,6 +46,7 @@ describe("stage logging", () => {
     process.env.GITVIBE_TEST_SECRET = "super-secret-value";
     process.env.GIT_AUTHOR_NAME = "git-vibe";
     process.env.GITVIBE_AI_ENV_JSON = "{";
+    process.env.GITVIBE_MCP_ENV_JSON = JSON.stringify({ DENSE_MEM_TOKEN: "dense-secret-value" });
     /** @type {string[]} */
     const messages = [];
     const logger = createStageLogger("validate", {
@@ -51,12 +54,12 @@ describe("stage logging", () => {
     });
 
     logger.event("ai.tool.start", {
-      command: "echo super-secret-value github_pat_abc123",
+      command: "echo super-secret-value dense-secret-value github_pat_abc123",
       tool: "bash",
     });
 
     expect(messages).toEqual([
-      '[git-vibe] validate ai.tool.start command="echo <redacted:GITVIBE_TEST_SECRET> <redacted>" tool="bash"',
+      '[git-vibe] validate ai.tool.start command="echo <redacted:GITVIBE_TEST_SECRET> <redacted:GITVIBE_MCP_ENV_JSON.DENSE_MEM_TOKEN> <redacted>" tool="bash"',
     ]);
     expect(redactLogText("[git-vibe] status")).toBe("[git-vibe] status");
     expect(redactLogText("plain text")).toBe("plain text");
