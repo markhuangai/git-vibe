@@ -148,7 +148,7 @@ describe("GitVibe app server accept-risk label result selection", () => {
         }),
         stageResultComment({
           artifact: "issue",
-          number: 9,
+          number: 99,
           stage: "implement",
           status: "completed",
           submittedAt: "2026-01-06T00:00:00Z",
@@ -217,6 +217,45 @@ describe("GitVibe app server accept-risk label result selection", () => {
     );
     expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
       "cannot be resumed",
+    );
+  });
+});
+
+describe("GitVibe app server accept-risk stage result ordering", () => {
+  it("removes accept-risk when the latest trusted stage result is no longer blocked", async () => {
+    const client = createClient({
+      comments: [
+        stageResultComment({
+          artifact: "issue",
+          number: 9,
+          stage: "investigate",
+          submittedAt: "2026-01-02T00:00:00Z",
+        }),
+        stageResultComment({
+          artifact: "issue",
+          number: 9,
+          stage: "implement",
+          status: "completed",
+          submittedAt: "2026-01-03T00:00:00Z",
+        }),
+      ],
+      permission: { role_name: "maintain" },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "no valid blocked GitVibe stage result",
     );
   });
 });
@@ -402,6 +441,35 @@ describe("GitVibe app server accept-risk label validation", () => {
 });
 
 describe("GitVibe app server accept-risk label no-op cleanup", () => {
+  it("does not trust unassociated actors with git-vibe-like logins", async () => {
+    const client = createClient({
+      comments: [
+        {
+          ...stageResultComment({ artifact: "issue", number: 9, stage: "implement" }),
+          author_association: "NONE",
+          user: { login: "external-git-vibe-helper" },
+        },
+      ],
+      permission: { role_name: "maintain" },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "no valid blocked GitVibe stage result",
+    );
+  });
+
   it("removes accept-risk without dispatching when no trusted blocked result exists", async () => {
     const client = createClient({
       comments: [

@@ -18,11 +18,14 @@ import {
 } from "./server-actions.js";
 import { removeIssueLabel } from "./labels.js";
 
-interface BlockedStageResult {
+interface StageResult {
   marker: StageResultMarker;
   order: number;
+  status: string;
   time: number;
 }
+
+const trustedAutomationAuthors = new Set(["github-actions[bot]"]);
 
 interface PullRequestReviewResponse {
   author_association?: string;
@@ -62,8 +65,8 @@ export async function handleAcceptRiskLabel(
   options: WebhookActionContext,
   label: string,
 ): Promise<void> {
-  const result = await latestBlockedStageResult(options);
-  if (!result) {
+  const result = await latestTrustedStageResult(options);
+  if (!result || result.status !== "blocked") {
     await removeAcceptRiskLabel(options, label);
     await postAcceptRiskNoopComment(
       options,
@@ -100,29 +103,33 @@ export async function handleAcceptRiskLabel(
   });
 }
 
-async function latestBlockedStageResult(
+async function latestTrustedStageResult(
   options: WebhookActionContext,
-): Promise<BlockedStageResult | undefined> {
+): Promise<StageResult | undefined> {
   const artifact = artifactForPayload(options);
   if (!artifact) return undefined;
   const sources = await stageResultSources(options, artifact);
   const candidates = sources
-    .map((source) => blockedStageResultFromSource(source, artifact))
-    .filter((result): result is BlockedStageResult => Boolean(result));
-  return candidates.sort(compareBlockedResults).at(-1);
+    .map((source) => stageResultFromSource(source, artifact))
+    .filter((result): result is StageResult => Boolean(result));
+  return candidates.sort(compareStageResults).at(-1);
 }
 
-function blockedStageResultFromSource(
+function stageResultFromSource(
   source: StageResultSource,
   artifact: Pick<StageResultMarker, "artifact" | "number">,
-): BlockedStageResult | undefined {
+): StageResult | undefined {
   const marker = parseStageResultMarker(source.body);
   if (!marker || marker.artifact !== artifact.artifact || marker.number !== artifact.number) {
     return undefined;
   }
-  if (stageResultStatus(source.body) !== "blocked") return undefined;
   if (!trustedStageResultAuthor(source)) return undefined;
-  return { marker, order: source.order, time: sourceTime(source.createdAt) };
+  return {
+    marker,
+    order: source.order,
+    status: stageResultStatus(source.body),
+    time: sourceTime(source.createdAt),
+  };
 }
 
 async function stageResultSources(
@@ -335,10 +342,10 @@ function trustedStageResultAuthor(source: StageResultSource): boolean {
   const association = stringField(source.authorAssociation).toUpperCase();
   if (["COLLABORATOR", "MEMBER", "OWNER"].includes(association)) return true;
   const author = stringField(source.author).toLowerCase();
-  return author === "github-actions[bot]" || author.includes("git-vibe");
+  return trustedAutomationAuthors.has(author);
 }
 
-function compareBlockedResults(left: BlockedStageResult, right: BlockedStageResult): number {
+function compareStageResults(left: StageResult, right: StageResult): number {
   return left.time - right.time || left.order - right.order;
 }
 

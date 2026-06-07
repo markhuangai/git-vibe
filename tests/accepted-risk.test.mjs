@@ -87,11 +87,14 @@ describe("accepted-risk runner scope", () => {
         logger,
         runner: { ...runner, acceptedRisk: { stages: ["review-matrix"] } },
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(logger.event).toHaveBeenCalledWith(
       "accepted_risk.skip",
       expect.objectContaining({ reason: "pull-request-head-changed" }),
     );
+    expect(logger.event).toHaveBeenCalledWith("accepted_risk.skip", {
+      reason: "missing-accepted-artifact-sha",
+    });
   });
 });
 

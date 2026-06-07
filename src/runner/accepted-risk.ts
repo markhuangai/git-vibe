@@ -13,7 +13,11 @@ export function acceptedRiskApplies(options: {
   const accepted = options.runner.acceptedRisk;
   if (!accepted) return false;
   if (!accepted.stages.includes(options.runner.stage)) return false;
-  if (options.context.artifact.type !== "pull-request" || !accepted.artifactSha) return true;
+  if (options.context.artifact.type !== "pull-request") return true;
+  if (!accepted.artifactSha) {
+    options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
+    return false;
+  }
 
   const currentSha = options.context.artifact.pullRequestHead?.sha || "";
   if (currentSha && currentSha === accepted.artifactSha) return true;
