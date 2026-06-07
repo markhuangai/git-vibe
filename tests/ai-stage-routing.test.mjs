@@ -348,6 +348,7 @@ describe("AI stage runner stage fallbacks", () => {
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith(
       expect.stringContaining("System\n\nGitVibe web access policy"),
     );
+    expect(spawnedChildren[0].stdin.end.mock.calls[0][0]).not.toContain("output_validator");
     expect(process.stdout.write).toHaveBeenCalledWith("codex event\n");
     const writtenSchema = JSON.parse(readFileSync(schemaPathFrom(spawn.mock.calls[0][1]), "utf8"));
     expect(writtenSchema).toMatchObject({ required: ["stage", "working_capabilities"] });

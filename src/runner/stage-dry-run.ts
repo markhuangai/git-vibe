@@ -8,7 +8,7 @@ export function stageContract(stage: string, context: ContextPacket): string {
   const branchRule = deterministicBranch
     ? ` GitVibe has already prepared branch ${deterministicBranch}; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.`
     : "";
-  return `Stage ${stage} is running.${branchRule} Return only JSON matching the schema. Call output_validator with the exact final JSON before responding.`;
+  return `Stage ${stage} is running.${branchRule} Return only JSON matching the schema.`;
 }
 
 export function dryRunContent(stage: string, context: ContextPacket, logger: StageLogger): string {

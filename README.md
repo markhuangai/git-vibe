@@ -433,6 +433,8 @@ falling back to a profile name the repository may not have configured.
 Role definitions referenced by `role_group` live in `.git-vibe/role-group/*.md`.
 CLI adapters use fixed commands (`codex exec` and `claude -p`); profiles choose
 adapter, model, auth, env, and reasoning settings, not the executable command.
+They use native structured-output schema flags and do not receive
+`output_validator` tool-call instructions.
 Profiles may opt into shared repository guidance with
 `ai.profiles.<name>.context.files`. Listed files are appended to the rendered
 system prompt for that profile across `ai-sdk-agentool`, `cli-codex`, and
