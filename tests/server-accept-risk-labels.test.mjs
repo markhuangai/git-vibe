@@ -89,6 +89,53 @@ describe("GitVibe app server accept-risk labels", () => {
   });
 });
 
+describe("GitVibe app server accept-risk pull request review pagination", () => {
+  it("paginates pull request reviews before selecting the latest blocked result", async () => {
+    const pageOne = Array.from({ length: 100 }, (_, index) =>
+      stageResultReview({
+        artifact: "pull-request",
+        number: 12,
+        stage: "review-matrix",
+        submittedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+      }),
+    );
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      pullRequestHeadSha: "head-sha",
+      pullRequestReviewPages: [
+        pageOne,
+        [
+          stageResultReview({
+            artifact: "pull-request",
+            number: 12,
+            stage: "address-pr-feedback",
+            submittedAt: "2026-01-02T00:00:00Z",
+          }),
+        ],
+      ],
+    });
+
+    await createApp({ client }).handleWebhook("pull_request", {
+      action: "labeled",
+      label: { name: gitVibeLabels.acceptRisk.name },
+      pull_request: { head: { sha: "head-sha" }, number: 12 },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)[0].inputs).toMatchObject({
+      "accept-risk-stage": "investigate,address-pr-feedback",
+      "pr-number": "12",
+    });
+    expect(requestPaths(client, "GET")).toEqual(
+      expect.arrayContaining([
+        "/repos/example/repo/pulls/12/reviews?page=1&per_page=100",
+        "/repos/example/repo/pulls/12/reviews?page=2&per_page=100",
+      ]),
+    );
+  });
+});
+
 describe("GitVibe app server accept-risk label result selection", () => {
   it("uses the latest trusted blocked result and ignores invalid candidates", async () => {
     const client = createClient({

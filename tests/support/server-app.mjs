@@ -104,7 +104,11 @@ function requestResponseFor(request, options) {
     }
     throw new Error("GitHub API GET contents failed: 404");
   }
-  if (request.method === "GET" && /\/pulls\/\d+\/reviews$/.test(request.path)) {
+  if (request.method === "GET" && /\/pulls\/\d+\/reviews(?:\?|$)/.test(request.path)) {
+    if (options.pullRequestReviewPages) {
+      const page = Number(new URL(`https://example.test${request.path}`).searchParams.get("page"));
+      return options.pullRequestReviewPages[Math.max(0, page - 1)] || [];
+    }
     return options.pullRequestReviews || [];
   }
   if (request.method === "GET" && request.path.includes("/pulls/")) {

@@ -183,6 +183,25 @@ describe("accepted-risk audit publishing", () => {
   });
 });
 
+describe("accepted-risk audit dry runs", () => {
+  it("does not publish audits or remove labels during dry runs", async () => {
+    const client = { request: vi.fn() };
+    const loggerMock = logger();
+
+    await publishAcceptedRiskAudit({
+      client,
+      context: issueContext(),
+      logger: loggerMock,
+      runner: runner({ dryRun: true }),
+    });
+
+    expect(client.request).not.toHaveBeenCalled();
+    expect(loggerMock.event).toHaveBeenCalledWith("accepted_risk.audit.skip", {
+      reason: "dry-run",
+    });
+  });
+});
+
 describe("accepted-risk audit error handling", () => {
   it("propagates unexpected issue label removal errors after publishing the audit", async () => {
     const client = {

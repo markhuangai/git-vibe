@@ -31,6 +31,10 @@ export async function publishAcceptedRiskAudit(options: {
   result?: StageRunResult;
   runner: RunnerOptions;
 }): Promise<void> {
+  if (options.runner.dryRun) {
+    options.logger.event("accepted_risk.audit.skip", { reason: "dry-run" });
+    return;
+  }
   const body = acceptedRiskAuditBody(options);
   if (options.context.artifact.type === "discussion") {
     await publishDiscussionAudit(options, body);

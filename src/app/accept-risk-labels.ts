@@ -1,4 +1,5 @@
 import { discussionComments } from "../shared/discussions.js";
+import { paginatedGitHubRequest } from "../shared/github.js";
 import {
   parseStageResultMarker,
   stageResultStatus,
@@ -173,7 +174,7 @@ async function pullRequestReviews(
   options: WebhookActionContext,
   prNumber: string,
 ): Promise<PullRequestReviewResponse[]> {
-  return options.client.request<PullRequestReviewResponse[]>({
+  return paginatedGitHubRequest<PullRequestReviewResponse>(options.client, {
     method: "GET",
     path: `/repos/${options.owner}/${options.repo}/pulls/${prNumber}/reviews`,
     token: options.token,
