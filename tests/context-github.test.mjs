@@ -59,6 +59,11 @@ describe("GitHub context builders", () => {
       kind: "pull-request-review-comment",
       parentId: "8",
     });
+    expect(context.timeline.at(3)).toMatchObject({
+      databaseId: 7,
+      id: "7",
+      kind: "pull-request-review",
+    });
     expect(context.pullRequestFiles).toEqual([
       expect.objectContaining({
         filename: "src/file.ts",

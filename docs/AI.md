@@ -424,14 +424,14 @@ Adapter mappings:
 
 - `cli-codex`: run `codex exec` with `--dangerously-bypass-approvals-and-sandbox`; do not pass `--search`; map `reasoning.effort` to Codex `model_reasoning_effort`; map `reasoning.summary` to `model_reasoning_summary`.
 - `cli-claude-code`: run `claude -p` with `--dangerously-skip-permissions`; pass strict JSON Schema with `--json-schema`; map `reasoning.effort` to `--effort`. GitVibe does not set `--bare` unless a profile explicitly opts in with `bare: true`.
-- CLI adapters do not receive GitVibe stage tool lists or `max_turns`; Codex and Claude Code own their native agent/tool loop and run without per-tool permission prompts in this workflow.
+- CLI adapters do not receive GitVibe stage tool lists, `output_validator` tool-call instructions, or `max_turns`; Codex and Claude Code own their native agent/tool loop and run without per-tool permission prompts in this workflow.
 - `ai-sdk-agentool` with native OpenAI: map `reasoning.effort` to `providerOptions.openai.reasoningEffort`; map summaries to `providerOptions.openai.reasoningSummary` where applicable; set a stable `providerOptions.openai.promptCacheKey` by default.
 - `ai-sdk-agentool` with OpenAI-compatible endpoints: do not add OpenAI prompt cache request fields by default because non-OpenAI endpoints may reject unknown fields.
 - `ai-sdk-agentool` with Anthropic: map `reasoning.effort` to `providerOptions.anthropic.effort`; keep lower-level `thinking` config under `provider_options.anthropic` for explicit advanced use; set `providerOptions.anthropic.cacheControl: { type: "ephemeral" }` by default.
 
 AI SDK tool policy by stage:
 
-Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters do not receive these tool lists because their native agents own tool selection.
+Stage `tools` config is optional and only applies to the `ai-sdk-agentool` adapter. When omitted, GitVibe uses the built-in defaults below. CLI adapters do not receive these tool lists because their native agents own tool selection. `output_validator` is an AI SDK tool only; CLI adapters use native structured-output schema flags and GitVibe post-validation.
 
 - `investigate`: read, grep, glob, diff, GitHub search, web fetch/search,
   and read-only `agent` subagents.

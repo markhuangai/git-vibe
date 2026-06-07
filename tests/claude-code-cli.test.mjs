@@ -89,7 +89,9 @@ describe("Claude Code CLI adapter", () => {
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--tools");
     expect(args).not.toContain("--disallowedTools");
-    expect(args[args.indexOf("--system-prompt") + 1]).toContain("GitVibe web access policy");
+    const systemPrompt = args[args.indexOf("--system-prompt") + 1];
+    expect(systemPrompt).toContain("GitVibe web access policy");
+    expect(systemPrompt).not.toContain("output_validator");
     expect(JSON.parse(jsonSchemaFrom(args))).toEqual(
       expect.objectContaining({ required: ["stage", "status", "questions"] }),
     );
@@ -106,6 +108,7 @@ describe("Claude Code CLI adapter", () => {
     );
     expect(spawn.mock.calls[0][2].env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(spawnedChildren[0].stdin.end).toHaveBeenCalledWith("Prompt");
+    expect(spawnedChildren[0].stdin.end.mock.calls[0][0]).not.toContain("output_validator");
     expect(process.stdout.write).toHaveBeenCalledWith(
       expect.stringContaining("ai.claude.init model=opus"),
     );

@@ -66,7 +66,7 @@ describe("AI stage runner OpenAI-compatible profiles", () => {
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         maxRetries: 0,
-        prompt: "Prompt",
+        prompt: expect.stringContaining("Call output_validator"),
         providerOptions: { custom: true },
         stopWhen: [expect.any(Function), { count: 3 }],
         system: expect.stringContaining("System\n\nGitVibe web access policy"),

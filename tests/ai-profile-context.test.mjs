@@ -71,7 +71,8 @@ describe("AI profile context routing", () => {
       expect(generateText.mock.calls[0][0].system).toContain(
         "Use profile-specific repository guidance.",
       );
-      expect(generateText.mock.calls[0][0].prompt).toBe("Prompt");
+      expect(generateText.mock.calls[0][0].prompt).toContain("Prompt");
+      expect(generateText.mock.calls[0][0].prompt).toContain("output_validator");
     } finally {
       cleanupWorkspace(cwd);
     }

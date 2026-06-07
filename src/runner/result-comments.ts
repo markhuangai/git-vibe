@@ -73,7 +73,9 @@ export function renderStageResultComment(options: StageResultCommentOptions): st
 
 function resultMarker(options: StageResultCommentOptions): string {
   const artifact = options.context.artifact;
-  return `<!-- git-vibe:stage-result stage=${options.stage} artifact=${artifact.type} number=${artifact.number} -->`;
+  const run = workflowRunIdFromUrl(options.workflowRunUrl);
+  const runAttribute = run ? ` run=${run}` : "";
+  return `<!-- git-vibe:stage-result stage=${options.stage} artifact=${artifact.type} number=${artifact.number}${runAttribute} -->`;
 }
 
 function stageTitle(options: Pick<StageResultCommentOptions, "context" | "stage">): string {

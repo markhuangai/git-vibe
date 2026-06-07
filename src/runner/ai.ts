@@ -155,7 +155,11 @@ async function runAiStageWithProfile(
     throw new Error(`AI profile ${profileName} uses unsupported adapter ${adapter}.`);
   }
 
-  return runAiSdkStageWithProfile(profileOptions, profileName, profile);
+  return runAiSdkStageWithProfile(
+    aiSdkOutputValidationOptions(profileOptions),
+    profileName,
+    profile,
+  );
 }
 
 async function runAiSdkStageWithProfile(
@@ -210,6 +214,23 @@ async function runAiSdkStageWithProfile(
   } finally {
     await mcpTools.close();
   }
+}
+
+function aiSdkOutputValidationOptions(options: RunAiStageOptions): RunAiStageOptions {
+  return {
+    ...options,
+    prompt: [options.prompt, aiSdkOutputValidationInstruction()].join("\n\n"),
+  };
+}
+
+function aiSdkOutputValidationInstruction(): string {
+  return [
+    "<adapter_output_validation>",
+    "Call output_validator with content set to the exact final JSON object string.",
+    "If validation fails, fix every reported error and call output_validator again.",
+    "After validation, return only the same JSON object.",
+    "</adapter_output_validation>",
+  ].join("\n");
 }
 
 function aiSdkRuntime(options: {
