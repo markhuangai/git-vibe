@@ -106,13 +106,19 @@ export function safetyGateForStage(options: {
   config: GitVibeConfig;
   context: ContextPacket;
   extraSources?: SafetySource[];
+  includeContext?: boolean;
   output?: JsonObject;
   stage: Stage;
 }): SafetyGateResult {
   if (!promptInjectionGateEnabled(options.config)) return allowedResult();
 
   const analysis = analyzeSources(
-    sourcesFor(options.context, options.output, options.extraSources),
+    sourcesFor({
+      context: options.context,
+      extraSources: options.extraSources,
+      includeContext: options.includeContext !== false,
+      output: options.output,
+    }),
   );
   const shouldBlock =
     analysis.severity === "high" &&
@@ -357,17 +363,25 @@ function nearbyRiskyLinkAction(text: string, index: number): boolean {
   return riskyLinkActionPattern.test(text.slice(start, end));
 }
 
-function sourcesFor(
-  context: ContextPacket,
-  output: JsonObject | undefined,
-  extraSources: SafetySource[] = [],
-): ContentUnit[] {
+function sourcesFor(options: {
+  context: ContextPacket;
+  extraSources?: SafetySource[];
+  includeContext: boolean;
+  output?: JsonObject;
+}): ContentUnit[] {
   return [
-    ...contentUnitsForContext(context),
-    ...(output
-      ? [safetySourceUnit({ label: "stage output", text: JSON.stringify(output) }, "stage-output")]
+    ...(options.includeContext ? contentUnitsForContext(options.context) : []),
+    ...(options.output
+      ? [
+          safetySourceUnit(
+            { label: "stage output", text: JSON.stringify(options.output) },
+            "stage-output",
+          ),
+        ]
       : []),
-    ...extraSources.map((source, index) => safetySourceUnit(source, `extra-source-${index}`)),
+    ...(options.extraSources || []).map((source, index) =>
+      safetySourceUnit(source, `extra-source-${index}`),
+    ),
   ].filter((source) => source.text.trim());
 }
 

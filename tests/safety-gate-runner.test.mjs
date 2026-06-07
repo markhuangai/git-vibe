@@ -164,6 +164,40 @@ describe("stage runner accepted-risk gate", () => {
     expect(labelRemovalPath(fetch, "git-vibe:accept-risk")).toBeTruthy();
     expect(generateText).not.toHaveBeenCalled();
   });
+});
+
+describe("stage runner accepted-risk output gate", () => {
+  it("does not reblock accepted input risk when stage output is clean", async () => {
+    const cwd = await workspace();
+    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    const fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([issueComment(unsafeInstruction())]),
+      response(200, { id: 4 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      acceptedRisk: { actor: "maintainer", stages: ["investigate"] },
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result).toMatchObject({
+      parsedOutput: { comment_body: "Ready to implement.", findings: [] },
+      status: "completed",
+      summary: "Ready.",
+    });
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
+  });
 
   it("still blocks unsafe stage output after accepted input risk", async () => {
     const cwd = await workspace();

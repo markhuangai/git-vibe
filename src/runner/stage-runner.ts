@@ -178,6 +178,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
 
   const result = await runCheckedStageResult({
     ...stageContext,
+    acceptedRisk,
     aiRunOptions,
     branchState,
     config,
@@ -210,6 +211,7 @@ function blockRenderedPromptInput(options: {
 }
 
 async function runCheckedStageResult(options: {
+  acceptedRisk: boolean;
   aiRunOptions: RunAiStageOptions;
   branchState: PreparedBranch;
   client: GitHubClient;
@@ -231,6 +233,7 @@ async function runCheckedStageResult(options: {
 
   const outputSafetyResult = await blockUnsafePromptInjection({
     ...options.safetyOptions,
+    includeContext: !options.acceptedRisk,
     phase: "output",
     result,
   });

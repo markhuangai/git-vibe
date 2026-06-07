@@ -21,6 +21,7 @@ export async function blockUnsafePromptInjection(options: {
   config: GitVibeConfig;
   context: ContextPacket;
   extraSources?: SafetySource[];
+  includeContext?: boolean;
   logger: StageLogger;
   phase: "input" | "output";
   result?: StageRunResult;
@@ -53,6 +54,7 @@ export async function promptInjectionBlockedResult(options: {
   config: GitVibeConfig;
   context: ContextPacket;
   extraSources?: SafetySource[];
+  includeContext?: boolean;
   logger: StageLogger;
   phase: "input" | "output";
   result?: StageRunResult;
@@ -63,6 +65,7 @@ export async function promptInjectionBlockedResult(options: {
     config: options.config,
     context: options.context,
     extraSources: options.extraSources,
+    includeContext: options.includeContext,
     output: options.result?.parsedOutput,
     stage: options.runner.stage,
   });
