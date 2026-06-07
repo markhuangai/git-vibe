@@ -147,6 +147,9 @@ describe("pull request review publishing reruns", () => {
     expect(requestCalls(client).map((request) => request.path)).not.toContain(
       "/repos/example/repo/issues/12/comments",
     );
+    expect(requestCalls(client)).toContainEqual(
+      expect.objectContaining({ method: "GET", path: "/user" }),
+    );
     expect(requestCalls(client).map((request) => request.method)).not.toContain("POST");
     expect(logger.event).toHaveBeenCalledWith("github.pr.review.update.start", {
       pull_request: "12",
@@ -158,6 +161,40 @@ describe("pull request review publishing reruns", () => {
       review: "99",
       run: "99",
     });
+  });
+
+  it("submits a new review when a matching rerun review is not authored by the token user", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: contextWithPreviousReview({ author: "contributor" }),
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        next_state: "review-passed",
+        stage: "review-matrix",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(requestCalls(client)).toContainEqual(
+      expect.objectContaining({ method: "GET", path: "/user" }),
+    );
+    expect(requestCalls(client).map((request) => request.path)).not.toContain(
+      "/repos/example/repo/pulls/12/reviews/99",
+    );
+    expect(
+      requestCalls(client).find((request) => request.path.endsWith("/pulls/12/reviews")),
+    ).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        path: "/repos/example/repo/pulls/12/reviews",
+      }),
+    );
   });
 });
 
@@ -480,13 +517,16 @@ function runner(overrides = {}) {
 }
 
 /**
+ * @param {{ login?: string }} [options]
  * @returns {MockGitHubClient}
  */
-function createClient() {
+function createClient(options = {}) {
   return /** @type {MockGitHubClient} */ ({
     apiBaseUrl: "https://api.github.test",
     graphql: vi.fn(async () => ({})),
-    request: vi.fn(async () => ({})),
+    request: vi.fn(async (request) =>
+      request.path === "/user" ? { login: options.login || "git-vibe" } : {},
+    ),
     retryBaseDelayMs: 0,
   });
 }

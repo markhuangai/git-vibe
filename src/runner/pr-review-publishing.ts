@@ -12,6 +12,10 @@ interface PullRequestReviewComment {
   start_side?: "LEFT" | "RIGHT";
 }
 
+interface AuthenticatedUserResponse extends JsonObject {
+  login?: string;
+}
+
 export async function publishPullRequestReviewResult(options: {
   client: GitHubClient;
   context: ContextPacket;
@@ -29,7 +33,7 @@ export async function publishPullRequestReviewResult(options: {
     stageResultBody: options.stageResultBody,
     workflowRunUrl: options.runner.workflowRunUrl,
   });
-  const existingReview = editableReviewForStageResult({ ...options, comments });
+  const existingReview = await editableReviewForStageResult({ ...options, comments });
   if (existingReview) {
     options.logger.event("github.pr.review.update.start", {
       pull_request: options.context.artifact.number,
@@ -81,15 +85,16 @@ function shouldPublishPullRequestReview(options: {
   );
 }
 
-function editableReviewForStageResult(options: {
+async function editableReviewForStageResult(options: {
+  client: GitHubClient;
   comments: PullRequestReviewComment[];
   context: ContextPacket;
   runner: RunnerOptions;
-}): { reviewId: string } | undefined {
+}): Promise<{ reviewId: string } | undefined> {
   if (options.comments.length > 0) return undefined;
   const run = workflowRunIdFromUrl(options.runner.workflowRunUrl);
   if (!run) return undefined;
-  let editableReview: { reviewId: string } | undefined;
+  const candidates: Array<{ author: string; reviewId: string }> = [];
   for (const item of options.context.timeline) {
     if (item.kind !== "pull-request-review") continue;
     const reviewId = reviewDatabaseId(item.databaseId);
@@ -102,7 +107,19 @@ function editableReviewForStageResult(options: {
       markerMatchesRun(marker, item.body, run) &&
       reviewInlineCommentCount(item.body) === 0
     ) {
-      editableReview = { reviewId };
+      candidates.push({ author: item.author, reviewId });
+    }
+  }
+  if (!candidates.length) return undefined;
+
+  const login = await authenticatedGitHubLogin({
+    client: options.client,
+    token: options.runner.token,
+  });
+  let editableReview: { reviewId: string } | undefined;
+  for (const candidate of candidates) {
+    if (sameGitHubLogin(candidate.author, login)) {
+      editableReview = { reviewId: candidate.reviewId };
     }
   }
   return editableReview;
@@ -142,6 +159,28 @@ function reviewDatabaseId(value: number | string | undefined): string | undefine
   if (typeof value === "number" && Number.isInteger(value) && value > 0) return String(value);
   if (typeof value === "string" && /^\d+$/.test(value)) return value;
   return undefined;
+}
+
+function sameGitHubLogin(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+async function authenticatedGitHubLogin(options: {
+  client: GitHubClient;
+  token: string;
+}): Promise<string> {
+  const user = await options.client.request<AuthenticatedUserResponse>({
+    method: "GET",
+    path: "/user",
+    token: options.token,
+  });
+  const login = stringField(user.login);
+  if (!login) {
+    throw new Error(
+      "GitHub authenticated user did not include login; cannot safely update PR review.",
+    );
+  }
+  return login;
 }
 
 async function createPullRequestReview(options: {
