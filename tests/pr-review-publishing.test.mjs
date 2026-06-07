@@ -48,7 +48,7 @@ describe("pull request review publishing", () => {
     expect(review).toMatchObject({
       body: {
         body: expect.stringContaining(
-          "<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=12 -->",
+          "<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=12 run=99 -->",
         ),
         comments: [
           {
@@ -107,6 +107,211 @@ describe("pull request review publishing passed reviews", () => {
     });
     expect(requestCalls(client).map((request) => request.path)).not.toContain(
       "/repos/example/repo/issues/12/comments",
+    );
+  });
+});
+
+describe("pull request review publishing reruns", () => {
+  it("updates a matching top-level review result from the same workflow run", async () => {
+    const client = createClient();
+    const logger = createLogger();
+
+    await publishStageResultComment({
+      client,
+      context: contextWithPreviousReview(),
+      logger,
+      parsedOutput: {
+        ...output(),
+        findings: ["The same blocked result was already published by an earlier attempt."],
+        next_state: "blocked",
+        stage: "review-matrix",
+        status: "blocked",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(requestCalls(client)).toContainEqual(
+      expect.objectContaining({
+        body: {
+          body: expect.stringContaining(
+            "The same blocked result was already published by an earlier attempt.",
+          ),
+        },
+        method: "PUT",
+        path: "/repos/example/repo/pulls/12/reviews/99",
+      }),
+    );
+    expect(requestCalls(client).map((request) => request.path)).not.toContain(
+      "/repos/example/repo/issues/12/comments",
+    );
+    expect(requestCalls(client).map((request) => request.method)).not.toContain("POST");
+    expect(logger.event).toHaveBeenCalledWith("github.pr.review.update.start", {
+      pull_request: "12",
+      review: "99",
+      run: "99",
+    });
+    expect(logger.event).toHaveBeenCalledWith("github.pr.review.update.done", {
+      pull_request: "12",
+      review: "99",
+      run: "99",
+    });
+  });
+});
+
+describe("pull request review publishing legacy reruns", () => {
+  it("updates the latest matching legacy review that only references the workflow run in body", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: {
+        ...context("pull-request"),
+        timeline: [
+          previousReview({
+            body: previousReviewBody([], { includeRunAttribute: false }),
+            databaseId: 88,
+            id: "older-review-node",
+          }),
+          previousReview({
+            body: previousReviewBody([], { includeRunAttribute: false }),
+            databaseId: 99,
+          }),
+        ],
+      },
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        next_state: "review-passed",
+        stage: "review-matrix",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(
+      requestCalls(client).find((request) => request.path.endsWith("/pulls/12/reviews/99")),
+    ).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        path: "/repos/example/repo/pulls/12/reviews/99",
+      }),
+    );
+    expect(requestCalls(client).map((request) => request.path)).not.toContain(
+      "/repos/example/repo/pulls/12/reviews/88",
+    );
+  });
+});
+
+describe("pull request review publishing changed rerun outcomes", () => {
+  it("updates the existing review when a rerun changes the review result outcome", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: contextWithPreviousReview(),
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        next_state: "review-passed",
+        stage: "review-matrix",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(
+      requestCalls(client).find((request) => request.path.endsWith("/pulls/12/reviews/99")),
+    ).toEqual(
+      expect.objectContaining({
+        body: { body: expect.stringContaining("**Next state:** `review-passed`") },
+        method: "PUT",
+        path: "/repos/example/repo/pulls/12/reviews/99",
+      }),
+    );
+  });
+});
+
+describe("pull request review publishing rerun inline comment guards", () => {
+  it("submits a new review when rerun output includes inline comments", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: contextWithPreviousReview(),
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        findings: ["New required fix."],
+        inline_comments: [
+          {
+            body: "New line-specific feedback.",
+            line: 42,
+            path: "src/app.ts",
+          },
+        ],
+        next_state: "changes-required",
+        stage: "review-matrix",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(
+      requestCalls(client).find((request) => request.path.endsWith("/pulls/12/reviews")),
+    ).toEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          comments: [
+            {
+              body: "New line-specific feedback.",
+              line: 42,
+              path: "src/app.ts",
+              side: "RIGHT",
+            },
+          ],
+        }),
+        method: "POST",
+        path: "/repos/example/repo/pulls/12/reviews",
+      }),
+    );
+  });
+
+  it("submits a new review when the matching review already has inline comments", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: contextWithPreviousReview({
+        body: previousReviewBody(["**Inline comments:** 1"]),
+      }),
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        next_state: "review-passed",
+        stage: "review-matrix",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(
+      requestCalls(client).find((request) => request.path.endsWith("/pulls/12/reviews")),
+    ).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        path: "/repos/example/repo/pulls/12/reviews",
+      }),
     );
   });
 });
@@ -206,6 +411,53 @@ function output() {
     status: "completed",
     summary: "Result summary.",
   };
+}
+
+function previousReview(overrides = {}) {
+  return {
+    author: "git-vibe",
+    body: "",
+    createdAt: "2026-01-01T00:00:00Z",
+    databaseId: 99,
+    id: "review-node",
+    kind: "pull-request-review",
+    url: "https://github.com/example/repo/pull/12#pullrequestreview-99",
+    ...overrides,
+  };
+}
+
+function contextWithPreviousReview(overrides = {}) {
+  return {
+    ...context("pull-request"),
+    timeline: [
+      previousReview({
+        body: previousReviewBody(),
+        ...overrides,
+      }),
+    ],
+  };
+}
+
+/**
+ * @param {string[]} [extraLines]
+ * @param {{ includeRunAttribute?: boolean }} [options]
+ * @returns {string}
+ */
+function previousReviewBody(extraLines = [], options = {}) {
+  const runAttribute = options.includeRunAttribute === false ? "" : " run=99";
+  return [
+    `<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=12${runAttribute} -->`,
+    "## GitVibe Review Matrix",
+    "",
+    "**Status:** `blocked`",
+    "**Next state:** `blocked`",
+    "",
+    "Previous attempt blocked.",
+    ...extraLines.flatMap((line) => ["", line]),
+    "",
+    "### Result",
+    "Workflow run: https://github.com/example/repo/actions/runs/99",
+  ].join("\n");
 }
 
 /**

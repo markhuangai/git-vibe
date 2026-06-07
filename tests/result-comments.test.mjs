@@ -35,7 +35,7 @@ describe("stage result comments", () => {
     });
 
     expect(body).toContain(
-      "<!-- git-vibe:stage-result stage=create-pr artifact=issue number=12 -->",
+      "<!-- git-vibe:stage-result stage=create-pr artifact=issue number=12 run=99 -->",
     );
     expect(body).toContain("## GitVibe Pull Request Update");
     expect(body).toContain("**Status:** `completed`");

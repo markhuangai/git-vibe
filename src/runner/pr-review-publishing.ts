@@ -1,4 +1,5 @@
 import { GitHubClient, splitRepository } from "../shared/github.js";
+import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { ContextPacket, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
 
@@ -22,17 +23,41 @@ export async function publishPullRequestReviewResult(options: {
   if (!shouldPublishPullRequestReview(options)) return false;
 
   const comments = inlineReviewComments(options.parsedOutput.inline_comments);
+  const body = pullRequestReviewBody({
+    comments,
+    output: options.parsedOutput,
+    stageResultBody: options.stageResultBody,
+    workflowRunUrl: options.runner.workflowRunUrl,
+  });
+  const existingReview = editableReviewForStageResult({ ...options, comments });
+  if (existingReview) {
+    options.logger.event("github.pr.review.update.start", {
+      pull_request: options.context.artifact.number,
+      review: existingReview.reviewId,
+      run: workflowRunIdFromUrl(options.runner.workflowRunUrl),
+    });
+    await updatePullRequestReview({
+      body,
+      client: options.client,
+      pullNumber: options.context.artifact.number,
+      repository: options.runner.repository,
+      reviewId: existingReview.reviewId,
+      token: options.runner.token,
+    });
+    options.logger.event("github.pr.review.update.done", {
+      pull_request: options.context.artifact.number,
+      review: existingReview.reviewId,
+      run: workflowRunIdFromUrl(options.runner.workflowRunUrl),
+    });
+    return true;
+  }
+
   options.logger.event("github.pr.review.start", {
     comments: comments.length,
     pull_request: options.context.artifact.number,
   });
   await createPullRequestReview({
-    body: pullRequestReviewBody({
-      comments,
-      output: options.parsedOutput,
-      stageResultBody: options.stageResultBody,
-      workflowRunUrl: options.runner.workflowRunUrl,
-    }),
+    body,
     client: options.client,
     comments,
     pullNumber: options.context.artifact.number,
@@ -56,6 +81,69 @@ function shouldPublishPullRequestReview(options: {
   );
 }
 
+function editableReviewForStageResult(options: {
+  comments: PullRequestReviewComment[];
+  context: ContextPacket;
+  runner: RunnerOptions;
+}): { reviewId: string } | undefined {
+  if (options.comments.length > 0) return undefined;
+  const run = workflowRunIdFromUrl(options.runner.workflowRunUrl);
+  if (!run) return undefined;
+  let editableReview: { reviewId: string } | undefined;
+  for (const item of options.context.timeline) {
+    if (item.kind !== "pull-request-review") continue;
+    const reviewId = reviewDatabaseId(item.databaseId);
+    if (!reviewId) continue;
+    const marker = parseStageResultMarker(item.body);
+    if (
+      marker?.artifact === options.context.artifact.type &&
+      marker.number === options.context.artifact.number &&
+      marker.stage === options.runner.stage &&
+      markerMatchesRun(marker, item.body, run) &&
+      reviewInlineCommentCount(item.body) === 0
+    ) {
+      editableReview = { reviewId };
+    }
+  }
+  return editableReview;
+}
+
+function parseStageResultMarker(
+  body: string,
+): { artifact: string; number: string; run?: string; stage: string } | undefined {
+  const match = body.match(/<!--\s*git-vibe:stage-result\s+([^>]*)-->/);
+  if (!match) return undefined;
+  const attributes = Object.fromEntries(
+    [...(match[1] || "").matchAll(/([a-z][a-z-]*)=([^\s>]+)/g)].map((entry) => [
+      entry[1],
+      entry[2],
+    ]),
+  );
+  if (!attributes.stage || !attributes.artifact || !attributes.number) return undefined;
+  return {
+    artifact: attributes.artifact,
+    number: attributes.number,
+    run: attributes.run,
+    stage: attributes.stage,
+  };
+}
+
+function markerMatchesRun(marker: { run?: string }, body: string, run: string): boolean {
+  if (marker.run) return marker.run === run;
+  return body.includes(`/actions/runs/${run}`);
+}
+
+function reviewInlineCommentCount(body: string): number {
+  const match = body.match(/\*\*Inline comments:\*\*\s+(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function reviewDatabaseId(value: number | string | undefined): string | undefined {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return String(value);
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  return undefined;
+}
+
 async function createPullRequestReview(options: {
   body: string;
   client: GitHubClient;
@@ -73,6 +161,23 @@ async function createPullRequestReview(options: {
     },
     method: "POST",
     path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/reviews`,
+    token: options.token,
+  });
+}
+
+async function updatePullRequestReview(options: {
+  body: string;
+  client: GitHubClient;
+  pullNumber: string;
+  repository: string;
+  reviewId: string;
+  token: string;
+}): Promise<void> {
+  const { owner, repo } = splitRepository(options.repository);
+  await options.client.request({
+    body: { body: options.body },
+    method: "PUT",
+    path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/reviews/${options.reviewId}`,
     token: options.token,
   });
 }
