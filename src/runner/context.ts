@@ -34,6 +34,7 @@ interface PullRequestResponse extends JsonObject {
       name?: string;
       owner?: { login?: string };
     } | null;
+    sha?: string;
   };
 }
 
@@ -193,7 +194,7 @@ function pullRequestHead(
       ? `${pullRequest.head.repo.owner.login}/${pullRequest.head.repo.name}`
       : "");
   if (!branch || !repository) return undefined;
-  return { branch, repository };
+  return { branch, repository, sha: pullRequest?.head?.sha };
 }
 
 function toPullRequestFile(file: PullRequestFileResponse): PullRequestFile | undefined {

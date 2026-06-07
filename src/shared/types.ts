@@ -24,6 +24,11 @@ export interface StageDefinition {
 }
 
 export interface RunnerOptions {
+  acceptedRisk?: {
+    actor?: string;
+    artifactSha?: string;
+    stages: Stage[];
+  };
   cwd: string;
   dryRun: boolean;
   executionMode?: "finalizer" | "member" | "standard";
@@ -112,6 +117,7 @@ export interface ContextPacket {
     pullRequestHead?: {
       branch: string;
       repository: string;
+      sha?: string;
     };
   };
   generatedAt: string;

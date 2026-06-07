@@ -40,6 +40,22 @@ inputs:
     description: Maximum AI turns for each validation repair attempt.
     required: false
     default: "45"
+  accept-risk:
+    description: Allow this run to continue after a trusted prompt-injection risk acceptance.
+    required: false
+    default: "false"
+  accept-risk-actor:
+    description: GitHub login that accepted the prompt-injection risk.
+    required: false
+    default: ""
+  accept-risk-artifact-sha:
+    description: Pull request head SHA covered by the accepted-risk decision.
+    required: false
+    default: ""
+  accept-risk-stage:
+    description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+    required: false
+    default: ""
 
 outputs:
   summary:
@@ -80,4 +96,8 @@ runs:
         GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
         GITVIBE_VALIDATION_REPAIR_ATTEMPTS: ${{ inputs.validation-repair-attempts }}
         GITVIBE_VALIDATION_REPAIR_MAX_TURNS: ${{ inputs.validation-repair-max-turns }}
+        GITVIBE_ACCEPT_RISK: ${{ inputs.accept-risk }}
+        GITVIBE_ACCEPT_RISK_ACTOR: ${{ inputs.accept-risk-actor }}
+        GITVIBE_ACCEPT_RISK_ARTIFACT_SHA: ${{ inputs.accept-risk-artifact-sha }}
+        GITVIBE_ACCEPT_RISK_STAGE: ${{ inputs.accept-risk-stage }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" implement

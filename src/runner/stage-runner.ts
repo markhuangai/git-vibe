@@ -20,7 +20,8 @@ import { stageRunResult } from "./stage-results.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
 import type { SafetySource } from "./safety-gate.js";
-import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
+import { blockUnsafePromptInjection, promptInjectionBlockedResult } from "./safety-gate-runner.js";
+import { acceptedRiskApplies, publishAcceptedRiskAudit } from "./accepted-risk.js";
 import {
   applyStageLabelTransition,
   applyStageStartLabelTransition,
@@ -87,17 +88,20 @@ export async function runStageSecurityReview(
   });
   if (blockedHeadResult) return blockedSecurityReview(blockedHeadResult);
 
-  const inputSafetyResult = await blockPromptInput(
-    stageSafetyOptions({
-      client,
-      config,
-      context,
-      definition,
-      logger,
-      options,
-      transientComments,
-    }),
-  );
+  const safetyOptions = stageSafetyOptions({
+    client,
+    config,
+    context,
+    definition,
+    logger,
+    options,
+    transientComments,
+  });
+  if (acceptedRiskApplies({ context, logger, runner: options })) {
+    return acceptedRiskSecurityReview(safetyOptions);
+  }
+
+  const inputSafetyResult = await blockPromptInput(safetyOptions);
   if (inputSafetyResult) return blockedSecurityReview(inputSafetyResult);
 
   logger.event("security.review.done", { allowed: true });
@@ -119,37 +123,21 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
   const transientComments = await publishStageStart({ client, context, logger, options });
-  const blockedResult = await blockUnsafePullRequestHead({
-    client,
-    context,
-    definition,
-    logger,
-    options,
-    transientComments,
-  });
+  const stageContext = { client, context, definition, logger, options, transientComments };
+  const blockedResult = await blockUnsafePullRequestHead(stageContext);
   if (blockedResult) return blockedResult;
 
-  const safetyOptions = stageSafetyOptions({
-    client,
-    config,
-    context,
-    definition,
+  const safetyOptions = stageSafetyOptions({ ...stageContext, config });
+  const acceptedRisk = acceptedRiskApplies({ context, logger, runner: options });
+  const inputSafetyResult = await blockInitialPromptInput({
+    acceptedRisk,
     logger,
-    options,
-    transientComments,
+    runner: options,
+    safetyOptions,
   });
-  const inputSafetyResult = await blockPromptInput(safetyOptions);
   if (inputSafetyResult) return inputSafetyResult;
 
-  const mcpContext = await resolveMcpContext({
-    client,
-    config,
-    context,
-    definition,
-    logger,
-    options,
-    transientComments,
-  });
+  const mcpContext = await resolveMcpContext({ ...stageContext, config });
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
 
   const branchState = await prepareBranchForStage({ client, context, logger, options });
@@ -181,23 +169,44 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     prompts,
     schema,
   });
-  const promptSafetyResult = await blockPromptInput(safetyOptions, promptSafetySources(prompts));
+  const promptSafetyResult = await blockRenderedPromptInput({
+    acceptedRisk,
+    prompts,
+    safetyOptions,
+  });
   if (promptSafetyResult) return promptSafetyResult;
 
   const result = await runCheckedStageResult({
+    ...stageContext,
     aiRunOptions,
     branchState,
-    client,
     config,
-    context,
-    definition,
     executionMode,
-    logger,
-    options,
     safetyOptions,
-    transientComments,
   });
   return finishStage(logger, result);
+}
+
+async function blockInitialPromptInput(options: {
+  acceptedRisk: boolean;
+  logger: StageLogger;
+  runner: RunnerOptions;
+  safetyOptions: StageSafetyOptions;
+}): Promise<StageRunResult | undefined> {
+  if (options.acceptedRisk) {
+    options.logger.event("accepted_risk.input_gate.skip", { stage: options.runner.stage });
+    return undefined;
+  }
+  return blockPromptInput(options.safetyOptions);
+}
+
+function blockRenderedPromptInput(options: {
+  acceptedRisk: boolean;
+  prompts: { prompt: string; system: string };
+  safetyOptions: StageSafetyOptions;
+}): Promise<StageRunResult | undefined> {
+  if (options.acceptedRisk) return Promise.resolve(undefined);
+  return blockPromptInput(options.safetyOptions, promptSafetySources(options.prompts));
 }
 
 async function runCheckedStageResult(options: {
@@ -246,6 +255,35 @@ function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResul
     result,
     status: result.status,
     summary: result.summary,
+  };
+}
+
+async function acceptedRiskSecurityReview(
+  options: StageSafetyOptions,
+): Promise<StageSecurityReviewResult> {
+  const result = await promptInjectionBlockedResult({ ...options, phase: "input" });
+  if (result) {
+    await publishStageResultComment({
+      client: options.client,
+      context: options.context,
+      logger: options.logger,
+      parsedOutput: result.parsedOutput,
+      runner: options.runner,
+      transientComments: options.transientComments,
+    });
+  }
+  await publishAcceptedRiskAudit({ ...options, result });
+  options.logger.event("security.review.done", {
+    accepted_risk: true,
+    allowed: true,
+  });
+  return {
+    allowed: true,
+    result,
+    status: result ? "accepted-risk" : "allowed",
+    summary: result
+      ? "Prompt-injection risk was accepted by a trusted actor for this run."
+      : "Security review passed; accepted-risk label was removed.",
   };
 }
 

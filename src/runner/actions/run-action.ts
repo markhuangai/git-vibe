@@ -8,6 +8,7 @@ import { runStage } from "../stage-runner.js";
 import { isInvestigationReady } from "../stage-publishing.js";
 import { redactLogText } from "../logging.js";
 import { matrixMemberRowForStage } from "../role-groups.js";
+import { acceptedRiskFromEnv } from "./accepted-risk-inputs.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { RunnerOptions, Stage, StageRunResult } from "../../shared/types.js";
@@ -44,6 +45,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       stage,
     });
     const result = await (runtime.runStage || runStage)({
+      acceptedRisk: acceptedRiskFromEnv(env),
       cwd,
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
       executionMode,

@@ -53,6 +53,26 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
 
 jobs:
   develop:
@@ -74,6 +94,10 @@ jobs:
       validation_repair_max_turns: ${{ fromJSON(github.event.inputs.validation_repair_max_turns) }}
       dry-run: ${{ fromJSON(github.event.inputs.dry-run) }}
       source-comment: ${{ github.event.inputs.source-comment }}
+      accept-risk: ${{ fromJSON(github.event.inputs.accept-risk) }}
+      accept-risk-actor: ${{ github.event.inputs.accept-risk-actor }}
+      accept-risk-artifact-sha: ${{ github.event.inputs.accept-risk-artifact-sha }}
+      accept-risk-stage: ${{ github.event.inputs.accept-risk-stage }}
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

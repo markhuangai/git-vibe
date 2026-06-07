@@ -25,7 +25,12 @@ export interface WebhookPayload {
     user?: { login?: string };
   };
   label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
-  pull_request?: { body?: string | null; merged?: boolean; number?: number | string };
+  pull_request?: {
+    body?: string | null;
+    head?: { sha?: string };
+    merged?: boolean;
+    number?: number | string;
+  };
   review?: {
     body?: string;
     html_url?: string;

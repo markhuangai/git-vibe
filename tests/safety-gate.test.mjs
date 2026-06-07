@@ -351,7 +351,7 @@ describe("prompt-injection safety blocked output", () => {
       status: "blocked",
       tests: ["Not run because GitVibe paused before write-capable execution."],
     });
-    expect(output.questions[0].options[0]).toContain("approval labels do not override");
+    expect(output.questions[0].options[0]).toContain("git-vibe:accept-risk");
     expect(output.questions[0].options[0]).not.toContain("git-vibe:approved");
   });
 

@@ -33,6 +33,26 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       pr-number:
@@ -61,6 +81,26 @@ on:
         default: false
       source-comment:
         description: JSON source comment metadata for replying to command comments.
+        required: false
+        type: string
+        default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
         required: false
         type: string
         default: ""
@@ -118,6 +158,10 @@ jobs:
           stage-timeout-minutes: 10
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   plan-investigate-feedback:
     runs-on: ${{ inputs.runner }}
@@ -203,6 +247,10 @@ jobs:
           source-comment: ${{ inputs.source-comment }}
           execution-mode: member
           member-index: ${{ matrix.index }}
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
       - name: Upload feedback investigation member result
         if: always()
         uses: actions/upload-artifact@v4
@@ -265,6 +313,10 @@ jobs:
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
           execution-mode: finalizer
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
       - name: Upload feedback investigation handoff
         if: always()
         uses: actions/upload-artifact@v4
@@ -325,3 +377,7 @@ jobs:
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
           handoff-dir: ${{ runner.temp }}/git-vibe-feedback-handoff
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}

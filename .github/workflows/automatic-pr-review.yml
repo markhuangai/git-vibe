@@ -28,6 +28,10 @@ jobs:
       max_turns: 200
       dry-run: false
       source-comment: ""
+      accept-risk: false
+      accept-risk-actor: ""
+      accept-risk-artifact-sha: ""
+      accept-risk-stage: ""
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

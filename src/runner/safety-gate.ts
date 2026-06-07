@@ -150,7 +150,7 @@ export function safetyBlockedOutput(options: {
   const summary = "GitVibe paused this run for maintainer review.";
   const question = {
     options: [
-      "Change the flagged content or safety configuration, then rerun GitVibe; approval labels do not override this gate.",
+      "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for one rerun.",
     ],
     question:
       options.gate.blockedReason ||
@@ -429,7 +429,7 @@ function safetyBlockedComment(gate: SafetyGateResult): string {
     gate.blockedReason ||
       "High-risk prompt-injection content was detected before GitVibe could safely continue.",
     "",
-    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, or handle the case manually before automation continues.",
+    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for a one-run acceptance, or handle the case manually before automation continues.",
     "",
     "Detected risk:",
     ...gate.findings.map((finding) => `- ${finding}`),

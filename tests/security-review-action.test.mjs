@@ -29,6 +29,10 @@ describe("GitVibe security review action", () => {
           GITHUB_OUTPUT: "/tmp/output",
           GITHUB_RUN_ID: "99",
           GITHUB_SERVER_URL: "https://github.enterprise.test",
+          GITVIBE_ACCEPT_RISK: "true",
+          GITVIBE_ACCEPT_RISK_ACTOR: "maintainer",
+          GITVIBE_ACCEPT_RISK_ARTIFACT_SHA: "head-sha",
+          GITVIBE_ACCEPT_RISK_STAGE: "investigate,review-matrix",
           GITVIBE_DRY_RUN: "true",
           GITVIBE_HANDOFF_DIR: "/tmp/handoffs",
           GITVIBE_SOURCE_COMMENT: JSON.stringify({
@@ -46,6 +50,11 @@ describe("GitVibe security review action", () => {
 
     expect(runStageSecurityReview).toHaveBeenCalledWith(
       expect.objectContaining({
+        acceptedRisk: {
+          actor: "maintainer",
+          artifactSha: "head-sha",
+          stages: ["investigate", "review-matrix"],
+        },
         dryRun: true,
         handoffDir: "/tmp/handoffs",
         issueNumber: "12",
@@ -174,6 +183,11 @@ describe("GitVibe security review action validation", () => {
         argv: ["implement"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_ISSUE_NUMBER: "1" },
         error: "GITVIBE_GITHUB_TOKEN is required.",
+      },
+      {
+        argv: ["investigate"],
+        env: { ...baseEnv, GITVIBE_ACCEPT_RISK: "true" },
+        error: "GITVIBE_ACCEPT_RISK_STAGE is required when GITVIBE_ACCEPT_RISK is true.",
       },
     ];
 

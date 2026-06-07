@@ -58,6 +58,26 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       issue-number:
@@ -114,6 +134,26 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
     secrets:
       GITVIBE_GITHUB_TOKEN:
         description: Fine-grained PAT used for GitHub API access.
@@ -167,6 +207,10 @@ jobs:
           stage-timeout-minutes: 10
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   implement:
     runs-on: ${{ inputs.runner }}
@@ -210,6 +254,10 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   implementation-blocked-cleanup:
     runs-on: ${{ inputs.runner }}
@@ -283,6 +331,10 @@ jobs:
           max-turns: 20
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   plan-review-matrix:
     runs-on: ${{ inputs.runner }}

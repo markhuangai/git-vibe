@@ -36,6 +36,22 @@ inputs:
     description: Directory containing previous GitVibe stage result JSON files to review.
     required: false
     default: ""
+  accept-risk:
+    description: Allow this run to continue after a trusted prompt-injection risk acceptance.
+    required: false
+    default: "false"
+  accept-risk-actor:
+    description: GitHub login that accepted the prompt-injection risk.
+    required: false
+    default: ""
+  accept-risk-artifact-sha:
+    description: Pull request head SHA covered by the accepted-risk decision.
+    required: false
+    default: ""
+  accept-risk-stage:
+    description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+    required: false
+    default: ""
 
 outputs:
   allowed:
@@ -81,4 +97,8 @@ runs:
         GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
+        GITVIBE_ACCEPT_RISK: ${{ inputs.accept-risk }}
+        GITVIBE_ACCEPT_RISK_ACTOR: ${{ inputs.accept-risk-actor }}
+        GITVIBE_ACCEPT_RISK_ARTIFACT_SHA: ${{ inputs.accept-risk-artifact-sha }}
+        GITVIBE_ACCEPT_RISK_STAGE: ${{ inputs.accept-risk-stage }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/security-review.js" "${{ inputs.stage }}"

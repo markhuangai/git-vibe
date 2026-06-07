@@ -12,7 +12,10 @@ export interface CreatedDiscussionComment {
 }
 
 export interface DiscussionCommentNode {
+  author?: { login?: string };
+  authorAssociation?: string;
   body: string;
+  createdAt?: string;
   id: string;
   replies?: DiscussionCommentConnection;
   url: string;
@@ -416,8 +419,13 @@ const discussionCommentsQuery = `
             endCursor
           }
           nodes {
+            author {
+              login
+            }
+            authorAssociation
             id
             body
+            createdAt
             url
             replies(first: 100) {
               pageInfo {
@@ -425,8 +433,13 @@ const discussionCommentsQuery = `
                 endCursor
               }
               nodes {
+                author {
+                  login
+                }
+                authorAssociation
                 id
                 body
+                createdAt
                 url
               }
             }
@@ -447,8 +460,13 @@ const discussionCommentRepliesQuery = `
             endCursor
           }
           nodes {
+            author {
+              login
+            }
+            authorAssociation
             id
             body
+            createdAt
             url
           }
         }
