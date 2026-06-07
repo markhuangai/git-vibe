@@ -162,7 +162,9 @@ describe("pull request review publishing reruns", () => {
       run: "99",
     });
   });
+});
 
+describe("pull request review publishing rerun ownership guards", () => {
   it("submits a new review when a matching rerun review is not authored by the token user", async () => {
     const client = createClient();
 
@@ -195,6 +197,44 @@ describe("pull request review publishing reruns", () => {
         path: "/repos/example/repo/pulls/12/reviews",
       }),
     );
+  });
+
+  it("submits a new review when the token author cannot be identified", async () => {
+    const client = createClient({ userLookupError: true });
+    const logger = createLogger();
+
+    await publishStageResultComment({
+      client,
+      context: contextWithPreviousReview(),
+      logger,
+      parsedOutput: {
+        ...output(),
+        next_state: "review-passed",
+        stage: "review-matrix",
+      },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+    });
+
+    expect(requestCalls(client)).toContainEqual(
+      expect.objectContaining({ method: "GET", path: "/user" }),
+    );
+    expect(requestCalls(client).map((request) => request.path)).not.toContain(
+      "/repos/example/repo/pulls/12/reviews/99",
+    );
+    expect(
+      requestCalls(client).find((request) => request.path.endsWith("/pulls/12/reviews")),
+    ).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        path: "/repos/example/repo/pulls/12/reviews",
+      }),
+    );
+    expect(logger.event).toHaveBeenCalledWith("github.pr.review.update.skip", {
+      reason: "unknown-token-author",
+    });
   });
 });
 
@@ -517,16 +557,18 @@ function runner(overrides = {}) {
 }
 
 /**
- * @param {{ login?: string }} [options]
+ * @param {{ login?: string; userLookupError?: boolean }} [options]
  * @returns {MockGitHubClient}
  */
 function createClient(options = {}) {
   return /** @type {MockGitHubClient} */ ({
     apiBaseUrl: "https://api.github.test",
     graphql: vi.fn(async () => ({})),
-    request: vi.fn(async (request) =>
-      request.path === "/user" ? { login: options.login || "git-vibe" } : {},
-    ),
+    request: vi.fn(async (request) => {
+      if (request.path !== "/user") return {};
+      if (options.userLookupError) throw new Error("Resource not accessible by integration");
+      return { login: options.login || "git-vibe" };
+    }),
     retryBaseDelayMs: 0,
   });
 }

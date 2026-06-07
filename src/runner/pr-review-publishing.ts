@@ -89,6 +89,7 @@ async function editableReviewForStageResult(options: {
   client: GitHubClient;
   comments: PullRequestReviewComment[];
   context: ContextPacket;
+  logger: StageLogger;
   runner: RunnerOptions;
 }): Promise<{ reviewId: string } | undefined> {
   if (options.comments.length > 0) return undefined;
@@ -114,8 +115,10 @@ async function editableReviewForStageResult(options: {
 
   const login = await authenticatedGitHubLogin({
     client: options.client,
+    logger: options.logger,
     token: options.runner.token,
   });
+  if (!login) return undefined;
   let editableReview: { reviewId: string } | undefined;
   for (const candidate of candidates) {
     if (sameGitHubLogin(candidate.author, login)) {
@@ -167,18 +170,28 @@ function sameGitHubLogin(left: string, right: string): boolean {
 
 async function authenticatedGitHubLogin(options: {
   client: GitHubClient;
+  logger: StageLogger;
   token: string;
-}): Promise<string> {
-  const user = await options.client.request<AuthenticatedUserResponse>({
-    method: "GET",
-    path: "/user",
-    token: options.token,
-  });
+}): Promise<string | undefined> {
+  let user: AuthenticatedUserResponse;
+  try {
+    user = await options.client.request<AuthenticatedUserResponse>({
+      method: "GET",
+      path: "/user",
+      token: options.token,
+    });
+  } catch {
+    options.logger.event("github.pr.review.update.skip", {
+      reason: "unknown-token-author",
+    });
+    return undefined;
+  }
   const login = stringField(user.login);
   if (!login) {
-    throw new Error(
-      "GitHub authenticated user did not include login; cannot safely update PR review.",
-    );
+    options.logger.event("github.pr.review.update.skip", {
+      reason: "unknown-token-author",
+    });
+    return undefined;
   }
   return login;
 }

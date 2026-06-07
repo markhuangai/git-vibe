@@ -47,7 +47,7 @@ const highRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
   {
     finding: "asks GitVibe to bypass validation, approval, or safety controls",
     regex:
-      /\b(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b/isu,
+      /(?:(?:^|[.!?\n]\s*)(?:please\s+|just\s+|now\s+)?(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b|\b(?:you|gitvibe|assistant|agent|model|bot|workflow|codex|claude)\s+(?:must|should|need to|needs to|have to|has to|can|will)\s+(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b)/isu,
   },
   {
     finding: "asks for secrets, credentials, or hidden prompts",
