@@ -78,7 +78,7 @@ In GitVibe stages, `cli-codex` runs `codex exec` with
 `--dangerously-bypass-approvals-and-sandbox`, `--output-schema`, and
 `--output-last-message`, and without `--search`; stdout and stderr stream to the
 action log while the final message file supplies the structured result for
-validation.
+validation. Codex CLI prompts do not include `output_validator` instructions.
 
 Claude Code smoke testing is optional. The workflow installs Claude Code through
 Anthropic's native installer when the `claude` command is missing, prompts
@@ -94,7 +94,7 @@ set `--bare` unless a profile explicitly opts in with `bare: true`. Configure
 Claude OAuth and provider env through profile `env.<NAME>` mappings using either
 `{ from_bundle: KEY }` or literal strings. CLI adapter progress is rendered to
 the action log while GitVibe still captures the structured result for
-validation.
+validation; Claude Code prompts do not include `output_validator` instructions.
 
 ## Quality Gates
 

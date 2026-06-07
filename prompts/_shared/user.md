@@ -21,8 +21,7 @@
 5. Separate facts, assumptions, questions, and risks. Do not merge them into vague prose.
 6. Decide whether the stage is `completed` or `blocked`. If blocked, explain the blocking condition and do not trigger downstream work through a completed status.
 7. Build the final JSON object with every required field from the schema. Include optional fields only when they are useful and schema-valid.
-8. Call `output_validator` with the exact final JSON object.
-9. Return only the validated JSON object.
+8. Return only the final JSON object.
    </required_process>
 
 <status_rules>

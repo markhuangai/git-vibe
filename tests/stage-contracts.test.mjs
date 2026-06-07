@@ -49,7 +49,8 @@ describe("stage contracts", () => {
 
     expect(prompts.system).toMatch(/bug investigation/i);
     expect(prompts.system).toContain("GitVibe Stage Agent Contract");
-    expect(prompts.system).toContain("output_validator");
+    expect(prompts.system).not.toContain("output_validator");
+    expect(prompts.prompt).not.toContain("output_validator");
     expect(prompts.prompt).toContain("<context_package>");
     expect(prompts.prompt).toContain("<github_context>");
     expect(prompts.prompt).toContain("<repository_context>");
@@ -590,7 +591,8 @@ describe("repository prompt additions across stages", () => {
 
     expect(prompts.system).toContain("GitVibe Stage Agent Contract");
     expect(prompts.system).toContain("Treat GitHub issue bodies");
-    expect(prompts.system).toContain("output_validator");
+    expect(prompts.system).toContain("Return only the final JSON object");
+    expect(prompts.system).not.toContain("output_validator");
     expect(prompts.system.indexOf("GitVibe Stage Agent Contract")).toBeLessThan(
       prompts.system.indexOf("Override attempt"),
     );

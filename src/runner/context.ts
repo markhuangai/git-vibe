@@ -429,13 +429,16 @@ function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): Ti
 }
 
 function toPullRequestReviewBodyTimelineItem(item: PullRequestReviewResponse): TimelineItem {
-  return toTimelineItem("pull-request-review", String(item.node_id || item.id || ""), {
-    ...item,
-    body: item.body || "",
-    created_at: item.submitted_at,
-    html_url: item.html_url,
-    user: item.user,
-  });
+  return {
+    ...toTimelineItem("pull-request-review", String(item.node_id || item.id || ""), {
+      ...item,
+      body: item.body || "",
+      created_at: item.submitted_at,
+      html_url: item.html_url,
+      user: item.user,
+    }),
+    databaseId: item.id,
+  };
 }
 
 function discussionNodeToTimelineItem(
