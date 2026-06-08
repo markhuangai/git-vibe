@@ -200,6 +200,32 @@ describe("accepted-risk context rejection", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("ignores current run audit markers from untrusted authors", () => {
+    const trustedMetadata = acceptedRiskMetadata({ stage: "implement" });
+
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [
+            blockedResultComment({ metadata: trustedMetadata, stage: "implement" }),
+            riskAcceptedAuditComment({
+              author: "outside-user",
+              authorAssociation: "NONE",
+              run: "99",
+              stage: "implement",
+            }),
+          ],
+        }),
+        logger: logger(),
+        runner: runner({
+          acceptedRisk: undefined,
+          stage: "implement",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe("accepted-risk context marker rejection", () => {
@@ -615,10 +641,15 @@ function issueTimelineComment(body) {
   };
 }
 
-function riskAcceptedAuditComment({ run, stage }) {
+function riskAcceptedAuditComment({
+  author = "github-actions[bot]",
+  authorAssociation = "NONE",
+  run,
+  stage,
+}) {
   return {
-    author: "github-actions[bot]",
-    authorAssociation: "NONE",
+    author,
+    authorAssociation,
     body: [
       `<!-- git-vibe:risk-accepted stage=${stage} artifact=issue number=12 run=${run} -->`,
       "## GitVibe Risk Accepted",

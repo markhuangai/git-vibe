@@ -190,7 +190,7 @@ function acceptedRiskMetadataCandidate(
   const marker = parseStageResultMarker(item.body);
   const metadata = parseAcceptedRiskMetadata(item.body);
   if (!marker || !metadata) return undefined;
-  if (!trustedStageResultTimelineItem(item)) return undefined;
+  if (!trustedGitVibeTimelineItem(item)) return undefined;
   if (stageResultStatus(item.body) !== "blocked") return undefined;
   if (marker.artifact !== context.artifact.type || marker.number !== context.artifact.number) {
     return undefined;
@@ -219,6 +219,7 @@ function acceptedRiskAuditForCurrentRun(context: ContextPacket, runner: RunnerOp
   const run = workflowRunIdFromUrl(runner.workflowRunUrl);
   if (!run) return false;
   return context.timeline.some((item) => {
+    if (!trustedGitVibeTimelineItem(item)) return false;
     const marker = parseAcceptedRiskAuditMarker(item.body);
     return (
       marker?.artifact === context.artifact.type &&
@@ -236,7 +237,7 @@ function parseAcceptedRiskAuditMarker(
   return parseAttributes(match[1] || "");
 }
 
-function trustedStageResultTimelineItem(item: TimelineItem): boolean {
+function trustedGitVibeTimelineItem(item: TimelineItem): boolean {
   const association = String(item.authorAssociation || "").toUpperCase();
   if (["COLLABORATOR", "MEMBER", "OWNER"].includes(association)) return true;
   return trustedAutomationAuthors.has(String(item.author || "").toLowerCase());
