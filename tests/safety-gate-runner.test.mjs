@@ -250,6 +250,44 @@ describe("stage runner accepted-risk output gate", () => {
 });
 
 describe("stage runner accepted-risk delta input gate", () => {
+  it("does not reblock accepted artifact body after label metadata updates the artifact", async () => {
+    const cwd = await workspace();
+    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    const fetch = fetchMock([
+      issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
+      commentsResponse([]),
+      response(200, { id: 4 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result).toMatchObject({
+      parsedOutput: { comment_body: "Ready to implement.", findings: [] },
+      status: "completed",
+      summary: "Ready.",
+    });
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
+  });
+});
+
+describe("stage runner accepted-risk post-cutoff input gate", () => {
   it("blocks post-cutoff unsafe input before the stage model runs", async () => {
     const cwd = await workspace();
     generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
@@ -430,14 +468,14 @@ function isLabelRequest(url, init) {
     : method === "DELETE" && String(url).includes("/labels/");
 }
 
-function issueResponse(body) {
+function issueResponse(body, updatedAt = "2026-01-02T00:00:00Z") {
   return response(200, {
     body,
     created_at: "2026-01-02T00:00:00Z",
     html_url: "https://github.com/example/repo/issues/12",
     number: 12,
     title: "Issue title",
-    updated_at: "2026-01-02T00:00:00Z",
+    updated_at: updatedAt,
     user: { login: "octocat" },
   });
 }

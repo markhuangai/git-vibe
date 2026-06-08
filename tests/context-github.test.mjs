@@ -60,6 +60,9 @@ describe("GitHub context builders", () => {
       parentId: "8",
       updatedAt: "2026-01-05T01:00:00Z",
     });
+    expect(context.artifact.updatedAt).toBe("2026-01-06T00:00:00Z");
+    expect(context.timeline[0].updatedAt).toBeUndefined();
+    expect(context.timeline[1].updatedAt).toBe("2026-01-03T01:00:00Z");
     expect(context.timeline.at(3)).toMatchObject({
       databaseId: 7,
       id: "7",
@@ -228,6 +231,7 @@ function issueFixture() {
     html_url: "https://github.com/example/repo/issues/4",
     number: 4,
     title: "Issue title",
+    updated_at: "2026-01-06T00:00:00Z",
     user: { login: "author" },
   };
 }
@@ -239,6 +243,7 @@ function commentFixtures() {
       created_at: "2026-01-04T00:00:00Z",
       html_url: "comment-2",
       id: 2,
+      updated_at: "2026-01-04T01:00:00Z",
       user: { login: "b" },
     },
     {
@@ -246,6 +251,7 @@ function commentFixtures() {
       created_at: "2026-01-03T00:00:00Z",
       html_url: "comment-1",
       id: 1,
+      updated_at: "2026-01-03T01:00:00Z",
       user: { login: "a" },
     },
   ];

@@ -224,11 +224,15 @@ function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {
         id: item.id,
         kind: item.kind,
         parentId: item.parentId,
-        updatedAt: item.updatedAt,
+        updatedAt: bodyTimelineKind(item.kind) ? undefined : item.updatedAt,
       },
       sourceUrl: item.url,
     }),
   ];
+}
+
+function bodyTimelineKind(kind: string): boolean {
+  return kind === "body" || kind.endsWith("-body");
 }
 
 function artifactMetadata(context: ContextPacket): JsonObject {
@@ -236,7 +240,6 @@ function artifactMetadata(context: ContextPacket): JsonObject {
     createdAt: context.artifact.createdAt,
     number: context.artifact.number,
     type: context.artifact.type,
-    updatedAt: context.artifact.updatedAt,
   };
 }
 

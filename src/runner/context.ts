@@ -413,7 +413,7 @@ function toTimelineItem(kind: string, id: string, item: IssueResponse): Timeline
     id,
     kind,
     reactions: item.reactions,
-    updatedAt: item.updated_at,
+    updatedAt: kind === "body" ? undefined : item.updated_at,
     url: item.html_url || "",
   };
 }
@@ -464,7 +464,7 @@ function discussionNodeToTimelineItem(
     kind,
     parentId,
     reactions: {},
-    updatedAt: item.updatedAt,
+    updatedAt: kind === "body" ? undefined : item.updatedAt,
     url: item.url || "",
   };
 }

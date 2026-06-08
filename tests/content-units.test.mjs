@@ -105,9 +105,19 @@ describe("context content units", () => {
 });
 
 describe("accepted-risk context unit filtering", () => {
-  it("filters context units by created or edited time after an accepted-risk cutoff", () => {
+  it("filters edited comments without treating artifact metadata updates as body edits", () => {
     const context = contextPacket();
+    context.artifact.updatedAt = "2026-01-05T00:00:00Z";
     context.timeline = [
+      {
+        author: "octocat",
+        body: "Old accepted body",
+        createdAt: "2026-01-01T00:00:00Z",
+        id: "issue-12",
+        kind: "body",
+        updatedAt: "2026-01-05T00:00:00Z",
+        url: "https://github.com/example/repo/issues/12",
+      },
       {
         author: "guest",
         body: "Old accepted comment",
@@ -129,7 +139,7 @@ describe("accepted-risk context unit filtering", () => {
 
     const units = contentUnitsOnOrAfterCutoff(context, "2026-01-04T12:00:00Z");
 
-    expect(units.map((unit) => unit.id)).toEqual(["timeline-1-comment-edited"]);
+    expect(units.map((unit) => unit.id)).toEqual(["timeline-2-comment-edited"]);
   });
 
   it("includes post-cutoff and untimestamped handoffs in accepted-risk delta scans", () => {
