@@ -163,7 +163,10 @@ describe("accepted-risk context derivation", () => {
 
 describe("accepted-risk context rejection", () => {
   it("ignores stale run audits and untrusted accepted-risk metadata", () => {
-    const trustedMetadata = acceptedRiskMetadata({ stage: "implement" });
+    const trustedMetadata = acceptedRiskMetadata({
+      stage: "implement",
+      stages: ["implement"],
+    });
 
     expect(
       acceptedRiskFromContext({
@@ -202,7 +205,10 @@ describe("accepted-risk context rejection", () => {
   });
 
   it("ignores current run audit markers from untrusted authors", () => {
-    const trustedMetadata = acceptedRiskMetadata({ stage: "implement" });
+    const trustedMetadata = acceptedRiskMetadata({
+      stage: "implement",
+      stages: ["implement"],
+    });
 
     expect(
       acceptedRiskFromContext({
