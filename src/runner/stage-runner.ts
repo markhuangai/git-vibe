@@ -25,6 +25,7 @@ import {
   acceptedRiskApplies,
   acceptedRiskContextUnits,
   publishAcceptedRiskAudit,
+  publishAcceptedRiskAuditForLabeledContext,
   runnerWithAcceptedRiskFromContext,
 } from "./accepted-risk.js";
 import {
@@ -191,6 +192,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     executionMode,
     safetyOptions,
   });
+  await publishAcceptedRiskAuditForLabeledContext({ ...safetyOptions, acceptedRisk, result });
   return finishStage(logger, result);
 }
 
@@ -244,7 +246,6 @@ function blockRenderedPromptInput(options: {
 
 const mcpPromptSafetySources = (promptAddition: string): SafetySource[] =>
   promptAddition ? [{ label: "rendered MCP context prompt addition", text: promptAddition }] : [];
-
 async function runCheckedStageResult(options: {
   acceptedRisk: boolean;
   aiRunOptions: RunAiStageOptions;

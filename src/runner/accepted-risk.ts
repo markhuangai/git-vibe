@@ -106,6 +106,10 @@ export function acceptedRiskContextUnits(
   });
 }
 
+export function acceptedRiskLabelPresent(context: ContextPacket): boolean {
+  return (context.artifact.labels || []).includes(gitVibeLabels.acceptRisk.name);
+}
+
 export async function publishAcceptedRiskAudit(options: {
   client: GitHubClient;
   context: ContextPacket;
@@ -124,6 +128,19 @@ export async function publishAcceptedRiskAudit(options: {
     await publishIssueAudit(options, body);
   }
   await removeAcceptedRiskLabel(options);
+}
+
+export async function publishAcceptedRiskAuditForLabeledContext(options: {
+  acceptedRisk: boolean;
+  client: GitHubClient;
+  context: ContextPacket;
+  logger: StageLogger;
+  result: StageRunResult;
+  runner: RunnerOptions;
+}): Promise<void> {
+  if (!options.acceptedRisk) return;
+  if (!acceptedRiskLabelPresent(options.context)) return;
+  await publishAcceptedRiskAudit(options);
 }
 
 function acceptedRiskAuditBody(options: {
@@ -211,7 +228,7 @@ function acceptedRiskRuntimeSource(
   context: ContextPacket,
   runner: RunnerOptions,
 ): "label" | "run-audit" | undefined {
-  if ((context.artifact.labels || []).includes(gitVibeLabels.acceptRisk.name)) return "label";
+  if (acceptedRiskLabelPresent(context)) return "label";
   return acceptedRiskAuditForCurrentRun(context, runner) ? "run-audit" : undefined;
 }
 
