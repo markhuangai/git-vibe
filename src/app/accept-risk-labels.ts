@@ -1,4 +1,13 @@
-import { discussionComments } from "../shared/discussions.js";
+import {
+  acceptedRiskArtifactContentSha,
+  appendAcceptedRiskMetadataBlock,
+  type AcceptedRiskMetadata,
+} from "../shared/accepted-risk.js";
+import {
+  discussionComments,
+  discussionContent,
+  updateDiscussionComment,
+} from "../shared/discussions.js";
 import { paginatedGitHubRequest } from "../shared/github.js";
 import {
   parseStageResultMarker,
@@ -21,6 +30,7 @@ import { removeIssueLabel } from "./labels.js";
 interface StageResult {
   marker: StageResultMarker;
   order: number;
+  source: StageResultSource;
   status: string;
   time: number;
 }
@@ -30,18 +40,27 @@ const trustedAutomationAuthors = new Set(["github-actions[bot]"]);
 interface PullRequestReviewResponse {
   author_association?: string;
   body?: string | null;
+  id?: number | string;
   submitted_at?: string;
   user?: { login?: string };
 }
 
 interface PullRequestResponse extends Record<string, unknown> {
+  body?: string | null;
   head?: { sha?: string };
+  title?: string;
+}
+
+interface ArtifactContentResponse extends Record<string, unknown> {
+  body?: string | null;
+  title?: string;
 }
 
 interface IssueCommentResponse {
   author_association?: string;
   body?: string | null;
   created_at?: string;
+  id?: number | string;
   user?: { login?: string };
 }
 
@@ -50,7 +69,9 @@ interface StageResultSource {
   authorAssociation?: string;
   body?: string | null;
   createdAt?: string;
+  id?: string;
   order: number;
+  surface: "discussion-comment" | "issue-comment" | "pull-request-review";
 }
 
 interface ResumePlan {
@@ -85,13 +106,16 @@ export async function handleAcceptRiskLabel(
     return;
   }
 
+  const acceptance = await acceptedRiskMetadata(options, plan, result.marker.stage);
+  await updateAcceptedRiskResultComment(options, result.source, plan, acceptance);
+
   const dispatch = await dispatchWorkflow(options, plan.workflow, {
     ...(await repositoryWorkflowBudgetInputs(options, plan.workflow)),
     [plan.inputName]: plan.number,
     "accept-risk": "true",
     "accept-risk-actor": options.payload.sender?.login || "",
-    "accept-risk-artifact-sha": await acceptedRiskArtifactSha(options, plan),
-    "accept-risk-cutoff": new Date().toISOString(),
+    "accept-risk-artifact-sha": acceptance.artifactSha || "",
+    "accept-risk-cutoff": acceptance.cutoff,
     "accept-risk-stage": plan.riskStages.join(","),
   });
   await postQueuedWorkflowComment(options, {
@@ -128,6 +152,7 @@ function stageResultFromSource(
   return {
     marker,
     order: source.order,
+    source,
     status: stageResultStatus(source.body),
     time: sourceTime(source.createdAt),
   };
@@ -145,7 +170,9 @@ async function stageResultSources(
       authorAssociation: stringField(value.author_association),
       body: value.body,
       createdAt: stringField(value.created_at),
+      id: stringValue(value.id),
       order: index,
+      surface: "issue-comment" as const,
     };
   });
   if (artifact.artifact !== "pull-request") return comments;
@@ -154,7 +181,9 @@ async function stageResultSources(
     authorAssociation: stringField(review.author_association),
     body: review.body,
     createdAt: stringField(review.submitted_at),
+    id: stringValue(review.id),
     order: comments.length + index,
+    surface: "pull-request-review" as const,
   }));
   return [...comments, ...reviews];
 }
@@ -174,7 +203,9 @@ async function discussionStageResultSources(
     authorAssociation: stringField(comment.authorAssociation),
     body: comment.body,
     createdAt: stringField(comment.createdAt),
+    id: stringField(comment.id),
     order: index,
+    surface: "discussion-comment" as const,
   }));
 }
 
@@ -289,6 +320,115 @@ async function acceptedRiskArtifactSha(
   return stringField(pullRequest.head?.sha);
 }
 
+async function acceptedRiskMetadata(
+  options: WebhookActionContext,
+  plan: ResumePlan,
+  stage: Stage,
+): Promise<AcceptedRiskMetadata> {
+  const [artifactSha, content] = await Promise.all([
+    acceptedRiskArtifactSha(options, plan),
+    acceptedRiskArtifactContent(options, plan),
+  ]);
+  return {
+    actor: options.payload.sender?.login || undefined,
+    artifact: plan.artifact,
+    artifactContentSha: acceptedRiskArtifactContentSha(content),
+    artifactSha: artifactSha || undefined,
+    cutoff: new Date().toISOString(),
+    number: plan.number,
+    stage,
+    stages: plan.riskStages,
+  };
+}
+
+async function acceptedRiskArtifactContent(
+  options: WebhookActionContext,
+  plan: ResumePlan,
+): Promise<ArtifactContentResponse> {
+  const payloadContent = payloadArtifactContent(options, plan.artifact);
+  if (payloadContent) return payloadContent;
+  if (plan.artifact === "discussion") {
+    const content = await discussionContent({
+      client: options.client,
+      discussionNumber: plan.number,
+      repository: `${options.owner}/${options.repo}`,
+      token: options.token,
+    });
+    return { body: content.body, title: content.title };
+  }
+  return options.client.request<ArtifactContentResponse>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.repo}/${plan.artifact === "pull-request" ? "pulls" : "issues"}/${plan.number}`,
+    token: options.token,
+  });
+}
+
+function payloadArtifactContent(
+  options: WebhookActionContext,
+  artifact: ResumePlan["artifact"],
+): ArtifactContentResponse | undefined {
+  if (artifact === "discussion" && hasArtifactContent(options.payload.discussion)) {
+    return options.payload.discussion;
+  }
+  if (artifact === "pull-request" && hasArtifactContent(options.payload.pull_request)) {
+    return options.payload.pull_request;
+  }
+  if (hasArtifactContent(options.payload.issue)) return options.payload.issue;
+  return undefined;
+}
+
+async function updateAcceptedRiskResultComment(
+  options: WebhookActionContext,
+  source: StageResultSource,
+  plan: ResumePlan,
+  metadata: AcceptedRiskMetadata,
+): Promise<void> {
+  if (!source.id)
+    throw new Error("Cannot update accepted-risk metadata: missing result comment id.");
+  const body = appendAcceptedRiskMetadataBlock(String(source.body || ""), metadata);
+  if (source.surface === "discussion-comment") {
+    await updateDiscussionComment({
+      body,
+      client: options.client,
+      commentId: source.id,
+      token: options.token,
+    });
+    return;
+  }
+  if (source.surface === "pull-request-review") {
+    await updatePullRequestReviewBody(options, plan.number, source.id, body);
+    return;
+  }
+  await updateIssueCommentBody(options, source.id, body);
+}
+
+async function updateIssueCommentBody(
+  options: WebhookActionContext,
+  commentId: string,
+  body: string,
+): Promise<void> {
+  await options.client.request({
+    body: { body },
+    method: "PATCH",
+    path: `/repos/${options.owner}/${options.repo}/issues/comments/${commentId}`,
+    token: options.token,
+  });
+}
+
+async function updatePullRequestReviewBody(
+  options: WebhookActionContext,
+  prNumber: string,
+  reviewId: string,
+  body: string,
+): Promise<void> {
+  await options.client.request({
+    body: { body },
+    method: "PUT",
+    path: `/repos/${options.owner}/${options.repo}/pulls/${prNumber}/reviews/${reviewId}`,
+    token: options.token,
+  });
+}
+
 function artifactForPayload(
   options: WebhookActionContext,
 ): Pick<StageResultMarker, "artifact" | "number"> | undefined {
@@ -368,6 +508,15 @@ function userLogin(value: unknown): string {
   const user = (value as { author?: { login?: string }; user?: { login?: string } }).user;
   const author = (value as { author?: { login?: string }; user?: { login?: string } }).author;
   return stringField(user?.login || author?.login);
+}
+
+function hasArtifactContent(value: unknown): value is ArtifactContentResponse {
+  return Boolean(value && typeof value === "object" && ("body" in value || "title" in value));
+}
+
+function stringValue(value: unknown): string | undefined {
+  if (typeof value === "number" && Number.isInteger(value)) return String(value);
+  return stringField(value);
 }
 
 function stringField(value: unknown): string {

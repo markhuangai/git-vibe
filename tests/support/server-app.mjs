@@ -41,6 +41,19 @@ function graphqlResponseFor(query, options) {
   if (query.includes("GitVibeAddDiscussionComment")) {
     return { addDiscussionComment: { comment: { id: "comment-id", url: "comment-url" } } };
   }
+  if (query.includes("GitVibeUpdateDiscussionComment")) {
+    return { updateDiscussionComment: { clientMutationId: null } };
+  }
+  if (query.includes("GitVibeDiscussionContent")) {
+    return {
+      repository: {
+        discussion: {
+          body: options.discussionBody || "Discussion body",
+          title: options.discussionTitle || "Discussion title",
+        },
+      },
+    };
+  }
   if (query.includes("GitVibeDiscussionComments")) {
     return { node: { comments: { nodes: options.discussionComments || [] } } };
   }
@@ -111,8 +124,18 @@ function requestResponseFor(request, options) {
     }
     return options.pullRequestReviews || [];
   }
+  if (request.method === "PUT" && /\/pulls\/\d+\/reviews\/\d+$/.test(request.path)) {
+    return {};
+  }
   if (request.method === "GET" && request.path.includes("/pulls/")) {
-    return { body: options.pullRequestBody || "", head: { sha: options.pullRequestHeadSha } };
+    return {
+      body: options.pullRequestBody || "",
+      head: { sha: options.pullRequestHeadSha },
+      title: options.pullRequestTitle || "Pull request title",
+    };
+  }
+  if (request.method === "GET" && /\/issues\/\d+$/.test(request.path)) {
+    return { body: options.issueBody || "", title: options.issueTitle || "Issue title" };
   }
   if (request.method === "POST" && request.path.endsWith("/labels")) {
     if (options.labelError) throw options.labelError;

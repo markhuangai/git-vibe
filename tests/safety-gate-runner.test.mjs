@@ -5,8 +5,15 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  acceptedRiskArtifactContentSha,
+  acceptedRiskMetadataBlock,
+} from "../src/shared/accepted-risk.ts";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
+const mocks = vi.hoisted(() => ({
+  buildMcpPromptContext: vi.fn(),
+}));
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
@@ -18,6 +25,9 @@ vi.mock("ai", () => ({
 }));
 vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
 vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
+vi.mock("../src/runner/mcp-context.js", () => ({
+  buildMcpPromptContext: mocks.buildMcpPromptContext,
+}));
 
 const { runStage, runStageSecurityReview } = await import("../src/runner/stage-runner.ts");
 
@@ -26,6 +36,8 @@ const originalEnv = { ...process.env };
 
 beforeEach(() => {
   generateText.mockReset();
+  mocks.buildMcpPromptContext.mockReset();
+  mocks.buildMcpPromptContext.mockResolvedValue({ promptAddition: "" });
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
@@ -255,7 +267,7 @@ describe("stage runner accepted-risk delta input gate", () => {
     generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
-      commentsResponse([]),
+      commentsResponse([acceptedRiskMetadataComment({ body: unsafeInstruction() })]),
       response(200, { id: 4 }),
     ]);
     globalThis.fetch = fetch;
@@ -284,6 +296,37 @@ describe("stage runner accepted-risk delta input gate", () => {
     });
     expect(generateText).toHaveBeenCalledTimes(1);
     expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
+  });
+
+  it("blocks accepted artifact bodies that changed after risk acceptance", async () => {
+    const cwd = await workspace();
+    const fetch = fetchMock([
+      issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
+      commentsResponse([acceptedRiskMetadataComment({ body: "Previously accepted body" })]),
+      response(200, { id: 4 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
+    expect(generateText).not.toHaveBeenCalled();
   });
 });
 
@@ -362,6 +405,42 @@ describe("stage runner accepted-risk post-cutoff input gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("handoff");
+    expect(generateText).not.toHaveBeenCalled();
+  });
+});
+
+describe("stage runner accepted-risk MCP input gate", () => {
+  it("blocks unsafe MCP prompt additions after the accepted-risk delta scan", async () => {
+    const cwd = await workspace();
+    mocks.buildMcpPromptContext.mockResolvedValueOnce({
+      promptAddition: `<mcp_context>${unsafeInstruction()}</mcp_context>`,
+    });
+    const fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([]),
+      response(200, { id: 4 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
     expect(generateText).not.toHaveBeenCalled();
   });
 });
@@ -529,6 +608,31 @@ const issueComment = (body, createdAt = "2026-01-03T00:00:00Z", updatedAt = crea
   updated_at: updatedAt,
   user: { login: "guest" },
 });
+
+function acceptedRiskMetadataComment({ body, title = "Issue title" }) {
+  const metadata = {
+    actor: "maintainer",
+    artifact: "issue",
+    artifactContentSha: acceptedRiskArtifactContentSha({ body, title }),
+    cutoff: "2026-01-04T00:00:00Z",
+    number: "12",
+    stage: "investigate",
+    stages: ["investigate"],
+  };
+  return issueComment(
+    [
+      "<!-- git-vibe:stage-result stage=investigate artifact=issue number=12 -->",
+      "## GitVibe Investigation",
+      "",
+      "**Status:** `blocked`",
+      "",
+      `Required Fix: ${unsafeInstruction()}`,
+      acceptedRiskMetadataBlock(metadata),
+    ].join("\n"),
+    "2026-01-03T00:00:00Z",
+    "2026-01-04T00:00:00Z",
+  );
+}
 
 const legacyHandoff = (parsedOutput) => ({
   commentBody: "Legacy handoff",

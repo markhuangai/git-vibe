@@ -2,7 +2,9 @@ import { addDiscussionComment, removeDiscussionLabel } from "../shared/discussio
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
+import { parseAcceptedRiskMetadata, type AcceptedRiskMetadata } from "../shared/accepted-risk.js";
 import type { ContextPacket, RunnerOptions, StageRunResult } from "../shared/types.js";
+import { acceptedRiskDeltaContentUnits, type ContentUnit } from "./content-units.js";
 import type { StageLogger } from "./logging.js";
 
 export function acceptedRiskApplies(options: {
@@ -30,6 +32,20 @@ export function acceptedRiskApplies(options: {
     reason: "pull-request-head-changed",
   });
   return false;
+}
+
+export function acceptedRiskContextUnits(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): ContentUnit[] {
+  const cutoff = runner.acceptedRisk?.cutoff;
+  if (!cutoff) return [];
+  const acceptedMetadata = acceptedRiskMetadataForContext(context, runner);
+  return acceptedRiskDeltaContentUnits({
+    acceptedMetadata,
+    context,
+    cutoff,
+  });
 }
 
 export async function publishAcceptedRiskAudit(options: {
@@ -77,6 +93,36 @@ function acceptedRiskAuditBody(options: {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function acceptedRiskMetadataForContext(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): AcceptedRiskMetadata | undefined {
+  const accepted = runner.acceptedRisk;
+  if (!accepted) return undefined;
+  return context.timeline
+    .map((item) => parseAcceptedRiskMetadata(item.body))
+    .filter((metadata): metadata is AcceptedRiskMetadata =>
+      acceptedRiskMetadataMatches({ accepted, context, metadata, runner }),
+    )
+    .at(-1);
+}
+
+function acceptedRiskMetadataMatches(options: {
+  accepted: NonNullable<RunnerOptions["acceptedRisk"]>;
+  context: ContextPacket;
+  metadata: AcceptedRiskMetadata | undefined;
+  runner: RunnerOptions;
+}): boolean {
+  const metadata = options.metadata;
+  if (!metadata) return false;
+  return (
+    metadata.artifact === options.context.artifact.type &&
+    metadata.number === options.context.artifact.number &&
+    metadata.cutoff === options.accepted.cutoff &&
+    metadata.stages.includes(options.runner.stage)
+  );
 }
 
 async function publishDiscussionAudit(

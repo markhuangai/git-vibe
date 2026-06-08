@@ -9,11 +9,13 @@ export interface WebhookPayload {
     url?: string;
   };
   discussion?: {
+    body?: string | null;
     id?: string;
     labels?: Array<{ name?: string }>;
     node_id?: string;
     nodeId?: string;
     number?: number | string;
+    title?: string;
   };
   issue?: {
     body?: string | null;
@@ -30,6 +32,7 @@ export interface WebhookPayload {
     head?: { sha?: string };
     merged?: boolean;
     number?: number | string;
+    title?: string;
   };
   review?: {
     body?: string;

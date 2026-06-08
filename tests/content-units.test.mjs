@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  acceptedRiskDeltaContentUnits,
   chunkContentUnits,
   contextPromptCoverageForContext,
   contentUnitsForContext,
@@ -7,6 +8,10 @@ import {
   packedContextForPrompt,
   pullRequestFileText,
 } from "../src/runner/content-units.ts";
+import {
+  acceptedRiskArtifactContentSha,
+  acceptedRiskMetadataBlock,
+} from "../src/shared/accepted-risk.ts";
 
 describe("context content units", () => {
   it("splits large context units into overlapping chunks", () => {
@@ -160,6 +165,48 @@ describe("accepted-risk context unit filtering", () => {
       "handoff-2-review-matrix-comment",
       "handoff-2-review-matrix-output",
     ]);
+  });
+
+  it("skips the accepted-risk metadata edit but scans changed artifact content", () => {
+    const cutoff = "2026-01-04T12:00:00Z";
+    const context = contextPacket();
+    /** @type {import("../src/shared/accepted-risk.ts").AcceptedRiskMetadata} */
+    const acceptedMetadata = {
+      artifact: "pull-request",
+      artifactContentSha: acceptedRiskArtifactContentSha(context.artifact),
+      cutoff,
+      number: "12",
+      stage: "review-matrix",
+      stages: ["review-matrix"],
+    };
+    context.timeline = [
+      {
+        author: "github-actions[bot]",
+        body: [
+          "Previously blocked result containing accepted unsafe text",
+          acceptedRiskMetadataBlock(acceptedMetadata),
+        ].join("\n\n"),
+        createdAt: "2026-01-04T00:00:00Z",
+        id: "100",
+        kind: "comment",
+        updatedAt: "2026-01-04T12:00:00Z",
+        url: "https://github.com/example/repo/issues/12#issuecomment-100",
+      },
+    ];
+
+    expect(
+      acceptedRiskDeltaContentUnits({ acceptedMetadata, context, cutoff }).map((unit) => unit.id),
+    ).toEqual([]);
+
+    const changedContext = { ...context, artifact: { ...context.artifact, body: "Changed body" } };
+
+    expect(
+      acceptedRiskDeltaContentUnits({
+        acceptedMetadata,
+        context: changedContext,
+        cutoff,
+      }).map((unit) => unit.id),
+    ).toEqual(["artifact-title", "artifact-body"]);
   });
 });
 

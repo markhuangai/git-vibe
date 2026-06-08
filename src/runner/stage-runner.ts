@@ -9,12 +9,7 @@ import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
-import {
-  contentUnitsOnOrAfterCutoff,
-  contextPromptCoverageForContext,
-  type ContentUnit,
-  type ContextPromptCoverage,
-} from "./content-units.js";
+import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
 import { type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
 import {
   promptSafetySources,
@@ -26,7 +21,11 @@ import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
 import type { SafetySource } from "./safety-gate.js";
 import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
-import { acceptedRiskApplies, publishAcceptedRiskAudit } from "./accepted-risk.js";
+import {
+  acceptedRiskApplies,
+  acceptedRiskContextUnits,
+  publishAcceptedRiskAudit,
+} from "./accepted-risk.js";
 import {
   applyStageLabelTransition,
   applyStageStartLabelTransition,
@@ -174,6 +173,7 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   });
   const promptSafetyResult = await blockRenderedPromptInput({
     acceptedRisk,
+    promptAddition: mcpContext.promptAddition,
     prompts,
     safetyOptions,
   });
@@ -197,12 +197,6 @@ async function blockInitialPromptInput(options: {
 }): Promise<StageRunResult | undefined> {
   if (options.acceptedRisk) return blockAcceptedRiskDeltaInput(options.safetyOptions);
   return blockPromptInput(options.safetyOptions);
-}
-
-function acceptedRiskContextUnits(context: ContextPacket, runner: RunnerOptions): ContentUnit[] {
-  const cutoff = runner.acceptedRisk?.cutoff;
-  if (!cutoff) return [];
-  return contentUnitsOnOrAfterCutoff(context, cutoff);
 }
 
 async function blockAcceptedRiskDeltaInput(
@@ -231,12 +225,22 @@ async function blockAcceptedRiskDeltaInput(
 
 function blockRenderedPromptInput(options: {
   acceptedRisk: boolean;
+  promptAddition: string;
   prompts: { prompt: string; system: string };
   safetyOptions: StageSafetyOptions;
 }): Promise<StageRunResult | undefined> {
-  if (options.acceptedRisk) return Promise.resolve(undefined);
+  if (options.acceptedRisk)
+    return blockUnsafePromptInjection({
+      ...options.safetyOptions,
+      extraSources: mcpPromptSafetySources(options.promptAddition),
+      includeContext: false,
+      phase: "input",
+    });
   return blockPromptInput(options.safetyOptions, promptSafetySources(options.prompts));
 }
+
+const mcpPromptSafetySources = (promptAddition: string): SafetySource[] =>
+  promptAddition ? [{ label: "rendered MCP context prompt addition", text: promptAddition }] : [];
 
 async function runCheckedStageResult(options: {
   acceptedRisk: boolean;
@@ -281,12 +285,7 @@ async function runCheckedStageResult(options: {
 }
 
 function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResult {
-  return {
-    allowed: false,
-    result,
-    status: result.status,
-    summary: result.summary,
-  };
+  return { allowed: false, result, status: result.status, summary: result.summary };
 }
 
 async function acceptedRiskSecurityReview(

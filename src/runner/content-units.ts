@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  acceptedRiskArtifactContentSha,
+  parseAcceptedRiskMetadata,
+  type AcceptedRiskMetadata,
+} from "../shared/accepted-risk.js";
 import type { ContextPacket, JsonObject, PullRequestFile, TimelineItem } from "../shared/types.js";
 
 export interface ContentUnit {
@@ -111,6 +116,21 @@ export function contentUnitsOnOrAfterCutoff(context: ContextPacket, cutoff: stri
   });
 }
 
+export function acceptedRiskDeltaContentUnits(options: {
+  acceptedMetadata?: AcceptedRiskMetadata;
+  context: ContextPacket;
+  cutoff: string;
+}): ContentUnit[] {
+  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff).filter(
+    (item) =>
+      !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata),
+  );
+  if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
+    return units;
+  }
+  return [...contentUnitsForContext(options.context).filter(artifactContentUnit), ...units];
+}
+
 export function chunkContentUnits(
   units: ContentUnit[],
   options: PackContextOptions = {},
@@ -210,6 +230,29 @@ function unit(
   options: Omit<ContentUnit, "id" | "kind" | "label" | "text"> = {},
 ): ContentUnit {
   return { id, kind, label, text, ...options };
+}
+
+function artifactContentAccepted(context: ContextPacket, acceptedSha: string | undefined): boolean {
+  return Boolean(acceptedSha && acceptedRiskArtifactContentSha(context.artifact) === acceptedSha);
+}
+
+function artifactContentUnit(item: ContentUnit): boolean {
+  return item.id === "artifact-title" || item.id === "artifact-body";
+}
+
+function acceptedRiskMetadataUnit(
+  item: ContentUnit,
+  acceptedMetadata: AcceptedRiskMetadata | undefined,
+): boolean {
+  if (!acceptedMetadata) return false;
+  const itemMetadata = parseAcceptedRiskMetadata(item.text);
+  return Boolean(
+    itemMetadata &&
+    itemMetadata.artifact === acceptedMetadata.artifact &&
+    itemMetadata.number === acceptedMetadata.number &&
+    itemMetadata.cutoff === acceptedMetadata.cutoff &&
+    itemMetadata.artifactContentSha === acceptedMetadata.artifactContentSha,
+  );
 }
 
 function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {

@@ -48,6 +48,10 @@ describe("GitVibe app server accept-risk labels", () => {
     expect(
       Number.isFinite(Date.parse(workflowDispatches(client)[0].inputs["accept-risk-cutoff"])),
     ).toBe(true);
+    const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
+    expect(updatedResult).toContain("### Accepted Risk");
+    expect(updatedResult).toContain("git-vibe:accepted-risk-metadata");
+    expect(updatedResult).toContain("Artifact title/body SHA");
     expect(requestPaths(client, "DELETE")).not.toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
     );
@@ -89,6 +93,9 @@ describe("GitVibe app server accept-risk labels", () => {
         }),
       }),
     ]);
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
+      "### Accepted Risk",
+    );
   });
 });
 
@@ -544,6 +551,7 @@ function stageResultReview({ artifact, number, stage, submittedAt = "2026-01-01T
   return {
     author_association: "OWNER",
     body: stageResultBody({ artifact, number, stage }),
+    id: 200,
     submitted_at: submittedAt,
     user: { login: "maintainer" },
   };

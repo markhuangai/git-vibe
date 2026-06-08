@@ -263,6 +263,7 @@ function pullRequestLabelPayload(payload: WebhookPayload): WebhookPayload {
       body: payload.pull_request?.body,
       number: payload.pull_request?.number,
       pull_request: {},
+      title: payload.pull_request?.title,
     },
   };
 }
