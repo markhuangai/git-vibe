@@ -68,6 +68,7 @@ describe("GitHub context builders", () => {
       databaseId: 7,
       id: "7",
       kind: "pull-request-review",
+      updatedAt: "2026-01-04T12:00:00Z",
     });
     expect(context.pullRequestFiles).toEqual([
       expect.objectContaining({
