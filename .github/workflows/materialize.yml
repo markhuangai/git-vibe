@@ -33,6 +33,31 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       discussion-number:
@@ -61,6 +86,31 @@ on:
         default: false
       source-comment:
         description: JSON source comment metadata for replying to command comments.
+        required: false
+        type: string
+        default: ""
+      accept-risk:
+        description: Continue this run after a trusted prompt-injection risk acceptance.
+        required: false
+        type: boolean
+        default: false
+      accept-risk-actor:
+        description: GitHub login that accepted the prompt-injection risk.
+        required: false
+        type: string
+        default: ""
+      accept-risk-artifact-sha:
+        description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
+        required: false
+        type: string
+        default: ""
+      accept-risk-stage:
+        description: Comma-separated GitVibe stages covered by the accepted-risk decision.
         required: false
         type: string
         default: ""
@@ -118,6 +168,11 @@ jobs:
           stage-timeout-minutes: 10
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   materialize:
     runs-on: ${{ inputs.runner }}
@@ -157,3 +212,8 @@ jobs:
           max-turns: ${{ inputs.max_turns }}
           dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
+          accept-risk: ${{ inputs.accept-risk }}
+          accept-risk-actor: ${{ inputs.accept-risk-actor }}
+          accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
+          accept-risk-stage: ${{ inputs.accept-risk-stage }}

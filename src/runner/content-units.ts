@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  acceptedRiskArtifactContentSha,
+  parseAcceptedRiskMetadata,
+  type AcceptedRiskMetadata,
+} from "../shared/accepted-risk.js";
 import type { ContextPacket, JsonObject, PullRequestFile, TimelineItem } from "../shared/types.js";
 
 export interface ContentUnit {
@@ -47,9 +52,11 @@ const defaultPromptBudgetChars = 80_000;
 export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
   return [
     unit("artifact-title", "artifact", "artifact title", context.artifact.title, {
+      metadata: artifactMetadata(context),
       sourceUrl: context.artifact.url,
     }),
     unit("artifact-body", "artifact", "artifact body", context.artifact.body, {
+      metadata: artifactMetadata(context),
       sourceUrl: context.artifact.url,
     }),
     ...context.timeline.flatMap(timelineUnits),
@@ -77,27 +84,51 @@ export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
         "handoff",
         `${handoff.stage} handoff summary`,
         handoff.summary,
-        {
-          metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status },
-        },
+        { metadata: handoffMetadata(handoff) },
       ),
       unit(
         `handoff-${index}-${handoff.stage}-comment`,
         "handoff",
         `${handoff.stage} handoff comment`,
         handoff.commentBody || "",
-        { metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status } },
+        { metadata: handoffMetadata(handoff) },
       ),
       unit(
         `handoff-${index}-${handoff.stage}-output`,
         "handoff",
         `${handoff.stage} handoff output`,
         JSON.stringify(handoff.parsedOutput),
-        { metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status } },
+        { metadata: handoffMetadata(handoff) },
       ),
     ]),
     ...(context.pullRequestFiles || []).map((file, index) => pullRequestFileUnit(file, index)),
   ].filter((item) => item.text.trim());
+}
+
+export function contentUnitsOnOrAfterCutoff(context: ContextPacket, cutoff: string): ContentUnit[] {
+  const cutoffMs = cutoffTimeMs(cutoff);
+  if (cutoffMs === undefined) return [];
+  const cutoffSecondMs = Math.floor(cutoffMs / 1000) * 1000;
+  return contentUnitsForContext(context).filter((item) => {
+    const activityMs = contentUnitActivityMs(item);
+    if (activityMs !== undefined) return activityMs >= cutoffSecondMs;
+    return item.kind === "handoff";
+  });
+}
+
+export function acceptedRiskDeltaContentUnits(options: {
+  acceptedMetadata?: AcceptedRiskMetadata;
+  context: ContextPacket;
+  cutoff: string;
+}): ContentUnit[] {
+  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff).filter(
+    (item) =>
+      !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata),
+  );
+  if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
+    return units;
+  }
+  return [...contentUnitsForContext(options.context).filter(artifactContentUnit), ...units];
 }
 
 export function chunkContentUnits(
@@ -201,6 +232,29 @@ function unit(
   return { id, kind, label, text, ...options };
 }
 
+function artifactContentAccepted(context: ContextPacket, acceptedSha: string | undefined): boolean {
+  return Boolean(acceptedSha && acceptedRiskArtifactContentSha(context.artifact) === acceptedSha);
+}
+
+function artifactContentUnit(item: ContentUnit): boolean {
+  return item.id === "artifact-title" || item.id === "artifact-body";
+}
+
+function acceptedRiskMetadataUnit(
+  item: ContentUnit,
+  acceptedMetadata: AcceptedRiskMetadata | undefined,
+): boolean {
+  if (!acceptedMetadata) return false;
+  const itemMetadata = parseAcceptedRiskMetadata(item.text);
+  return Boolean(
+    itemMetadata &&
+    itemMetadata.artifact === acceptedMetadata.artifact &&
+    itemMetadata.number === acceptedMetadata.number &&
+    itemMetadata.cutoff === acceptedMetadata.cutoff &&
+    itemMetadata.artifactContentSha === acceptedMetadata.artifactContentSha,
+  );
+}
+
 function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {
   const id = `timeline-${index}-${slug(item.kind)}-${slug(item.id || item.url || "item")}`;
   return [
@@ -213,10 +267,47 @@ function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {
         id: item.id,
         kind: item.kind,
         parentId: item.parentId,
+        updatedAt: bodyTimelineKind(item.kind) ? undefined : item.updatedAt,
       },
       sourceUrl: item.url,
     }),
   ];
+}
+
+function bodyTimelineKind(kind: string): boolean {
+  return kind === "body" || kind.endsWith("-body");
+}
+
+function artifactMetadata(context: ContextPacket): JsonObject {
+  return {
+    createdAt: context.artifact.createdAt,
+    number: context.artifact.number,
+    type: context.artifact.type,
+  };
+}
+
+function handoffMetadata(handoff: NonNullable<ContextPacket["handoffs"]>[number]): JsonObject {
+  return {
+    createdAt: handoff.createdAt,
+    schemaId: handoff.schemaId,
+    stage: handoff.stage,
+    status: handoff.status,
+    updatedAt: handoff.updatedAt,
+  };
+}
+
+function contentUnitActivityMs(item: ContentUnit): number | undefined {
+  const metadata = item.metadata || {};
+  const timestamps = [metadata.updatedAt, metadata.createdAt]
+    .map((value) => (typeof value === "string" ? cutoffTimeMs(value) : undefined))
+    .filter((value): value is number => value !== undefined);
+  if (timestamps.length === 0) return undefined;
+  return Math.max(...timestamps);
+}
+
+function cutoffTimeMs(value: string): number | undefined {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function pullRequestFileUnit(file: PullRequestFile, index: number): ContentUnit {

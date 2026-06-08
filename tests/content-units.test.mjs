@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  acceptedRiskDeltaContentUnits,
   chunkContentUnits,
   contextPromptCoverageForContext,
   contentUnitsForContext,
+  contentUnitsOnOrAfterCutoff,
   packedContextForPrompt,
   pullRequestFileText,
 } from "../src/runner/content-units.ts";
+import {
+  acceptedRiskArtifactContentSha,
+  acceptedRiskMetadataBlock,
+} from "../src/shared/accepted-risk.ts";
 
 describe("context content units", () => {
   it("splits large context units into overlapping chunks", () => {
@@ -103,6 +109,107 @@ describe("context content units", () => {
   });
 });
 
+describe("accepted-risk context unit filtering", () => {
+  it("filters edited comments without treating artifact metadata updates as body edits", () => {
+    const context = contextPacket();
+    context.artifact.updatedAt = "2026-01-05T00:00:00Z";
+    context.timeline = [
+      {
+        author: "octocat",
+        body: "Old accepted body",
+        createdAt: "2026-01-01T00:00:00Z",
+        id: "issue-12",
+        kind: "body",
+        updatedAt: "2026-01-05T00:00:00Z",
+        url: "https://github.com/example/repo/issues/12",
+      },
+      {
+        author: "guest",
+        body: "Old accepted comment",
+        createdAt: "2026-01-03T00:00:00Z",
+        id: "old",
+        kind: "comment",
+        url: "https://github.com/example/repo/issues/12#issuecomment-old",
+      },
+      {
+        author: "guest",
+        body: "Edited after acceptance",
+        createdAt: "2026-01-03T00:00:00Z",
+        id: "edited",
+        kind: "comment",
+        updatedAt: "2026-01-05T00:00:00Z",
+        url: "https://github.com/example/repo/issues/12#issuecomment-edited",
+      },
+    ];
+
+    const units = contentUnitsOnOrAfterCutoff(context, "2026-01-04T12:00:00Z");
+
+    expect(units.map((unit) => unit.id)).toEqual(["timeline-2-comment-edited"]);
+  });
+
+  it("includes post-cutoff and untimestamped handoffs in accepted-risk delta scans", () => {
+    const context = contextPacket();
+    context.handoffs = [
+      stageHandoff({ createdAt: "2026-01-03T00:00:00Z", stage: "investigate" }),
+      stageHandoff({ createdAt: "2026-01-05T00:00:00Z", stage: "validate" }),
+      stageHandoff({ stage: "review-matrix" }),
+    ];
+
+    const units = contentUnitsOnOrAfterCutoff(context, "2026-01-04T12:00:00Z");
+
+    expect(units.map((unit) => unit.id)).toEqual([
+      "handoff-1-validate-summary",
+      "handoff-1-validate-comment",
+      "handoff-1-validate-output",
+      "handoff-2-review-matrix-summary",
+      "handoff-2-review-matrix-comment",
+      "handoff-2-review-matrix-output",
+    ]);
+  });
+
+  it("skips the accepted-risk metadata edit but scans changed artifact content", () => {
+    const cutoff = "2026-01-04T12:00:00Z";
+    const context = contextPacket();
+    /** @type {import("../src/shared/accepted-risk.ts").AcceptedRiskMetadata} */
+    const acceptedMetadata = {
+      artifact: "pull-request",
+      artifactContentSha: acceptedRiskArtifactContentSha(context.artifact),
+      cutoff,
+      number: "12",
+      stage: "review-matrix",
+      stages: ["review-matrix"],
+    };
+    context.timeline = [
+      {
+        author: "github-actions[bot]",
+        body: [
+          "Previously blocked result containing accepted unsafe text",
+          acceptedRiskMetadataBlock(acceptedMetadata),
+        ].join("\n\n"),
+        createdAt: "2026-01-04T00:00:00Z",
+        id: "100",
+        kind: "comment",
+        updatedAt: "2026-01-04T12:00:00Z",
+        url: "https://github.com/example/repo/issues/12#issuecomment-100",
+      },
+    ];
+
+    expect(
+      acceptedRiskDeltaContentUnits({ acceptedMetadata, context, cutoff }).map((unit) => unit.id),
+    ).toEqual([]);
+
+    const changedContext = { ...context, artifact: { ...context.artifact, body: "Changed body" } };
+
+    expect(
+      acceptedRiskDeltaContentUnits({
+        acceptedMetadata,
+        context: changedContext,
+        cutoff,
+      }).map((unit) => unit.id),
+    ).toEqual(["artifact-title", "artifact-body"]);
+  });
+});
+
 /**
  * @param {{ body?: string; patch?: string }} [options]
  * @returns {import("../src/shared/types.ts").ContextPacket}
@@ -111,9 +218,11 @@ function contextPacket({ body = "Issue body", patch = "@@ -1 +1 @@\n-old\n+new" 
   return /** @type {import("../src/shared/types.ts").ContextPacket} */ ({
     artifact: {
       body,
+      createdAt: "2026-01-01T00:00:00Z",
       number: "12",
       title: "Issue title",
       type: "pull-request",
+      updatedAt: "2026-01-01T00:00:00Z",
       url: "https://github.com/example/repo/pull/12",
     },
     generatedAt: "2026-01-02T00:00:00Z",
@@ -130,4 +239,20 @@ function contextPacket({ body = "Issue body", patch = "@@ -1 +1 @@\n-old\n+new" 
     repository: "example/repo",
     timeline: [],
   });
+}
+
+/**
+ * @param {{ createdAt?: string; stage: import("../src/shared/types.ts").Stage }} options
+ */
+function stageHandoff({ createdAt, stage }) {
+  return {
+    commentBody: "Handoff comment",
+    createdAt,
+    parsedOutput: { status: "completed", summary: "Handoff summary." },
+    schemaId: `${stage}.v1`,
+    stage,
+    status: "completed",
+    summary: "Handoff summary.",
+    updatedAt: createdAt,
+  };
 }

@@ -9,11 +9,13 @@ export interface WebhookPayload {
     url?: string;
   };
   discussion?: {
+    body?: string | null;
     id?: string;
     labels?: Array<{ name?: string }>;
     node_id?: string;
     nodeId?: string;
     number?: number | string;
+    title?: string;
   };
   issue?: {
     body?: string | null;
@@ -25,7 +27,13 @@ export interface WebhookPayload {
     user?: { login?: string };
   };
   label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
-  pull_request?: { body?: string | null; merged?: boolean; number?: number | string };
+  pull_request?: {
+    body?: string | null;
+    head?: { sha?: string };
+    merged?: boolean;
+    number?: number | string;
+    title?: string;
+  };
   review?: {
     body?: string;
     html_url?: string;

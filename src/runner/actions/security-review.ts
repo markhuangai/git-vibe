@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { redactLogText } from "../logging.js";
 import { runStageSecurityReview } from "../stage-runner.js";
+import { acceptedRiskFromEnv } from "./accepted-risk-inputs.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { Stage } from "../../shared/types.js";
@@ -32,6 +33,7 @@ export async function securityReview(runtime: SecurityReviewRuntime = {}): Promi
     const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
     const target = readTargetInputs(stage, env);
     const result = await (runtime.runStageSecurityReview || runStageSecurityReview)({
+      acceptedRisk: acceptedRiskFromEnv(env),
       cwd,
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
       handoffDir: envValue(env, "GITVIBE_HANDOFF_DIR") || undefined,
