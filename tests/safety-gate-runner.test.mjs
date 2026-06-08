@@ -619,19 +619,23 @@ function acceptedRiskMetadataComment({ body, title = "Issue title" }) {
     stage: "investigate",
     stages: ["investigate"],
   };
-  return issueComment(
-    [
-      "<!-- git-vibe:stage-result stage=investigate artifact=issue number=12 -->",
-      "## GitVibe Investigation",
-      "",
-      "**Status:** `blocked`",
-      "",
-      `Required Fix: ${unsafeInstruction()}`,
-      acceptedRiskMetadataBlock(metadata),
-    ].join("\n"),
-    "2026-01-03T00:00:00Z",
-    "2026-01-04T00:00:00Z",
-  );
+  return {
+    ...issueComment(
+      [
+        "<!-- git-vibe:stage-result stage=investigate artifact=issue number=12 -->",
+        "## GitVibe Investigation",
+        "",
+        "**Status:** `blocked`",
+        "",
+        `Required Fix: ${unsafeInstruction()}`,
+        acceptedRiskMetadataBlock(metadata),
+      ].join("\n"),
+      "2026-01-03T00:00:00Z",
+      "2026-01-04T00:00:00Z",
+    ),
+    author_association: "OWNER",
+    user: { login: "github-actions[bot]" },
+  };
 }
 
 const legacyHandoff = (parsedOutput) => ({

@@ -25,6 +25,7 @@ import {
   acceptedRiskApplies,
   acceptedRiskContextUnits,
   publishAcceptedRiskAudit,
+  runnerWithAcceptedRiskFromContext,
 } from "./accepted-risk.js";
 import {
   applyStageLabelTransition,
@@ -81,13 +82,14 @@ export async function runStageSecurityReview(
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
+  const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
   const transientComments: PublishedArtifactComment[] = [];
   const blockedHeadResult = await blockUnsafePullRequestHead({
     client,
     context,
     definition,
     logger,
-    options,
+    options: runner,
     transientComments,
   });
   if (blockedHeadResult) return blockedSecurityReview(blockedHeadResult);
@@ -98,10 +100,10 @@ export async function runStageSecurityReview(
     context,
     definition,
     logger,
-    options,
+    options: runner,
     transientComments,
   });
-  if (acceptedRiskApplies({ context, logger, runner: options })) {
+  if (acceptedRiskApplies({ context, logger, runner })) {
     return acceptedRiskSecurityReview(safetyOptions);
   }
 
@@ -126,13 +128,14 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const definition = stageDefinitions[options.stage];
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
-  const transientComments = await publishStageStart({ client, context, logger, options });
-  const stageContext = { client, context, definition, logger, options, transientComments };
+  const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
+  const transientComments = await publishStageStart({ client, context, logger, options: runner });
+  const stageContext = { client, context, definition, logger, options: runner, transientComments };
   const blockedResult = await blockUnsafePullRequestHead(stageContext);
   if (blockedResult) return blockedResult;
 
   const safetyOptions = stageSafetyOptions({ ...stageContext, config });
-  const acceptedRisk = acceptedRiskApplies({ context, logger, runner: options });
+  const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
   const inputSafetyResult = await blockInitialPromptInput({
     acceptedRisk,
     safetyOptions,

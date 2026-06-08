@@ -36,21 +36,14 @@ describe("GitVibe app server accept-risk labels", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          "accept-risk": "true",
-          "accept-risk-actor": "maintainer",
-          "accept-risk-stage": "implement,create-pr",
-          "issue-number": "9",
-        }),
+        inputs: { "issue-number": "9" },
         ref: "main",
       }),
     ]);
-    expect(
-      Number.isFinite(Date.parse(workflowDispatches(client)[0].inputs["accept-risk-cutoff"])),
-    ).toBe(true);
     const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
     expect(updatedResult).toContain("### Accepted Risk");
     expect(updatedResult).toContain("git-vibe:accepted-risk-metadata");
+    expect(updatedResult).toContain("Accepted stages: `implement`, `create-pr`");
     expect(updatedResult).toContain("Artifact title/body SHA");
     expect(requestPaths(client, "DELETE")).not.toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
@@ -84,17 +77,14 @@ describe("GitVibe app server accept-risk labels", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          "accept-risk": "true",
-          "accept-risk-actor": "maintainer",
-          "accept-risk-artifact-sha": "head-sha",
-          "accept-risk-stage": "review-matrix",
-          "pr-number": "12",
-        }),
+        inputs: { "pr-number": "12" },
       }),
     ]);
     expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
       "### Accepted Risk",
+    );
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
+      "Pull request head SHA: `head-sha`",
     );
   });
 });
@@ -133,10 +123,10 @@ describe("GitVibe app server accept-risk pull request review pagination", () => 
       sender: { login: "maintainer" },
     });
 
-    expect(workflowDispatches(client)[0].inputs).toMatchObject({
-      "accept-risk-stage": "investigate,address-pr-feedback",
-      "pr-number": "12",
-    });
+    expect(workflowDispatches(client)[0].inputs).toEqual({ "pr-number": "12" });
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
+      "Accepted stages: `investigate`, `address-pr-feedback`",
+    );
     expect(requestPaths(client, "GET")).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/pulls/12/reviews?page=1&per_page=100",
@@ -199,12 +189,12 @@ describe("GitVibe app server accept-risk label result selection", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          "accept-risk-stage": "implement,create-pr",
-          "issue-number": "9",
-        }),
+        inputs: { "issue-number": "9" },
       }),
     ]);
+    expect(requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body).toContain(
+      "Accepted stages: `implement`, `create-pr`",
+    );
   });
 
   it("removes accept-risk when the blocked stage cannot resume from the artifact", async () => {
@@ -288,10 +278,10 @@ describe("GitVibe app server accept-risk label stage routing", () => {
     expect(requestPaths(client, "POST")).toContain(
       "/repos/example/repo/actions/workflows/investigate.yml/dispatches",
     );
-    expect(workflowDispatches(client)[0].inputs).toMatchObject({
-      "accept-risk-stage": "investigate",
-      "issue-number": "9",
-    });
+    expect(workflowDispatches(client)[0].inputs).toEqual({ "issue-number": "9" });
+    expect(requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body).toContain(
+      "Accepted stages: `investigate`",
+    );
   });
 
   it("removes accept-risk when pull request blocked stages are not resumable", async () => {
@@ -369,13 +359,12 @@ describe("GitVibe app server accept-risk pull request labels", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          "accept-risk-artifact-sha": "lookup-sha",
-          "accept-risk-stage": "investigate,address-pr-feedback",
-          "pr-number": "12",
-        }),
+        inputs: { "pr-number": "12" },
       }),
     ]);
+    expect(requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body).toContain(
+      "Pull request head SHA: `lookup-sha`",
+    );
     expect(requestPaths(client, "GET")).toContain("/repos/example/repo/pulls/12");
   });
 });
@@ -406,14 +395,10 @@ describe("GitVibe app server accept-risk label validation", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          "accept-risk": "true",
-          "accept-risk-actor": "maintainer",
-          "accept-risk-stage": "validate",
-          "discussion-number": "5",
-        }),
+        inputs: { "discussion-number": "5" },
       }),
     ]);
+    expect(discussionUpdateBodies(client).at(-1)).toContain("Accepted stages: `validate`");
   });
 
   it("resumes blocked discussion materialization", async () => {
@@ -441,12 +426,10 @@ describe("GitVibe app server accept-risk label validation", () => {
 
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          "accept-risk-stage": "materialize",
-          "discussion-number": "5",
-        }),
+        inputs: { "discussion-number": "5" },
       }),
     ]);
+    expect(discussionUpdateBodies(client).at(-1)).toContain("Accepted stages: `materialize`");
   });
 });
 
@@ -567,4 +550,10 @@ function stageResultBody({ artifact, number, stage, status = "blocked" }) {
     "",
     "GitVibe paused this run for maintainer review.",
   ].join("\n");
+}
+
+function discussionUpdateBodies(client) {
+  return client.graphql.mock.calls
+    .filter(([query]) => query.includes("GitVibeUpdateDiscussionComment"))
+    .map(([, variables]) => variables.body);
 }

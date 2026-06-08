@@ -1,11 +1,69 @@
 import { addDiscussionComment, removeDiscussionLabel } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
+import { parseStageResultMarker, stageResultStatus } from "../shared/stage-result-markers.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import { parseAcceptedRiskMetadata, type AcceptedRiskMetadata } from "../shared/accepted-risk.js";
-import type { ContextPacket, RunnerOptions, StageRunResult } from "../shared/types.js";
+import type {
+  ContextPacket,
+  RunnerOptions,
+  StageRunResult,
+  TimelineItem,
+} from "../shared/types.js";
 import { acceptedRiskDeltaContentUnits, type ContentUnit } from "./content-units.js";
 import type { StageLogger } from "./logging.js";
+
+const trustedAutomationAuthors = new Set(["github-actions[bot]"]);
+
+interface AcceptedRiskMetadataCandidate {
+  metadata: AcceptedRiskMetadata;
+  order: number;
+}
+
+interface AcceptedRiskAuditMarker {
+  artifact?: string;
+  number?: string;
+  run?: string;
+  stage?: string;
+}
+
+export function acceptedRiskFromContext(options: {
+  context: ContextPacket;
+  logger: StageLogger;
+  runner: RunnerOptions;
+}): RunnerOptions["acceptedRisk"] | undefined {
+  if (options.runner.acceptedRisk) return options.runner.acceptedRisk;
+
+  const metadata = acceptedRiskMetadataForRunner(options.context, options.runner);
+  if (!metadata) return undefined;
+
+  const source = acceptedRiskRuntimeSource(options.context, options.runner);
+  if (!source) return undefined;
+
+  options.logger.event("accepted_risk.context.detected", {
+    cutoff: metadata.cutoff,
+    source,
+    stage: options.runner.stage,
+    stages: metadata.stages.join(","),
+  });
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    stages: metadata.stages,
+  };
+}
+
+export function runnerWithAcceptedRiskFromContext(options: {
+  context: ContextPacket;
+  logger: StageLogger;
+  runner: RunnerOptions;
+}): RunnerOptions {
+  const acceptedRisk = acceptedRiskFromContext(options);
+  return acceptedRisk === options.runner.acceptedRisk
+    ? options.runner
+    : { ...options.runner, acceptedRisk };
+}
 
 export function acceptedRiskApplies(options: {
   context: ContextPacket;
@@ -101,27 +159,101 @@ function acceptedRiskMetadataForContext(
 ): AcceptedRiskMetadata | undefined {
   const accepted = runner.acceptedRisk;
   if (!accepted) return undefined;
-  return context.timeline
-    .map((item) => parseAcceptedRiskMetadata(item.body))
-    .filter((metadata): metadata is AcceptedRiskMetadata =>
-      acceptedRiskMetadataMatches({ accepted, context, metadata, runner }),
-    )
+  return acceptedRiskMetadataCandidates(context, runner)
+    .map((candidate) => candidate.metadata)
+    .filter((metadata) => acceptedRiskMetadataMatches({ accepted, context, metadata, runner }))
     .at(-1);
+}
+
+function acceptedRiskMetadataForRunner(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): AcceptedRiskMetadata | undefined {
+  return acceptedRiskMetadataCandidates(context, runner).at(-1)?.metadata;
+}
+
+function acceptedRiskMetadataCandidates(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): AcceptedRiskMetadataCandidate[] {
+  return context.timeline
+    .map((item, order) => acceptedRiskMetadataCandidate(item, order, context, runner))
+    .filter((candidate): candidate is AcceptedRiskMetadataCandidate => Boolean(candidate));
+}
+
+function acceptedRiskMetadataCandidate(
+  item: TimelineItem,
+  order: number,
+  context: ContextPacket,
+  runner: RunnerOptions,
+): AcceptedRiskMetadataCandidate | undefined {
+  const marker = parseStageResultMarker(item.body);
+  const metadata = parseAcceptedRiskMetadata(item.body);
+  if (!marker || !metadata) return undefined;
+  if (!trustedGitVibeTimelineItem(item)) return undefined;
+  if (stageResultStatus(item.body) !== "blocked") return undefined;
+  if (marker.artifact !== context.artifact.type || marker.number !== context.artifact.number) {
+    return undefined;
+  }
+  if (
+    metadata.artifact !== context.artifact.type ||
+    metadata.number !== context.artifact.number ||
+    metadata.stage !== marker.stage ||
+    !metadata.stages.includes(runner.stage) ||
+    !Number.isFinite(Date.parse(metadata.cutoff))
+  ) {
+    return undefined;
+  }
+  return { metadata, order };
+}
+
+function acceptedRiskRuntimeSource(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): "label" | "run-audit" | undefined {
+  if ((context.artifact.labels || []).includes(gitVibeLabels.acceptRisk.name)) return "label";
+  return acceptedRiskAuditForCurrentRun(context, runner) ? "run-audit" : undefined;
+}
+
+function acceptedRiskAuditForCurrentRun(context: ContextPacket, runner: RunnerOptions): boolean {
+  const run = workflowRunIdFromUrl(runner.workflowRunUrl);
+  if (!run) return false;
+  return context.timeline.some((item) => {
+    if (!trustedGitVibeTimelineItem(item)) return false;
+    const marker = parseAcceptedRiskAuditMarker(item.body);
+    return (
+      marker?.artifact === context.artifact.type &&
+      marker.number === context.artifact.number &&
+      marker.run === run
+    );
+  });
+}
+
+function parseAcceptedRiskAuditMarker(
+  body: string | null | undefined,
+): AcceptedRiskAuditMarker | undefined {
+  const match = String(body || "").match(/<!--\s*git-vibe:risk-accepted\s+([^>]*)-->/);
+  if (!match) return undefined;
+  return parseAttributes(match[1] || "");
+}
+
+function trustedGitVibeTimelineItem(item: TimelineItem): boolean {
+  const association = String(item.authorAssociation || "").toUpperCase();
+  if (["COLLABORATOR", "MEMBER", "OWNER"].includes(association)) return true;
+  return trustedAutomationAuthors.has(String(item.author || "").toLowerCase());
 }
 
 function acceptedRiskMetadataMatches(options: {
   accepted: NonNullable<RunnerOptions["acceptedRisk"]>;
   context: ContextPacket;
-  metadata: AcceptedRiskMetadata | undefined;
+  metadata: AcceptedRiskMetadata;
   runner: RunnerOptions;
 }): boolean {
-  const metadata = options.metadata;
-  if (!metadata) return false;
   return (
-    metadata.artifact === options.context.artifact.type &&
-    metadata.number === options.context.artifact.number &&
-    metadata.cutoff === options.accepted.cutoff &&
-    metadata.stages.includes(options.runner.stage)
+    options.metadata.artifact === options.context.artifact.type &&
+    options.metadata.number === options.context.artifact.number &&
+    options.metadata.cutoff === options.accepted.cutoff &&
+    options.metadata.stages.includes(options.runner.stage)
   );
 }
 
@@ -218,4 +350,12 @@ async function removeIssueAcceptedRiskLabel(options: {
 
 function actorLabel(actor: string): string {
   return /^[A-Za-z0-9-]+$/u.test(actor) ? `@${actor}` : `\`${actor.replaceAll("`", "'")}\``;
+}
+
+function parseAttributes(value: string): AcceptedRiskAuditMarker {
+  const attributes: AcceptedRiskAuditMarker = {};
+  for (const match of value.matchAll(/([a-z][a-z-]*)=([^\s>]+)/g)) {
+    attributes[match[1] as keyof AcceptedRiskAuditMarker] = match[2] as string;
+  }
+  return attributes;
 }

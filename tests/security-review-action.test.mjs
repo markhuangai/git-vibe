@@ -29,11 +29,6 @@ describe("GitVibe security review action", () => {
           GITHUB_OUTPUT: "/tmp/output",
           GITHUB_RUN_ID: "99",
           GITHUB_SERVER_URL: "https://github.enterprise.test",
-          GITVIBE_ACCEPT_RISK: "true",
-          GITVIBE_ACCEPT_RISK_ACTOR: "maintainer",
-          GITVIBE_ACCEPT_RISK_ARTIFACT_SHA: "head-sha",
-          GITVIBE_ACCEPT_RISK_CUTOFF: "2026-01-04T00:00:00Z",
-          GITVIBE_ACCEPT_RISK_STAGE: "investigate,review-matrix",
           GITVIBE_DRY_RUN: "true",
           GITVIBE_HANDOFF_DIR: "/tmp/handoffs",
           GITVIBE_SOURCE_COMMENT: JSON.stringify({
@@ -51,12 +46,6 @@ describe("GitVibe security review action", () => {
 
     expect(runStageSecurityReview).toHaveBeenCalledWith(
       expect.objectContaining({
-        acceptedRisk: {
-          actor: "maintainer",
-          artifactSha: "head-sha",
-          cutoff: "2026-01-04T00:00:00Z",
-          stages: ["investigate", "review-matrix"],
-        },
         dryRun: true,
         handoffDir: "/tmp/handoffs",
         issueNumber: "12",
@@ -185,30 +174,6 @@ describe("GitVibe security review action validation", () => {
         argv: ["implement"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_ISSUE_NUMBER: "1" },
         error: "GITVIBE_GITHUB_TOKEN is required.",
-      },
-      {
-        argv: ["investigate"],
-        env: { ...baseEnv, GITVIBE_ACCEPT_RISK: "true" },
-        error: "GITVIBE_ACCEPT_RISK_STAGE is required when GITVIBE_ACCEPT_RISK is true.",
-      },
-      {
-        argv: ["investigate"],
-        env: {
-          ...baseEnv,
-          GITVIBE_ACCEPT_RISK: "true",
-          GITVIBE_ACCEPT_RISK_STAGE: "investigate",
-        },
-        error: "GITVIBE_ACCEPT_RISK_CUTOFF is required when GITVIBE_ACCEPT_RISK is true.",
-      },
-      {
-        argv: ["investigate"],
-        env: {
-          ...baseEnv,
-          GITVIBE_ACCEPT_RISK: "true",
-          GITVIBE_ACCEPT_RISK_CUTOFF: "not-a-date",
-          GITVIBE_ACCEPT_RISK_STAGE: "investigate",
-        },
-        error: "GITVIBE_ACCEPT_RISK_CUTOFF must be an ISO timestamp.",
       },
     ];
 

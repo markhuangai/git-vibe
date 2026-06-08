@@ -112,11 +112,6 @@ export async function handleAcceptRiskLabel(
   const dispatch = await dispatchWorkflow(options, plan.workflow, {
     ...(await repositoryWorkflowBudgetInputs(options, plan.workflow)),
     [plan.inputName]: plan.number,
-    "accept-risk": "true",
-    "accept-risk-actor": options.payload.sender?.login || "",
-    "accept-risk-artifact-sha": acceptance.artifactSha || "",
-    "accept-risk-cutoff": acceptance.cutoff,
-    "accept-risk-stage": plan.riskStages.join(","),
   });
   await postQueuedWorkflowComment(options, {
     artifact: plan.artifact,

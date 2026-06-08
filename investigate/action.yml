@@ -51,27 +51,6 @@ inputs:
     description: Matrix member index used to resolve the configured role/profile pair.
     required: false
     default: ""
-  accept-risk:
-    description: Allow this run to continue after a trusted prompt-injection risk acceptance.
-    required: false
-    default: "false"
-  accept-risk-actor:
-    description: GitHub login that accepted the prompt-injection risk.
-    required: false
-    default: ""
-  accept-risk-artifact-sha:
-    description: Pull request head SHA covered by the accepted-risk decision.
-    required: false
-    default: ""
-  accept-risk-cutoff:
-    description: Accepted-risk cutoff timestamp for scanning new or edited context.
-    required: false
-    default: ""
-  accept-risk-stage:
-    description: Comma-separated GitVibe stages covered by the accepted-risk decision.
-    required: false
-    default: ""
-
 outputs:
   summary:
     description: Short stage summary.
@@ -133,9 +112,4 @@ runs:
         GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
         GITVIBE_ROLE_NAME: ${{ inputs.role }}
         GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
-        GITVIBE_ACCEPT_RISK: ${{ inputs.accept-risk }}
-        GITVIBE_ACCEPT_RISK_ACTOR: ${{ inputs.accept-risk-actor }}
-        GITVIBE_ACCEPT_RISK_ARTIFACT_SHA: ${{ inputs.accept-risk-artifact-sha }}
-        GITVIBE_ACCEPT_RISK_CUTOFF: ${{ inputs.accept-risk-cutoff }}
-        GITVIBE_ACCEPT_RISK_STAGE: ${{ inputs.accept-risk-stage }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" investigate
