@@ -5,6 +5,7 @@ import type {
   RunnerOptions,
   StageRunResult,
 } from "../shared/types.js";
+import type { ContentUnit } from "./content-units.js";
 import type { StageLogger } from "./logging.js";
 import {
   removeApprovalOnSafetyBlock,
@@ -20,6 +21,7 @@ export async function blockUnsafePromptInjection(options: {
   client: GitHubClient;
   config: GitVibeConfig;
   context: ContextPacket;
+  contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
   includeContext?: boolean;
   logger: StageLogger;
@@ -53,6 +55,7 @@ export async function promptInjectionBlockedResult(options: {
   buildResult: (content: string) => Promise<StageRunResult>;
   config: GitVibeConfig;
   context: ContextPacket;
+  contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
   includeContext?: boolean;
   logger: StageLogger;
@@ -64,6 +67,7 @@ export async function promptInjectionBlockedResult(options: {
   const gate = safetyGateForStage({
     config: options.config,
     context: options.context,
+    contextUnits: options.contextUnits,
     extraSources: options.extraSources,
     includeContext: options.includeContext,
     output: options.result?.parsedOutput,

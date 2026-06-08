@@ -47,9 +47,11 @@ const defaultPromptBudgetChars = 80_000;
 export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
   return [
     unit("artifact-title", "artifact", "artifact title", context.artifact.title, {
+      metadata: artifactMetadata(context),
       sourceUrl: context.artifact.url,
     }),
     unit("artifact-body", "artifact", "artifact body", context.artifact.body, {
+      metadata: artifactMetadata(context),
       sourceUrl: context.artifact.url,
     }),
     ...context.timeline.flatMap(timelineUnits),
@@ -98,6 +100,16 @@ export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
     ]),
     ...(context.pullRequestFiles || []).map((file, index) => pullRequestFileUnit(file, index)),
   ].filter((item) => item.text.trim());
+}
+
+export function contentUnitsOnOrAfterCutoff(context: ContextPacket, cutoff: string): ContentUnit[] {
+  const cutoffMs = cutoffTimeMs(cutoff);
+  if (cutoffMs === undefined) return [];
+  const cutoffSecondMs = Math.floor(cutoffMs / 1000) * 1000;
+  return contentUnitsForContext(context).filter((item) => {
+    const activityMs = contentUnitActivityMs(item);
+    return activityMs !== undefined && activityMs >= cutoffSecondMs;
+  });
 }
 
 export function chunkContentUnits(
@@ -213,10 +225,34 @@ function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {
         id: item.id,
         kind: item.kind,
         parentId: item.parentId,
+        updatedAt: item.updatedAt,
       },
       sourceUrl: item.url,
     }),
   ];
+}
+
+function artifactMetadata(context: ContextPacket): JsonObject {
+  return {
+    createdAt: context.artifact.createdAt,
+    number: context.artifact.number,
+    type: context.artifact.type,
+    updatedAt: context.artifact.updatedAt,
+  };
+}
+
+function contentUnitActivityMs(item: ContentUnit): number | undefined {
+  const metadata = item.metadata || {};
+  const timestamps = [metadata.updatedAt, metadata.createdAt]
+    .map((value) => (typeof value === "string" ? cutoffTimeMs(value) : undefined))
+    .filter((value): value is number => value !== undefined);
+  if (timestamps.length === 0) return undefined;
+  return Math.max(...timestamps);
+}
+
+function cutoffTimeMs(value: string): number | undefined {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function pullRequestFileUnit(file: PullRequestFile, index: number): ContentUnit {

@@ -73,6 +73,11 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
+        required: false
+        type: string
+        default: ""
       accept-risk-stage:
         description: Comma-separated GitVibe stages covered by the accepted-risk decision.
         required: false
@@ -149,6 +154,11 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
+        required: false
+        type: string
+        default: ""
       accept-risk-stage:
         description: Comma-separated GitVibe stages covered by the accepted-risk decision.
         required: false
@@ -210,6 +220,7 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   implement:
@@ -257,6 +268,7 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   implementation-blocked-cleanup:
@@ -334,6 +346,7 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   plan-review-matrix:

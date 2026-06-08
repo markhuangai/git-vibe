@@ -3,6 +3,7 @@ import {
   chunkContentUnits,
   contextPromptCoverageForContext,
   contentUnitsForContext,
+  contentUnitsOnOrAfterCutoff,
   packedContextForPrompt,
   pullRequestFileText,
 } from "../src/runner/content-units.ts";
@@ -103,6 +104,35 @@ describe("context content units", () => {
   });
 });
 
+describe("accepted-risk context unit filtering", () => {
+  it("filters context units by created or edited time after an accepted-risk cutoff", () => {
+    const context = contextPacket();
+    context.timeline = [
+      {
+        author: "guest",
+        body: "Old accepted comment",
+        createdAt: "2026-01-03T00:00:00Z",
+        id: "old",
+        kind: "comment",
+        url: "https://github.com/example/repo/issues/12#issuecomment-old",
+      },
+      {
+        author: "guest",
+        body: "Edited after acceptance",
+        createdAt: "2026-01-03T00:00:00Z",
+        id: "edited",
+        kind: "comment",
+        updatedAt: "2026-01-05T00:00:00Z",
+        url: "https://github.com/example/repo/issues/12#issuecomment-edited",
+      },
+    ];
+
+    const units = contentUnitsOnOrAfterCutoff(context, "2026-01-04T12:00:00Z");
+
+    expect(units.map((unit) => unit.id)).toEqual(["timeline-1-comment-edited"]);
+  });
+});
+
 /**
  * @param {{ body?: string; patch?: string }} [options]
  * @returns {import("../src/shared/types.ts").ContextPacket}
@@ -111,9 +141,11 @@ function contextPacket({ body = "Issue body", patch = "@@ -1 +1 @@\n-old\n+new" 
   return /** @type {import("../src/shared/types.ts").ContextPacket} */ ({
     artifact: {
       body,
+      createdAt: "2026-01-01T00:00:00Z",
       number: "12",
       title: "Issue title",
       type: "pull-request",
+      updatedAt: "2026-01-01T00:00:00Z",
       url: "https://github.com/example/repo/pull/12",
     },
     generatedAt: "2026-01-02T00:00:00Z",

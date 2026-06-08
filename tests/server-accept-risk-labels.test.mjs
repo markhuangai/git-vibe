@@ -45,6 +45,9 @@ describe("GitVibe app server accept-risk labels", () => {
         ref: "main",
       }),
     ]);
+    expect(
+      Number.isFinite(Date.parse(workflowDispatches(client)[0].inputs["accept-risk-cutoff"])),
+    ).toBe(true);
     expect(requestPaths(client, "DELETE")).not.toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
     );

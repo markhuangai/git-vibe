@@ -5,40 +5,8 @@ import { acceptedRiskApplies, publishAcceptedRiskAudit } from "../src/runner/acc
 describe("accepted-risk runner scope", () => {
   it("only applies to the accepted stage and current pull request head SHA", () => {
     const logger = { event: vi.fn() };
-    /** @type {import("../src/shared/types.ts").ContextPacket} */
-    const context = {
-      artifact: {
-        body: "",
-        number: "12",
-        pullRequestHead: {
-          branch: "git-vibe/12",
-          repository: "example/repo",
-          sha: "current-sha",
-        },
-        title: "PR title",
-        type: "pull-request",
-        url: "https://github.com/example/repo/pull/12",
-      },
-      generatedAt: "2026-01-01T00:00:00Z",
-      repository: "example/repo",
-      timeline: [],
-    };
-    /** @type {import("../src/shared/types.ts").RunnerOptions} */
-    const runner = {
-      acceptedRisk: {
-        artifactSha: "current-sha",
-        stages: ["review-matrix"],
-      },
-      cwd: "/repo",
-      dryRun: false,
-      issueNumber: "",
-      maxTurns: 1,
-      prNumber: "12",
-      repository: "example/repo",
-      stage: "review-matrix",
-      stageTimeoutMinutes: 1,
-      token: "token",
-    };
+    const context = pullRequestContext();
+    const runner = pullRequestReviewRunner();
 
     expect(acceptedRiskApplies({ context, logger, runner })).toBe(true);
     expect(
@@ -57,7 +25,11 @@ describe("accepted-risk runner scope", () => {
         logger,
         runner: {
           ...runner,
-          acceptedRisk: { artifactSha: "old-sha", stages: ["review-matrix"] },
+          acceptedRisk: {
+            artifactSha: "old-sha",
+            cutoff: "2026-01-04T00:00:00Z",
+            stages: ["review-matrix"],
+          },
         },
       }),
     ).toBe(false);
@@ -78,14 +50,27 @@ describe("accepted-risk runner scope", () => {
       acceptedRiskApplies({
         context: issueContext(),
         logger,
-        runner: { ...runner, acceptedRisk: { stages: ["review-matrix"] } },
+        runner: {
+          ...runner,
+          acceptedRisk: { cutoff: "2026-01-04T00:00:00Z", stages: ["review-matrix"] },
+        },
       }),
     ).toBe(true);
     expect(
       acceptedRiskApplies({
         context,
         logger,
-        runner: { ...runner, acceptedRisk: { stages: ["review-matrix"] } },
+        runner: {
+          ...runner,
+          acceptedRisk: { cutoff: "2026-01-04T00:00:00Z", stages: ["review-matrix"] },
+        },
+      }),
+    ).toBe(false);
+    expect(
+      acceptedRiskApplies({
+        context: issueContext(),
+        logger,
+        runner: { ...runner, acceptedRisk: { cutoff: "not-a-date", stages: ["review-matrix"] } },
       }),
     ).toBe(false);
     expect(logger.event).toHaveBeenCalledWith(
@@ -94,6 +79,9 @@ describe("accepted-risk runner scope", () => {
     );
     expect(logger.event).toHaveBeenCalledWith("accepted_risk.skip", {
       reason: "missing-accepted-artifact-sha",
+    });
+    expect(logger.event).toHaveBeenCalledWith("accepted_risk.skip", {
+      reason: "invalid-accepted-risk-cutoff",
     });
   });
 });
@@ -112,7 +100,13 @@ describe("accepted-risk audit publishing", () => {
       context: issueContext(),
       logger: logger(),
       result: stageResult(),
-      runner: runner({ acceptedRisk: { actor: "bad`actor", stages: ["investigate"] } }),
+      runner: runner({
+        acceptedRisk: {
+          actor: "bad`actor",
+          cutoff: "2026-01-04T00:00:00Z",
+          stages: ["investigate"],
+        },
+      }),
     });
 
     const comment = client.request.mock.calls.find(([request]) => request.method === "POST")?.[0];
@@ -273,7 +267,11 @@ function logger() {
 
 function runner(overrides = {}) {
   return {
-    acceptedRisk: { actor: "maintainer", stages: ["investigate"] },
+    acceptedRisk: {
+      actor: "maintainer",
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["investigate"],
+    },
     cwd: "/repo",
     dryRun: false,
     issueNumber: "12",
@@ -286,6 +284,47 @@ function runner(overrides = {}) {
     workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     ...overrides,
   };
+}
+
+function pullRequestReviewRunner(overrides = {}) {
+  return /** @type {import("../src/shared/types.ts").RunnerOptions} */ ({
+    acceptedRisk: {
+      artifactSha: "current-sha",
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["review-matrix"],
+    },
+    cwd: "/repo",
+    dryRun: false,
+    issueNumber: "",
+    maxTurns: 1,
+    prNumber: "12",
+    repository: "example/repo",
+    stage: "review-matrix",
+    stageTimeoutMinutes: 1,
+    token: "token",
+    ...overrides,
+  });
+}
+
+function pullRequestContext(overrides = {}) {
+  return /** @type {import("../src/shared/types.ts").ContextPacket} */ ({
+    artifact: {
+      body: "",
+      number: "12",
+      pullRequestHead: {
+        branch: "git-vibe/12",
+        repository: "example/repo",
+        sha: "current-sha",
+      },
+      title: "PR title",
+      type: "pull-request",
+      url: "https://github.com/example/repo/pull/12",
+      ...overrides,
+    },
+    generatedAt: "2026-01-01T00:00:00Z",
+    repository: "example/repo",
+    timeline: [],
+  });
 }
 
 function issueContext() {

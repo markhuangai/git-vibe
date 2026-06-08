@@ -31,6 +31,7 @@ jobs:
       accept-risk: false
       accept-risk-actor: ""
       accept-risk-artifact-sha: ""
+      accept-risk-cutoff: ""
       accept-risk-stage: ""
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}

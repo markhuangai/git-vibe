@@ -41,6 +41,7 @@ describe("GitVibe action launcher", () => {
           GITVIBE_ACCEPT_RISK: "true",
           GITVIBE_ACCEPT_RISK_ACTOR: "maintainer",
           GITVIBE_ACCEPT_RISK_ARTIFACT_SHA: "head-sha",
+          GITVIBE_ACCEPT_RISK_CUTOFF: "2026-01-04T00:00:00Z",
           GITVIBE_ACCEPT_RISK_STAGE: "investigate,create-pr",
           GITVIBE_DRY_RUN: "true",
           GITVIBE_HANDOFF_DIR: "/tmp/handoffs",
@@ -63,6 +64,7 @@ describe("GitVibe action launcher", () => {
         acceptedRisk: {
           actor: "maintainer",
           artifactSha: "head-sha",
+          cutoff: "2026-01-04T00:00:00Z",
           stages: ["investigate", "create-pr"],
         },
         dryRun: true,
@@ -253,7 +255,12 @@ describe("GitVibe action launcher validation", () => {
       }),
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("Unknown GitVibe action stage: missing-stage");
+  });
+});
 
+describe("GitVibe action launcher accepted-risk validation", () => {
+  it("validates accepted-risk env inputs", async () => {
+    const error = vi.fn();
     await expect(
       runAction({
         argv: ["investigate"],
@@ -264,8 +271,39 @@ describe("GitVibe action launcher validation", () => {
     expect(error).toHaveBeenCalledWith(
       "GITVIBE_ACCEPT_RISK_STAGE is required when GITVIBE_ACCEPT_RISK is true.",
     );
-  });
 
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: {
+          ...baseEnv,
+          GITVIBE_ACCEPT_RISK: "true",
+          GITVIBE_ACCEPT_RISK_STAGE: "investigate",
+        },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "GITVIBE_ACCEPT_RISK_CUTOFF is required when GITVIBE_ACCEPT_RISK is true.",
+    );
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: {
+          ...baseEnv,
+          GITVIBE_ACCEPT_RISK: "true",
+          GITVIBE_ACCEPT_RISK_CUTOFF: "not-a-date",
+          GITVIBE_ACCEPT_RISK_STAGE: "investigate",
+        },
+        error,
+      }),
+    ).resolves.toBe(1);
+    expect(error).toHaveBeenCalledWith("GITVIBE_ACCEPT_RISK_CUTOFF must be an ISO timestamp.");
+  });
+});
+
+describe("GitVibe action launcher execution mode validation", () => {
   it("validates member and finalizer execution mode inputs", async () => {
     const error = vi.fn();
 

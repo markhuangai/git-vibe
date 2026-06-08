@@ -58,6 +58,7 @@ describe("GitHub context builders", () => {
       id: "9",
       kind: "pull-request-review-comment",
       parentId: "8",
+      updatedAt: "2026-01-05T01:00:00Z",
     });
     expect(context.timeline.at(3)).toMatchObject({
       databaseId: 7,
@@ -337,6 +338,7 @@ function reviewThreadFixture() {
           diffHunk: "@@ -1 +1 @@",
           id: "9",
           replyTo: { id: "8" },
+          updatedAt: "2026-01-05T01:00:00Z",
           url: "review-comment",
         },
       ],

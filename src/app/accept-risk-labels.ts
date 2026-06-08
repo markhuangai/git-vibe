@@ -91,6 +91,7 @@ export async function handleAcceptRiskLabel(
     "accept-risk": "true",
     "accept-risk-actor": options.payload.sender?.login || "",
     "accept-risk-artifact-sha": await acceptedRiskArtifactSha(options, plan),
+    "accept-risk-cutoff": new Date().toISOString(),
     "accept-risk-stage": plan.riskStages.join(","),
   });
   await postQueuedWorkflowComment(options, {

@@ -9,7 +9,12 @@ import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
-import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
+import {
+  contentUnitsOnOrAfterCutoff,
+  contextPromptCoverageForContext,
+  type ContentUnit,
+  type ContextPromptCoverage,
+} from "./content-units.js";
 import { type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
 import {
   promptSafetySources,
@@ -20,7 +25,7 @@ import { stageRunResult } from "./stage-results.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
 import type { SafetySource } from "./safety-gate.js";
-import { blockUnsafePromptInjection, promptInjectionBlockedResult } from "./safety-gate-runner.js";
+import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
 import { acceptedRiskApplies, publishAcceptedRiskAudit } from "./accepted-risk.js";
 import {
   applyStageLabelTransition,
@@ -131,8 +136,6 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const acceptedRisk = acceptedRiskApplies({ context, logger, runner: options });
   const inputSafetyResult = await blockInitialPromptInput({
     acceptedRisk,
-    logger,
-    runner: options,
     safetyOptions,
   });
   if (inputSafetyResult) return inputSafetyResult;
@@ -190,15 +193,40 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
 
 async function blockInitialPromptInput(options: {
   acceptedRisk: boolean;
-  logger: StageLogger;
-  runner: RunnerOptions;
   safetyOptions: StageSafetyOptions;
 }): Promise<StageRunResult | undefined> {
-  if (options.acceptedRisk) {
-    options.logger.event("accepted_risk.input_gate.skip", { stage: options.runner.stage });
+  if (options.acceptedRisk) return blockAcceptedRiskDeltaInput(options.safetyOptions);
+  return blockPromptInput(options.safetyOptions);
+}
+
+function acceptedRiskContextUnits(context: ContextPacket, runner: RunnerOptions): ContentUnit[] {
+  const cutoff = runner.acceptedRisk?.cutoff;
+  if (!cutoff) return [];
+  return contentUnitsOnOrAfterCutoff(context, cutoff);
+}
+
+async function blockAcceptedRiskDeltaInput(
+  options: StageSafetyOptions,
+): Promise<StageRunResult | undefined> {
+  const contextUnits = acceptedRiskContextUnits(options.context, options.runner);
+  if (contextUnits.length === 0) {
+    options.logger.event("accepted_risk.input_gate.skip", {
+      cutoff: options.runner.acceptedRisk?.cutoff,
+      reason: "no-context-after-cutoff",
+      stage: options.runner.stage,
+    });
     return undefined;
   }
-  return blockPromptInput(options.safetyOptions);
+  options.logger.event("accepted_risk.input_gate.delta", {
+    cutoff: options.runner.acceptedRisk?.cutoff,
+    sources: contextUnits.length,
+    stage: options.runner.stage,
+  });
+  return blockUnsafePromptInjection({
+    ...options,
+    contextUnits,
+    phase: "input",
+  });
 }
 
 function blockRenderedPromptInput(options: {
@@ -264,29 +292,17 @@ function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResul
 async function acceptedRiskSecurityReview(
   options: StageSafetyOptions,
 ): Promise<StageSecurityReviewResult> {
-  const result = await promptInjectionBlockedResult({ ...options, phase: "input" });
-  if (result) {
-    await publishStageResultComment({
-      client: options.client,
-      context: options.context,
-      logger: options.logger,
-      parsedOutput: result.parsedOutput,
-      runner: options.runner,
-      transientComments: options.transientComments,
-    });
-  }
-  await publishAcceptedRiskAudit({ ...options, result });
+  const blockedResult = await blockAcceptedRiskDeltaInput(options);
+  if (blockedResult) return blockedSecurityReview(blockedResult);
+  await publishAcceptedRiskAudit(options);
   options.logger.event("security.review.done", {
     accepted_risk: true,
     allowed: true,
   });
   return {
     allowed: true,
-    result,
-    status: result ? "accepted-risk" : "allowed",
-    summary: result
-      ? "Prompt-injection risk was accepted by a trusted actor for this run."
-      : "Security review passed; accepted-risk label was removed.",
+    status: "allowed",
+    summary: "Security review passed; accepted-risk label was removed.",
   };
 }
 

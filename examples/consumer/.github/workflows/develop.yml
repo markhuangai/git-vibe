@@ -68,6 +68,11 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
+        required: false
+        type: string
+        default: ""
       accept-risk-stage:
         description: Comma-separated GitVibe stages covered by the accepted-risk decision.
         required: false
@@ -97,6 +102,7 @@ jobs:
       accept-risk: ${{ fromJSON(github.event.inputs.accept-risk) }}
       accept-risk-actor: ${{ github.event.inputs.accept-risk-actor }}
       accept-risk-artifact-sha: ${{ github.event.inputs.accept-risk-artifact-sha }}
+      accept-risk-cutoff: ${{ github.event.inputs.accept-risk-cutoff }}
       accept-risk-stage: ${{ github.event.inputs.accept-risk-stage }}
     secrets:
       GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}

@@ -13,6 +13,10 @@ export function acceptedRiskApplies(options: {
   const accepted = options.runner.acceptedRisk;
   if (!accepted) return false;
   if (!accepted.stages.includes(options.runner.stage)) return false;
+  if (!Number.isFinite(Date.parse(accepted.cutoff))) {
+    options.logger.event("accepted_risk.skip", { reason: "invalid-accepted-risk-cutoff" });
+    return false;
+  }
   if (options.context.artifact.type !== "pull-request") return true;
   if (!accepted.artifactSha) {
     options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
@@ -54,11 +58,14 @@ function acceptedRiskAuditBody(options: {
   runner: RunnerOptions;
 }): string {
   const actor = options.runner.acceptedRisk?.actor || "<unknown>";
+  const cutoff = options.runner.acceptedRisk?.cutoff;
   const run = workflowRunIdFromUrl(options.runner.workflowRunUrl);
   const runAttribute = run ? ` run=${run}` : "";
   const riskLine = options.result
     ? "The high-risk findings remain visible in the GitVibe blocked result above."
-    : "The security scan did not detect high-risk prompt-injection content in this run.";
+    : cutoff
+      ? `GitVibe did not detect high-risk prompt-injection content in context created or edited after \`${cutoff}\`.`
+      : "The security scan did not detect high-risk prompt-injection content in this run.";
   return [
     `<!-- git-vibe:risk-accepted stage=${options.runner.stage} artifact=${options.context.artifact.type} number=${options.context.artifact.number}${runAttribute} -->`,
     "## GitVibe Risk Accepted",

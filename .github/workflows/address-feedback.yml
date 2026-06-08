@@ -48,6 +48,11 @@ on:
         required: false
         type: string
         default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
+        required: false
+        type: string
+        default: ""
       accept-risk-stage:
         description: Comma-separated GitVibe stages covered by the accepted-risk decision.
         required: false
@@ -96,6 +101,11 @@ on:
         default: ""
       accept-risk-artifact-sha:
         description: Pull request head SHA covered by the accepted-risk decision.
+        required: false
+        type: string
+        default: ""
+      accept-risk-cutoff:
+        description: Accepted-risk cutoff timestamp for scanning new or edited context.
         required: false
         type: string
         default: ""
@@ -161,6 +171,7 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}
 
   plan-investigate-feedback:
@@ -250,6 +261,7 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}
       - name: Upload feedback investigation member result
         if: always()
@@ -316,6 +328,7 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}
       - name: Upload feedback investigation handoff
         if: always()
@@ -380,4 +393,5 @@ jobs:
           accept-risk: ${{ inputs.accept-risk }}
           accept-risk-actor: ${{ inputs.accept-risk-actor }}
           accept-risk-artifact-sha: ${{ inputs.accept-risk-artifact-sha }}
+          accept-risk-cutoff: ${{ inputs.accept-risk-cutoff }}
           accept-risk-stage: ${{ inputs.accept-risk-stage }}

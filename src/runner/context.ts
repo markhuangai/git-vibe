@@ -19,6 +19,7 @@ interface IssueResponse extends JsonObject {
   number?: number;
   reactions?: JsonObject;
   title?: string;
+  updated_at?: string;
   user?: { login?: string };
 }
 
@@ -142,9 +143,11 @@ export async function buildIssueContext(options: {
   return {
     artifact: {
       body: issue.body || "",
+      createdAt: issue.created_at,
       number: String(issue.number || options.issueNumber),
       title: issue.title || "",
       type: options.type || "issue",
+      updatedAt: issue.updated_at,
       url: issue.html_url || "",
       pullRequestHead: pullRequestHead(pullRequest),
     },
@@ -383,11 +386,13 @@ export async function buildDiscussionContext(options: {
   return {
     artifact: {
       body: discussion.body || "",
+      createdAt: discussion.createdAt,
       id: discussion.id,
       labels: labels.map((label) => label.name),
       number: options.discussionNumber,
       title: discussion.title || "",
       type: "discussion",
+      updatedAt: discussion.updatedAt,
       url: discussion.url || "",
     },
     generatedAt: new Date().toISOString(),
@@ -408,6 +413,7 @@ function toTimelineItem(kind: string, id: string, item: IssueResponse): Timeline
     id,
     kind,
     reactions: item.reactions,
+    updatedAt: item.updated_at,
     url: item.html_url || "",
   };
 }
@@ -421,6 +427,7 @@ function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): Ti
       body: `${path}${diff}${item.body || ""}`,
       created_at: item.createdAt,
       html_url: item.url,
+      updated_at: item.updatedAt,
       user: item.author,
     }),
     authorAssociation: item.authorAssociation,
@@ -436,6 +443,7 @@ function toPullRequestReviewBodyTimelineItem(item: PullRequestReviewResponse): T
       body: item.body || "",
       created_at: item.submitted_at,
       html_url: item.html_url,
+      updated_at: item.submitted_at,
       user: item.user,
     }),
     databaseId: item.id,
@@ -456,6 +464,7 @@ function discussionNodeToTimelineItem(
     kind,
     parentId,
     reactions: {},
+    updatedAt: item.updatedAt,
     url: item.url || "",
   };
 }

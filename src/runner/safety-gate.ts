@@ -105,6 +105,7 @@ const riskyLinkActionPattern =
 export function safetyGateForStage(options: {
   config: GitVibeConfig;
   context: ContextPacket;
+  contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
   includeContext?: boolean;
   output?: JsonObject;
@@ -115,6 +116,7 @@ export function safetyGateForStage(options: {
   const analysis = analyzeSources(
     sourcesFor({
       context: options.context,
+      contextUnits: options.contextUnits,
       extraSources: options.extraSources,
       includeContext: options.includeContext !== false,
       output: options.output,
@@ -365,12 +367,15 @@ function nearbyRiskyLinkAction(text: string, index: number): boolean {
 
 function sourcesFor(options: {
   context: ContextPacket;
+  contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
   includeContext: boolean;
   output?: JsonObject;
 }): ContentUnit[] {
   return [
-    ...(options.includeContext ? contentUnitsForContext(options.context) : []),
+    ...(options.includeContext
+      ? (options.contextUnits ?? contentUnitsForContext(options.context))
+      : []),
     ...(options.output
       ? [
           safetySourceUnit(

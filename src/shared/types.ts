@@ -27,6 +27,7 @@ export interface RunnerOptions {
   acceptedRisk?: {
     actor?: string;
     artifactSha?: string;
+    cutoff: string;
     stages: Stage[];
   };
   cwd: string;
@@ -72,6 +73,7 @@ export interface TimelineItem {
   kind: string;
   parentId?: string;
   reactions?: JsonObject;
+  updatedAt?: string;
   url: string;
 }
 
@@ -114,11 +116,13 @@ export interface ContextPacket {
     title: string;
     type: "issue" | "discussion" | "pull-request";
     url: string;
+    createdAt?: string;
     pullRequestHead?: {
       branch: string;
       repository: string;
       sha?: string;
     };
+    updatedAt?: string;
   };
   generatedAt: string;
   handoffs?: StageHandoff[];

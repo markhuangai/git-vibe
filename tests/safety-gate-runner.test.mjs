@@ -129,7 +129,7 @@ describe("stage runner pre-LLM safety gate", () => {
 });
 
 describe("stage runner accepted-risk gate", () => {
-  it("allows one accepted unsafe input review while publishing the risk details and audit", async () => {
+  it("allows pre-cutoff accepted unsafe input while publishing the audit", async () => {
     const cwd = await workspace();
     const fetch = fetchMock([
       issueResponse("Issue body"),
@@ -140,7 +140,11 @@ describe("stage runner accepted-risk gate", () => {
     globalThis.fetch = fetch;
 
     const result = await runStageSecurityReview({
-      acceptedRisk: { actor: "maintainer", stages: ["investigate"] },
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
       cwd,
       dryRun: false,
       issueNumber: "12",
@@ -155,13 +159,54 @@ describe("stage runner accepted-risk gate", () => {
 
     expect(result).toMatchObject({
       allowed: true,
-      status: "accepted-risk",
-      summary: "Prompt-injection risk was accepted by a trusted actor for this run.",
+      status: "allowed",
+      summary: "Security review passed; accepted-risk label was removed.",
     });
-    expect(issueCommentBodies(fetch).join("\n")).toContain("GitVibe paused this run");
-    expect(issueCommentBodies(fetch).join("\n")).toContain("GitVibe Risk Accepted");
+    const bodies = issueCommentBodies(fetch).join("\n");
+    expect(bodies).not.toContain("GitVibe paused this run");
+    expect(bodies).toContain("GitVibe Risk Accepted");
     expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
     expect(labelRemovalPath(fetch, "git-vibe:accept-risk")).toBeTruthy();
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("blocks post-cutoff unsafe input after accepted-risk", async () => {
+    const cwd = await workspace();
+    const fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([issueComment(unsafeInstruction(), "2026-01-05T00:00:00Z")]),
+      response(200, { id: 1 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStageSecurityReview({
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 1,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+    });
+
+    expect(result).toMatchObject({
+      allowed: false,
+      status: "blocked",
+      summary: "GitVibe paused this run for maintainer review.",
+    });
+    expect(result.result?.parsedOutput.findings.join("\n")).toContain(
+      "higher-priority instructions",
+    );
+    expect(issueCommentBodies(fetch).join("\n")).not.toContain("GitVibe Risk Accepted");
+    expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
     expect(generateText).not.toHaveBeenCalled();
   });
 });
@@ -178,7 +223,11 @@ describe("stage runner accepted-risk output gate", () => {
     globalThis.fetch = fetch;
 
     const result = await runStage({
-      acceptedRisk: { actor: "maintainer", stages: ["investigate"] },
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
       cwd,
       dryRun: false,
       issueNumber: "12",
@@ -198,7 +247,46 @@ describe("stage runner accepted-risk output gate", () => {
     expect(generateText).toHaveBeenCalledTimes(1);
     expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
   });
+});
 
+describe("stage runner accepted-risk delta input gate", () => {
+  it("blocks post-cutoff unsafe input before the stage model runs", async () => {
+    const cwd = await workspace();
+    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    const fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([issueComment(unsafeInstruction(), "2026-01-05T00:00:00Z")]),
+      response(200, { id: 4 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
+      cwd,
+      dryRun: false,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      summary: "GitVibe paused this run for maintainer review.",
+    });
+    expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
+    expect(generateText).not.toHaveBeenCalled();
+  });
+});
+
+describe("stage runner accepted-risk output gate", () => {
   it("still blocks unsafe stage output after accepted input risk", async () => {
     const cwd = await workspace();
     generateText.mockResolvedValueOnce(investigateAiOutput(unsafeInstructionWithBypass()));
@@ -210,7 +298,11 @@ describe("stage runner accepted-risk output gate", () => {
     globalThis.fetch = fetch;
 
     const result = await runStage({
-      acceptedRisk: { actor: "maintainer", stages: ["investigate"] },
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
       cwd,
       dryRun: false,
       issueNumber: "12",
@@ -303,6 +395,7 @@ function issueResponse(body) {
     html_url: "https://github.com/example/repo/issues/12",
     number: 12,
     title: "Issue title",
+    updated_at: "2026-01-02T00:00:00Z",
     user: { login: "octocat" },
   });
 }
@@ -348,11 +441,12 @@ function investigateAiOutput(commentBody) {
   };
 }
 
-const issueComment = (body) => ({
+const issueComment = (body, createdAt = "2026-01-03T00:00:00Z", updatedAt = createdAt) => ({
   body,
-  created_at: "2026-01-03T00:00:00Z",
+  created_at: createdAt,
   html_url: "https://github.com/example/repo/issues/12#issuecomment-3",
   id: 3,
+  updated_at: updatedAt,
   user: { login: "guest" },
 });
 
