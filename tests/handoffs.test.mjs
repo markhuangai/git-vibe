@@ -37,18 +37,23 @@ describe("stage handoff helpers", () => {
     );
 
     expect(resultFile).toBe(join(directory, "git-vibe-investigate-result.json"));
-    expect(JSON.parse(readFileSync(resultFile, "utf8"))).toMatchObject({
+    const persisted = JSON.parse(readFileSync(resultFile, "utf8"));
+    expect(persisted).toMatchObject({
       parsedOutput: {
         implementation_plan: ["src/app/server.ts: remove obsolete route"],
       },
       stage: "investigate",
     });
+    expect(Number.isFinite(Date.parse(persisted.createdAt))).toBe(true);
+    expect(Number.isFinite(Date.parse(persisted.updatedAt))).toBe(true);
     expect(context.handoffs).toEqual([
       expect.objectContaining({
+        createdAt: persisted.createdAt,
         parsedOutput: result.parsedOutput,
         stage: "investigate",
         status: "completed",
         summary: "Investigated.",
+        updatedAt: persisted.updatedAt,
       }),
     ]);
   });
@@ -110,6 +115,7 @@ describe("stage result comment handoffs", () => {
         createdAt: "2026-01-01T00:00:00Z",
         id: "comment-1",
         kind: "comment",
+        updatedAt: "2026-01-02T00:00:00Z",
         url: "https://github.com/example/repo/issues/12#issuecomment-1",
       },
     ]);
@@ -117,10 +123,12 @@ describe("stage result comment handoffs", () => {
     expect(handoffs).toEqual([
       expect.objectContaining({
         commentBody,
+        createdAt: "2026-01-01T00:00:00Z",
         schemaId: "investigate.v1",
         stage: "investigate",
         status: "completed",
         summary: "Investigation found a clear implementation path.",
+        updatedAt: "2026-01-02T00:00:00Z",
       }),
     ]);
     expect(handoffs[0].parsedOutput).toMatchObject({

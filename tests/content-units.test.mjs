@@ -131,6 +131,26 @@ describe("accepted-risk context unit filtering", () => {
 
     expect(units.map((unit) => unit.id)).toEqual(["timeline-1-comment-edited"]);
   });
+
+  it("includes post-cutoff and untimestamped handoffs in accepted-risk delta scans", () => {
+    const context = contextPacket();
+    context.handoffs = [
+      stageHandoff({ createdAt: "2026-01-03T00:00:00Z", stage: "investigate" }),
+      stageHandoff({ createdAt: "2026-01-05T00:00:00Z", stage: "validate" }),
+      stageHandoff({ stage: "review-matrix" }),
+    ];
+
+    const units = contentUnitsOnOrAfterCutoff(context, "2026-01-04T12:00:00Z");
+
+    expect(units.map((unit) => unit.id)).toEqual([
+      "handoff-1-validate-summary",
+      "handoff-1-validate-comment",
+      "handoff-1-validate-output",
+      "handoff-2-review-matrix-summary",
+      "handoff-2-review-matrix-comment",
+      "handoff-2-review-matrix-output",
+    ]);
+  });
 });
 
 /**
@@ -162,4 +182,20 @@ function contextPacket({ body = "Issue body", patch = "@@ -1 +1 @@\n-old\n+new" 
     repository: "example/repo",
     timeline: [],
   });
+}
+
+/**
+ * @param {{ createdAt?: string; stage: import("../src/shared/types.ts").Stage }} options
+ */
+function stageHandoff({ createdAt, stage }) {
+  return {
+    commentBody: "Handoff comment",
+    createdAt,
+    parsedOutput: { status: "completed", summary: "Handoff summary." },
+    schemaId: `${stage}.v1`,
+    stage,
+    status: "completed",
+    summary: "Handoff summary.",
+    updatedAt: createdAt,
+  };
 }

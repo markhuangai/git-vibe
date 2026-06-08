@@ -79,23 +79,21 @@ export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
         "handoff",
         `${handoff.stage} handoff summary`,
         handoff.summary,
-        {
-          metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status },
-        },
+        { metadata: handoffMetadata(handoff) },
       ),
       unit(
         `handoff-${index}-${handoff.stage}-comment`,
         "handoff",
         `${handoff.stage} handoff comment`,
         handoff.commentBody || "",
-        { metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status } },
+        { metadata: handoffMetadata(handoff) },
       ),
       unit(
         `handoff-${index}-${handoff.stage}-output`,
         "handoff",
         `${handoff.stage} handoff output`,
         JSON.stringify(handoff.parsedOutput),
-        { metadata: { schemaId: handoff.schemaId, stage: handoff.stage, status: handoff.status } },
+        { metadata: handoffMetadata(handoff) },
       ),
     ]),
     ...(context.pullRequestFiles || []).map((file, index) => pullRequestFileUnit(file, index)),
@@ -108,7 +106,8 @@ export function contentUnitsOnOrAfterCutoff(context: ContextPacket, cutoff: stri
   const cutoffSecondMs = Math.floor(cutoffMs / 1000) * 1000;
   return contentUnitsForContext(context).filter((item) => {
     const activityMs = contentUnitActivityMs(item);
-    return activityMs !== undefined && activityMs >= cutoffSecondMs;
+    if (activityMs !== undefined) return activityMs >= cutoffSecondMs;
+    return item.kind === "handoff";
   });
 }
 
@@ -238,6 +237,16 @@ function artifactMetadata(context: ContextPacket): JsonObject {
     number: context.artifact.number,
     type: context.artifact.type,
     updatedAt: context.artifact.updatedAt,
+  };
+}
+
+function handoffMetadata(handoff: NonNullable<ContextPacket["handoffs"]>[number]): JsonObject {
+  return {
+    createdAt: handoff.createdAt,
+    schemaId: handoff.schemaId,
+    stage: handoff.stage,
+    status: handoff.status,
+    updatedAt: handoff.updatedAt,
   };
 }
 

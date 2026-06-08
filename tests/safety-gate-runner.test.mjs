@@ -284,6 +284,48 @@ describe("stage runner accepted-risk delta input gate", () => {
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
     expect(generateText).not.toHaveBeenCalled();
   });
+
+  it("blocks untimestamped handoff input before the stage model runs", async () => {
+    const cwd = await workspace();
+    const handoffDir = join(cwd, "handoffs");
+    mkdirSync(handoffDir);
+    writeFileSync(
+      join(handoffDir, "git-vibe-investigate-result.json"),
+      JSON.stringify(legacyHandoff({ findings: [unsafeInstruction()] })),
+    );
+    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    const fetch = fetchMock([
+      issueResponse("Issue body"),
+      commentsResponse([]),
+      response(200, { id: 4 }),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      acceptedRisk: {
+        actor: "maintainer",
+        cutoff: "2026-01-04T00:00:00Z",
+        stages: ["investigate"],
+      },
+      cwd,
+      dryRun: false,
+      handoffDir,
+      issueNumber: "12",
+      maxTurns: 2,
+      prNumber: "",
+      repository: "example/repo",
+      stage: "investigate",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      summary: "GitVibe paused this run for maintainer review.",
+    });
+    expect(result.parsedOutput.findings.join("\n")).toContain("handoff");
+    expect(generateText).not.toHaveBeenCalled();
+  });
 });
 
 describe("stage runner accepted-risk output gate", () => {
@@ -448,6 +490,15 @@ const issueComment = (body, createdAt = "2026-01-03T00:00:00Z", updatedAt = crea
   id: 3,
   updated_at: updatedAt,
   user: { login: "guest" },
+});
+
+const legacyHandoff = (parsedOutput) => ({
+  commentBody: "Legacy handoff",
+  parsedOutput,
+  schemaId: "investigate.v1",
+  stage: "investigate",
+  status: "completed",
+  summary: "Legacy handoff.",
 });
 
 function unsafeInstruction() {

@@ -79,11 +79,13 @@ export interface TimelineItem {
 
 export interface StageHandoff {
   commentBody?: string;
+  createdAt?: string;
   parsedOutput: JsonObject;
   schemaId: string;
   stage: Stage;
   status: string;
   summary: string;
+  updatedAt?: string;
 }
 
 export interface SourceComment {
