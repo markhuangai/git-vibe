@@ -16,6 +16,7 @@ interface IssueResponse extends JsonObject {
   body?: string;
   created_at?: string;
   html_url?: string;
+  labels?: Array<{ name?: string } | string>;
   number?: number;
   reactions?: JsonObject;
   title?: string;
@@ -144,6 +145,7 @@ export async function buildIssueContext(options: {
     artifact: {
       body: issue.body || "",
       createdAt: issue.created_at,
+      labels: labelNames(issue.labels),
       number: String(issue.number || options.issueNumber),
       title: issue.title || "",
       type: options.type || "issue",
@@ -156,6 +158,12 @@ export async function buildIssueContext(options: {
     repository: options.repository,
     timeline,
   };
+}
+
+function labelNames(labels: IssueResponse["labels"]): string[] {
+  return (labels || [])
+    .map((label) => (typeof label === "string" ? label : label.name || ""))
+    .filter(Boolean);
 }
 
 async function pullRequestDetails(options: {

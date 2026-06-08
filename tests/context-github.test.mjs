@@ -42,6 +42,7 @@ describe("GitHub context builders", () => {
     });
 
     expect(context.artifact).toMatchObject({
+      labels: ["git-vibe:accept-risk", "custom"],
       number: "4",
       pullRequestHead: { branch: "git-vibe/4", repository: "example/repo" },
       title: "Issue title",
@@ -229,6 +230,7 @@ function issueFixture() {
     body: "Issue body",
     created_at: "2026-01-02T00:00:00Z",
     html_url: "https://github.com/example/repo/issues/4",
+    labels: [{ name: "git-vibe:accept-risk" }, "custom"],
     number: 4,
     title: "Issue title",
     updated_at: "2026-01-06T00:00:00Z",
