@@ -50,7 +50,7 @@ afterEach(() => {
 });
 
 describe("direct accepted-risk stage runs", () => {
-  it("publishes the audit and removes the accept-risk label", async () => {
+  it("removes the accept-risk label without a duplicate audit comment for run-bound metadata", async () => {
     const cwd = await workspace();
     generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
     const fetch = fetchMock([
@@ -81,7 +81,7 @@ describe("direct accepted-risk stage runs", () => {
       status: "completed",
       summary: "Ready.",
     });
-    expect(issueCommentBodies(fetch).join("\n")).toContain("GitVibe Risk Accepted");
+    expect(issueCommentBodies(fetch).join("\n")).not.toContain("GitVibe Risk Accepted");
     expect(labelRemovalPath(fetch, gitVibeLabels.acceptRisk.name)).toBeTruthy();
     expect(generateText).toHaveBeenCalledTimes(1);
   });

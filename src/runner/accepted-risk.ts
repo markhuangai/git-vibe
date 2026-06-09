@@ -149,11 +149,15 @@ export async function publishAcceptedRiskAudit(options: {
     options.logger.event("accepted_risk.audit.skip", { reason: "dry-run" });
     return;
   }
-  const body = acceptedRiskAuditBody(options);
-  if (options.context.artifact.type === "discussion") {
-    await publishDiscussionAudit(options, body);
+  if (options.runner.acceptedRisk?.run) {
+    options.logger.event("accepted_risk.audit.skip", { reason: "run-bound-metadata" });
   } else {
-    await publishIssueAudit(options, body);
+    const body = acceptedRiskAuditBody(options);
+    if (options.context.artifact.type === "discussion") {
+      await publishDiscussionAudit(options, body);
+    } else {
+      await publishIssueAudit(options, body);
+    }
   }
   await removeAcceptedRiskLabel(options);
 }

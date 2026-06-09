@@ -23,6 +23,7 @@ import type {
 } from "../shared/types.js";
 
 export async function runStageResultForMode(options: {
+  acceptedRisk: boolean;
   aiRunOptions: RunAiStageOptions;
   config: GitVibeConfig;
   context: ContextPacket;
@@ -141,6 +142,7 @@ async function runStageAiResult({
 }
 
 async function runMatrixFinalizerResult({
+  acceptedRisk,
   aiRunOptions,
   config,
   context,
@@ -148,6 +150,7 @@ async function runMatrixFinalizerResult({
   logger,
   options,
 }: {
+  acceptedRisk: boolean;
   aiRunOptions: RunAiStageOptions;
   config: GitVibeConfig;
   context: ContextPacket;
@@ -187,11 +190,20 @@ async function runMatrixFinalizerResult({
 
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
+  const finalizerSafetySources = acceptedRisk
+    ? matrixFinalizerRoleSafetySources({ members })
+    : matrixFinalizerSafetySources({ members, results });
+  if (acceptedRisk) {
+    logger.event("matrix.finalize.member_safety.skip", {
+      reason: "accepted-risk",
+      results: results.length,
+    });
+  }
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config,
     context,
-    extraSources: matrixFinalizerSafetySources({ members, results }),
+    extraSources: finalizerSafetySources,
     logger,
     phase: "input",
     runner: options,
@@ -223,6 +235,15 @@ async function runMatrixFinalizerResult({
   });
 }
 
+function matrixFinalizerRoleSafetySources(options: {
+  members: ReturnType<typeof roleGroupSynthesisMembers>;
+}): SafetySource[] {
+  return options.members.map((member) => ({
+    label: `role-group ${member.role || member.profile || member.index} definition`,
+    text: member.roleDefinition,
+  }));
+}
+
 function validationFailureSafetySources(failure: ValidationCommandFailure): SafetySource[] {
   return [
     { label: "validation repair command", text: failure.command },
@@ -236,10 +257,7 @@ function matrixFinalizerSafetySources(options: {
   results: ReturnType<typeof loadMatrixStageResults>;
 }): SafetySource[] {
   return [
-    ...options.members.map((member) => ({
-      label: `role-group ${member.role || member.profile || member.index} definition`,
-      text: member.roleDefinition,
-    })),
+    ...matrixFinalizerRoleSafetySources({ members: options.members }),
     ...options.results.map((result, index) => ({
       label: `matrix member result ${index + 1}`,
       text: JSON.stringify({
