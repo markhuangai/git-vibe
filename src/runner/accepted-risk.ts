@@ -3,7 +3,12 @@ import { GitHubClient, splitRepository } from "../shared/github.js";
 import { gitVibeLabels } from "../shared/labels.js";
 import { parseStageResultMarker, stageResultStatus } from "../shared/stage-result-markers.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
-import { parseAcceptedRiskMetadata, type AcceptedRiskMetadata } from "../shared/accepted-risk.js";
+import {
+  acceptedRiskMetadataBodySha,
+  parseAcceptedRiskMetadata,
+  type AcceptedRiskMetadata,
+  type AcceptedRiskMetadataSource,
+} from "../shared/accepted-risk.js";
 import type {
   ContextPacket,
   RunnerOptions,
@@ -18,6 +23,7 @@ const trustedAutomationAuthors = new Set(["github-actions[bot]"]);
 interface AcceptedRiskMetadataCandidate {
   metadata: AcceptedRiskMetadata;
   order: number;
+  source: AcceptedRiskMetadataSource;
 }
 
 interface AcceptedRiskAuditMarker {
@@ -98,9 +104,10 @@ export function acceptedRiskContextUnits(
 ): ContentUnit[] {
   const cutoff = runner.acceptedRisk?.cutoff;
   if (!cutoff) return [];
-  const acceptedMetadata = acceptedRiskMetadataForContext(context, runner);
+  const accepted = acceptedRiskMetadataForContext(context, runner);
   return acceptedRiskDeltaContentUnits({
-    acceptedMetadata,
+    acceptedMetadata: accepted?.metadata,
+    acceptedSource: accepted?.source,
     context,
     cutoff,
   });
@@ -173,12 +180,13 @@ function acceptedRiskAuditBody(options: {
 function acceptedRiskMetadataForContext(
   context: ContextPacket,
   runner: RunnerOptions,
-): AcceptedRiskMetadata | undefined {
+): AcceptedRiskMetadataCandidate | undefined {
   const accepted = runner.acceptedRisk;
   if (!accepted) return undefined;
   return acceptedRiskMetadataCandidates(context, runner)
-    .map((candidate) => candidate.metadata)
-    .filter((metadata) => acceptedRiskMetadataMatches({ accepted, context, metadata, runner }))
+    .filter((candidate) =>
+      acceptedRiskMetadataMatches({ accepted, context, metadata: candidate.metadata, runner }),
+    )
     .at(-1);
 }
 
@@ -221,7 +229,17 @@ function acceptedRiskMetadataCandidate(
   ) {
     return undefined;
   }
-  return { metadata, order };
+  return { metadata, order, source: acceptedRiskMetadataSource(item) };
+}
+
+function acceptedRiskMetadataSource(item: TimelineItem): AcceptedRiskMetadataSource {
+  return {
+    bodySha: acceptedRiskMetadataBodySha(item.body),
+    databaseId: stringValue(item.databaseId),
+    id: stringValue(item.id),
+    kind: item.kind,
+    sourceUrl: item.url || undefined,
+  };
 }
 
 function acceptedRiskRuntimeSource(
@@ -258,6 +276,11 @@ function trustedGitVibeTimelineItem(item: TimelineItem): boolean {
   const association = String(item.authorAssociation || "").toUpperCase();
   if (["COLLABORATOR", "MEMBER", "OWNER"].includes(association)) return true;
   return trustedAutomationAuthors.has(String(item.author || "").toLowerCase());
+}
+
+function stringValue(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text || undefined;
 }
 
 function acceptedRiskMetadataMatches(options: {

@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import {
   acceptedRiskArtifactContentSha,
+  acceptedRiskMetadataBodySha,
   parseAcceptedRiskMetadata,
   type AcceptedRiskMetadata,
+  type AcceptedRiskMetadataSource,
 } from "../shared/accepted-risk.js";
 import type { ContextPacket, JsonObject, PullRequestFile, TimelineItem } from "../shared/types.js";
 
@@ -118,12 +120,14 @@ export function contentUnitsOnOrAfterCutoff(context: ContextPacket, cutoff: stri
 
 export function acceptedRiskDeltaContentUnits(options: {
   acceptedMetadata?: AcceptedRiskMetadata;
+  acceptedSource?: AcceptedRiskMetadataSource;
   context: ContextPacket;
   cutoff: string;
 }): ContentUnit[] {
   const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff).filter(
     (item) =>
-      !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata),
+      !artifactContentUnit(item) &&
+      !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource),
   );
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
     return units;
@@ -243,16 +247,68 @@ function artifactContentUnit(item: ContentUnit): boolean {
 function acceptedRiskMetadataUnit(
   item: ContentUnit,
   acceptedMetadata: AcceptedRiskMetadata | undefined,
+  acceptedSource: AcceptedRiskMetadataSource | undefined,
 ): boolean {
-  if (!acceptedMetadata) return false;
+  if (!acceptedMetadata || !acceptedSource) return false;
   const itemMetadata = parseAcceptedRiskMetadata(item.text);
   return Boolean(
-    itemMetadata &&
-    itemMetadata.artifact === acceptedMetadata.artifact &&
-    itemMetadata.number === acceptedMetadata.number &&
-    itemMetadata.cutoff === acceptedMetadata.cutoff &&
-    itemMetadata.artifactContentSha === acceptedMetadata.artifactContentSha,
+    acceptedRiskSourceHandoffUnit(item, acceptedSource) ||
+    (itemMetadata &&
+      itemMetadata.artifact === acceptedMetadata.artifact &&
+      itemMetadata.number === acceptedMetadata.number &&
+      itemMetadata.cutoff === acceptedMetadata.cutoff &&
+      itemMetadata.artifactContentSha === acceptedMetadata.artifactContentSha &&
+      acceptedRiskMetadataSourceUnit(item, acceptedSource)),
   );
+}
+
+function acceptedRiskSourceHandoffUnit(
+  item: ContentUnit,
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const metadata = item.metadata || {};
+  return (
+    item.kind === "handoff" &&
+    sourceField(metadata.sourceBodySha) === acceptedSource.bodySha &&
+    sourceField(metadata.sourceKind) === acceptedSource.kind &&
+    sourceField(metadata.sourceUrl) === acceptedSource.sourceUrl &&
+    sourceIdMatches(
+      {
+        databaseId: metadata.sourceDatabaseId,
+        id: metadata.sourceId,
+      },
+      acceptedSource,
+    )
+  );
+}
+
+function acceptedRiskMetadataSourceUnit(
+  item: ContentUnit,
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const metadata = item.metadata || {};
+  return (
+    acceptedRiskMetadataBodySha(item.text) === acceptedSource.bodySha &&
+    sourceField(metadata.kind) === acceptedSource.kind &&
+    sourceField(item.sourceUrl) === acceptedSource.sourceUrl &&
+    sourceIdMatches(metadata, acceptedSource)
+  );
+}
+
+function sourceIdMatches(
+  metadata: JsonObject,
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const ids = new Set([sourceField(metadata.id), sourceField(metadata.databaseId)].filter(Boolean));
+  return Boolean(
+    (acceptedSource.id && ids.has(acceptedSource.id)) ||
+    (acceptedSource.databaseId && ids.has(acceptedSource.databaseId)),
+  );
+}
+
+function sourceField(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text || undefined;
 }
 
 function timelineUnits(item: TimelineItem, index: number): ContentUnit[] {
@@ -290,6 +346,11 @@ function handoffMetadata(handoff: NonNullable<ContextPacket["handoffs"]>[number]
   return {
     createdAt: handoff.createdAt,
     schemaId: handoff.schemaId,
+    sourceBodySha: handoff.source?.bodySha,
+    sourceDatabaseId: handoff.source?.databaseId,
+    sourceId: handoff.source?.id,
+    sourceKind: handoff.source?.kind,
+    sourceUrl: handoff.source?.sourceUrl,
     stage: handoff.stage,
     status: handoff.status,
     updatedAt: handoff.updatedAt,

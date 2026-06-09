@@ -82,6 +82,13 @@ export interface StageHandoff {
   createdAt?: string;
   parsedOutput: JsonObject;
   schemaId: string;
+  source?: {
+    bodySha?: string;
+    databaseId?: number | string;
+    id?: string;
+    kind?: string;
+    sourceUrl?: string;
+  };
   stage: Stage;
   status: string;
   summary: string;

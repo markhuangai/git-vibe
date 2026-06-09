@@ -10,6 +10,7 @@ import {
 } from "../src/runner/content-units.ts";
 import {
   acceptedRiskArtifactContentSha,
+  acceptedRiskMetadataBodySha,
   acceptedRiskMetadataBlock,
 } from "../src/shared/accepted-risk.ts";
 
@@ -166,7 +167,9 @@ describe("accepted-risk context unit filtering", () => {
       "handoff-2-review-matrix-output",
     ]);
   });
+});
 
+describe("accepted-risk metadata context unit filtering", () => {
   it("skips the accepted-risk metadata edit but scans changed artifact content", () => {
     const cutoff = "2026-01-04T12:00:00Z";
     const context = contextPacket();
@@ -179,13 +182,20 @@ describe("accepted-risk context unit filtering", () => {
       stage: "review-matrix",
       stages: ["review-matrix"],
     };
+    const resultBody = [
+      "Previously blocked result containing accepted unsafe text",
+      acceptedRiskMetadataBlock(acceptedMetadata),
+    ].join("\n\n");
+    const acceptedSource = {
+      bodySha: acceptedRiskMetadataBodySha(resultBody),
+      id: "100",
+      kind: "comment",
+      sourceUrl: "https://github.com/example/repo/issues/12#issuecomment-100",
+    };
     context.timeline = [
       {
         author: "github-actions[bot]",
-        body: [
-          "Previously blocked result containing accepted unsafe text",
-          acceptedRiskMetadataBlock(acceptedMetadata),
-        ].join("\n\n"),
+        body: resultBody,
         createdAt: "2026-01-04T00:00:00Z",
         id: "100",
         kind: "comment",
@@ -195,7 +205,9 @@ describe("accepted-risk context unit filtering", () => {
     ];
 
     expect(
-      acceptedRiskDeltaContentUnits({ acceptedMetadata, context, cutoff }).map((unit) => unit.id),
+      acceptedRiskDeltaContentUnits({ acceptedMetadata, acceptedSource, context, cutoff }).map(
+        (unit) => unit.id,
+      ),
     ).toEqual([]);
 
     const changedContext = { ...context, artifact: { ...context.artifact, body: "Changed body" } };
@@ -203,6 +215,7 @@ describe("accepted-risk context unit filtering", () => {
     expect(
       acceptedRiskDeltaContentUnits({
         acceptedMetadata,
+        acceptedSource,
         context: changedContext,
         cutoff,
       }).map((unit) => unit.id),

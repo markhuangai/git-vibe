@@ -1,5 +1,6 @@
 import { appendFileSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { acceptedRiskMetadataBodySha } from "../shared/accepted-risk.js";
 import { parseStage } from "../shared/stages.js";
 import type {
   ContextPacket,
@@ -113,6 +114,13 @@ function parseStageResultCommentHandoff(item: TimelineItem): StageHandoff | unde
     createdAt: item.createdAt,
     parsedOutput,
     schemaId: `${stage}.v1`,
+    source: {
+      bodySha: acceptedRiskMetadataBodySha(body),
+      databaseId: item.databaseId,
+      id: item.id,
+      kind: item.kind,
+      sourceUrl: item.url || undefined,
+    },
     stage,
     status,
     summary,

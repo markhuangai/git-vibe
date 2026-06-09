@@ -18,6 +18,14 @@ export interface AcceptedRiskMetadata {
   stages: Stage[];
 }
 
+export interface AcceptedRiskMetadataSource {
+  bodySha: string;
+  databaseId?: string;
+  id?: string;
+  kind?: string;
+  sourceUrl?: string;
+}
+
 const metadataStartPattern = /<!--\s*git-vibe:accepted-risk-metadata\s+([^>]*)-->/;
 const metadataBlockPattern =
   /\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*/g;
@@ -25,6 +33,16 @@ const metadataBlockPattern =
 export function acceptedRiskArtifactContentSha(content: AcceptedRiskArtifactContent): string {
   return createHash("sha256")
     .update(JSON.stringify(normalizedArtifactContent(content)))
+    .digest("hex");
+}
+
+export function acceptedRiskMetadataBodySha(body: string | null | undefined): string {
+  return createHash("sha256")
+    .update(
+      String(body || "")
+        .replace(metadataBlockPattern, "")
+        .trimEnd(),
+    )
     .digest("hex");
 }
 
