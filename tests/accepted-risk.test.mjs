@@ -93,41 +93,6 @@ describe("accepted-risk runner scope", () => {
 });
 
 describe("accepted-risk context derivation", () => {
-  it("derives accepted risk from trusted metadata while the label is present", () => {
-    const logger = { event: vi.fn() };
-    const context = issueContext({
-      artifact: { labels: [gitVibeLabels.acceptRisk.name] },
-      timeline: [
-        blockedResultComment({
-          metadata: acceptedRiskMetadata({
-            stage: "implement",
-            stages: ["implement", "create-pr"],
-          }),
-          stage: "implement",
-        }),
-      ],
-    });
-
-    expect(
-      acceptedRiskFromContext({
-        context,
-        logger,
-        runner: runner({ acceptedRisk: undefined, stage: "implement" }),
-      }),
-    ).toEqual({
-      actor: "maintainer",
-      artifactSha: undefined,
-      cutoff: "2026-01-04T00:00:00Z",
-      stages: ["implement", "create-pr"],
-    });
-    expect(logger.event).toHaveBeenCalledWith("accepted_risk.context.detected", {
-      cutoff: "2026-01-04T00:00:00Z",
-      source: "label",
-      stage: "implement",
-      stages: "implement,create-pr",
-    });
-  });
-
   it("derives accepted risk for downstream jobs from the current workflow audit", () => {
     const context = issueContext({
       timeline: [
@@ -291,17 +256,24 @@ describe("accepted-risk context trusted automation", () => {
     expect(
       acceptedRiskFromContext({
         context: issueContext({
-          artifact: { labels: [gitVibeLabels.acceptRisk.name] },
           timeline: [
             blockedResultComment({
               authorAssociation: null,
-              metadata: acceptedRiskMetadata({ stage: "implement", stages: ["implement"] }),
+              metadata: acceptedRiskMetadata({
+                run: "99",
+                stage: "implement",
+                stages: ["implement"],
+              }),
               stage: "implement",
             }),
           ],
         }),
         logger: logger(),
-        runner: runner({ acceptedRisk: undefined, stage: "implement" }),
+        runner: runner({
+          acceptedRisk: undefined,
+          stage: "implement",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
       }),
     ).toMatchObject({ cutoff: "2026-01-04T00:00:00Z" });
   });

@@ -28,6 +28,7 @@ export interface RunnerOptions {
     actor?: string;
     artifactSha?: string;
     cutoff: string;
+    run?: string;
     stages: Stage[];
   };
   cwd: string;

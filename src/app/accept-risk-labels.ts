@@ -14,6 +14,7 @@ import {
   stageResultStatus,
   type StageResultMarker,
 } from "../shared/stage-result-markers.js";
+import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { Stage } from "../shared/types.js";
 import {
   createDiscussionComment,
@@ -82,6 +83,13 @@ interface ResumePlan {
   workflow: string;
 }
 
+interface AcceptedRiskWorkflowDispatch extends Record<string, unknown> {
+  html_url?: string;
+  ref: string;
+  run_url?: string;
+  workflow_run_id?: number | string;
+}
+
 export async function handleAcceptRiskLabel(
   options: WebhookActionContext,
   label: string,
@@ -107,12 +115,24 @@ export async function handleAcceptRiskLabel(
   }
 
   const acceptance = await acceptedRiskMetadata(options, plan, result.marker.stage);
-  await updateAcceptedRiskResultComment(options, result.source, plan, acceptance);
+  const dispatch = await dispatchAcceptedRiskWorkflow(options, label, plan);
+  if (!dispatch) return;
 
-  const dispatch = await dispatchWorkflow(options, plan.workflow, {
-    ...(await repositoryWorkflowBudgetInputs(options, plan.workflow)),
-    [plan.inputName]: plan.number,
-  });
+  const run = workflowRunIdFromDispatch(dispatch);
+  if (!run) {
+    await removeAcceptRiskLabel(options, label);
+    await postAcceptRiskNoopComment(
+      options,
+      `GitVibe removed \`${label}\` because GitHub did not return a workflow run id for the accepted-risk rerun. Apply the label again after GitHub workflow dispatch run details are available.`,
+    );
+    return;
+  }
+
+  const boundAcceptance = { ...acceptance, run };
+  const stored = await storeRunBoundAcceptedRisk(options, label, result, plan, boundAcceptance);
+  if (!stored) return;
+
+  await removeAcceptRiskLabel(options, label);
   await postQueuedWorkflowComment(options, {
     artifact: plan.artifact,
     number: plan.number,
@@ -121,6 +141,57 @@ export async function handleAcceptRiskLabel(
     ref: dispatch.ref,
     workflowRunUrl: dispatch.html_url,
   });
+}
+
+async function dispatchAcceptedRiskWorkflow(
+  options: WebhookActionContext,
+  label: string,
+  plan: ResumePlan,
+): Promise<AcceptedRiskWorkflowDispatch | undefined> {
+  try {
+    return await dispatchWorkflow(options, plan.workflow, {
+      ...(await repositoryWorkflowBudgetInputs(options, plan.workflow)),
+      [plan.inputName]: plan.number,
+    });
+  } catch (error) {
+    await removeAcceptRiskLabel(options, label);
+    options.log(`accepted-risk workflow dispatch failed: ${errorSummary(error)}`);
+    await postAcceptRiskNoopComment(
+      options,
+      `GitVibe removed \`${label}\` because it could not queue a run-bound accepted-risk workflow.`,
+    );
+    return undefined;
+  }
+}
+
+async function storeRunBoundAcceptedRisk(
+  options: WebhookActionContext,
+  label: string,
+  result: StageResult,
+  plan: ResumePlan,
+  acceptance: AcceptedRiskMetadata,
+): Promise<boolean> {
+  try {
+    await updateAcceptedRiskResultComment(options, result.source, plan, acceptance);
+    return true;
+  } catch (error) {
+    await removeAcceptRiskLabel(options, label);
+    options.log(`accepted-risk metadata update failed: ${errorSummary(error)}`);
+    await postAcceptRiskNoopComment(
+      options,
+      `GitVibe removed \`${label}\` because it could not record run-bound accepted-risk metadata.`,
+    );
+    return false;
+  }
+}
+
+function workflowRunIdFromDispatch(dispatch: AcceptedRiskWorkflowDispatch): string {
+  return (
+    stringValue(dispatch.workflow_run_id) ||
+    workflowRunIdFromUrl(dispatch.html_url) ||
+    workflowRunIdFromUrl(dispatch.run_url) ||
+    ""
+  );
 }
 
 async function latestTrustedStageResult(
@@ -516,4 +587,8 @@ function stringValue(value: unknown): string | undefined {
 
 function stringField(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function errorSummary(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

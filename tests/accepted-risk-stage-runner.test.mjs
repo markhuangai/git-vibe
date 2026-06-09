@@ -58,6 +58,8 @@ describe("direct accepted-risk stage runs", () => {
       commentsResponse([acceptedRiskMetadataComment({ body: "Issue body" })]),
       response(200, { id: 4 }),
       response(200, { id: 5 }),
+      response(200, { id: 6 }),
+      response(200, { id: 7 }),
     ]);
     globalThis.fetch = fetch;
 
@@ -71,6 +73,7 @@ describe("direct accepted-risk stage runs", () => {
       stage: "investigate",
       stageTimeoutMinutes: 1,
       token: "token",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
 
     expect(result).toMatchObject({
@@ -160,6 +163,7 @@ function acceptedRiskMetadataComment({ body, title = "Issue title" }) {
     artifactContentSha: acceptedRiskArtifactContentSha({ body, title }),
     cutoff: "2026-01-04T00:00:00Z",
     number: "12",
+    run: "99",
     stage: "investigate",
     stages: ["investigate"],
   };
