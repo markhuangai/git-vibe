@@ -24,6 +24,13 @@ export interface StageDefinition {
 }
 
 export interface RunnerOptions {
+  acceptedRisk?: {
+    actor?: string;
+    artifactSha?: string;
+    cutoff: string;
+    run?: string;
+    stages: Stage[];
+  };
   cwd: string;
   dryRun: boolean;
   executionMode?: "finalizer" | "member" | "standard";
@@ -67,16 +74,26 @@ export interface TimelineItem {
   kind: string;
   parentId?: string;
   reactions?: JsonObject;
+  updatedAt?: string;
   url: string;
 }
 
 export interface StageHandoff {
   commentBody?: string;
+  createdAt?: string;
   parsedOutput: JsonObject;
   schemaId: string;
+  source?: {
+    bodySha?: string;
+    databaseId?: number | string;
+    id?: string;
+    kind?: string;
+    sourceUrl?: string;
+  };
   stage: Stage;
   status: string;
   summary: string;
+  updatedAt?: string;
 }
 
 export interface SourceComment {
@@ -109,10 +126,13 @@ export interface ContextPacket {
     title: string;
     type: "issue" | "discussion" | "pull-request";
     url: string;
+    createdAt?: string;
     pullRequestHead?: {
       branch: string;
       repository: string;
+      sha?: string;
     };
+    updatedAt?: string;
   };
   generatedAt: string;
   handoffs?: StageHandoff[];

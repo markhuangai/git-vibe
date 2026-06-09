@@ -10,6 +10,11 @@ export const gitVibeLabels = {
     description: "Trusted actor approved GitVibe implementation automation.",
     name: "git-vibe:approved",
   },
+  acceptRisk: {
+    color: "B60205",
+    description: "Trusted actor accepted prompt-injection risk for one GitVibe rerun.",
+    name: "git-vibe:accept-risk",
+  },
   blocked: {
     color: "D93F0B",
     description: "GitVibe is blocked by missing or contradictory information.",

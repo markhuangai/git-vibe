@@ -8,6 +8,7 @@ export interface DiscussionNode {
   labels?: GraphQLConnection<{ name: string }>;
   replies?: GraphQLConnection<DiscussionNode>;
   title?: string;
+  updatedAt?: string;
   url?: string;
 }
 
@@ -21,6 +22,7 @@ export interface PullRequestReviewCommentNode {
   id: string;
   path?: string;
   replyTo?: { id?: string } | null;
+  updatedAt?: string;
   url?: string;
 }
 
@@ -273,6 +275,7 @@ const discussionQuery = `
         title
         body
         createdAt
+        updatedAt
         url
         author { login }
         labels(first: 100) {
@@ -287,6 +290,7 @@ const discussionQuery = `
             id
             body
             createdAt
+            updatedAt
             url
             author { login }
             replies(first: 100) {
@@ -296,6 +300,7 @@ const discussionQuery = `
                 databaseId
                 body
                 createdAt
+                updatedAt
                 url
                 author { login }
                 replies(first: 0) { nodes { id } }
@@ -318,6 +323,7 @@ const discussionCommentsPageQuery = `
             id
             body
             createdAt
+            updatedAt
             url
             author { login }
             replies(first: 100) {
@@ -327,6 +333,7 @@ const discussionCommentsPageQuery = `
                 databaseId
                 body
                 createdAt
+                updatedAt
                 url
                 author { login }
                 replies(first: 0) { nodes { id } }
@@ -350,6 +357,7 @@ const discussionRepliesPageQuery = `
             databaseId
             body
             createdAt
+            updatedAt
             url
             author { login }
             replies(first: 0) { nodes { id } }
@@ -390,6 +398,7 @@ const pullRequestReviewThreadsQuery = `
                 id
                 body
                 createdAt
+                updatedAt
                 url
                 authorAssociation
                 diffHunk
@@ -415,6 +424,7 @@ const pullRequestReviewThreadCommentsQuery = `
             id
             body
             createdAt
+            updatedAt
             url
             authorAssociation
             diffHunk

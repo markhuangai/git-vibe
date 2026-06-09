@@ -245,7 +245,9 @@ describe("GitVibe action launcher validation", () => {
     ).resolves.toBe(1);
     expect(error).toHaveBeenCalledWith("Unknown GitVibe action stage: missing-stage");
   });
+});
 
+describe("GitVibe action launcher execution mode validation", () => {
   it("validates member and finalizer execution mode inputs", async () => {
     const error = vi.fn();
 

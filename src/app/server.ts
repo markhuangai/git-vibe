@@ -49,6 +49,7 @@ import {
   repositoryWorkflowBudgetInputs,
   sourceReviewInput,
 } from "./server-actions.js";
+import { handleAcceptRiskLabel } from "./accept-risk-labels.js";
 import { handleApprovedIssueLabel } from "./approval-labels.js";
 import { handleReviewPullRequestLabel } from "./review-labels.js";
 import { createDeliveryDeduplicator, type DeliveryDeduplicator } from "./delivery-dedup.js";
@@ -229,7 +230,8 @@ async function handleWebhook(
     event === "pull_request" &&
     payload.action === "labeled" &&
     payload.pull_request &&
-    payload.label?.name === gitVibeLabels.review.name
+    (payload.label?.name === gitVibeLabels.review.name ||
+      payload.label?.name === gitVibeLabels.acceptRisk.name)
   ) {
     await handleIssueLabeled({
       ...state,
@@ -261,6 +263,7 @@ function pullRequestLabelPayload(payload: WebhookPayload): WebhookPayload {
       body: payload.pull_request?.body,
       number: payload.pull_request?.number,
       pull_request: {},
+      title: payload.pull_request?.title,
     },
   };
 }
@@ -425,6 +428,11 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
+  if (label === gitVibeLabels.acceptRisk.name) {
+    await handleAcceptRiskLabel(options, label);
+    return;
+  }
+
   if (label === gitVibeLabels.review.name) {
     await handleReviewPullRequestLabel(options, issueNumber, label);
     return;
@@ -535,6 +543,11 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
       workflowRunUrl: dispatch.html_url,
     });
     await removeDiscussionLabelBestEffort(options, label);
+    return;
+  }
+
+  if (label === gitVibeLabels.acceptRisk.name) {
+    await handleAcceptRiskLabel(options, label);
     return;
   }
 

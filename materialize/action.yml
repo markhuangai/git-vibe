@@ -24,7 +24,6 @@ inputs:
     description: JSON source comment metadata for replying to command comments.
     required: false
     default: ""
-
 outputs:
   summary:
     description: Short stage summary.

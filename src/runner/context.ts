@@ -16,9 +16,11 @@ interface IssueResponse extends JsonObject {
   body?: string;
   created_at?: string;
   html_url?: string;
+  labels?: Array<{ name?: string } | string>;
   number?: number;
   reactions?: JsonObject;
   title?: string;
+  updated_at?: string;
   user?: { login?: string };
 }
 
@@ -34,6 +36,7 @@ interface PullRequestResponse extends JsonObject {
       name?: string;
       owner?: { login?: string };
     } | null;
+    sha?: string;
   };
 }
 
@@ -141,9 +144,12 @@ export async function buildIssueContext(options: {
   return {
     artifact: {
       body: issue.body || "",
+      createdAt: issue.created_at,
+      labels: labelNames(issue.labels),
       number: String(issue.number || options.issueNumber),
       title: issue.title || "",
       type: options.type || "issue",
+      updatedAt: issue.updated_at,
       url: issue.html_url || "",
       pullRequestHead: pullRequestHead(pullRequest),
     },
@@ -152,6 +158,12 @@ export async function buildIssueContext(options: {
     repository: options.repository,
     timeline,
   };
+}
+
+function labelNames(labels: IssueResponse["labels"]): string[] {
+  return (labels || [])
+    .map((label) => (typeof label === "string" ? label : label.name || ""))
+    .filter(Boolean);
 }
 
 async function pullRequestDetails(options: {
@@ -193,7 +205,7 @@ function pullRequestHead(
       ? `${pullRequest.head.repo.owner.login}/${pullRequest.head.repo.name}`
       : "");
   if (!branch || !repository) return undefined;
-  return { branch, repository };
+  return { branch, repository, sha: pullRequest?.head?.sha };
 }
 
 function toPullRequestFile(file: PullRequestFileResponse): PullRequestFile | undefined {
@@ -382,11 +394,13 @@ export async function buildDiscussionContext(options: {
   return {
     artifact: {
       body: discussion.body || "",
+      createdAt: discussion.createdAt,
       id: discussion.id,
       labels: labels.map((label) => label.name),
       number: options.discussionNumber,
       title: discussion.title || "",
       type: "discussion",
+      updatedAt: discussion.updatedAt,
       url: discussion.url || "",
     },
     generatedAt: new Date().toISOString(),
@@ -407,6 +421,7 @@ function toTimelineItem(kind: string, id: string, item: IssueResponse): Timeline
     id,
     kind,
     reactions: item.reactions,
+    updatedAt: kind === "body" ? undefined : item.updated_at,
     url: item.html_url || "",
   };
 }
@@ -420,6 +435,7 @@ function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): Ti
       body: `${path}${diff}${item.body || ""}`,
       created_at: item.createdAt,
       html_url: item.url,
+      updated_at: item.updatedAt,
       user: item.author,
     }),
     authorAssociation: item.authorAssociation,
@@ -435,6 +451,7 @@ function toPullRequestReviewBodyTimelineItem(item: PullRequestReviewResponse): T
       body: item.body || "",
       created_at: item.submitted_at,
       html_url: item.html_url,
+      updated_at: item.submitted_at,
       user: item.user,
     }),
     databaseId: item.id,
@@ -455,6 +472,7 @@ function discussionNodeToTimelineItem(
     kind,
     parentId,
     reactions: {},
+    updatedAt: kind === "body" ? undefined : item.updatedAt,
     url: item.url || "",
   };
 }

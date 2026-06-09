@@ -111,6 +111,7 @@ describe("GitVibe labels", () => {
   it("defines unique protected GitVibe labels", () => {
     const names = gitVibeLabelList.map((label) => label.name);
     expect(new Set(names).size).toBe(names.length);
+    expect(names).toContain("git-vibe:accept-risk");
     expect(names).toContain("git-vibe:approved");
     expect(names).toContain("gvi:story");
     expect(names).toContain("git-vibe:validate");

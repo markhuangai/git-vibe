@@ -105,14 +105,22 @@ const riskyLinkActionPattern =
 export function safetyGateForStage(options: {
   config: GitVibeConfig;
   context: ContextPacket;
+  contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
+  includeContext?: boolean;
   output?: JsonObject;
   stage: Stage;
 }): SafetyGateResult {
   if (!promptInjectionGateEnabled(options.config)) return allowedResult();
 
   const analysis = analyzeSources(
-    sourcesFor(options.context, options.output, options.extraSources),
+    sourcesFor({
+      context: options.context,
+      contextUnits: options.contextUnits,
+      extraSources: options.extraSources,
+      includeContext: options.includeContext !== false,
+      output: options.output,
+    }),
   );
   const shouldBlock =
     analysis.severity === "high" &&
@@ -150,7 +158,7 @@ export function safetyBlockedOutput(options: {
   const summary = "GitVibe paused this run for maintainer review.";
   const question = {
     options: [
-      "Change the flagged content or safety configuration, then rerun GitVibe; approval labels do not override this gate.",
+      "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for one rerun.",
     ],
     question:
       options.gate.blockedReason ||
@@ -357,17 +365,28 @@ function nearbyRiskyLinkAction(text: string, index: number): boolean {
   return riskyLinkActionPattern.test(text.slice(start, end));
 }
 
-function sourcesFor(
-  context: ContextPacket,
-  output: JsonObject | undefined,
-  extraSources: SafetySource[] = [],
-): ContentUnit[] {
+function sourcesFor(options: {
+  context: ContextPacket;
+  contextUnits?: ContentUnit[];
+  extraSources?: SafetySource[];
+  includeContext: boolean;
+  output?: JsonObject;
+}): ContentUnit[] {
   return [
-    ...contentUnitsForContext(context),
-    ...(output
-      ? [safetySourceUnit({ label: "stage output", text: JSON.stringify(output) }, "stage-output")]
+    ...(options.includeContext
+      ? (options.contextUnits ?? contentUnitsForContext(options.context))
       : []),
-    ...extraSources.map((source, index) => safetySourceUnit(source, `extra-source-${index}`)),
+    ...(options.output
+      ? [
+          safetySourceUnit(
+            { label: "stage output", text: JSON.stringify(options.output) },
+            "stage-output",
+          ),
+        ]
+      : []),
+    ...(options.extraSources || []).map((source, index) =>
+      safetySourceUnit(source, `extra-source-${index}`),
+    ),
   ].filter((source) => source.text.trim());
 }
 
@@ -429,7 +448,7 @@ function safetyBlockedComment(gate: SafetyGateResult): string {
     gate.blockedReason ||
       "High-risk prompt-injection content was detected before GitVibe could safely continue.",
     "",
-    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, or handle the case manually before automation continues.",
+    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for a one-run acceptance, or handle the case manually before automation continues.",
     "",
     "Detected risk:",
     ...gate.findings.map((finding) => `- ${finding}`),

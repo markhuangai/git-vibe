@@ -28,7 +28,6 @@ on:
         required: false
         type: string
         default: ""
-
 jobs:
   investigate:
     permissions:

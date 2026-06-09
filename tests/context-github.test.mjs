@@ -42,6 +42,7 @@ describe("GitHub context builders", () => {
     });
 
     expect(context.artifact).toMatchObject({
+      labels: ["git-vibe:accept-risk", "custom"],
       number: "4",
       pullRequestHead: { branch: "git-vibe/4", repository: "example/repo" },
       title: "Issue title",
@@ -58,11 +59,16 @@ describe("GitHub context builders", () => {
       id: "9",
       kind: "pull-request-review-comment",
       parentId: "8",
+      updatedAt: "2026-01-05T01:00:00Z",
     });
+    expect(context.artifact.updatedAt).toBe("2026-01-06T00:00:00Z");
+    expect(context.timeline[0].updatedAt).toBeUndefined();
+    expect(context.timeline[1].updatedAt).toBe("2026-01-03T01:00:00Z");
     expect(context.timeline.at(3)).toMatchObject({
       databaseId: 7,
       id: "7",
       kind: "pull-request-review",
+      updatedAt: "2026-01-04T12:00:00Z",
     });
     expect(context.pullRequestFiles).toEqual([
       expect.objectContaining({
@@ -225,8 +231,10 @@ function issueFixture() {
     body: "Issue body",
     created_at: "2026-01-02T00:00:00Z",
     html_url: "https://github.com/example/repo/issues/4",
+    labels: [{ name: "git-vibe:accept-risk" }, "custom"],
     number: 4,
     title: "Issue title",
+    updated_at: "2026-01-06T00:00:00Z",
     user: { login: "author" },
   };
 }
@@ -238,6 +246,7 @@ function commentFixtures() {
       created_at: "2026-01-04T00:00:00Z",
       html_url: "comment-2",
       id: 2,
+      updated_at: "2026-01-04T01:00:00Z",
       user: { login: "b" },
     },
     {
@@ -245,6 +254,7 @@ function commentFixtures() {
       created_at: "2026-01-03T00:00:00Z",
       html_url: "comment-1",
       id: 1,
+      updated_at: "2026-01-03T01:00:00Z",
       user: { login: "a" },
     },
   ];
@@ -337,6 +347,7 @@ function reviewThreadFixture() {
           diffHunk: "@@ -1 +1 @@",
           id: "9",
           replyTo: { id: "8" },
+          updatedAt: "2026-01-05T01:00:00Z",
           url: "review-comment",
         },
       ],

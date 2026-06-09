@@ -36,7 +36,6 @@ inputs:
     description: Directory containing previous GitVibe stage result JSON files to review.
     required: false
     default: ""
-
 outputs:
   allowed:
     description: Whether downstream LLM jobs may run.

@@ -1,5 +1,6 @@
 import { appendFileSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { acceptedRiskMetadataBodySha } from "../shared/accepted-risk.js";
 import { parseStage } from "../shared/stages.js";
 import type {
   ContextPacket,
@@ -20,7 +21,7 @@ export function withStageHandoffs(context: ContextPacket, handoffDir?: string): 
 
 export function stageResultCommentHandoffs(timeline: TimelineItem[]): StageHandoff[] {
   return timeline
-    .map((item) => parseStageResultCommentHandoff(item.body))
+    .map((item) => parseStageResultCommentHandoff(item))
     .filter((handoff): handoff is StageHandoff => Boolean(handoff));
 }
 
@@ -77,18 +78,21 @@ function parseStageHandoff(content: string): StageHandoff | undefined {
 
     return {
       commentBody: stringField(parsed.commentBody),
+      createdAt: stringField(parsed.createdAt),
       parsedOutput: parsed.parsedOutput,
       schemaId,
       stage,
       status,
       summary,
+      updatedAt: stringField(parsed.updatedAt),
     };
   } catch {
     return undefined;
   }
 }
 
-function parseStageResultCommentHandoff(body: string): StageHandoff | undefined {
+function parseStageResultCommentHandoff(item: TimelineItem): StageHandoff | undefined {
+  const body = item.body;
   const attributes = stageResultAttributes(body);
   const stage = stageField(attributes.stage);
   if (!stage) return undefined;
@@ -107,22 +111,34 @@ function parseStageResultCommentHandoff(body: string): StageHandoff | undefined 
 
   return {
     commentBody: body.trim(),
+    createdAt: item.createdAt,
     parsedOutput,
     schemaId: `${stage}.v1`,
+    source: {
+      bodySha: acceptedRiskMetadataBodySha(body),
+      databaseId: item.databaseId,
+      id: item.id,
+      kind: item.kind,
+      sourceUrl: item.url || undefined,
+    },
     stage,
     status,
     summary,
+    updatedAt: item.updatedAt,
   };
 }
 
 function stageHandoff(stage: Stage, result: StageRunResult): StageHandoff {
+  const now = new Date().toISOString();
   return {
     commentBody: result.commentBody,
+    createdAt: now,
     parsedOutput: result.parsedOutput,
     schemaId: result.schemaId,
     stage,
     status: result.status,
     summary: result.summary,
+    updatedAt: now,
   };
 }
 

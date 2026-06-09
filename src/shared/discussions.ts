@@ -12,7 +12,10 @@ export interface CreatedDiscussionComment {
 }
 
 export interface DiscussionCommentNode {
+  author?: { login?: string };
+  authorAssociation?: string;
   body: string;
+  createdAt?: string;
   id: string;
   replies?: DiscussionCommentConnection;
   url: string;
@@ -25,6 +28,11 @@ export interface DiscussionCommentConnection {
 
 export interface DiscussionLabelNode {
   name: string;
+}
+
+export interface DiscussionContent {
+  body: string;
+  title: string;
 }
 
 interface PageInfo {
@@ -97,6 +105,19 @@ export async function addDiscussionComment(options: {
   return { id: comment.id, url: comment.url };
 }
 
+export async function updateDiscussionComment(options: {
+  body: string;
+  client: GitHubClient;
+  commentId: string;
+  token: string;
+}): Promise<void> {
+  await options.client.graphql(
+    updateDiscussionCommentMutation,
+    { body: options.body, id: options.commentId },
+    options.token,
+  );
+}
+
 export async function discussionComments(options: {
   client: GitHubClient;
   discussionId: string;
@@ -104,6 +125,22 @@ export async function discussionComments(options: {
 }): Promise<DiscussionCommentNode[]> {
   const comments = await paginatedDiscussionComments(options);
   return comments.flatMap((comment) => [comment, ...(comment.replies?.nodes || [])]);
+}
+
+export async function discussionContent(options: {
+  client: GitHubClient;
+  discussionNumber: string;
+  repository: string;
+  token: string;
+}): Promise<DiscussionContent> {
+  const { owner, repo } = splitRepository(options.repository);
+  const result = await options.client.graphql<DiscussionContentResult>(
+    discussionContentQuery,
+    { name: repo, number: Number(options.discussionNumber), owner },
+    options.token,
+  );
+  const discussion = result.repository.discussion;
+  return { body: discussion.body || "", title: discussion.title || "" };
 }
 
 export async function deleteDiscussionComment(options: {
@@ -333,6 +370,12 @@ interface DiscussionCommentsResult {
   } | null;
 }
 
+interface DiscussionContentResult {
+  repository: {
+    discussion: DiscussionContent;
+  };
+}
+
 interface DiscussionLabelsResult {
   node?: {
     labels?: {
@@ -406,6 +449,14 @@ const addDiscussionCommentMutation = `
   }
 `;
 
+const updateDiscussionCommentMutation = `
+  mutation GitVibeUpdateDiscussionComment($body: String!, $id: ID!) {
+    updateDiscussionComment(input: { body: $body, commentId: $id }) {
+      clientMutationId
+    }
+  }
+`;
+
 const discussionCommentsQuery = `
   query GitVibeDiscussionComments($discussionId: ID!, $commentsAfter: String) {
     node(id: $discussionId) {
@@ -416,8 +467,13 @@ const discussionCommentsQuery = `
             endCursor
           }
           nodes {
+            author {
+              login
+            }
+            authorAssociation
             id
             body
+            createdAt
             url
             replies(first: 100) {
               pageInfo {
@@ -425,13 +481,29 @@ const discussionCommentsQuery = `
                 endCursor
               }
               nodes {
+                author {
+                  login
+                }
+                authorAssociation
                 id
                 body
+                createdAt
                 url
               }
             }
           }
         }
+      }
+    }
+  }
+`;
+
+const discussionContentQuery = `
+  query GitVibeDiscussionContent($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      discussion(number: $number) {
+        title
+        body
       }
     }
   }
@@ -447,8 +519,13 @@ const discussionCommentRepliesQuery = `
             endCursor
           }
           nodes {
+            author {
+              login
+            }
+            authorAssociation
             id
             body
+            createdAt
             url
           }
         }

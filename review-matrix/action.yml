@@ -49,7 +49,6 @@ inputs:
     description: Matrix member index used to resolve the configured role/profile pair.
     required: false
     default: ""
-
 outputs:
   summary:
     description: Short stage summary.

@@ -40,7 +40,6 @@ inputs:
     description: Maximum AI turns for each validation repair attempt.
     required: false
     default: "45"
-
 outputs:
   summary:
     description: Short stage summary.

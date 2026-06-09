@@ -34,7 +34,6 @@ on:
         required: false
         type: string
         default: ""
-
 jobs:
   validate:
     permissions:
