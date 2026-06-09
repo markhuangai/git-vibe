@@ -4,7 +4,7 @@ import { isDirectRun, securityReview } from "../src/runner/actions/security-revi
 
 const baseEnv = {
   GITHUB_REPOSITORY: "example/repo",
-  GITVIBE_GITHUB_TOKEN: "token",
+  GITVIBE_GITHUB_APP_TOKEN: "token",
   GITVIBE_ISSUE_NUMBER: "12",
 };
 
@@ -167,13 +167,14 @@ describe("GitVibe security review action validation", () => {
       },
       {
         argv: ["implement"],
-        env: { GITVIBE_GITHUB_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
+        env: { GITVIBE_GITHUB_APP_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
         error: "GITHUB_REPOSITORY is required.",
       },
       {
         argv: ["implement"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_ISSUE_NUMBER: "1" },
-        error: "GITVIBE_GITHUB_TOKEN is required.",
+        error:
+          "ACTIONS_ID_TOKEN_REQUEST_URL is required. Add permissions: id-token: write to this job.",
       },
     ];
 

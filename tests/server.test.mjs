@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createGitVibeApp } from "../src/app/server.ts";
 import {
   createApp,
+  createAppAuth,
   createClient,
   discussionCommentBodies,
   featureIssue,
@@ -93,11 +94,11 @@ describe("GitVibe app server", () => {
   it("logs startup label bootstrap failures with the default error logger", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const app = createGitVibeApp({
+      appAuth: createAppAuth(),
       client: /** @type {import("../src/shared/github.ts").GitHubClient} */ (
         /** @type {unknown} */ (createClient({ labelError: new Error("label write failed") }))
       ),
       configuredRepository: "example/repo",
-      githubToken: "token",
       log: vi.fn(),
       webhookSecret: "secret",
     });

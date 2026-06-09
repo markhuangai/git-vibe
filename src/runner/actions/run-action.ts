@@ -11,6 +11,7 @@ import { matrixMemberRowForStage } from "../role-groups.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { RunnerOptions, Stage, StageRunResult } from "../../shared/types.js";
+import { githubAppToken } from "./github-app-token.js";
 
 export interface ActionRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -18,6 +19,8 @@ export interface ActionRuntime {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   error?: (message: string) => void;
+  fetch?: typeof fetch;
+  githubToken?: () => Promise<string>;
   log?: (message: string) => void;
   runStage?: typeof runStage;
 }
@@ -30,7 +33,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
 
   try {
     const stage = parseStage(argv[0]);
-    const token = requiredEnv(env, "GITVIBE_GITHUB_TOKEN");
+    const token = await resolveGitHubToken(runtime, env);
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
     const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
     const target = readTargetInputs(stage, env);
@@ -81,6 +84,12 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     error(redactLogText(caught instanceof Error ? caught.message : String(caught)));
     return 1;
   }
+}
+
+function resolveGitHubToken(runtime: ActionRuntime, env: NodeJS.ProcessEnv): Promise<string> {
+  return runtime.githubToken
+    ? runtime.githubToken()
+    : githubAppToken({ env, fetch: runtime.fetch || fetch });
 }
 
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {

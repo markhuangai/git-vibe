@@ -26,6 +26,7 @@ export interface WebhookPayload {
     title?: string;
     user?: { login?: string };
   };
+  installation?: { id?: number | string };
   label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
   pull_request?: {
     body?: string | null;

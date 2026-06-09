@@ -2,7 +2,7 @@
 
 ## Summary
 
-GitVibe is a self-hostable repository webhook server plus reusable GitHub Actions/workflows for turning GitHub issues, discussions, labels, and pull requests into an AI-assisted development pipeline.
+GitVibe is a hosted GitHub App server plus reusable GitHub Actions/workflows for turning GitHub issues, discussions, labels, and pull requests into an AI-assisted development pipeline.
 
 The public action namespace should be:
 
@@ -18,13 +18,13 @@ jobs:
     uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
 ```
 
-Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The current GitVibe orchestrator is hosted by the repository owner, receives GitHub repository webhooks at `/webhooks`, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
+Consumer repositories can run jobs on GitHub-hosted runners or self-hosted runners. The current GitVibe orchestrator is a hosted GitHub App, receives App webhooks at `/webhooks`, validates permissions, updates GitHub-native state, and dispatches workflows with parameters.
 
 ## Runtime Boundaries
 
 GitVibe uses one package and one lockfile, but source is separated by runtime ownership:
 
-- `src/app`: webhook server and repository orchestration logic that ships in the self-hosted Docker image.
+- `src/app`: webhook server and repository orchestration logic that ships in the hosted app Docker image.
 - `src/runner`: reusable action runtime, AI stage execution, context assembly, prompt/schema handling, shared branch-update writes, PR creation, and result comments.
 - `src/shared`: GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both app and runner.
 
@@ -37,7 +37,7 @@ flowchart LR
   U[Guest or contributor] --> GH[GitHub issues, discussions, and PRs]
   M[Admin or collaborator] --> GH
 
-  GH -->|repository webhooks| APP[Self-hosted GitVibe Orchestrator]
+  GH -->|GitHub App webhooks| APP[Hosted GitVibe Orchestrator]
   APP -->|validate actor permissions| GH
   APP -->|labels, comments, backlinks, markers| GH
   APP -->|workflow_dispatch| WF[Consumer repo workflow]
@@ -57,7 +57,7 @@ flowchart LR
 
 ## Webhook And Token Model
 
-The self-hosted server is the orchestrator. The reusable actions and workflows are execution workers. Repository owners configure a GitHub repository webhook and provide a fine-grained PAT to their own server.
+The hosted GitHub App server is the orchestrator. The reusable actions and workflows are execution workers. Repository owners install the GitHub App on selected repositories; they do not configure repository webhooks or provide a GitHub PAT.
 
 ```mermaid
 sequenceDiagram
@@ -67,21 +67,23 @@ sequenceDiagram
   participant Act as markhuangai/git-vibe
   participant API as GitHub API
 
-  GH->>App: Repository webhook: command, label, issue, discussion, or PR event
+  GH->>App: GitHub App webhook: command, label, issue, discussion, or PR event
+  App->>API: Mint installation token for payload.installation.id
   App->>API: Validate actor permission
   App->>API: Add label, comment, or state marker
   App->>API: Dispatch workflow with target parameters and run details request
   GH->>WF: Start workflow run
+  WF->>App: Exchange GitHub Actions OIDC JWT for installation token
   WF->>Act: Run no-AI security-review job against full target context
   Act->>API: Publish blocked result, or expose allowed output
   WF->>Act: If allowed, run stage job or plan members plus finalizer
   Act->>Act: Run in-runner pre-LLM gate, validate structured output, and run post-output safety gate
-  Act->>API: Use configured repository PAT for allowed branch, PR, comments, and metadata writes
+  Act->>API: Use short-lived installation token for allowed branch, PR, comments, and metadata writes
 ```
 
-Use `GITHUB_TOKEN` only for simple read operations. Use the self-hosted server's fine-grained PAT when GitVibe must trigger follow-up workflows, push branches, create pull requests, or avoid `GITHUB_TOKEN` event recursion limits.
+Use `GITHUB_TOKEN` only for simple read operations. GitVibe uses GitHub App installation tokens when it must trigger follow-up workflows, push branches, create pull requests, update secrets, or avoid `GITHUB_TOKEN` event recursion limits.
 
-The PAT is long-lived, so GitVibe should keep it narrowly scoped to the managed repository and store it only as a GitHub Actions secret plus the self-hosted server runtime secret. Workflows use the same configured PAT for deterministic GitHub writes and must never log or render the token.
+Installation tokens are short-lived. The app server mints them from the GitHub App private key and scopes them by installation, repository, and permission profile. Workflow jobs request a GitHub Actions OIDC JWT and exchange it with `/actions/token`; the broker verifies the issuer, audience, repository claims, and trusted reusable workflow reference before returning a repository-scoped installation token.
 
 The runner treats all GitHub and repository content as untrusted data. Issue
 bodies, comments, diffs, repository files, handoffs, and future image/OCR text
@@ -93,21 +95,20 @@ gate before every LLM call, including initial stage calls, validation-repair
 calls, and role-group synthesis calls. AI output remains structured advice until
 deterministic GitVibe code validates the schema, applies the post-output safety
 gate, runs configured checks for write stages, and performs GitHub writes with
-the repository PAT. High-risk jailbreak content blocks LLM execution,
+an installation token. High-risk jailbreak content blocks LLM execution,
 privileged state advancement, and write-capable stages until a maintainer
 changes the flagged content, adjusts safety configuration, or handles the case
 manually; approval labels alone do not override the gate.
 
 Webhook dispatch includes serialized source metadata when automation came from an issue comment, Discussion comment, pull request conversation comment, or submitted pull request review. Runner publishing uses that metadata to choose Discussion `replyToId` or flat issue/PR comments with a source link. Pull request review-comment replies remain supported for existing metadata, but automatic feedback remediation is triggered by trusted `changes_requested` review submissions rather than individual review-comment webhooks. Protected PR review labels dispatch `review.yml`, then the server removes stale PR state and marks the PR `gvi:reviewing`.
 
-Supported workflow auth modes:
+Supported workflow auth mode:
 
-- `webhook-pat`: default self-hosted mode. The server receives repository webhooks and uses a fine-grained PAT scoped to the managed repository.
-- `pat`: local fallback where workflows receive a repository PAT directly as `GITVIBE_GITHUB_TOKEN`.
+- `github-app`: hosted GitHub App mode. The server receives App webhooks and workflows exchange GitHub Actions OIDC JWTs for short-lived installation tokens.
 
 ## Event Delivery Modes
 
-Repository webhooks are the implemented production event source when the operator has a reachable HTTPS endpoint. GitHub does not provide a first-party persistent stream where a private client dials out to subscribe to all repository events.
+GitHub App webhooks are the implemented production event source. Customers install the App; webhook delivery is configured centrally on the App registration.
 
 The repository still ships the `event_delivery` config shape used by examples
 and future planning, but the current server code implements direct webhook
@@ -133,7 +134,7 @@ flowchart TD
 
 Implemented and planned modes:
 
-- `webhook`: implemented mode. GitHub sends repository webhooks to a public HTTPS URL owned by the operator.
+- `webhook`: implemented mode. GitHub sends App webhooks to the hosted GitVibe HTTPS URL.
 - `relay`: planned no-domain operator mode. GitHub would send webhooks to a relay such as Smee, Hookdeck, Cloudflare Tunnel, ngrok, or a self-hosted relay; the local GitVibe process would keep an outbound connection to receive events.
 - `actions`: planned no-server mode. Consumer repositories would install lightweight receiver workflows triggered by GitHub events and scheduled scans.
 - `polling`: planned lowest-infrastructure mode. A local or scheduled GitVibe worker would periodically query issues, discussions, comments, reactions, labels, and workflow runs using ETags/cursors.
@@ -208,19 +209,19 @@ jobs:
 
 Required repository or organization secrets/variables:
 
-- `GITVIBE_GITHUB_TOKEN`: fine-grained PAT used by the server and workflows for GitHub API access.
-- `WEBHOOK_SECRET`: repository webhook shared secret used by the deploy workflow to set runtime `GITHUB_WEBHOOK_SECRET`.
 - `GITVIBE_AI_ENV_JSON`: JSON bundle for AI provider auth, endpoints, CLI auth, and provider-specific environment values.
 - `GITVIBE_MCP_ENV_JSON`: optional JSON bundle for configured MCP server credentials.
 - `GITVIBE_DISCUSSION_CATEGORY`: optional variable used by app deployment for feature Discussion conversion category.
 - `GITVIBE_BASE_BRANCH`: optional variable used by reusable workflows as the implementation and review base branch.
 
-Self-hosted server runtime secrets:
+Hosted server runtime secrets:
 
-- `GITHUB_WEBHOOK_SECRET`: webhook shared secret. In GitHub Actions deployment, this comes from repository secret `WEBHOOK_SECRET`.
-- `GITVIBE_GITHUB_TOKEN`: mapped to runtime `GITVIBE_GITHUB_TOKEN`.
+- `GITHUB_APP_ID`: GitHub App ID.
+- `GITHUB_APP_PRIVATE_KEY`: GitHub App private key used to sign App JWTs.
+- `GITHUB_WEBHOOK_SECRET`: GitHub App webhook shared secret.
 
-Self-hosted server variables:
+Hosted server variables:
 
+- `GITVIBE_ACTIONS_OIDC_AUDIENCE`: optional Actions OIDC audience, default `https://git-vibe.markhuang.ai/actions/token`.
 - `GITVIBE_DISCUSSION_CATEGORY`: preferred Discussion category for converted feature issues, default `Ideas`.
 - `GITHUB_REPOSITORY`: optional `owner/repo` used by startup preflight. GitHub Actions provides this automatically during deployment; operators do not create a secret or repository variable for it.

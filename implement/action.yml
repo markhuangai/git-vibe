@@ -2,9 +2,6 @@ name: GitVibe implement
 description: Implement an approved issue on a GitVibe branch.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   issue-number:
     description: Issue number to implement.
     required: true
@@ -69,7 +66,6 @@ runs:
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}

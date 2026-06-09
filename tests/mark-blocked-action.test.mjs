@@ -99,7 +99,7 @@ describe("markBlocked", () => {
     const exitCode = await markBlocked({
       env: {
         GITHUB_REPOSITORY: "markhuangai/git-vibe",
-        GITVIBE_GITHUB_TOKEN: "token",
+        GITVIBE_GITHUB_APP_TOKEN: "token",
       },
       error,
     });
@@ -137,7 +137,7 @@ function issueOptions(request, overrides = {}) {
 function actionEnv(overrides = {}) {
   return {
     GITHUB_REPOSITORY: "markhuangai/git-vibe",
-    GITVIBE_GITHUB_TOKEN: "token",
+    GITVIBE_GITHUB_APP_TOKEN: "token",
     GITVIBE_ISSUE_NUMBER: "22",
     ...overrides,
   };

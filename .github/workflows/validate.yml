@@ -77,9 +77,6 @@ on:
         type: string
         default: ""
     secrets:
-      GITVIBE_GITHUB_TOKEN:
-        description: Fine-grained PAT used for GitHub API access.
-        required: true
       GITVIBE_AI_ENV_JSON:
         description: JSON env bundle for AI provider config and CLI profiles.
         required: true
@@ -100,6 +97,7 @@ jobs:
       status: ${{ steps.security.outputs.status }}
       summary: ${{ steps.security.outputs.summary }}
     permissions:
+      id-token: write
       contents: read
       discussions: write
       issues: write
@@ -124,7 +122,6 @@ jobs:
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           stage: validate
           issue-number: ${{ inputs.issue-number }}
           discussion-number: ${{ inputs.discussion-number }}
@@ -146,6 +143,7 @@ jobs:
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
     permissions:
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -185,6 +183,7 @@ jobs:
       matrix:
         index: ${{ fromJSON(needs.plan-validate.outputs.indexes || '[0]') }}
     permissions:
+      id-token: write
       contents: read
       discussions: read
       issues: read
@@ -208,7 +207,6 @@ jobs:
           node-version: 22
       - uses: ./.git-vibe/actions/validate
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
           discussion-number: ${{ inputs.discussion-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
@@ -236,6 +234,7 @@ jobs:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
       GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     permissions:
+      id-token: write
       contents: read
       discussions: write
       issues: write
@@ -265,7 +264,6 @@ jobs:
           node-version: 22
       - uses: ./.git-vibe/actions/validate
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           issue-number: ${{ inputs.issue-number }}
           discussion-number: ${{ inputs.discussion-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}

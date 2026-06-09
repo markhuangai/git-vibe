@@ -23,7 +23,7 @@
 - `investigate/`, `validate/`, `materialize/`, `implement/`, `create-pr/`,
   `review-matrix/`, `address-pr-feedback/`, `plan-stage/`, and
   `mark-blocked/`: composite action entry points.
-- `src/app/server.ts`: self-hosted repository webhook server source.
+- `src/app/server.ts`: hosted GitHub App webhook server source.
 - `src/runner/actions/run-action.ts`: single-stage runner entry point built by composite actions before execution.
 - `src/runner`: config loading, context assembly, prompt rendering, schema validation, stage execution, shared branch-update writes, result publishing, and `ai-sdk-agentool` integration.
 - `src/shared`: shared GitHub API helpers, Discussion helpers, labels, stage definitions, traceability helpers, and common types used by both the app and runner.
@@ -31,7 +31,7 @@
 - `prompts/`: versioned system and user prompt templates.
 - `schemas/stages`: JSON Schema contracts for stage outputs.
 - `dist/`: generated build output. It is ignored in git. Docker builds only app/shared output for the app container, while composite actions build the bundled runner action before execution.
-- `Dockerfile` and `docker-compose.yml`: self-hosted app deployment packaging.
+- `Dockerfile` and `docker-compose.yml`: hosted app deployment packaging.
 
 ## Test Plan
 
@@ -72,8 +72,8 @@ Generate the value with `jq -Rs . < ~/.codex/auth.json`; do not use raw
 entry must be a string. Alternatively, pre-seed a persistent
 `CODEX_HOME/auth.json` on the runner. When `auth_json.from_bundle` is used,
 GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
-secret after successful CLI execution; the token in `GITVIBE_GITHUB_TOKEN` must
-include repository Actions secrets read/write permission for that path.
+secret after successful CLI execution; the GitVibe GitHub App must have
+repository Secrets write permission for that path.
 In GitVibe stages, `cli-codex` runs `codex exec` with
 `--dangerously-bypass-approvals-and-sandbox`, `--output-schema`, and
 `--output-last-message`, and without `--search`; stdout and stderr stream to the

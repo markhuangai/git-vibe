@@ -2,9 +2,6 @@ name: GitVibe materialize
 description: Create an implementation issue from an accepted feature discussion.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   discussion-number:
     description: Discussion number to materialize.
     required: true
@@ -53,7 +50,6 @@ runs:
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_DISCUSSION_NUMBER: ${{ inputs.discussion-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}

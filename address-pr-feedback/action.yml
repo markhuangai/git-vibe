@@ -2,9 +2,6 @@ name: GitVibe address PR feedback
 description: Address unresolved review feedback on an existing pull request.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   pr-number:
     description: Pull request number to update.
     required: true
@@ -81,7 +78,6 @@ runs:
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}

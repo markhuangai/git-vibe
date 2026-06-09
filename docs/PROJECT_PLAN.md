@@ -4,14 +4,14 @@ This file is the index for the GitVibe plan. The detailed plan is split into foc
 
 ## Documents
 
-- [Architecture](ARCHITECTURE.md): system shape, webhook/PAT token model, event delivery modes, and consumer setup.
+- [Architecture](ARCHITECTURE.md): system shape, GitHub App token model, event delivery modes, and consumer setup.
 - [Workflow](WORKFLOW.md): issue/discussion lifecycle, public commands, labels, bug and feature flows, PR feedback, and traceability.
 - [AI](AI.md): context assembly, AI stage contracts, execution rules, prompt-injection safety, provider strategy, tool policy, and budgets.
 - [Development](DEVELOPMENT.md): repository shape, test plan, AI smoke tests, quality gates, and assumptions.
 
 ## Quick Summary
 
-GitVibe is a self-hostable repository webhook server plus reusable GitHub Actions/workflows for turning GitHub issues, discussions, labels, and pull requests into an AI-assisted development pipeline.
+GitVibe is a hosted GitHub App server plus reusable GitHub Actions/workflows for turning GitHub issues, discussions, labels, and pull requests into an AI-assisted development pipeline.
 
 The public action namespace should be:
 

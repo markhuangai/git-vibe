@@ -2,9 +2,6 @@ name: GitVibe validate
 description: Validate accepted context before implementation or materialization.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   issue-number:
     description: Issue number to validate.
     required: false
@@ -78,7 +75,6 @@ runs:
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
         GITVIBE_DISCUSSION_NUMBER: ${{ inputs.discussion-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}

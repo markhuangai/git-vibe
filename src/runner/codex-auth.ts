@@ -87,7 +87,7 @@ export async function writeBackCodexAuth(options: {
   }
   if (!options.github) {
     throw new Error(
-      "GITVIBE_GITHUB_TOKEN with repository Secrets read/write permission is required to update GITVIBE_AI_ENV_JSON after Codex auth refresh.",
+      "GitVibe GitHub App Secrets write permission is required to update GITVIBE_AI_ENV_JSON after Codex auth refresh.",
     );
   }
 

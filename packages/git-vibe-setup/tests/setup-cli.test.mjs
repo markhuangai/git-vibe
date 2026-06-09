@@ -102,8 +102,9 @@ describe("git-vibe-setup installation", () => {
     });
 
     expect(logs[0]).toContain("GITVIBE_AI_ENV_JSON");
-    expect(logs[0]).toContain("GITVIBE_GITHUB_TOKEN");
-    expect(logs[0]).toContain("WEBHOOK_SECRET");
+    expect(logs[0]).toContain("GITVIBE_MCP_ENV_JSON");
+    expect(logs[0]).not.toContain("GITVIBE_GITHUB_TOKEN");
+    expect(logs[0]).not.toContain("WEBHOOK_SECRET");
     expect(logs[0]).toContain("GITVIBE_BASE_BRANCH");
     expect(logs[0]).toContain("/blob/v1.2.3/examples/consumer/GITVIBE_AI_ENV_JSON.example.json");
   });

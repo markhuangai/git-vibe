@@ -41,6 +41,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agentool": "^1.5.2",
     "ai": "^6.0.175",
+    "jose": "^6.2.3",
     "libsodium-wrappers": "^0.8.4",
     "yaml": "^2.8.4",
     "zod": "^4.4.3"

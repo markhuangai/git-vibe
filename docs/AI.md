@@ -249,7 +249,7 @@ CLI authentication guidance:
 
 - API-key based OpenAI, Anthropic, OpenAI-compatible proxy, or Codex API style providers should go through `ai-sdk-agentool`.
 - AI profiles should read provider auth and endpoints from the `GITVIBE_AI_ENV_JSON` bundle secret. CLI profile `env` values may use either `{ from_bundle: KEY }` or literal strings when the repository owner intentionally wants the value committed in config.
-- Codex CLI can use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner. When `auth_json.from_bundle` is configured, GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret, so `GITVIBE_GITHUB_TOKEN` needs repository Actions secrets read/write permission.
+- Codex CLI can use `auth_json.from_bundle` or a pre-seeded persistent `CODEX_HOME/auth.json` on a trusted self-hosted runner. When `auth_json.from_bundle` is configured, GitVibe writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON` secret, so the GitVibe GitHub App needs repository Secrets write permission.
 - Claude Code CLI should use `env.CLAUDE_CODE_OAUTH_TOKEN.from_bundle` for OAuth sessions. Do not use undocumented `CLAUDE_CODE_AUTH_TOKEN` as the planned env name.
 - MCP server credentials should read from the optional `GITVIBE_MCP_ENV_JSON`
   bundle secret, not from `GITVIBE_AI_ENV_JSON`. Stdio MCP servers may map

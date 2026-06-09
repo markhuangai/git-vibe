@@ -65,9 +65,6 @@ on:
         type: string
         default: ""
     secrets:
-      GITVIBE_GITHUB_TOKEN:
-        description: Fine-grained PAT used for GitHub API access.
-        required: true
       GITVIBE_AI_ENV_JSON:
         description: JSON env bundle for AI provider config and CLI profiles.
         required: true
@@ -88,6 +85,7 @@ jobs:
       status: ${{ steps.security.outputs.status }}
       summary: ${{ steps.security.outputs.summary }}
     permissions:
+      id-token: write
       contents: read
       issues: write
       pull-requests: write
@@ -112,7 +110,6 @@ jobs:
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           stage: investigate
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: 10
@@ -133,6 +130,7 @@ jobs:
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
     permissions:
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -172,6 +170,7 @@ jobs:
       matrix:
         index: ${{ fromJSON(needs.plan-investigate-feedback.outputs.indexes || '[0]') }}
     permissions:
+      id-token: write
       contents: read
       issues: read
       pull-requests: read
@@ -195,7 +194,6 @@ jobs:
           node-version: 22
       - uses: ./.git-vibe/actions/investigate
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
@@ -227,6 +225,7 @@ jobs:
       status: ${{ steps.investigate.outputs.status }}
       summary: ${{ steps.investigate.outputs.summary }}
     permissions:
+      id-token: write
       contents: read
       issues: write
       pull-requests: write
@@ -257,7 +256,6 @@ jobs:
       - id: investigate
         uses: ./.git-vibe/actions/investigate
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
@@ -287,13 +285,13 @@ jobs:
       status: ${{ steps.address.outputs.status }}
       summary: ${{ steps.address.outputs.summary }}
     permissions:
+      id-token: write
       contents: write
       issues: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           persist-credentials: false
       - name: Download feedback investigation handoff
         uses: actions/download-artifact@v4
@@ -317,7 +315,6 @@ jobs:
       - id: address
         uses: ./.git-vibe/actions/address-pr-feedback
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}

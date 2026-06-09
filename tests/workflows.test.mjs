@@ -239,7 +239,9 @@ describe("GitVibe workflow call wiring", () => {
       expect(workflowCall?.inputs?.["action-ref"]).toBeUndefined();
       expect(workflowCall?.secrets?.GITVIBE_AI_ENV_JSON).toMatchObject({ required: true });
       expect(workflowCall?.secrets?.GITVIBE_MCP_ENV_JSON).toMatchObject({ required: false });
+      expect(workflowCall?.secrets?.GITVIBE_GITHUB_TOKEN).toBeUndefined();
       expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
+      expect(workflowJobsHaveIdToken(workflow), `${file} grants OIDC tokens`).toBe(true);
       expect(actionSourceSteps.length).toBeGreaterThan(0);
       for (const step of actionSourceSteps) {
         expect(step.with?.repository).toBe("${{ job.workflow_repository }}");
@@ -260,9 +262,10 @@ describe("GitVibe workflow call wiring", () => {
       expect(reusableJobs.length, `${file} should call a GitVibe reusable workflow`).toBe(1);
       expect(reusableJob?.secrets).toMatchObject({
         GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
-        GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
         GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
       });
+      expect(reusableJob?.secrets?.GITVIBE_GITHUB_TOKEN).toBeUndefined();
+      expect(reusableJob?.permissions?.["id-token"]).toBe("write");
       expect(reusableJob?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
       expect(reusableJob?.secrets?.CODEX_AUTH_JSON, `${file} omits old Codex auth`).toBeUndefined();
       expect(reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
@@ -519,7 +522,6 @@ describe("GitVibe automatic PR review workflow", () => {
       if: "${{ !github.event.pull_request.draft }}",
       secrets: {
         GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
-        GITVIBE_GITHUB_TOKEN: "${{ secrets.GITVIBE_GITHUB_TOKEN }}",
         GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
       },
       uses: "./.github/workflows/review.yml",
@@ -532,6 +534,7 @@ describe("GitVibe automatic PR review workflow", () => {
         timeout_minutes: 60,
       },
     });
+    expect(wrapper.jobs?.review?.permissions?.["id-token"]).toBe("write");
   });
 
   it("cancels older in-progress review runs for the same pull request", () => {
@@ -566,6 +569,13 @@ function gitVibeActionSteps(workflow, matchesUse) {
 /** @param {Workflow} workflow @param {string} jobName @param {string} stepName @returns {WorkflowStep | undefined} */
 function workflowStep(workflow, jobName, stepName) {
   return workflow.jobs?.[jobName]?.steps?.find((step) => step.name === stepName);
+}
+
+/** @param {Workflow} workflow @returns {boolean} */
+function workflowJobsHaveIdToken(workflow) {
+  return Object.values(workflow.jobs || {}).every(
+    (job) => job.permissions?.["id-token"] === "write",
+  );
 }
 
 /** @param {string} file @returns {Workflow} */

@@ -87,13 +87,18 @@ describe("GitVibe app server review-fix labels", () => {
 });
 
 function createApp(client) {
-  return createGitVibeApp({
+  const app = createGitVibeApp({
+    appAuth: { tokenForRepository: vi.fn(async () => "token") },
     client,
     errorLog: vi.fn(),
-    githubToken: "token",
     log: vi.fn(),
     webhookSecret: "secret",
   });
+  return {
+    ...app,
+    handleWebhook: (event, payload) =>
+      app.handleWebhook(event, { ...payload, installation: { id: 123 } }),
+  };
 }
 
 function createClient(options = {}) {

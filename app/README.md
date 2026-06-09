@@ -1,6 +1,6 @@
 # GitVibe Server
 
-This is the self-hosted repository webhook server. The source of truth is
+This is the hosted GitHub App webhook server. The source of truth is
 `../src/app/server.ts`; the runtime entry point is `../dist/app/server.js`.
 
 It currently handles:
@@ -16,20 +16,23 @@ It currently handles:
 - Accepted admin/collaborator comment commands get a `rocket` reaction before workflow dispatch.
 - Protected public trigger labels, including `git-vibe:validate`, `git-vibe:investigate`, and `git-vibe:approved`.
 - Internal `gvi:*` runtime labels managed by GitVibe.
-- Fine-grained PAT-backed GitHub API writes.
+- GitHub App installation-token-backed GitHub API writes.
+- `POST /actions/token` for GitHub Actions OIDC token exchange.
 - Repository permission checks before dispatching workflows.
 - Workflow dispatch to reusable GitVibe workflows. Comment commands use queued comments only when reaction acknowledgement fails; protected labels and trusted reviews still use queued comments with exact workflow links when GitHub returns them.
 
-GitVibe uses repository webhooks plus a fine-grained PAT. The PAT owner appears as
-the actor for GitHub writes performed by the server and workflows.
+GitVibe uses GitHub App webhooks plus short-lived installation tokens. The App
+bot appears as the actor for GitHub writes performed by the server and
+workflows.
 
 ## Environment
 
 Required runtime values:
 
 ```text
+GITHUB_APP_ID=...
+GITHUB_APP_PRIVATE_KEY=...
 GITHUB_WEBHOOK_SECRET=...
-GITVIBE_GITHUB_TOKEN=...
 ```
 
 Optional runtime values:
@@ -37,14 +40,18 @@ Optional runtime values:
 ```text
 GITHUB_API_URL=https://api.github.com
 GITHUB_REPOSITORY=owner/repo
+GITVIBE_ACTIONS_OIDC_AUDIENCE=https://git-vibe.markhuang.ai/actions/token
 GITVIBE_DISCUSSION_CATEGORY=Ideas
 ```
 
-Use a fine-grained PAT scoped only to the repositories managed by this server.
+Use the private key generated for the registered GitHub App. Do not configure a
+customer repository PAT for hosted GitVibe.
 Workflow dispatch uses the repository variable `GITVIBE_BASE_BRANCH`; empty or
 missing means the repository default branch.
-When deploying through GitHub Actions, store the webhook secret as repository secret
-`WEBHOOK_SECRET`; the deploy workflow maps it to `GITHUB_WEBHOOK_SECRET`.
+When deploying through GitHub Actions, store the App ID as repository variable
+`GITVIBE_GITHUB_APP_ID`, the App private key as `GITHUB_APP_PRIVATE_KEY`, and
+the webhook secret as `WEBHOOK_SECRET`; the deploy workflow maps them to runtime
+environment variables.
 Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub
 Actions provides it to the deploy workflow automatically, and Docker Compose
 passes that existing value into the container. Manual Docker deployments may set

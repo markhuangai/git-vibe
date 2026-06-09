@@ -77,7 +77,7 @@ export function discussionSetupErrorComment(error: unknown): string {
     "",
     `Error: ${errorMessage(error)}`,
     "",
-    "Enable repository Discussions and ensure GITVIBE_GITHUB_TOKEN has Discussions read/write permission, then reopen or recreate the feature request.",
+    "Enable repository Discussions and ensure the GitVibe GitHub App has Discussions read/write permission, then reopen or recreate the feature request.",
   ].join("\n");
 }
 

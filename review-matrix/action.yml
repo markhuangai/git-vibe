@@ -2,9 +2,6 @@ name: GitVibe review matrix
 description: Run GitVibe's configured review matrix for an issue or pull request.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   issue-number:
     description: Issue number being reviewed.
     required: false
@@ -94,7 +91,6 @@ runs:
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
         GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}

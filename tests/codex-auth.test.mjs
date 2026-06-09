@@ -108,7 +108,7 @@ describe("Codex auth write-back", () => {
     writeFileSync(prepared.auth.authPath, codexAuthJson("refreshed"));
 
     await expect(writeBackCodexAuth({ auth: prepared.auth, github: undefined })).rejects.toThrow(
-      "GITVIBE_GITHUB_TOKEN with repository Secrets read/write permission is required",
+      "GitVibe GitHub App Secrets write permission is required",
     );
   });
 

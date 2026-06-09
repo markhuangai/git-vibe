@@ -225,9 +225,9 @@ gvi:review-fix
 them manually; GitVibe creates missing managed labels on app startup and on the
 first webhook seen for a repository.
 
-### Fine-Grained PAT Permissions
+### GitHub App Permissions
 
-Required fine-grained PAT repository permissions:
+Required GitHub App repository permissions:
 
 | Permission    | Access     | Required for                                                         |
 | ------------- | ---------- | -------------------------------------------------------------------- |
@@ -241,8 +241,8 @@ Required fine-grained PAT repository permissions:
 | Secrets       | Read/write | Updating `GITVIBE_AI_ENV_JSON` after Codex CLI refreshes `auth.json` |
 | Workflows     | Read/write | Updating GitHub Actions workflow files                               |
 
-Only `Metadata` and `Variables` are always read-only. `Secrets` needs read/write
-access only when a `cli-codex` profile uses `auth_json.from_bundle`; GitVibe
+Only `Metadata` and `Variables` are always read-only. `Secrets` needs write
+access when a `cli-codex` profile uses `auth_json.from_bundle`; GitVibe
 then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
 secret. Every other listed permission needs read/write access.
 
