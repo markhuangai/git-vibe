@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { gitVibeLabels } from "../src/shared/labels.ts";
 import {
   createApp,
@@ -89,6 +89,83 @@ describe("GitVibe app server accept-risk labels", () => {
     expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
       "did not return a workflow run id",
     );
+  });
+});
+
+describe("GitVibe app server accept-risk run id binding", () => {
+  it("binds accepted risk from workflow html_url when workflow_run_id is absent", async () => {
+    const client = createClient({
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      permission: { role_name: "maintain" },
+      workflowDispatchResponse: {
+        html_url: "https://github.com/example/repo/actions/runs/42",
+        ref: "main",
+      },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
+    expect(updatedResult).toContain("run=42");
+    expect(updatedResult).toContain("Accepted workflow run: `42`");
+  });
+
+  it("binds accepted risk from workflow run_url when html_url is absent", async () => {
+    const client = createClient({
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      permission: { role_name: "maintain" },
+      workflowDispatchResponse: {
+        ref: "main",
+        run_url: "https://api.github.com/repos/example/repo/actions/runs/43",
+      },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
+    expect(updatedResult).toContain("run=43");
+    expect(updatedResult).toContain("Accepted workflow run: `43`");
+  });
+});
+
+describe("GitVibe app server accept-risk dispatch failures", () => {
+  it("removes accept-risk without writing metadata when dispatch fails", async () => {
+    const client = createClient({
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      permission: { role_name: "maintain" },
+      workflowDispatchError: new Error("dispatch unavailable"),
+      workflowDispatchErrorCount: 1,
+    });
+    const log = vi.fn();
+
+    await createApp({ client, log }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestBodies(client, "PATCH", "/issues/comments/100")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "could not queue a run-bound accepted-risk workflow",
+    );
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("dispatch unavailable"));
   });
 });
 
