@@ -2,8 +2,11 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
+  canWriteBackCodexAuthForGitHubActionsJob,
   GitHubAppInstallationTokenProvider,
+  isGitHubAppPermissionProfile,
   permissionsForProfile,
+  runnerPermissionProfileForGitHubActionsJob,
 } from "../src/app/github-app-auth.ts";
 
 describe("GitHub App installation token provider", () => {
@@ -186,9 +189,13 @@ describe("GitHub App installation token error handling", () => {
       provider.tokenForRepository({ owner: "example", profile: "server", repo: "repo" }),
     ).rejects.toThrow("installation not found for example/repo");
   });
+});
 
+describe("GitHub App permission profiles", () => {
   it("defines least-privilege permission profiles for server and runner tokens", () => {
     expect(permissionsForProfile("server")).not.toHaveProperty("secrets");
+    expect(permissionsForProfile("server-checks-read")).toEqual({ checks: "read" });
+    expect(permissionsForProfile("server-secrets-write")).toEqual({ secrets: "write" });
     expect(permissionsForProfile("runner-read")).toEqual({
       contents: "read",
       discussions: "read",
@@ -214,9 +221,50 @@ describe("GitHub App installation token error handling", () => {
     });
     expect(permissionsForProfile("runner-content-write")).not.toHaveProperty("secrets");
   });
+
+  it("recognizes server and runner permission profile names", () => {
+    expect(isGitHubAppPermissionProfile("server-checks-read")).toBe(true);
+    expect(isGitHubAppPermissionProfile("runner-read")).toBe(true);
+    expect(isGitHubAppPermissionProfile("owner")).toBe(false);
+  });
+});
+
+describe("GitHub Actions hosted auth job mapping", () => {
+  it("derives runner profiles from trusted reusable workflow files and check run job names", () => {
+    expect(profile("develop.yml", "develop / implement")).toBe("runner-content-write");
+    expect(profile("develop.yml", "develop / review-matrix")).toBe("runner-workflow-write");
+    expect(profile("review.yml", "review / plan-review-matrix")).toBe("runner-read");
+    expect(profile("review.yml", "review / security-review")).toBe("runner-status-write");
+    expect(profile("review.yml", "review / git-vibe-review-member-1 / security")).toBe(
+      "runner-read",
+    );
+    expect(profile("review.yml", "review / security")).toBeUndefined();
+  });
+
+  it("allows Codex auth writeback only for AI execution jobs", () => {
+    expect(canWriteback("develop.yml", "develop / implement")).toBe(true);
+    expect(canWriteback("review.yml", "review / review-matrix")).toBe(true);
+    expect(canWriteback("review.yml", "review / git-vibe-review-member-1 / security")).toBe(true);
+    expect(canWriteback("develop.yml", "develop / security-review")).toBe(false);
+    expect(canWriteback("review.yml", "review / plan-review-matrix")).toBe(false);
+  });
 });
 
 function testPrivateKey() {
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   return privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+}
+
+function profile(workflowFile, checkRunName) {
+  return runnerPermissionProfileForGitHubActionsJob({
+    checkRunName,
+    jobWorkflowRef: `markhuangai/git-vibe/.github/workflows/${workflowFile}@v3`,
+  });
+}
+
+function canWriteback(workflowFile, checkRunName) {
+  return canWriteBackCodexAuthForGitHubActionsJob({
+    checkRunName,
+    jobWorkflowRef: `markhuangai/git-vibe/.github/workflows/${workflowFile}@v3`,
+  });
 }

@@ -169,7 +169,7 @@ jobs:
           stage: validate
 
   validate-members:
-    name: ${{ fromJSON(needs.plan-validate.outputs.labels)[format('{0}', matrix.index)] }}
+    name: git-vibe-validate-member-${{ matrix.index }} / ${{ fromJSON(needs.plan-validate.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-validate
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}

@@ -92,6 +92,36 @@ describe("Codex auth write-back", () => {
     );
   });
 
+  it("uses the hosted broker callback when provided", async () => {
+    const prepared = prepare();
+    writeFileSync(prepared.auth.authPath, codexAuthJson("refreshed"));
+    const authWriteback = vi.fn();
+    const client = { request: vi.fn() };
+
+    await writeBackCodexAuth({
+      auth: prepared.auth,
+      github: {
+        authWriteback,
+        client,
+        repository: "example/repo",
+        token: "runner-token",
+      },
+    });
+
+    expect(authWriteback).toHaveBeenCalledWith(
+      JSON.stringify({
+        CODEX_AUTH_JSON: codexAuthJson("refreshed"),
+        GITVIBE_AI_API_KEY: "test-key",
+      }),
+    );
+    expect(client.request).not.toHaveBeenCalled();
+    expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON).CODEX_AUTH_JSON).toBe(
+      codexAuthJson("refreshed"),
+    );
+  });
+});
+
+describe("Codex auth write-back edge cases", () => {
   it("skips GitHub writes when Codex leaves auth JSON unchanged", async () => {
     const prepared = prepare();
     const logger = { event: vi.fn() };

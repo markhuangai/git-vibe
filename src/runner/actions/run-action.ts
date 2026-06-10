@@ -12,7 +12,11 @@ import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { GitHubActionsRunnerPermissionProfile } from "../../shared/github-app-permissions.js";
 import type { RunnerOptions, Stage, StageRunResult } from "../../shared/types.js";
-import { githubAppToken, runnerPermissionProfileForStage } from "./github-app-token.js";
+import {
+  githubAppCodexAuthWriteback,
+  githubAppToken,
+  runnerPermissionProfileForStage,
+} from "./github-app-token.js";
 
 export interface ActionRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -56,6 +60,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       dryRun: envValue(env, "GITVIBE_DRY_RUN").toLowerCase() === "true",
       executionMode,
       failOnNotReady: envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true",
+      githubAuthWriteback: resolveGitHubAuthWriteback(runtime, env),
       handoffDir: envValue(env, "GITVIBE_HANDOFF_DIR") || undefined,
       issueNumber: target.issueNumber,
       memberResultsDir,
@@ -99,6 +104,14 @@ function resolveGitHubToken(
   return runtime.githubToken
     ? runtime.githubToken()
     : githubAppToken({ env, fetch: runtime.fetch || fetch, permissionProfile });
+}
+
+function resolveGitHubAuthWriteback(
+  runtime: ActionRuntime,
+  env: NodeJS.ProcessEnv,
+): ((value: string) => Promise<void>) | undefined {
+  if (runtime.githubToken || env.GITVIBE_GITHUB_APP_TOKEN?.trim()) return undefined;
+  return (value) => githubAppCodexAuthWriteback(value, { env, fetch: runtime.fetch || fetch });
 }
 
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {

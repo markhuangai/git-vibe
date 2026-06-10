@@ -91,7 +91,9 @@ describe("GitVibe action launcher hosted auth", () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
-      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }));
+      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }))
+      .mockResolvedValueOnce(jsonResponse({ value: "writeback-oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ updated: true }));
     const runStage = vi.fn().mockResolvedValue({
       commentBody: "",
       parsedOutput: {},
@@ -108,6 +110,7 @@ describe("GitVibe action launcher hosted auth", () => {
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
           ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
           GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_ACTIONS_CODEX_AUTH_URL: "https://git-vibe.example/actions/codex-auth",
           GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
           GITVIBE_ISSUE_NUMBER: "12",
         },
@@ -126,7 +129,25 @@ describe("GitVibe action launcher hosted auth", () => {
         method: "POST",
       },
     ]);
-    expect(runStage).toHaveBeenCalledWith(expect.objectContaining({ token: "installation-token" }));
+    expect(runStage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubAuthWriteback: expect.any(Function),
+        token: "installation-token",
+      }),
+    );
+
+    await runStage.mock.calls[0][0].githubAuthWriteback(JSON.stringify({ CODEX_AUTH_JSON: "{}" }));
+
+    expect(fetchImpl.mock.calls[3]).toMatchObject([
+      "https://git-vibe.example/actions/codex-auth",
+      {
+        body: JSON.stringify({
+          oidcToken: "writeback-oidc-token",
+          value: JSON.stringify({ CODEX_AUTH_JSON: "{}" }),
+        }),
+        method: "POST",
+      },
+    ]);
   });
 });
 

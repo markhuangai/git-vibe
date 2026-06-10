@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import sodium from "libsodium-wrappers";
-import { splitRepository } from "../shared/github.js";
 import type { GitHubClient } from "../shared/github.js";
+import { updateRepositorySecret } from "../shared/repository-secrets.js";
 import type { StageLogger } from "./logging.js";
 import {
   aiEnvBundleVariable,
@@ -25,6 +24,7 @@ export interface PreparedCodexEnv {
 }
 
 export interface CodexAuthWritebackGitHub {
+  authWriteback?: (value: string) => Promise<void>;
   client: GitHubClient;
   repository: string;
   token: string;
@@ -91,11 +91,15 @@ export async function writeBackCodexAuth(options: {
     );
   }
 
-  await updateRepositorySecret({
-    ...options.github,
-    name: aiEnvBundleVariable,
-    value: updatedBundle,
-  });
+  if (options.github.authWriteback) {
+    await options.github.authWriteback(updatedBundle);
+  } else {
+    await updateRepositorySecret({
+      ...options.github,
+      name: aiEnvBundleVariable,
+      value: updatedBundle,
+    });
+  }
   process.env[aiEnvBundleVariable] = updatedBundle;
   options.logger?.event("codex.auth_json.writeback.done", {
     bundle_key: options.auth.bundleKey,
@@ -206,40 +210,4 @@ function jwtShaped(value: string): boolean {
 
 function base64UrlJwtSegment(value: string): boolean {
   return /^[A-Za-z0-9_-]+={0,2}$/.test(value) && value.length % 4 !== 1;
-}
-
-async function updateRepositorySecret(options: {
-  client: GitHubClient;
-  name: string;
-  repository: string;
-  token: string;
-  value: string;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.repository);
-  const publicKey = await options.client.request<{ key?: string; key_id?: string }>({
-    method: "GET",
-    path: `/repos/${owner}/${repo}/actions/secrets/public-key`,
-    token: options.token,
-  });
-  if (!publicKey.key || !publicKey.key_id) {
-    throw new Error(
-      `GitHub repository ${options.repository} did not return an Actions public key.`,
-    );
-  }
-  await options.client.request({
-    body: {
-      encrypted_value: await encryptedSecretValue(options.value, publicKey.key),
-      key_id: publicKey.key_id,
-    },
-    method: "PUT",
-    path: `/repos/${owner}/${repo}/actions/secrets/${encodeURIComponent(options.name)}`,
-    token: options.token,
-  });
-}
-
-async function encryptedSecretValue(value: string, publicKey: string): Promise<string> {
-  await sodium.ready;
-  const keyBytes = sodium.from_base64(publicKey, sodium.base64_variants.ORIGINAL);
-  const encryptedBytes = sodium.crypto_box_seal(value, keyBytes);
-  return sodium.to_base64(encryptedBytes, sodium.base64_variants.ORIGINAL);
 }

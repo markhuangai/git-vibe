@@ -18,6 +18,7 @@ It currently handles:
 - Internal `gvi:*` runtime labels managed by GitVibe.
 - GitHub App installation-token-backed GitHub API writes.
 - `POST /actions/token` for GitHub Actions OIDC token exchange.
+- `POST /actions/codex-auth` for server-side Codex auth bundle writeback.
 - Repository permission checks before dispatching workflows.
 - Workflow dispatch to reusable GitVibe workflows. Comment commands use queued comments only when reaction acknowledgement fails; protected labels and trusted reviews still use queued comments with exact workflow links when GitHub returns them.
 
@@ -46,6 +47,10 @@ GITVIBE_DISCUSSION_CATEGORY=Ideas
 
 Use the private key generated for the registered GitHub App. Do not configure a
 customer repository PAT for hosted GitVibe.
+The registered App needs repository permissions for Actions read/write, Checks
+read, Contents read/write, Discussions read/write, Issues read/write, Pull
+requests read/write, Secrets read/write, and Workflows read/write. Customer
+repositories do not create GitHub environments for hosted auth.
 Workflow dispatch uses the repository variable `GITVIBE_BASE_BRANCH`; empty or
 missing means the repository default branch.
 When deploying through GitHub Actions, store the App ID as repository variable

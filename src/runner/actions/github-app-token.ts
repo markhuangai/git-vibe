@@ -1,4 +1,4 @@
-import { defaultActionsTokenUrl } from "../../shared/hosted-app.js";
+import { defaultActionsCodexAuthUrl, defaultActionsTokenUrl } from "../../shared/hosted-app.js";
 import {
   isGitHubActionsRunnerPermissionProfile,
   type GitHubActionsRunnerPermissionProfile,
@@ -19,6 +19,10 @@ interface ActionsTokenResponse {
   token?: string;
 }
 
+interface ActionsCodexAuthResponse {
+  updated?: boolean;
+}
+
 export async function githubAppToken(runtime: GitHubAppTokenRuntime = {}): Promise<string> {
   const env = runtime.env || process.env;
   const existingToken = env.GITVIBE_GITHUB_APP_TOKEN?.trim();
@@ -28,6 +32,27 @@ export async function githubAppToken(runtime: GitHubAppTokenRuntime = {}): Promi
   const fetchImpl = runtime.fetch || fetch;
   const oidcToken = await requestActionsOidcToken(env, fetchImpl);
   return exchangeActionsOidcToken(env, fetchImpl, oidcToken, permissionProfile);
+}
+
+export async function githubAppCodexAuthWriteback(
+  value: string,
+  runtime: Pick<GitHubAppTokenRuntime, "env" | "fetch"> = {},
+): Promise<void> {
+  const env = runtime.env || process.env;
+  const fetchImpl = runtime.fetch || fetch;
+  const oidcToken = await requestActionsOidcToken(env, fetchImpl);
+  const response = await fetchImpl(actionsCodexAuthUrl(env), {
+    body: JSON.stringify({ oidcToken, value }),
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = await responseJson<ActionsCodexAuthResponse>(response, "GitVibe actions Codex auth");
+  if (data.updated !== true) {
+    throw new Error("GitVibe actions Codex auth response was missing updated=true.");
+  }
 }
 
 export function runnerPermissionProfileForStage(
@@ -106,6 +131,10 @@ async function responseJson<T>(response: Response, label: string): Promise<T> {
 
 function actionsTokenUrl(env: NodeJS.ProcessEnv): string {
   return env.GITVIBE_ACTIONS_TOKEN_URL || defaultActionsTokenUrl;
+}
+
+function actionsCodexAuthUrl(env: NodeJS.ProcessEnv): string {
+  return env.GITVIBE_ACTIONS_CODEX_AUTH_URL || defaultActionsCodexAuthUrl;
 }
 
 function actionsOidcAudience(env: NodeJS.ProcessEnv): string {

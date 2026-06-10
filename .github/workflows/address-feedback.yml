@@ -156,7 +156,7 @@ jobs:
           stage: investigate
 
   investigate-feedback-members:
-    name: ${{ fromJSON(needs.plan-investigate-feedback.outputs.labels)[format('{0}', matrix.index)] }}
+    name: git-vibe-investigate-feedback-member-${{ matrix.index }} / ${{ fromJSON(needs.plan-investigate-feedback.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-investigate-feedback
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}

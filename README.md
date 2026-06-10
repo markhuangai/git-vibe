@@ -316,6 +316,22 @@ Pull requests
 Pull request reviews
 ```
 
+Repository permissions for the GitVibe App registration:
+
+```text
+Actions: Read and write
+Checks: Read-only
+Contents: Read and write
+Discussions: Read and write
+Issues: Read and write
+Pull requests: Read and write
+Secrets: Read and write
+Workflows: Read and write
+```
+
+These are permissions on the hosted GitVibe App installation. Customer
+repositories do not create GitHub environments for hosted auth.
+
 Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 ## Commands And Labels

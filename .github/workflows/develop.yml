@@ -319,7 +319,7 @@ jobs:
           stage: review-matrix
 
   review-matrix-members:
-    name: ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
+    name: git-vibe-review-member-${{ matrix.index }} / ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs:
       - create-pr

@@ -111,7 +111,6 @@ export async function runStageSecurityReview(
 
   const inputSafetyResult = await blockPromptInput(safetyOptions);
   if (inputSafetyResult) return blockedSecurityReview(inputSafetyResult);
-
   logger.event("security.review.done", { allowed: true });
   return { allowed: true, status: "allowed", summary: "Security review passed." };
 }
@@ -390,6 +389,7 @@ function buildAiRunOptions(options: {
     config: options.config,
     cwd: options.options.cwd,
     github: {
+      authWriteback: options.options.githubAuthWriteback,
       client: options.client,
       repository: options.options.repository,
       token: options.options.token,

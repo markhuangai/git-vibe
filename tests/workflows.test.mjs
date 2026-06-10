@@ -6,7 +6,7 @@ import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
  * @typedef {{ concurrency?: { group?: string, ["cancel-in-progress"]?: boolean }, env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
- * @typedef {{ env?: Record<string, string>, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, environment?: unknown, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} SimulatedStep
  */
@@ -273,7 +273,56 @@ describe("GitVibe workflow call wiring", () => {
       expect(reusableJob?.with?.["action-ref"]).toBeUndefined();
     }
   });
+});
 
+describe("GitVibe hosted auth workflow contract", () => {
+  it("does not require repository environments for hosted auth", () => {
+    for (const file of reusableWorkflows) {
+      const workflow = readWorkflow(file);
+      for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
+        expect(job.environment, `${file} ${jobName} omits environment`).toBeUndefined();
+      }
+    }
+  });
+
+  it("uses stable matrix member job prefixes for hosted auth authorization", () => {
+    const memberJobs = [
+      {
+        file: ".github/workflows/address-feedback.yml",
+        job: "investigate-feedback-members",
+        prefix: "git-vibe-investigate-feedback-member-${{ matrix.index }} / ",
+      },
+      {
+        file: ".github/workflows/develop.yml",
+        job: "review-matrix-members",
+        prefix: "git-vibe-review-member-${{ matrix.index }} / ",
+      },
+      {
+        file: ".github/workflows/investigate.yml",
+        job: "investigate-members",
+        prefix: "git-vibe-investigate-member-${{ matrix.index }} / ",
+      },
+      {
+        file: ".github/workflows/review.yml",
+        job: "review-matrix-members",
+        prefix: "git-vibe-review-member-${{ matrix.index }} / ",
+      },
+      {
+        file: ".github/workflows/validate.yml",
+        job: "validate-members",
+        prefix: "git-vibe-validate-member-${{ matrix.index }} / ",
+      },
+    ];
+
+    for (const { file, job, prefix } of memberJobs) {
+      const name = readWorkflow(file).jobs?.[job]?.name || "";
+      expect(name, `${file} ${job}`).toContain(prefix);
+      expect(name, `${file} ${job}`).toContain("${{ fromJSON(");
+    }
+  });
+});
+
+describe("GitVibe workflow budget wiring", () => {
   it("declares and forwards every budget input the server dispatches to consumer wrappers", () => {
     for (const file of consumerWorkflows) {
       const workflowName = file.slice(file.lastIndexOf("/") + 1);

@@ -6,12 +6,16 @@ import {
 } from "../shared/github-app-permissions.js";
 
 export {
+  canWriteBackCodexAuthForGitHubActionsJob,
   isGitHubActionsRunnerPermissionProfile,
   isGitHubAppPermissionProfile,
   permissionsForProfile,
+  runnerPermissionProfileForGitHubActionsJob,
+  type GitHubActionsJobIdentity,
   type GitHubActionsRunnerPermissionProfile,
   type GitHubAppPermission,
   type GitHubAppPermissionProfile,
+  type GitHubAppServerPermissionProfile,
 } from "../shared/github-app-permissions.js";
 
 export interface InstallationTokenRequest {

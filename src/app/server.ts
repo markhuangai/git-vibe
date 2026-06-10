@@ -11,6 +11,7 @@ import {
   RemoteGitHubActionsOidcVerifier,
   type GitHubActionsOidcVerifier,
 } from "./actions-token.js";
+import { writeBackActionsCodexAuth } from "./actions-codex-auth.js";
 import {
   GitHubAppInstallationTokenProvider,
   type InstallationTokenProvider,
@@ -139,6 +140,7 @@ export function createGitVibeApp(options: GitVibeAppOptions): GitVibeApp {
         res,
         (event, payload) => handleWebhook(state, event, payload),
         (body) => handleActionsToken(state, body),
+        (body) => handleActionsCodexAuthWriteback(state, body),
       ),
     handleWebhook: (event, payload) => handleWebhook(state, event, payload),
     runStartupPreflight: () =>
@@ -269,13 +271,22 @@ async function handleWebhook(
   state.log(`ignored ${event}.${payload.action || "unknown"}`);
 }
 
-function handleActionsToken(
-  state: AppState,
-  body: string,
-): Promise<{ expires_in: number; token: string }> {
+function handleActionsToken(state: AppState, body: string) {
   return exchangeActionsToken({
     audience: state.config.actionsOidcAudience,
     body,
+    client: state.client,
+    tokenProvider: state.appAuth,
+    trustedWorkflowRefPattern: state.trustedWorkflowRefPattern,
+    verifier: state.actionsOidcVerifier,
+  });
+}
+
+function handleActionsCodexAuthWriteback(state: AppState, body: string) {
+  return writeBackActionsCodexAuth({
+    audience: state.config.actionsOidcAudience,
+    body,
+    client: state.client,
     tokenProvider: state.appAuth,
     trustedWorkflowRefPattern: state.trustedWorkflowRefPattern,
     verifier: state.actionsOidcVerifier,
