@@ -204,6 +204,7 @@ async function runMatrixFinalizerResult({
     config,
     context,
     extraSources: finalizerSafetySources,
+    includeContext: !acceptedRisk,
     logger,
     phase: "input",
     runner: options,

@@ -12,6 +12,7 @@ import {
 import type {
   ContextPacket,
   RunnerOptions,
+  StageHandoff,
   StageRunResult,
   TimelineItem,
 } from "../shared/types.js";
@@ -132,6 +133,22 @@ export function acceptedRiskContextUnits(
     context,
     cutoff,
   });
+}
+
+export function contextWithoutAcceptedRiskMetadataSource(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): ContextPacket {
+  const accepted = acceptedRiskMetadataForContext(context, runner);
+  if (!accepted) return context;
+
+  const timeline = context.timeline.filter((_, order) => order !== accepted.order);
+  const handoffs = context.handoffs?.filter(
+    (handoff) => !acceptedRiskHandoffSourceMatches(handoff, accepted.source),
+  );
+  const handoffsChanged = Boolean(context.handoffs && handoffs?.length !== context.handoffs.length);
+  if (timeline.length === context.timeline.length && !handoffsChanged) return context;
+  return { ...context, handoffs, timeline };
 }
 
 export function acceptedRiskLabelPresent(context: ContextPacket): boolean {
@@ -265,6 +282,30 @@ function acceptedRiskMetadataSource(item: TimelineItem): AcceptedRiskMetadataSou
     kind: item.kind,
     sourceUrl: item.url || undefined,
   };
+}
+
+function acceptedRiskHandoffSourceMatches(
+  handoff: StageHandoff,
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const source = handoff.source;
+  return Boolean(
+    source?.bodySha === acceptedSource.bodySha &&
+    stringValue(source.kind) === acceptedSource.kind &&
+    stringValue(source.sourceUrl) === acceptedSource.sourceUrl &&
+    acceptedRiskSourceIdMatches(source, acceptedSource),
+  );
+}
+
+function acceptedRiskSourceIdMatches(
+  source: StageHandoff["source"],
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const ids = new Set([stringValue(source?.id), stringValue(source?.databaseId)].filter(Boolean));
+  return Boolean(
+    (acceptedSource.id && ids.has(acceptedSource.id)) ||
+    (acceptedSource.databaseId && ids.has(acceptedSource.databaseId)),
+  );
 }
 
 function acceptedRiskRuntimeSource(
