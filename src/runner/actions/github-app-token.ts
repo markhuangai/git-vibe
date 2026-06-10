@@ -1,8 +1,14 @@
 import { defaultActionsTokenUrl } from "../../shared/hosted-app.js";
+import {
+  isGitHubActionsRunnerPermissionProfile,
+  type GitHubActionsRunnerPermissionProfile,
+} from "../../shared/github-app-permissions.js";
+import type { RunnerOptions, Stage } from "../../shared/types.js";
 
 export interface GitHubAppTokenRuntime {
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
+  permissionProfile?: GitHubActionsRunnerPermissionProfile;
 }
 
 interface OidcTokenResponse {
@@ -18,9 +24,20 @@ export async function githubAppToken(runtime: GitHubAppTokenRuntime = {}): Promi
   const existingToken = env.GITVIBE_GITHUB_APP_TOKEN?.trim();
   if (existingToken) return existingToken;
 
+  const permissionProfile = requiredPermissionProfile(runtime.permissionProfile);
   const fetchImpl = runtime.fetch || fetch;
   const oidcToken = await requestActionsOidcToken(env, fetchImpl);
-  return exchangeActionsOidcToken(env, fetchImpl, oidcToken);
+  return exchangeActionsOidcToken(env, fetchImpl, oidcToken, permissionProfile);
+}
+
+export function runnerPermissionProfileForStage(
+  stage: Stage,
+  executionMode: RunnerOptions["executionMode"] = "standard",
+): GitHubActionsRunnerPermissionProfile {
+  if (executionMode === "member") return "runner-read";
+  if (stage === "review-matrix") return "runner-workflow-write";
+  if (stage === "implement" || stage === "address-pr-feedback") return "runner-content-write";
+  return "runner-status-write";
 }
 
 async function requestActionsOidcToken(
@@ -52,9 +69,10 @@ async function exchangeActionsOidcToken(
   env: NodeJS.ProcessEnv,
   fetchImpl: typeof fetch,
   oidcToken: string,
+  permissionProfile: GitHubActionsRunnerPermissionProfile,
 ): Promise<string> {
   const response = await fetchImpl(actionsTokenUrl(env), {
-    body: JSON.stringify({ oidcToken, permissionProfile: "runner" }),
+    body: JSON.stringify({ oidcToken, permissionProfile }),
     headers: {
       accept: "application/json",
       "content-type": "application/json",
@@ -64,6 +82,14 @@ async function exchangeActionsOidcToken(
   const data = await responseJson<ActionsTokenResponse>(response, "GitVibe actions token");
   if (!data.token) throw new Error("GitVibe actions token response was missing token.");
   return data.token;
+}
+
+function requiredPermissionProfile(
+  value: GitHubActionsRunnerPermissionProfile | undefined,
+): GitHubActionsRunnerPermissionProfile {
+  if (value && isGitHubActionsRunnerPermissionProfile(value)) return value;
+  if (value) throw new Error(`Unsupported GitHub App token permission profile: ${value}.`);
+  throw new Error("GitHub App permission profile is required when requesting a hosted token.");
 }
 
 async function responseJson<T>(response: Response, label: string): Promise<T> {

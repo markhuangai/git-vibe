@@ -72,6 +72,49 @@ describe("GitVibe security review action", () => {
   });
 });
 
+describe("GitVibe security review hosted auth", () => {
+  it("requests hosted App tokens with the status-write profile", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }));
+    const runStageSecurityReview = vi.fn().mockResolvedValue({
+      allowed: true,
+      status: "allowed",
+      summary: "Security review passed.",
+    });
+
+    await expect(
+      securityReview({
+        argv: ["investigate"],
+        env: {
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+          ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
+          GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
+          GITVIBE_ISSUE_NUMBER: "12",
+        },
+        fetch: fetchImpl,
+        runStageSecurityReview,
+      }),
+    ).resolves.toBe(0);
+
+    expect(fetchImpl.mock.calls[1]).toMatchObject([
+      "https://git-vibe.example/actions/token",
+      {
+        body: JSON.stringify({
+          oidcToken: "oidc-token",
+          permissionProfile: "runner-status-write",
+        }),
+        method: "POST",
+      },
+    ]);
+    expect(runStageSecurityReview).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "installation-token" }),
+    );
+  });
+});
+
 describe("GitVibe security review action outputs", () => {
   it("writes allowed outputs without a result file", async () => {
     const appendFile = vi.fn();
@@ -210,3 +253,15 @@ describe("GitVibe security review action entrypoints", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * @param {unknown} body
+ * @param {number} [status]
+ */
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body),
+  };
+}

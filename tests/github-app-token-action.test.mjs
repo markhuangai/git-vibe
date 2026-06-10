@@ -1,6 +1,9 @@
 // @ts-nocheck
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { githubAppToken } from "../src/runner/actions/github-app-token.ts";
+import {
+  githubAppToken,
+  runnerPermissionProfileForStage,
+} from "../src/runner/actions/github-app-token.ts";
 import { defaultActionsTokenUrl } from "../src/shared/hosted-app.ts";
 
 afterEach(() => {
@@ -46,6 +49,7 @@ describe("GitHub App token action resolver", () => {
           GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.markhuang.ai/actions/token",
         },
         fetch: fetchImpl,
+        permissionProfile: "runner-status-write",
       }),
     ).resolves.toBe("installation-token");
 
@@ -59,10 +63,27 @@ describe("GitHub App token action resolver", () => {
     expect(fetchImpl.mock.calls[1]).toMatchObject([
       "https://git-vibe.markhuang.ai/actions/token",
       {
-        body: JSON.stringify({ oidcToken: "oidc-token", permissionProfile: "runner" }),
+        body: JSON.stringify({
+          oidcToken: "oidc-token",
+          permissionProfile: "runner-status-write",
+        }),
         method: "POST",
       },
     ]);
+  });
+
+  it("selects least-privilege runner profiles from stage and execution mode", () => {
+    expect(runnerPermissionProfileForStage("validate", "member")).toBe("runner-read");
+    expect(runnerPermissionProfileForStage("investigate", "standard")).toBe("runner-status-write");
+    expect(runnerPermissionProfileForStage("materialize", "standard")).toBe("runner-status-write");
+    expect(runnerPermissionProfileForStage("create-pr", "standard")).toBe("runner-status-write");
+    expect(runnerPermissionProfileForStage("review-matrix", "standard")).toBe(
+      "runner-workflow-write",
+    );
+    expect(runnerPermissionProfileForStage("implement", "standard")).toBe("runner-content-write");
+    expect(runnerPermissionProfileForStage("address-pr-feedback", "standard")).toBe(
+      "runner-content-write",
+    );
   });
 });
 
@@ -80,6 +101,7 @@ describe("GitHub App token action hosted exchange", () => {
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
           ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
         },
+        permissionProfile: "runner-read",
       }),
     ).resolves.toBe("installation-token");
 
@@ -104,6 +126,7 @@ describe("GitHub App token action hosted exchange", () => {
           GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
         },
         fetch: fetchImpl,
+        permissionProfile: "runner-workflow-write",
       }),
     ).resolves.toBe("installation-token");
 
@@ -120,6 +143,7 @@ describe("GitHub App token action response validation", () => {
       githubAppToken({
         env: tokenRequestEnv(),
         fetch: vi.fn().mockResolvedValueOnce(textResponse("", 200)),
+        permissionProfile: "runner-status-write",
       }),
     ).rejects.toThrow("GitHub Actions OIDC token response was missing value");
 
@@ -130,6 +154,7 @@ describe("GitHub App token action response validation", () => {
           .fn()
           .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
           .mockResolvedValueOnce(textResponse("", 200)),
+        permissionProfile: "runner-status-write",
       }),
     ).rejects.toThrow("GitVibe actions token response was missing token");
 
@@ -137,6 +162,7 @@ describe("GitHub App token action response validation", () => {
       githubAppToken({
         env: tokenRequestEnv(),
         fetch: vi.fn().mockResolvedValueOnce(jsonResponse({ error: "nope" }, 403)),
+        permissionProfile: "runner-status-write",
       }),
     ).rejects.toThrow('GitHub Actions OIDC token request failed: 403 {"error":"nope"}');
 
@@ -144,8 +170,21 @@ describe("GitHub App token action response validation", () => {
       githubAppToken({
         env: tokenRequestEnv(),
         fetch: vi.fn().mockResolvedValueOnce(jsonResponse([], 200)),
+        permissionProfile: "runner-status-write",
       }),
     ).rejects.toThrow("GitHub Actions OIDC token response must be a JSON object");
+  });
+
+  it("requires an explicit hosted token permission profile", async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(
+      githubAppToken({
+        env: tokenRequestEnv(),
+        fetch: fetchImpl,
+      }),
+    ).rejects.toThrow("GitHub App permission profile is required");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 

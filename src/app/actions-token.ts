@@ -1,6 +1,10 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { splitRepository } from "../shared/github.js";
-import { isGitHubAppPermissionProfile, type InstallationTokenProvider } from "./github-app-auth.js";
+import {
+  isGitHubActionsRunnerPermissionProfile,
+  type GitHubActionsRunnerPermissionProfile,
+  type InstallationTokenProvider,
+} from "./github-app-auth.js";
 
 export interface ActionsTokenRequestBody {
   oidcToken?: string;
@@ -82,12 +86,18 @@ function parseActionsTokenBody(body: string): ActionsTokenRequestBody {
   }
 }
 
-function tokenPermissionProfile(body: ActionsTokenRequestBody): "runner" {
-  const value = body.permissionProfile || body.permission_profile || "runner";
-  if (!isGitHubAppPermissionProfile(value) || value !== "runner") {
+function tokenPermissionProfile(
+  body: ActionsTokenRequestBody,
+): GitHubActionsRunnerPermissionProfile {
+  const value = body.permissionProfile || body.permission_profile;
+  if (typeof value !== "string" || !value.trim()) {
+    throw httpError("permissionProfile is required.", 400);
+  }
+  const profile = value.trim();
+  if (!isGitHubActionsRunnerPermissionProfile(profile)) {
     throw httpError("unsupported GitHub App token permission profile.", 400);
   }
-  return value;
+  return profile;
 }
 
 function oidcToken(body: ActionsTokenRequestBody): string {

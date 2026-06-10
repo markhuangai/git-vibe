@@ -10,8 +10,9 @@ import { redactLogText } from "../logging.js";
 import { matrixMemberRowForStage } from "../role-groups.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
+import type { GitHubActionsRunnerPermissionProfile } from "../../shared/github-app-permissions.js";
 import type { RunnerOptions, Stage, StageRunResult } from "../../shared/types.js";
-import { githubAppToken } from "./github-app-token.js";
+import { githubAppToken, runnerPermissionProfileForStage } from "./github-app-token.js";
 
 export interface ActionRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -33,12 +34,16 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
 
   try {
     const stage = parseStage(argv[0]);
-    const token = await resolveGitHubToken(runtime, env);
+    const executionMode = executionModeEnv(env);
+    const token = await resolveGitHubToken(
+      runtime,
+      env,
+      runnerPermissionProfileForStage(stage, executionMode),
+    );
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
     const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
     const target = readTargetInputs(stage, env);
     const maxTurns = numberEnv(env, "GITVIBE_MAX_TURNS", 90);
-    const executionMode = executionModeEnv(env);
     const memberResultsDir = memberResultsDirFor({ cwd, env, executionMode, stage });
     const profileSelection = executionProfileSelection({
       cwd,
@@ -86,10 +91,14 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
   }
 }
 
-function resolveGitHubToken(runtime: ActionRuntime, env: NodeJS.ProcessEnv): Promise<string> {
+function resolveGitHubToken(
+  runtime: ActionRuntime,
+  env: NodeJS.ProcessEnv,
+  permissionProfile: GitHubActionsRunnerPermissionProfile,
+): Promise<string> {
   return runtime.githubToken
     ? runtime.githubToken()
-    : githubAppToken({ env, fetch: runtime.fetch || fetch });
+    : githubAppToken({ env, fetch: runtime.fetch || fetch, permissionProfile });
 }
 
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {

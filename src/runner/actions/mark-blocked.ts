@@ -62,7 +62,11 @@ export async function markBlocked(runtime: MarkBlockedRuntime = {}): Promise<num
 function resolveGitHubToken(runtime: MarkBlockedRuntime, env: NodeJS.ProcessEnv): Promise<string> {
   return runtime.githubToken
     ? runtime.githubToken()
-    : githubAppToken({ env, fetch: runtime.fetch || fetch });
+    : githubAppToken({
+        env,
+        fetch: runtime.fetch || fetch,
+        permissionProfile: "runner-status-write",
+      });
 }
 
 export async function markIssueBlocked(options: MarkBlockedOptions): Promise<void> {

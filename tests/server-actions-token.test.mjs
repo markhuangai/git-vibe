@@ -26,7 +26,12 @@ describe("GitVibe app actions token endpoint", () => {
        */
       async (url) => {
         await expect(
-          requestJson(url, "POST", "/actions/token", JSON.stringify({ oidcToken: "oidc" })),
+          requestJson(
+            url,
+            "POST",
+            "/actions/token",
+            JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
+          ),
         ).resolves.toMatchObject({
           body: { expires_in: 3600, token: "token" },
           status: 200,
@@ -40,7 +45,7 @@ describe("GitVibe app actions token endpoint", () => {
     );
     expect(appAuth.tokenForRepository).toHaveBeenCalledWith({
       owner: "example",
-      profile: "runner",
+      profile: "runner-status-write",
       repo: "repo",
     });
   });

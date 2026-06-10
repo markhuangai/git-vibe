@@ -545,11 +545,11 @@ async function blockUnsafePullRequestHead(options: {
     logger: options.logger,
     options: options.options,
   });
+  if (options.options.executionMode === "member") return result;
   await publishBlockedPullRequestHead({ ...options, result });
   options.logger.event("stage.done", { status: result.status });
   return result;
 }
-
 async function publishBlockedPullRequestHead(options: {
   client: GitHubClient;
   context: ContextPacket;

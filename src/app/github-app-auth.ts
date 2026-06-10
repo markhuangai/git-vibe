@@ -1,9 +1,18 @@
 import { SignJWT, importPKCS8 } from "jose";
 import { GitHubClient } from "../shared/github.js";
+import {
+  permissionsForProfile,
+  type GitHubAppPermissionProfile,
+} from "../shared/github-app-permissions.js";
 
-export type GitHubAppPermission = "read" | "write";
-
-export type GitHubAppPermissionProfile = "runner" | "server";
+export {
+  isGitHubActionsRunnerPermissionProfile,
+  isGitHubAppPermissionProfile,
+  permissionsForProfile,
+  type GitHubActionsRunnerPermissionProfile,
+  type GitHubAppPermission,
+  type GitHubAppPermissionProfile,
+} from "../shared/github-app-permissions.js";
 
 export interface InstallationTokenRequest {
   installationId?: number | string;
@@ -122,34 +131,6 @@ export class GitHubAppInstallationTokenProvider implements InstallationTokenProv
     this.installationIds.set(cacheKey, installationId);
     return installationId;
   }
-}
-
-export function permissionsForProfile(
-  profile: GitHubAppPermissionProfile,
-): Record<string, GitHubAppPermission> {
-  if (profile === "server") {
-    return {
-      actions: "write",
-      contents: "write",
-      discussions: "write",
-      issues: "write",
-      pull_requests: "write",
-    };
-  }
-
-  return {
-    actions: "write",
-    contents: "write",
-    discussions: "write",
-    issues: "write",
-    pull_requests: "write",
-    secrets: "write",
-    workflows: "write",
-  };
-}
-
-export function isGitHubAppPermissionProfile(value: string): value is GitHubAppPermissionProfile {
-  return value === "runner" || value === "server";
 }
 
 function installationTokenCacheKey(request: InstallationTokenRequest): string {

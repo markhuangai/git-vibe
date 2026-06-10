@@ -86,6 +86,50 @@ describe("GitVibe action launcher", () => {
   });
 });
 
+describe("GitVibe action launcher hosted auth", () => {
+  it("requests hosted App tokens with the stage permission profile", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }));
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "",
+      parsedOutput: {},
+      schemaId: "review-matrix.v1",
+      status: "completed",
+      summary: "Done",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        argv: ["review-matrix"],
+        env: {
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+          ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
+          GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
+          GITVIBE_ISSUE_NUMBER: "12",
+        },
+        fetch: fetchImpl,
+        runStage,
+      }),
+    ).resolves.toBe(0);
+
+    expect(fetchImpl.mock.calls[1]).toMatchObject([
+      "https://git-vibe.example/actions/token",
+      {
+        body: JSON.stringify({
+          oidcToken: "oidc-token",
+          permissionProfile: "runner-workflow-write",
+        }),
+        method: "POST",
+      },
+    ]);
+    expect(runStage).toHaveBeenCalledWith(expect.objectContaining({ token: "installation-token" }));
+  });
+});
+
 describe("GitVibe create-pr action outputs", () => {
   it("writes pull request outputs for create-pr", async () => {
     const appendFile = vi.fn();
@@ -153,6 +197,18 @@ function roleGroupWorkspace() {
     "Review maintainability.",
   );
   return cwd;
+}
+
+/**
+ * @param {unknown} body
+ * @param {number} [status]
+ */
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body),
+  };
 }
 
 describe("GitVibe action launcher investigation readiness", () => {

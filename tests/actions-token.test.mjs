@@ -21,7 +21,10 @@ describe("GitHub Actions token exchange", () => {
     await expect(
       exchangeActionsToken({
         audience: "https://git-vibe.markhuang.ai/actions/token",
-        body: JSON.stringify({ oidcToken: "oidc" }),
+        body: JSON.stringify({
+          oidcToken: "oidc",
+          permissionProfile: "runner-status-write",
+        }),
         tokenProvider,
         verifier,
       }),
@@ -33,7 +36,7 @@ describe("GitHub Actions token exchange", () => {
     );
     expect(tokenProvider.tokenForRepository).toHaveBeenCalledWith({
       owner: "example",
-      profile: "runner",
+      profile: "runner-status-write",
       repo: "repo",
     });
   });
@@ -59,7 +62,7 @@ describe("GitHub Actions token exchange", () => {
     await expect(
       exchangeActionsToken({
         audience: "audience",
-        body: JSON.stringify({ oidcToken: "oidc" }),
+        body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-read" }),
         tokenProvider,
         trustedWorkflowRefPattern: defaultTrustedWorkflowRefPattern,
         verifier,
@@ -75,7 +78,7 @@ describe("GitHub Actions token exchange", () => {
     await expect(
       exchangeActionsToken({
         audience: "audience",
-        body: JSON.stringify({ oidc_token: "oidc", permission_profile: "runner" }),
+        body: JSON.stringify({ oidc_token: "oidc", permission_profile: "runner-read" }),
         tokenProvider,
         verifier,
       }),
@@ -98,7 +101,7 @@ describe("GitHub Actions token workflow ref trust", () => {
     await expect(
       exchangeActionsToken({
         audience: "audience",
-        body: JSON.stringify({ oidcToken: "oidc" }),
+        body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-read" }),
         tokenProvider,
         verifier,
       }),
@@ -111,7 +114,7 @@ describe("GitHub Actions token workflow ref trust", () => {
     await expect(
       exchangeActionsToken({
         audience: "audience",
-        body: JSON.stringify({ oidcToken: "oidc" }),
+        body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-read" }),
         tokenProvider,
         verifier,
       }),
@@ -146,6 +149,24 @@ describe("GitHub Actions token request validation", () => {
       exchangeActionsToken({
         audience: "audience",
         body: "{}",
+        tokenProvider,
+        verifier,
+      }),
+    ).rejects.toThrow("permissionProfile is required");
+
+    await expect(
+      exchangeActionsToken({
+        audience: "audience",
+        body: JSON.stringify({ oidcToken: "oidc" }),
+        tokenProvider,
+        verifier,
+      }),
+    ).rejects.toThrow("permissionProfile is required");
+
+    await expect(
+      exchangeActionsToken({
+        audience: "audience",
+        body: JSON.stringify({ permissionProfile: "runner-read" }),
         tokenProvider,
         verifier,
       }),

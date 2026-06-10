@@ -65,7 +65,11 @@ function resolveGitHubToken(
 ): Promise<string> {
   return runtime.githubToken
     ? runtime.githubToken()
-    : githubAppToken({ env, fetch: runtime.fetch || fetch });
+    : githubAppToken({
+        env,
+        fetch: runtime.fetch || fetch,
+        permissionProfile: "runner-status-write",
+      });
 }
 
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {

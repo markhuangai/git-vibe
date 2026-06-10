@@ -25,7 +25,7 @@ describe("GitHub App installation token provider", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner",
+        profile: "runner-content-write",
         repo: "repo",
       }),
     ).resolves.toBe("installation-token");
@@ -33,7 +33,7 @@ describe("GitHub App installation token provider", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner",
+        profile: "runner-content-write",
         repo: "repo",
       }),
     ).resolves.toBe("installation-token");
@@ -41,7 +41,14 @@ describe("GitHub App installation token provider", () => {
     expect(client.request).toHaveBeenCalledTimes(1);
     expect(client.request.mock.calls[0][0]).toMatchObject({
       body: {
-        permissions: expect.objectContaining({ secrets: "write", workflows: "write" }),
+        permissions: {
+          actions: "write",
+          contents: "write",
+          discussions: "write",
+          issues: "write",
+          pull_requests: "write",
+          workflows: "write",
+        },
         repositories: ["repo"],
       },
       method: "POST",
@@ -73,7 +80,9 @@ describe("GitHub App installation token provider", () => {
       "/app/installations/456/access_tokens",
     ]);
   });
+});
 
+describe("GitHub App installation token provider profile caching", () => {
   it("reuses resolved installation IDs across permission profiles", async () => {
     const client = {
       request: vi.fn(async (request) => {
@@ -92,7 +101,11 @@ describe("GitHub App installation token provider", () => {
     });
 
     await provider.tokenForRepository({ owner: "example", profile: "server", repo: "repo" });
-    await provider.tokenForRepository({ owner: "example", profile: "runner", repo: "repo" });
+    await provider.tokenForRepository({
+      owner: "example",
+      profile: "runner-status-write",
+      repo: "repo",
+    });
 
     expect(client.request.mock.calls.map(([request]) => request.method)).toEqual([
       "GET",
@@ -127,7 +140,7 @@ describe("GitHub App installation token error handling", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner",
+        profile: "runner-status-write",
         repo: "repo",
       }),
     ).resolves.toBe("expiring-token");
@@ -135,7 +148,7 @@ describe("GitHub App installation token error handling", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner",
+        profile: "runner-status-write",
         repo: "repo",
       }),
     ).resolves.toBe("fresh-token");
@@ -155,7 +168,7 @@ describe("GitHub App installation token error handling", () => {
       provider.tokenForRepository({
         installationId: "not-a-number",
         owner: "example",
-        profile: "runner",
+        profile: "runner-read",
         repo: "repo",
       }),
     ).rejects.toThrow("installation ID must be a positive integer");
@@ -164,7 +177,7 @@ describe("GitHub App installation token error handling", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner",
+        profile: "runner-read",
         repo: "repo",
       }),
     ).rejects.toThrow("missing token or expires_at");
@@ -174,12 +187,32 @@ describe("GitHub App installation token error handling", () => {
     ).rejects.toThrow("installation not found for example/repo");
   });
 
-  it("defines separate permission profiles for server and runner tokens", () => {
+  it("defines least-privilege permission profiles for server and runner tokens", () => {
     expect(permissionsForProfile("server")).not.toHaveProperty("secrets");
-    expect(permissionsForProfile("runner")).toMatchObject({
-      secrets: "write",
+    expect(permissionsForProfile("runner-read")).toEqual({
+      contents: "read",
+      discussions: "read",
+      issues: "read",
+      pull_requests: "read",
+    });
+    expect(permissionsForProfile("runner-status-write")).toEqual({
+      contents: "read",
+      discussions: "write",
+      issues: "write",
+      pull_requests: "write",
+    });
+    expect(permissionsForProfile("runner-workflow-write")).toEqual({
+      actions: "write",
+      contents: "read",
+      discussions: "write",
+      issues: "write",
+      pull_requests: "write",
+    });
+    expect(permissionsForProfile("runner-content-write")).toMatchObject({
+      contents: "write",
       workflows: "write",
     });
+    expect(permissionsForProfile("runner-content-write")).not.toHaveProperty("secrets");
   });
 });
 
