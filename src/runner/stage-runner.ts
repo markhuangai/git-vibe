@@ -24,6 +24,7 @@ import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
 import {
   acceptedRiskApplies,
   acceptedRiskContextUnits,
+  contextWithoutAcceptedRiskMetadataSource,
   publishAcceptedRiskAudit,
   publishAcceptedRiskAuditForLabeledContext,
   runnerWithAcceptedRiskFromContext,
@@ -147,11 +148,10 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
 
   const branchState = await prepareBranchForStage({ client, context, logger, options });
-
   const schema = loadStageSchema(definition.schemaFile);
   const prompts = buildRenderedPrompts({
     branchState: branchState.branchState,
-    context,
+    context: acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context,
     definition,
     options,
     schema,

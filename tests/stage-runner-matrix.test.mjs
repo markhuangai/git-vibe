@@ -415,6 +415,75 @@ describe("stage runner matrix finalizer accepted risk", () => {
   });
 });
 
+describe("stage runner matrix finalizer accepted risk pull requests", () => {
+  it("does not reblock accepted pull request context during review-matrix synthesis", async () => {
+    const cwd = await workspace(roleGroupConfig());
+    writeRole(cwd, "security.md", "Focus on token boundaries.");
+    const resultsDir = join(cwd, "member-results");
+    mkdirSync(resultsDir);
+    writeFileSync(join(resultsDir, "git-vibe-review-matrix-result.json"), memberResult());
+    generateText.mockResolvedValueOnce(aiResult("review-matrix"));
+    globalThis.fetch = fetchMock([
+      issueResponse("PR body"),
+      commentsResponse([]),
+      pullRequestResponse("feature/review", "current-sha"),
+      reviewThreadsResponse(),
+      pullRequestReviewsResponse([
+        blockedResultComment({
+          artifact: "pull-request",
+          extraBody: "GitVibe paused this run for maintainer review. Apply `git-vibe:accept-risk`.",
+          metadata: acceptedRiskMetadata({
+            artifact: "pull-request",
+            artifactSha: "current-sha",
+            run: "99",
+            stage: "review-matrix",
+            stages: ["review-matrix"],
+          }),
+          number: "12",
+          stage: "review-matrix",
+        }),
+      ]),
+      pullRequestFilesResponse([
+        {
+          filename: "docs/ARCHITECTURE.md",
+          patch: "@@ -0,0 +1 @@\n+developer mode",
+          status: "modified",
+        },
+      ]),
+      response(200, { id: 1 }),
+      response(200, {}),
+      repositoryResponse(),
+      response(200, {}),
+    ]);
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      executionMode: "finalizer",
+      issueNumber: "",
+      maxTurns: 2,
+      memberResultsDir: resultsDir,
+      prNumber: "12",
+      repository: "example/repo",
+      stage: "review-matrix",
+      stageTimeoutMinutes: 1,
+      token: "token",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+    });
+
+    expect(result).toMatchObject({
+      parsedOutput: { comment_body: "Synthesized.", next_state: "review-passed" },
+      status: "completed",
+    });
+    expect(result.parsedOutput.findings.join("\n")).not.toContain("docs/ARCHITECTURE.md");
+    expect(generateText.mock.calls[0][0].prompt).not.toContain(
+      "GitVibe paused this run for maintainer review",
+    );
+    expect(generateText.mock.calls[0][0].prompt).not.toContain("git-vibe:accepted-risk-metadata");
+    expect(generateText).toHaveBeenCalledTimes(1);
+  });
+});
+
 async function workspace(config) {
   const cwd = await mkdtemp(join(tmpdir(), "git-vibe-stage-matrix-"));
   mkdirSync(join(cwd, ".github"), { recursive: true });
@@ -557,9 +626,15 @@ function nextStateForStage(stage) {
 
 const commentsResponse = (comments) => response(200, comments);
 const repositoryResponse = () => response(200, { default_branch: "main" });
-const issueResponse = () =>
+const reviewThreadsResponse = () =>
+  graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
+const pullRequestReviewsResponse = (reviews = []) => response(200, reviews);
+const pullRequestFilesResponse = (files) => response(200, files);
+const pullRequestResponse = (branch, sha = "current-sha") =>
+  response(200, { head: { ref: branch, repo: { full_name: "example/repo" }, sha } });
+const issueResponse = (body = "Issue body") =>
   response(200, {
-    body: "Issue body",
+    body,
     created_at: "2026-01-02T00:00:00Z",
     html_url: "https://github.com/example/repo/issues/12",
     number: 12,
@@ -577,6 +652,8 @@ const response = (status, value) => ({
   text: async () => JSON.stringify(value),
 });
 
+const graphqlResponse = (data) => response(200, { data });
+
 function acceptedRiskMetadata(overrides = {}) {
   return {
     actor: "maintainer",
@@ -590,14 +667,21 @@ function acceptedRiskMetadata(overrides = {}) {
   };
 }
 
-function blockedResultComment({ metadata, stage = "review-matrix" }) {
+function blockedResultComment({
+  artifact = "issue",
+  extraBody = "",
+  metadata,
+  number = "12",
+  stage = "review-matrix",
+}) {
   return {
     author_association: "OWNER",
     body: [
-      `<!-- git-vibe:stage-result stage=${stage} artifact=issue number=12 -->`,
+      `<!-- git-vibe:stage-result stage=${stage} artifact=${artifact} number=${number} -->`,
       "## GitVibe Result",
       "",
       "**Status:** `blocked`",
+      extraBody,
       metadata ? acceptedRiskMetadataBlock(metadata) : "",
     ]
       .filter(Boolean)
@@ -605,6 +689,8 @@ function blockedResultComment({ metadata, stage = "review-matrix" }) {
     created_at: "2026-01-02T00:00:00Z",
     html_url: "https://github.com/example/repo/issues/12#issuecomment-100",
     id: 100,
+    node_id: "review-100",
+    submitted_at: "2026-01-02T00:00:00Z",
     updated_at: "2026-01-04T00:00:00Z",
     user: { login: "github-actions[bot]" },
   };
