@@ -31,6 +31,8 @@ describe("GitVibe app deployment boundary", () => {
     expect(deploySteps.some((step) => step.uses === "docker/login-action@v3")).toBe(true);
     expect(deploySteps.some((step) => step.run?.includes("docker compose"))).toBe(true);
     expect(content).not.toContain("docker/build-push-action");
+    expect(content).toContain("secrets.GITVIBE_APP_PRIVATE_KEY");
+    expect(content).not.toContain("GITHUB_APP_PRIVATE_KEY");
     expect(content).not.toContain("github.sha");
     expect(content).not.toContain("latest");
   });
@@ -47,7 +49,9 @@ describe("GitVibe app deployment boundary", () => {
     expect(dockerfile).not.toContain("COPY --from=build /app/prompts ./prompts");
     expect(dockerfile).not.toContain("COPY --from=build /app/schemas ./schemas");
   });
+});
 
+describe("GitVibe release deployment boundary", () => {
   it("publishes prereleases from dev and stable releases from main", () => {
     const workflow = readWorkflow(".github/workflows/release.yml");
     const content = readFileSync(".github/workflows/release.yml", "utf8");

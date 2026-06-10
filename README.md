@@ -255,8 +255,8 @@ For local source runs:
 ```bash
 corepack pnpm build:app
 GITHUB_APP_ID=... \
-GITHUB_APP_PRIVATE_KEY=... \
 GITHUB_WEBHOOK_SECRET=... \
+GITVIBE_APP_PRIVATE_KEY=... \
 corepack pnpm start
 ```
 
@@ -264,8 +264,8 @@ For Docker Compose:
 
 ```bash
 GITHUB_APP_ID=... \
-GITHUB_APP_PRIVATE_KEY=... \
 GITHUB_WEBHOOK_SECRET=... \
+GITVIBE_APP_PRIVATE_KEY=... \
 docker compose up -d
 ```
 
@@ -274,9 +274,9 @@ Runtime variables:
 | Name                            | Required | Notes                                                     |
 | ------------------------------- | -------- | --------------------------------------------------------- |
 | `GITHUB_APP_ID`                 | Yes      | GitHub App ID                                             |
-| `GITHUB_APP_PRIVATE_KEY`        | Yes      | GitHub App private key                                    |
 | `GITHUB_WEBHOOK_SECRET`         | Yes      | Must match the GitHub App webhook secret                  |
 | `GITVIBE_ACTIONS_OIDC_AUDIENCE` | Optional | Defaults to `https://git-vibe.markhuang.ai/actions/token` |
+| `GITVIBE_APP_PRIVATE_KEY`       | Yes      | GitHub App private key                                    |
 | `GITHUB_API_URL`                | Optional | Defaults to `https://api.github.com`                      |
 | `GITHUB_REPOSITORY`             | Optional | `owner/repo` for startup Discussion preflight             |
 | `GITVIBE_DISCUSSION_CATEGORY`   | Optional | Defaults to `Ideas`                                       |

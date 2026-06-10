@@ -164,7 +164,7 @@ export function startServerFromEnv(env: NodeJS.ProcessEnv = process.env): Server
     appAuth: new GitHubAppInstallationTokenProvider({
       appId: requiredEnv(env, "GITHUB_APP_ID"),
       client,
-      privateKey: requiredEnv(env, "GITHUB_APP_PRIVATE_KEY"),
+      privateKey: requiredEnv(env, "GITVIBE_APP_PRIVATE_KEY"),
     }),
     client,
     configuredRepository: env.GITHUB_REPOSITORY || "",

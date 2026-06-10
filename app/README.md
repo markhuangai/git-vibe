@@ -32,8 +32,8 @@ Required runtime values:
 
 ```text
 GITHUB_APP_ID=...
-GITHUB_APP_PRIVATE_KEY=...
 GITHUB_WEBHOOK_SECRET=...
+GITVIBE_APP_PRIVATE_KEY=...
 ```
 
 Optional runtime values:
@@ -54,7 +54,7 @@ repositories do not create GitHub environments for hosted auth.
 Workflow dispatch uses the repository variable `GITVIBE_BASE_BRANCH`; empty or
 missing means the repository default branch.
 When deploying through GitHub Actions, store the App ID as repository variable
-`GITVIBE_GITHUB_APP_ID`, the App private key as `GITHUB_APP_PRIVATE_KEY`, and
+`GITVIBE_GITHUB_APP_ID`, the App private key as `GITVIBE_APP_PRIVATE_KEY`, and
 the webhook secret as `WEBHOOK_SECRET`; the deploy workflow maps them to runtime
 environment variables.
 Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub

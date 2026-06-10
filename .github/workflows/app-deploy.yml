@@ -40,8 +40,8 @@ jobs:
       - name: Deploy app with Docker Compose
         env:
           GITHUB_APP_ID: ${{ vars.GITVIBE_GITHUB_APP_ID }}
-          GITHUB_APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
           GITHUB_WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          GITVIBE_APP_PRIVATE_KEY: ${{ secrets.GITVIBE_APP_PRIVATE_KEY }}
           GITVIBE_DISCUSSION_CATEGORY: ${{ vars.GITVIBE_DISCUSSION_CATEGORY }}
           GITVIBE_IMAGE: ${{ env.GITVIBE_IMAGE }}
         run: |

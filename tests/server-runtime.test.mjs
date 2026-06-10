@@ -5,17 +5,17 @@ describe("GitVibe app server runtime configuration", () => {
   it("starts from environment configuration and validates required server secrets", async () => {
     expect(() => startServerFromEnv({})).toThrow("GITHUB_APP_ID is required");
     expect(() => startServerFromEnv({ GITHUB_APP_ID: "1" })).toThrow(
-      "GITHUB_APP_PRIVATE_KEY is required",
+      "GITVIBE_APP_PRIVATE_KEY is required",
     );
     expect(() =>
-      startServerFromEnv({ GITHUB_APP_ID: "1", GITHUB_APP_PRIVATE_KEY: "private-key" }),
+      startServerFromEnv({ GITHUB_APP_ID: "1", GITVIBE_APP_PRIVATE_KEY: "private-key" }),
     ).toThrow("GITHUB_WEBHOOK_SECRET is required");
 
     const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const server = startServerFromEnv({
       GITHUB_APP_ID: "1",
-      GITHUB_APP_PRIVATE_KEY: "private-key",
       GITHUB_WEBHOOK_SECRET: "secret",
+      GITVIBE_APP_PRIVATE_KEY: "private-key",
       PORT: "0",
     });
     await new Promise((resolve) => server.on("listening", resolve));
