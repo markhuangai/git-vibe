@@ -85,6 +85,40 @@ describe("GitHub Actions token exchange", () => {
   });
 });
 
+describe("GitHub Actions token workflow ref trust", () => {
+  it("trusts GitVibe reusable workflows from canonical local branches only", async () => {
+    const tokenProvider = { tokenForRepository: vi.fn(async () => "installation-token") };
+    const verifier = {
+      verify: vi.fn(async () => ({
+        ...trustedClaims,
+        jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/review.yml@refs/heads/dev",
+      })),
+    };
+
+    await expect(
+      exchangeActionsToken({
+        audience: "audience",
+        body: JSON.stringify({ oidcToken: "oidc" }),
+        tokenProvider,
+        verifier,
+      }),
+    ).resolves.toEqual({ expires_in: 3600, token: "installation-token" });
+
+    verifier.verify.mockResolvedValueOnce({
+      ...trustedClaims,
+      jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/review.yml@refs/heads/feature/test",
+    });
+    await expect(
+      exchangeActionsToken({
+        audience: "audience",
+        body: JSON.stringify({ oidcToken: "oidc" }),
+        tokenProvider,
+        verifier,
+      }),
+    ).rejects.toThrow("job_workflow_ref is not trusted");
+  });
+});
+
 describe("GitHub Actions token request validation", () => {
   it("rejects malformed token exchange request bodies", async () => {
     const tokenProvider = { tokenForRepository: vi.fn() };

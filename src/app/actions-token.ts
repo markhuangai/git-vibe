@@ -35,7 +35,7 @@ export interface GitHubActionsOidcVerifier {
 }
 
 export const defaultTrustedWorkflowRefPattern =
-  /^markhuangai\/git-vibe\/\.github\/workflows\/[-\w]+\.yml@(?:v\d+(?:\.\d+){0,2}|refs\/tags\/v\d+(?:\.\d+){0,2})$/;
+  /^markhuangai\/git-vibe\/\.github\/workflows\/[-\w]+\.yml@(?:v\d+(?:\.\d+){0,2}|refs\/tags\/v\d+(?:\.\d+){0,2}|refs\/heads\/(?:main|dev))$/;
 
 const githubActionsIssuer = "https://token.actions.githubusercontent.com";
 const githubActionsJwksUrl = "https://token.actions.githubusercontent.com/.well-known/jwks";
