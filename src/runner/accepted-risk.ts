@@ -12,6 +12,7 @@ import {
 import type {
   ContextPacket,
   RunnerOptions,
+  StageHandoff,
   StageRunResult,
   TimelineItem,
 } from "../shared/types.js";
@@ -33,6 +34,8 @@ interface AcceptedRiskAuditMarker {
   stage?: string;
 }
 
+type AcceptedRiskRuntimeSource = "run-audit" | "run-binding";
+
 export function acceptedRiskFromContext(options: {
   context: ContextPacket;
   logger: StageLogger;
@@ -40,23 +43,31 @@ export function acceptedRiskFromContext(options: {
 }): RunnerOptions["acceptedRisk"] | undefined {
   if (options.runner.acceptedRisk) return options.runner.acceptedRisk;
 
-  const metadata = acceptedRiskMetadataForRunner(options.context, options.runner);
-  if (!metadata) return undefined;
+  const candidate = acceptedRiskMetadataForRunner(options.context, options.runner);
+  if (!candidate) return undefined;
 
-  const source = acceptedRiskRuntimeSource(options.context, options.runner);
-  if (!source) return undefined;
+  const source = acceptedRiskRuntimeSource(candidate.metadata, options.context, options.runner);
+  if (!source) {
+    options.logger.event("accepted_risk.skip", {
+      reason: "workflow-run-not-bound",
+      run: workflowRunIdFromUrl(options.runner.workflowRunUrl) || "",
+      stage: options.runner.stage,
+    });
+    return undefined;
+  }
 
   options.logger.event("accepted_risk.context.detected", {
-    cutoff: metadata.cutoff,
+    cutoff: candidate.metadata.cutoff,
     source,
     stage: options.runner.stage,
-    stages: metadata.stages.join(","),
+    stages: candidate.metadata.stages.join(","),
   });
   return {
-    actor: metadata.actor,
-    artifactSha: metadata.artifactSha,
-    cutoff: metadata.cutoff,
-    stages: metadata.stages,
+    actor: candidate.metadata.actor,
+    artifactSha: candidate.metadata.artifactSha,
+    cutoff: candidate.metadata.cutoff,
+    run: candidate.metadata.run,
+    stages: candidate.metadata.stages,
   };
 }
 
@@ -82,6 +93,17 @@ export function acceptedRiskApplies(options: {
   if (!Number.isFinite(Date.parse(accepted.cutoff))) {
     options.logger.event("accepted_risk.skip", { reason: "invalid-accepted-risk-cutoff" });
     return false;
+  }
+  if (accepted.run) {
+    const currentRun = workflowRunIdFromUrl(options.runner.workflowRunUrl);
+    if (!currentRun || currentRun !== accepted.run) {
+      options.logger.event("accepted_risk.skip", {
+        accepted_run: accepted.run,
+        current_run: currentRun || "",
+        reason: "workflow-run-changed",
+      });
+      return false;
+    }
   }
   if (options.context.artifact.type !== "pull-request") return true;
   if (!accepted.artifactSha) {
@@ -113,6 +135,22 @@ export function acceptedRiskContextUnits(
   });
 }
 
+export function contextWithoutAcceptedRiskMetadataSource(
+  context: ContextPacket,
+  runner: RunnerOptions,
+): ContextPacket {
+  const accepted = acceptedRiskMetadataForContext(context, runner);
+  if (!accepted) return context;
+
+  const timeline = context.timeline.filter((_, order) => order !== accepted.order);
+  const handoffs = context.handoffs?.filter(
+    (handoff) => !acceptedRiskHandoffSourceMatches(handoff, accepted.source),
+  );
+  const handoffsChanged = Boolean(context.handoffs && handoffs?.length !== context.handoffs.length);
+  if (timeline.length === context.timeline.length && !handoffsChanged) return context;
+  return { ...context, handoffs, timeline };
+}
+
 export function acceptedRiskLabelPresent(context: ContextPacket): boolean {
   return (context.artifact.labels || []).includes(gitVibeLabels.acceptRisk.name);
 }
@@ -128,11 +166,15 @@ export async function publishAcceptedRiskAudit(options: {
     options.logger.event("accepted_risk.audit.skip", { reason: "dry-run" });
     return;
   }
-  const body = acceptedRiskAuditBody(options);
-  if (options.context.artifact.type === "discussion") {
-    await publishDiscussionAudit(options, body);
+  if (options.runner.acceptedRisk?.run) {
+    options.logger.event("accepted_risk.audit.skip", { reason: "run-bound-metadata" });
   } else {
-    await publishIssueAudit(options, body);
+    const body = acceptedRiskAuditBody(options);
+    if (options.context.artifact.type === "discussion") {
+      await publishDiscussionAudit(options, body);
+    } else {
+      await publishIssueAudit(options, body);
+    }
   }
   await removeAcceptedRiskLabel(options);
 }
@@ -193,8 +235,8 @@ function acceptedRiskMetadataForContext(
 function acceptedRiskMetadataForRunner(
   context: ContextPacket,
   runner: RunnerOptions,
-): AcceptedRiskMetadata | undefined {
-  return acceptedRiskMetadataCandidates(context, runner).at(-1)?.metadata;
+): AcceptedRiskMetadataCandidate | undefined {
+  return acceptedRiskMetadataCandidates(context, runner).at(-1);
 }
 
 function acceptedRiskMetadataCandidates(
@@ -242,12 +284,46 @@ function acceptedRiskMetadataSource(item: TimelineItem): AcceptedRiskMetadataSou
   };
 }
 
+function acceptedRiskHandoffSourceMatches(
+  handoff: StageHandoff,
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const source = handoff.source;
+  return Boolean(
+    source?.bodySha === acceptedSource.bodySha &&
+    stringValue(source.kind) === acceptedSource.kind &&
+    stringValue(source.sourceUrl) === acceptedSource.sourceUrl &&
+    acceptedRiskSourceIdMatches(source, acceptedSource),
+  );
+}
+
+function acceptedRiskSourceIdMatches(
+  source: StageHandoff["source"],
+  acceptedSource: AcceptedRiskMetadataSource,
+): boolean {
+  const ids = new Set([stringValue(source?.id), stringValue(source?.databaseId)].filter(Boolean));
+  return Boolean(
+    (acceptedSource.id && ids.has(acceptedSource.id)) ||
+    (acceptedSource.databaseId && ids.has(acceptedSource.databaseId)),
+  );
+}
+
 function acceptedRiskRuntimeSource(
+  metadata: AcceptedRiskMetadata,
   context: ContextPacket,
   runner: RunnerOptions,
-): "label" | "run-audit" | undefined {
-  if (acceptedRiskLabelPresent(context)) return "label";
+): AcceptedRiskRuntimeSource | undefined {
+  if (acceptedRiskMetadataBoundToCurrentRun(metadata, runner)) return "run-binding";
+  if (metadata.run) return undefined;
   return acceptedRiskAuditForCurrentRun(context, runner) ? "run-audit" : undefined;
+}
+
+function acceptedRiskMetadataBoundToCurrentRun(
+  metadata: AcceptedRiskMetadata,
+  runner: RunnerOptions,
+): boolean {
+  const run = workflowRunIdFromUrl(runner.workflowRunUrl);
+  return Boolean(run && metadata.run && metadata.run === run);
 }
 
 function acceptedRiskAuditForCurrentRun(context: ContextPacket, runner: RunnerOptions): boolean {
@@ -293,6 +369,7 @@ function acceptedRiskMetadataMatches(options: {
     options.metadata.artifact === options.context.artifact.type &&
     options.metadata.number === options.context.artifact.number &&
     options.metadata.cutoff === options.accepted.cutoff &&
+    (!options.accepted.run || options.metadata.run === options.accepted.run) &&
     options.metadata.stages.includes(options.runner.stage)
   );
 }

@@ -159,6 +159,7 @@ function requestResponseFor(request, options) {
     return {};
   }
   if (request.method === "PATCH" && request.path.includes("/issues/")) {
+    if (options.issuePatchError) throw options.issuePatchError;
     return {};
   }
   if (request.method === "DELETE" && request.path.includes("/labels/")) {

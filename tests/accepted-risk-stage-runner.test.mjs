@@ -50,7 +50,7 @@ afterEach(() => {
 });
 
 describe("direct accepted-risk stage runs", () => {
-  it("publishes the audit and removes the accept-risk label", async () => {
+  it("removes the accept-risk label without a duplicate audit comment for run-bound metadata", async () => {
     const cwd = await workspace();
     generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
     const fetch = fetchMock([
@@ -58,6 +58,8 @@ describe("direct accepted-risk stage runs", () => {
       commentsResponse([acceptedRiskMetadataComment({ body: "Issue body" })]),
       response(200, { id: 4 }),
       response(200, { id: 5 }),
+      response(200, { id: 6 }),
+      response(200, { id: 7 }),
     ]);
     globalThis.fetch = fetch;
 
@@ -71,6 +73,7 @@ describe("direct accepted-risk stage runs", () => {
       stage: "investigate",
       stageTimeoutMinutes: 1,
       token: "token",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
 
     expect(result).toMatchObject({
@@ -78,7 +81,7 @@ describe("direct accepted-risk stage runs", () => {
       status: "completed",
       summary: "Ready.",
     });
-    expect(issueCommentBodies(fetch).join("\n")).toContain("GitVibe Risk Accepted");
+    expect(issueCommentBodies(fetch).join("\n")).not.toContain("GitVibe Risk Accepted");
     expect(labelRemovalPath(fetch, gitVibeLabels.acceptRisk.name)).toBeTruthy();
     expect(generateText).toHaveBeenCalledTimes(1);
   });
@@ -160,6 +163,7 @@ function acceptedRiskMetadataComment({ body, title = "Issue title" }) {
     artifactContentSha: acceptedRiskArtifactContentSha({ body, title }),
     cutoff: "2026-01-04T00:00:00Z",
     number: "12",
+    run: "99",
     stage: "investigate",
     stages: ["investigate"],
   };

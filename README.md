@@ -271,17 +271,15 @@ docker compose up -d
 
 Runtime variables:
 
-| Name                            | Required | Notes                                                            |
-| ------------------------------- | -------- | ---------------------------------------------------------------- |
-| Name                            | Required | Notes                                                            |
-| -----------------------------   | -------- | ---------------------------------------------------------------- |
-| `GITHUB_APP_ID`                 | Yes      | GitHub App ID                                                    |
-| `GITHUB_APP_PRIVATE_KEY`        | Yes      | GitHub App private key                                           |
-| `GITHUB_WEBHOOK_SECRET`         | Yes      | Must match the GitHub App webhook secret                         |
-| `GITVIBE_ACTIONS_OIDC_AUDIENCE` | Optional | Defaults to `https://git-vibe.markhuang.ai/actions/token`        |
-| `GITHUB_API_URL`                | Optional | Defaults to `https://api.github.com`                             |
-| `GITHUB_REPOSITORY`             | Optional | `owner/repo` for startup Discussion preflight                    |
-| `GITVIBE_DISCUSSION_CATEGORY`   | Optional | Defaults to `Ideas`                                              |
+| Name                            | Required | Notes                                                     |
+| ------------------------------- | -------- | --------------------------------------------------------- |
+| `GITHUB_APP_ID`                 | Yes      | GitHub App ID                                             |
+| `GITHUB_APP_PRIVATE_KEY`        | Yes      | GitHub App private key                                    |
+| `GITHUB_WEBHOOK_SECRET`         | Yes      | Must match the GitHub App webhook secret                  |
+| `GITVIBE_ACTIONS_OIDC_AUDIENCE` | Optional | Defaults to `https://git-vibe.markhuang.ai/actions/token` |
+| `GITHUB_API_URL`                | Optional | Defaults to `https://api.github.com`                      |
+| `GITHUB_REPOSITORY`             | Optional | `owner/repo` for startup Discussion preflight             |
+| `GITVIBE_DISCUSSION_CATEGORY`   | Optional | Defaults to `Ideas`                                       |
 
 Workflow dispatch, new implementation branch bases, and pull request bases use
 the repository variable `GITVIBE_BASE_BRANCH`. Empty or missing means GitVibe
@@ -461,7 +459,7 @@ Optional repository prompt additions live under
 `.git-vibe/prompts/<stage>/system.md` and `.git-vibe/prompts/<stage>/user.md`.
 They append to GitVibe's built-in prompts without replacing stage contracts,
 schema requirements, or branch/file mutation boundaries. See
-[Repository Prompt Additions](docs/AI.md#repository-prompt-additions).
+[Repository Prompt Additions](https://github.com/markhuangai/git-vibe/wiki/Configuration#repository-prompt-additions).
 
 Current implementation status:
 
@@ -475,7 +473,8 @@ Current implementation status:
 | Active `cli-codex` and `cli-claude-code` stage adapters                  | Implemented                 |
 | External GitHub mention partners                                         | Planned opt-in surface      |
 
-See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
+See the [GitVibe wiki](https://github.com/markhuangai/git-vibe/wiki) for the
+canonical long-form documentation.
 
 ## Security Model
 
@@ -510,12 +509,14 @@ app deployment unless shared, package, Docker, deploy, or app files change.
 
 Detailed docs:
 
-| Document                                     | Covers                                                                    |
-| -------------------------------------------- | ------------------------------------------------------------------------- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System shape, GitHub App auth model, event delivery modes, consumer setup |
-| [docs/WORKFLOW.md](docs/WORKFLOW.md)         | Issue, Discussion, label, approval, PR feedback, and traceability flows   |
-| [docs/AI.md](docs/AI.md)                     | Context assembly, AI contracts, provider strategy, tool policy, budgets   |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)   | Repo shape, quality gates, smoke tests, assumptions                       |
+| Wiki page                                                                                         | Covers                                                                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [Architecture](https://github.com/markhuangai/git-vibe/wiki/Architecture)                         | System shape, GitHub App auth model, event delivery modes, consumer setup |
+| [Workflows and Lifecycle](https://github.com/markhuangai/git-vibe/wiki/Workflows-and-Lifecycle)   | Issue, Discussion, label, approval, PR feedback, and traceability flows   |
+| [AI and Stage Contracts](https://github.com/markhuangai/git-vibe/wiki/AI-and-Stage-Contracts)     | Context assembly, AI contracts, provider strategy, tool policy, budgets   |
+| [Configuration](https://github.com/markhuangai/git-vibe/wiki/Configuration)                       | `.github/git-vibe.yml`, profiles, role groups, MCP, tests, budgets        |
+| [Development and Testing](https://github.com/markhuangai/git-vibe/wiki/Development-and-Testing)   | Repo shape, quality gates, smoke tests, assumptions                       |
+| [Security and Permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions) | GitHub App auth, trust boundaries, protected labels, CLI adapter risk     |
 
 ## Example action usage
 

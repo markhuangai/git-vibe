@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { gitVibeLabels } from "../src/shared/labels.ts";
 import {
   createApp,
@@ -43,9 +43,11 @@ describe("GitVibe app server accept-risk labels", () => {
     const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
     expect(updatedResult).toContain("### Accepted Risk");
     expect(updatedResult).toContain("git-vibe:accepted-risk-metadata");
+    expect(updatedResult).toContain("run=1");
+    expect(updatedResult).toContain("Accepted workflow run: `1`");
     expect(updatedResult).toContain("Accepted stages: `implement`, `create-pr`");
     expect(updatedResult).toContain("Artifact title/body SHA");
-    expect(requestPaths(client, "DELETE")).not.toContain(
+    expect(requestPaths(client, "DELETE")).toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
     );
     expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
@@ -53,6 +55,121 @@ describe("GitVibe app server accept-risk labels", () => {
     );
   });
 
+  it("removes accept-risk without writing metadata when dispatch returns no run id", async () => {
+    const client = createClient({
+      comments: [
+        stageResultComment({
+          artifact: "issue",
+          number: 9,
+          stage: "implement",
+          submittedAt: "2026-01-02T00:00:00Z",
+        }),
+      ],
+      permission: { role_name: "maintain" },
+      workflowDispatchResponse: { ref: "main" },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({
+        inputs: { "issue-number": "9" },
+      }),
+    ]);
+    expect(requestBodies(client, "PATCH", "/issues/comments/100")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "did not return a workflow run id",
+    );
+  });
+});
+
+describe("GitVibe app server accept-risk run id binding", () => {
+  it("binds accepted risk from workflow html_url when workflow_run_id is absent", async () => {
+    const client = createClient({
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      permission: { role_name: "maintain" },
+      workflowDispatchResponse: {
+        html_url: "https://github.com/example/repo/actions/runs/42",
+        ref: "main",
+      },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
+    expect(updatedResult).toContain("run=42");
+    expect(updatedResult).toContain("Accepted workflow run: `42`");
+  });
+
+  it("binds accepted risk from workflow run_url when html_url is absent", async () => {
+    const client = createClient({
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      permission: { role_name: "maintain" },
+      workflowDispatchResponse: {
+        ref: "main",
+        run_url: "https://api.github.com/repos/example/repo/actions/runs/43",
+      },
+    });
+
+    await createApp({ client }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
+    expect(updatedResult).toContain("run=43");
+    expect(updatedResult).toContain("Accepted workflow run: `43`");
+  });
+});
+
+describe("GitVibe app server accept-risk dispatch failures", () => {
+  it("removes accept-risk without writing metadata when dispatch fails", async () => {
+    const client = createClient({
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      permission: { role_name: "maintain" },
+      workflowDispatchError: new Error("dispatch unavailable"),
+      workflowDispatchErrorCount: 1,
+    });
+    const log = vi.fn();
+
+    await createApp({ client, log }).handleWebhook("issues", {
+      action: "labeled",
+      issue: { number: 9 },
+      label: { name: gitVibeLabels.acceptRisk.name },
+      repository: repositoryPayload(),
+      sender: { login: "maintainer" },
+    });
+
+    expect(requestBodies(client, "PATCH", "/issues/comments/100")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/9/comments").at(-1).body).toContain(
+      "could not queue a run-bound accepted-risk workflow",
+    );
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("dispatch unavailable"));
+  });
+});
+
+describe("GitVibe app server accept-risk pull request reviews", () => {
   it("resumes blocked pull request reviews from PR review bodies and binds the head SHA", async () => {
     const client = createClient({
       permission: { role_name: "maintain" },
@@ -82,6 +199,9 @@ describe("GitVibe app server accept-risk labels", () => {
     ]);
     expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
       "### Accepted Risk",
+    );
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
+      "Accepted workflow run: `1`",
     );
     expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
       "Pull request head SHA: `head-sha`",
