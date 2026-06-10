@@ -4,7 +4,9 @@
 
 GitVibe is a repository webhook server plus reusable GitHub Actions/workflows for AI-assisted development through issues, discussions, labels, workflow runs, branches, and pull requests.
 
-The canonical product/architecture plan is [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md).
+The canonical long-form product, architecture, workflow, AI, and development
+documentation lives in the
+[GitVibe wiki](https://github.com/markhuangai/git-vibe/wiki).
 
 ## Workflow
 

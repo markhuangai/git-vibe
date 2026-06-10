@@ -248,8 +248,8 @@ jq -Rs . < ~/.codex/auth.json
 ```
 
 Create `GITVIBE_GITHUB_TOKEN` as a fine-grained PAT scoped to the managed
-repository. See
-[fine-grained PAT repository permissions](docs/WORKFLOW.md#fine-grained-pat-permissions)
+repository. See the
+[fine-grained PAT repository permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions#fine-grained-pat-permissions)
 for the required permission set and access levels. Include repository Actions
 secrets read/write permission only when using `CODEX_AUTH_JSON`, because GitVibe
 then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
@@ -455,7 +455,7 @@ Optional repository prompt additions live under
 `.git-vibe/prompts/<stage>/system.md` and `.git-vibe/prompts/<stage>/user.md`.
 They append to GitVibe's built-in prompts without replacing stage contracts,
 schema requirements, or branch/file mutation boundaries. See
-[Repository Prompt Additions](docs/AI.md#repository-prompt-additions).
+[Repository Prompt Additions](https://github.com/markhuangai/git-vibe/wiki/Configuration#repository-prompt-additions).
 
 Current implementation status:
 
@@ -469,7 +469,8 @@ Current implementation status:
 | Active `cli-codex` and `cli-claude-code` stage adapters                  | Implemented                 |
 | External GitHub mention partners                                         | Planned opt-in surface      |
 
-See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full plan index.
+See the [GitVibe wiki](https://github.com/markhuangai/git-vibe/wiki) for the
+canonical long-form documentation.
 
 ## Security Model
 
@@ -503,12 +504,14 @@ app deployment unless shared, package, Docker, deploy, or app files change.
 
 Detailed docs:
 
-| Document                                     | Covers                                                                  |
-| -------------------------------------------- | ----------------------------------------------------------------------- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System shape, webhook/PAT model, event delivery modes, consumer setup   |
-| [docs/WORKFLOW.md](docs/WORKFLOW.md)         | Issue, Discussion, label, approval, PR feedback, and traceability flows |
-| [docs/AI.md](docs/AI.md)                     | Context assembly, AI contracts, provider strategy, tool policy, budgets |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)   | Repo shape, quality gates, smoke tests, assumptions                     |
+| Wiki page                                                                                         | Covers                                                                  |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [Architecture](https://github.com/markhuangai/git-vibe/wiki/Architecture)                         | System shape, webhook/PAT model, event delivery modes, consumer setup   |
+| [Workflows and Lifecycle](https://github.com/markhuangai/git-vibe/wiki/Workflows-and-Lifecycle)   | Issue, Discussion, label, approval, PR feedback, and traceability flows |
+| [AI and Stage Contracts](https://github.com/markhuangai/git-vibe/wiki/AI-and-Stage-Contracts)     | Context assembly, AI contracts, provider strategy, tool policy, budgets |
+| [Configuration](https://github.com/markhuangai/git-vibe/wiki/Configuration)                       | `.github/git-vibe.yml`, profiles, role groups, MCP, tests, budgets      |
+| [Development and Testing](https://github.com/markhuangai/git-vibe/wiki/Development-and-Testing)   | Repo shape, quality gates, smoke tests, assumptions                     |
+| [Security and Permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions) | PAT scope, trust boundaries, protected labels, CLI adapter risk         |
 
 ## Example action usage
 

@@ -445,7 +445,7 @@ describe("stage runner matrix finalizer accepted risk pull requests", () => {
       ]),
       pullRequestFilesResponse([
         {
-          filename: "docs/ARCHITECTURE.md",
+          filename: "guides/ARCHITECTURE.md",
           patch: "@@ -0,0 +1 @@\n+developer mode",
           status: "modified",
         },
@@ -475,7 +475,7 @@ describe("stage runner matrix finalizer accepted risk pull requests", () => {
       parsedOutput: { comment_body: "Synthesized.", next_state: "review-passed" },
       status: "completed",
     });
-    expect(result.parsedOutput.findings.join("\n")).not.toContain("docs/ARCHITECTURE.md");
+    expect(result.parsedOutput.findings.join("\n")).not.toContain("guides/ARCHITECTURE.md");
     expect(generateText.mock.calls[0][0].prompt).not.toContain(
       "GitVibe paused this run for maintainer review",
     );
