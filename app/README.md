@@ -40,7 +40,6 @@ Optional runtime values:
 
 ```text
 GITHUB_API_URL=https://api.github.com
-GITHUB_REPOSITORY=owner/repo
 GITVIBE_ACTIONS_OIDC_AUDIENCE=https://git-vibe.markhuang.ai/actions/token
 GITVIBE_DISCUSSION_CATEGORY=Ideas
 ```
@@ -57,11 +56,8 @@ When deploying through GitHub Actions, store the App ID as repository variable
 `GITVIBE_GITHUB_APP_ID`, the App private key as `GITVIBE_APP_PRIVATE_KEY`, and
 the webhook secret as `WEBHOOK_SECRET`; the deploy workflow maps them to runtime
 environment variables.
-Do not create a repository secret or variable named `GITHUB_REPOSITORY`. GitHub
-Actions provides it to the deploy workflow automatically, and Docker Compose
-passes that existing value into the container. Manual Docker deployments may set
-`GITHUB_REPOSITORY=owner/repo` to enable startup preflight; otherwise GitVibe
-checks repository-specific setup when webhooks arrive.
+Repository setup checks run from GitHub App installation webhooks and repository
+webhooks, not from deploy-time repository environment variables.
 
 ## Run
 

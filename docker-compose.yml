@@ -11,8 +11,6 @@ services:
     environment:
       GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
       GITHUB_APP_ID: ${GITHUB_APP_ID:?GITHUB_APP_ID is required}
-      # GitHub Actions provides this automatically; manual Docker runs may omit it.
-      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET is required}
       GITVIBE_ACTIONS_OIDC_AUDIENCE: ${GITVIBE_ACTIONS_OIDC_AUDIENCE:-https://git-vibe.markhuang.ai/actions/token}
       GITVIBE_APP_PRIVATE_KEY: ${GITVIBE_APP_PRIVATE_KEY:?GITVIBE_APP_PRIVATE_KEY is required}

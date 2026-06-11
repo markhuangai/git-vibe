@@ -10,7 +10,6 @@ export function createApp(options = {}) {
     actionsOidcVerifier: options.actionsOidcVerifier,
     appAuth: options.appAuth || createAppAuth(),
     client: options.client || createClient(),
-    configuredRepository: options.configuredRepository || "",
     errorLog: options.errorLog || vi.fn(),
     log: options.log || vi.fn(),
     trustedWorkflowRefPattern: options.trustedWorkflowRefPattern,

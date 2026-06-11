@@ -278,7 +278,6 @@ Runtime variables:
 | `GITVIBE_ACTIONS_OIDC_AUDIENCE` | Optional | Defaults to `https://git-vibe.markhuang.ai/actions/token` |
 | `GITVIBE_APP_PRIVATE_KEY`       | Yes      | GitHub App private key                                    |
 | `GITHUB_API_URL`                | Optional | Defaults to `https://api.github.com`                      |
-| `GITHUB_REPOSITORY`             | Optional | `owner/repo` for startup Discussion preflight             |
 | `GITVIBE_DISCUSSION_CATEGORY`   | Optional | Defaults to `Ideas`                                       |
 
 Workflow dispatch, new implementation branch bases, and pull request bases use
