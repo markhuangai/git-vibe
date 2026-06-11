@@ -9,15 +9,37 @@ describe("GitVibe matrix workflow labels", () => {
         ".github/workflows/address-feedback.yml",
         "investigate-feedback-members",
         "plan-investigate-feedback",
+        "git-vibe-investigate-feedback-member-${{ matrix.index }} / ",
       ],
-      [".github/workflows/develop.yml", "review-matrix-members", "plan-review-matrix"],
-      [".github/workflows/review.yml", "review-matrix-members", "plan-review-matrix"],
-      [".github/workflows/investigate.yml", "investigate-members", "plan-investigate"],
-      [".github/workflows/validate.yml", "validate-members", "plan-validate"],
+      [
+        ".github/workflows/develop.yml",
+        "review-matrix-members",
+        "plan-review-matrix",
+        "git-vibe-review-member-${{ matrix.index }} / ",
+      ],
+      [
+        ".github/workflows/review.yml",
+        "review-matrix-members",
+        "plan-review-matrix",
+        "git-vibe-review-member-${{ matrix.index }} / ",
+      ],
+      [
+        ".github/workflows/investigate.yml",
+        "investigate-members",
+        "plan-investigate",
+        "git-vibe-investigate-member-${{ matrix.index }} / ",
+      ],
+      [
+        ".github/workflows/validate.yml",
+        "validate-members",
+        "plan-validate",
+        "git-vibe-validate-member-${{ matrix.index }} / ",
+      ],
     ];
 
-    for (const [file, job, plan] of cases) {
+    for (const [file, job, plan, prefix] of cases) {
       const expected = [
+        prefix,
         "${{ fromJSON(needs.",
         plan,
         ".outputs.labels)[format('{0}', matrix.index)] }}",

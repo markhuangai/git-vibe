@@ -2,9 +2,6 @@ name: GitVibe investigate
 description: Inspect an approved issue or pull request feedback and produce implementation context.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   issue-number:
     description: Issue number to investigate. Required unless pr-number is set.
     required: false
@@ -76,6 +73,9 @@ runs:
   steps:
     - name: Build GitVibe action runtime
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: |
         cd "$GITHUB_ACTION_PATH/.."
         if command -v corepack >/dev/null 2>&1 && corepack enable; then
@@ -92,6 +92,8 @@ runs:
     - name: Set up configured AI CLI
       shell: bash
       env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
         GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
         GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
         GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
@@ -99,7 +101,6 @@ runs:
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
         GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}

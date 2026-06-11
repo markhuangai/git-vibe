@@ -28,6 +28,7 @@ const requiredInstallSourcePaths = [
 ];
 
 const requiredWorkflowSourcePaths = requiredInstallSourcePaths.filter(isWorkflowSourcePath);
+const requiredUpdateSourcePaths = [".github/git-vibe.yml", ...requiredWorkflowSourcePaths];
 
 export function buildInstallFiles(options: {
   cwd: string;
@@ -40,15 +41,15 @@ export function buildInstallFiles(options: {
     .map((file) => buildInstallFile(file, options.cwd, options.releaseTag));
 }
 
-export function buildWorkflowUpdateFiles(options: {
+export function buildUpdateFiles(options: {
   cwd: string;
   releaseTag: string;
   sourceFiles: ConsumerStarterFile[];
 }): InstallFile[] {
-  requireSourcePaths(options.sourceFiles, requiredWorkflowSourcePaths, options.releaseTag);
+  requireSourcePaths(options.sourceFiles, requiredUpdateSourcePaths, options.releaseTag);
   return options.sourceFiles
-    .filter((file) => isWorkflowSourcePath(file.relativePath))
-    .map((file) => buildInstallFile(file, options.cwd, options.releaseTag));
+    .filter((file) => isUpdateSourcePath(file.relativePath))
+    .map((file) => buildUpdateFile(file, options.cwd, options.releaseTag));
 }
 
 export function blockingInstallPaths(files: InstallFile[]): string[] {
@@ -60,6 +61,7 @@ export function blockingInstallPaths(files: InstallFile[]): string[] {
 
 export function unmanagedWorkflowUpdatePaths(files: InstallFile[]): string[] {
   return files
+    .filter(isWorkflowInstallFile)
     .filter((file) => existsSync(file.targetPath) && !isManagedWorkflowTarget(file))
     .map((file) => file.targetPath)
     .sort();
@@ -116,6 +118,11 @@ export function pinWorkflowReleaseRefs(content: string, releaseTag: string): str
     /(uses:\s*markhuangai\/git-vibe\/\.github\/workflows\/[^\s@]+)@[^\s]+/g,
     (_match, workflowReference) => `${workflowReference}@${releaseTag}`,
   );
+}
+
+export function migrateGitVibeConfigContent(content: string): string {
+  const migratedComments = migrateLegacyEventDeliveryComments(content);
+  return ensureTrailingNewline(migrateGithubAuthConfig(migratedComments));
 }
 
 function isManagedWorkflowTarget(file: InstallFile): boolean {
@@ -203,6 +210,28 @@ function buildInstallFile(
   };
 }
 
+function buildUpdateFile(
+  sourceFile: ConsumerStarterFile,
+  cwd: string,
+  releaseTag: string,
+): InstallFile {
+  const targetPath = join(cwd, safeRelativePath(sourceFile.relativePath));
+  const existingContent = fileContentIfExists(targetPath);
+  let content = pinWorkflowReleaseRefs(sourceFile.content, releaseTag);
+
+  if (sourceFile.relativePath === ".github/git-vibe.yml" && existingContent !== undefined) {
+    content = migrateGitVibeConfigContent(existingContent);
+  } else if (isWorkflowSourcePath(sourceFile.relativePath) && existingContent !== undefined) {
+    content = preserveWorkflowRunner(content, existingContent);
+  }
+
+  return {
+    content,
+    sourcePath: sourceFile.sourcePath,
+    targetPath,
+  };
+}
+
 function requireSourcePaths(
   sourceFiles: ConsumerStarterFile[],
   requiredPaths: string[],
@@ -223,8 +252,16 @@ function isInstallSourcePath(relativePath: string): boolean {
   return relativePath.startsWith(".github/") || relativePath.startsWith(".git-vibe/");
 }
 
+function isUpdateSourcePath(relativePath: string): boolean {
+  return relativePath === ".github/git-vibe.yml" || isWorkflowSourcePath(relativePath);
+}
+
 function isWorkflowSourcePath(relativePath: string): boolean {
   return relativePath.startsWith(".github/workflows/") && relativePath.endsWith(".yml");
+}
+
+function isWorkflowInstallFile(file: InstallFile): boolean {
+  return file.sourcePath.includes(".github/workflows/") && file.sourcePath.endsWith(".yml");
 }
 
 function safeRelativePath(relativePath: string): string {
@@ -238,4 +275,34 @@ function safeRelativePath(relativePath: string): string {
   if (isSafe) return relativePath;
 
   throw new Error(`git-vibe-setup found an unsafe starter file path: ${relativePath}`);
+}
+
+function fileContentIfExists(targetPath: string): string | undefined {
+  if (!existsSync(targetPath)) return undefined;
+  return readFileSync(targetPath, "utf8");
+}
+
+function preserveWorkflowRunner(generatedContent: string, existingContent: string): string {
+  const runner = /^\s+runner:\s*(.+)$/m.exec(existingContent)?.[1];
+  if (!runner) return generatedContent;
+  return generatedContent.replace(/^(\s+runner:\s*).+$/m, `$1${runner}`);
+}
+
+function migrateLegacyEventDeliveryComments(content: string): string {
+  return content.replace(
+    /^event_delivery:\n  # webhook: repository webhook points at the self-hosted GitVibe server\.\n  # relay: webhook proxy\/tunnel such as Smee, Hookdeck, Cloudflare Tunnel, or ngrok\.\n  # actions: no-server receiver workflows in the consumer repository\.\n  # polling: local\/scheduled worker polls GitHub APIs with cursors\/ETags\.\n/m,
+    "event_delivery:\n  # Hosted GitHub App installs configure webhooks centrally; repositories do not create hooks.\n",
+  );
+}
+
+function migrateGithubAuthConfig(content: string): string {
+  const githubAppAuth = "github_auth:\n  mode: github-app\n";
+  if (/^github_auth:\n/m.test(content)) {
+    return content.replace(/^github_auth:\n(?:[ \t]+.*(?:\n|$))*/m, githubAppAuth);
+  }
+  return `${content.trimEnd()}\n\n${githubAppAuth}`;
+}
+
+function ensureTrailingNewline(content: string): string {
+  return content.endsWith("\n") ? content : `${content}\n`;
 }

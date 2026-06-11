@@ -38,10 +38,10 @@
 
 ## What it does
 
-GitVibe is a self-hostable GitHub automation layer for teams that want AI help
+GitVibe is a hosted GitHub App automation layer for teams that want AI help
 without moving product decisions, review, or merge authority out of GitHub.
 
-It listens to repository webhooks, verifies who is allowed to act, dispatches
+It listens to GitHub App webhooks, verifies who is allowed to act, dispatches
 reusable GitHub workflows, runs stage-specific AI workers, validates structured
 AI output, and writes routine GitHub state changes with deterministic code.
 
@@ -202,12 +202,10 @@ Secrets belong in GitHub repository or organization secrets, not in
 `git-vibe-setup` prints this list after it writes files. It does not collect or
 store secret values.
 
-| Name                   | Required | Purpose                                                                     |
-| ---------------------- | -------- | --------------------------------------------------------------------------- |
-| `GITVIBE_AI_ENV_JSON`  | Yes      | JSON env bundle for AI provider config, CLI auth, and provider variables    |
-| `GITVIBE_GITHUB_TOKEN` | Yes      | Fine-grained PAT for server-side and workflow GitHub writes                 |
-| `GITVIBE_MCP_ENV_JSON` | No       | JSON env bundle for configured MCP server credentials                       |
-| `WEBHOOK_SECRET`       | Yes      | GitHub webhook shared secret; deployment maps it to `GITHUB_WEBHOOK_SECRET` |
+| Name                   | Required | Purpose                                                                  |
+| ---------------------- | -------- | ------------------------------------------------------------------------ |
+| `GITVIBE_AI_ENV_JSON`  | Yes      | JSON env bundle for AI provider config, CLI auth, and provider variables |
+| `GITVIBE_MCP_ENV_JSON` | No       | JSON env bundle for configured MCP server credentials                    |
 
 Useful variables:
 
@@ -247,13 +245,8 @@ Prepare Codex auth JSON as a compact string before adding it to the bundle:
 jq -Rs . < ~/.codex/auth.json
 ```
 
-Create `GITVIBE_GITHUB_TOKEN` as a fine-grained PAT scoped to the managed
-repository. See the
-[fine-grained PAT repository permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions#fine-grained-pat-permissions)
-for the required permission set and access levels. Include repository Actions
-secrets read/write permission only when using `CODEX_AUTH_JSON`, because GitVibe
-then writes refreshed Codex auth back to the repository `GITVIBE_AI_ENV_JSON`
-secret.
+Hosted GitVibe uses the installed GitHub App for GitHub writes. Customers do not
+create a repo-level webhook or `GITVIBE_GITHUB_TOKEN` secret.
 
 ### 4. Run the app server
 
@@ -261,47 +254,58 @@ For local source runs:
 
 ```bash
 corepack pnpm build:app
+GITHUB_APP_ID=... \
 GITHUB_WEBHOOK_SECRET=... \
-GITVIBE_GITHUB_TOKEN=... \
+GITVIBE_APP_PRIVATE_KEY=... \
 corepack pnpm start
 ```
 
 For Docker Compose:
 
 ```bash
+GITHUB_APP_ID=... \
 GITHUB_WEBHOOK_SECRET=... \
-GITVIBE_GITHUB_TOKEN=... \
+GITVIBE_APP_PRIVATE_KEY=... \
 docker compose up -d
 ```
 
 Runtime variables:
 
-| Name                          | Required | Notes                                             |
-| ----------------------------- | -------- | ------------------------------------------------- |
-| `GITHUB_WEBHOOK_SECRET`       | Yes      | Must match the repository webhook secret          |
-| `GITVIBE_GITHUB_TOKEN`        | Yes      | Fine-grained PAT scoped to the managed repository |
-| `GITHUB_API_URL`              | Optional | Defaults to `https://api.github.com`              |
-| `GITHUB_REPOSITORY`           | Optional | `owner/repo` for startup Discussion preflight     |
-| `GITVIBE_DISCUSSION_CATEGORY` | Optional | Defaults to `Ideas`                               |
+| Name                            | Required | Notes                                                     |
+| ------------------------------- | -------- | --------------------------------------------------------- |
+| `GITHUB_APP_ID`                 | Yes      | GitHub App ID                                             |
+| `GITHUB_WEBHOOK_SECRET`         | Yes      | Must match the GitHub App webhook secret                  |
+| `GITVIBE_ACTIONS_OIDC_AUDIENCE` | Optional | Defaults to `https://git-vibe.markhuang.ai/actions/token` |
+| `GITVIBE_APP_PRIVATE_KEY`       | Yes      | GitHub App private key                                    |
+| `GITHUB_API_URL`                | Optional | Defaults to `https://api.github.com`                      |
+| `GITVIBE_DISCUSSION_CATEGORY`   | Optional | Defaults to `Ideas`                                       |
 
 Workflow dispatch, new implementation branch bases, and pull request bases use
 the repository variable `GITVIBE_BASE_BRANCH`. Empty or missing means GitVibe
 uses the repository `default_branch` reported by GitHub.
 
-### 5. Configure the repository webhook
+### 5. Install the GitHub App
 
-Create a repository webhook:
+Install the GitVibe GitHub App on the repositories you want GitVibe to manage.
+The App registration owns webhook delivery, so repositories do not create
+repo-level webhooks.
+
+GitHub App registration values:
 
 ```text
-Payload URL: https://<your-gitvibe-host>/webhooks
-Content type: application/json
-Secret: same value as WEBHOOK_SECRET
-SSL verification: enabled
+Homepage URL: https://markhuang.ai/manuals/git-vibe
+Setup URL: https://markhuang.ai/manuals/git-vibe/repository-settings
+Webhook URL: https://git-vibe.markhuang.ai/webhooks
+Callback URL: blank
+Request user authorization during installation: off
+Device flow: off
 ```
 
-Select individual events:
+Subscribe the App to these webhook events:
 
 ```text
+Installation
+Installation repositories
 Issues
 Issue comments
 Sub-issues
@@ -310,6 +314,22 @@ Discussion comments
 Pull requests
 Pull request reviews
 ```
+
+Repository permissions for the GitVibe App registration:
+
+```text
+Actions: Read and write
+Checks: Read-only
+Contents: Read and write
+Discussions: Read and write
+Issues: Read and write
+Pull requests: Read and write
+Secrets: Read and write
+Workflows: Read and write
+```
+
+These are permissions on the hosted GitVibe App installation. Customer
+repositories do not create GitHub environments for hosted auth.
 
 Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
@@ -360,8 +380,7 @@ Minimal shape:
 version: 1
 
 github_auth:
-  mode: webhook-pat
-  token_secret: GITVIBE_GITHUB_TOKEN
+  mode: github-app
 
 ai:
   profiles:
@@ -461,7 +480,7 @@ Current implementation status:
 
 | Area                                                                     | Status                      |
 | ------------------------------------------------------------------------ | --------------------------- |
-| Direct repository webhook mode                                           | Implemented first           |
+| Hosted GitHub App webhook mode                                           | Implemented                 |
 | `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first           |
 | Source-built composite actions and reusable workflows                    | Implemented                 |
 | JSON Schema stage contracts                                              | Implemented                 |
@@ -474,18 +493,19 @@ canonical long-form documentation.
 
 ## Security Model
 
-| Boundary      | Rule                                                                                           |
-| ------------- | ---------------------------------------------------------------------------------------------- |
-| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events                          |
-| Commands      | The server checks repository permission before protected actions                               |
-| Labels        | Public `git-vibe:` trigger labels are policy-gated; internal `gvi:` labels are GitVibe-managed |
-| Secrets       | Tokens stay in GitHub secrets or server runtime env, never in config                           |
-| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state              |
-| Branch writes | Implementation uses `git-vibe/{root-issue}`; PR feedback updates the existing PR branch        |
-| Pull requests | GitVibe can open or update PRs, but humans review and merge                                    |
+| Boundary      | Rule                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| Webhooks      | The app verifies GitHub `x-hub-signature-256` before accepting events                             |
+| Commands      | The server checks repository permission before protected actions                                  |
+| Labels        | Public `git-vibe:` trigger labels are policy-gated; internal `gvi:` labels are GitVibe-managed    |
+| Secrets       | App private keys and AI credentials stay in GitHub secrets or server runtime env, never in config |
+| AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state                 |
+| Branch writes | Implementation uses `git-vibe/{root-issue}`; PR feedback updates the existing PR branch           |
+| Pull requests | GitVibe can open or update PRs, but humans review and merge                                       |
 
-The PAT is long-lived. Scope it narrowly to the managed repository and never log
-or render it.
+Installation tokens are short-lived, repository-scoped, and minted from the
+GitHub App private key. Never log or render App private keys, OIDC tokens, or
+installation tokens.
 
 ## Architecture
 
@@ -493,7 +513,7 @@ GitVibe is one TypeScript package split by runtime boundary:
 
 ```text
 src/
-  app/       self-hosted webhook server and repository orchestration
+  app/       hosted GitHub App webhook server and repository orchestration
   runner/    action runtime, context assembly, prompts, schemas, AI execution
   shared/    GitHub helpers, labels, stage definitions, traceability types
 ```
@@ -504,14 +524,14 @@ app deployment unless shared, package, Docker, deploy, or app files change.
 
 Detailed docs:
 
-| Wiki page                                                                                         | Covers                                                                  |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [Architecture](https://github.com/markhuangai/git-vibe/wiki/Architecture)                         | System shape, webhook/PAT model, event delivery modes, consumer setup   |
-| [Workflows and Lifecycle](https://github.com/markhuangai/git-vibe/wiki/Workflows-and-Lifecycle)   | Issue, Discussion, label, approval, PR feedback, and traceability flows |
-| [AI and Stage Contracts](https://github.com/markhuangai/git-vibe/wiki/AI-and-Stage-Contracts)     | Context assembly, AI contracts, provider strategy, tool policy, budgets |
-| [Configuration](https://github.com/markhuangai/git-vibe/wiki/Configuration)                       | `.github/git-vibe.yml`, profiles, role groups, MCP, tests, budgets      |
-| [Development and Testing](https://github.com/markhuangai/git-vibe/wiki/Development-and-Testing)   | Repo shape, quality gates, smoke tests, assumptions                     |
-| [Security and Permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions) | PAT scope, trust boundaries, protected labels, CLI adapter risk         |
+| Wiki page                                                                                         | Covers                                                                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [Architecture](https://github.com/markhuangai/git-vibe/wiki/Architecture)                         | System shape, GitHub App auth model, event delivery modes, consumer setup |
+| [Workflows and Lifecycle](https://github.com/markhuangai/git-vibe/wiki/Workflows-and-Lifecycle)   | Issue, Discussion, label, approval, PR feedback, and traceability flows   |
+| [AI and Stage Contracts](https://github.com/markhuangai/git-vibe/wiki/AI-and-Stage-Contracts)     | Context assembly, AI contracts, provider strategy, tool policy, budgets   |
+| [Configuration](https://github.com/markhuangai/git-vibe/wiki/Configuration)                       | `.github/git-vibe.yml`, profiles, role groups, MCP, tests, budgets        |
+| [Development and Testing](https://github.com/markhuangai/git-vibe/wiki/Development-and-Testing)   | Repo shape, quality gates, smoke tests, assumptions                       |
+| [Security and Permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions) | GitHub App auth, trust boundaries, protected labels, CLI adapter risk     |
 
 ## Example action usage
 
@@ -522,7 +542,6 @@ steps:
       persist-credentials: false
   - uses: markhuangai/git-vibe/investigate@v3
     with:
-      token: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       issue-number: "123"
 ```
 
@@ -536,7 +555,6 @@ jobs:
       issue-number: "123"
       runner: docker-runner
     secrets:
-      GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
       GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
 ```

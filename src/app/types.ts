@@ -26,6 +26,7 @@ export interface WebhookPayload {
     title?: string;
     user?: { login?: string };
   };
+  installation?: { account?: { login?: string }; id?: number | string };
   label?: { id?: string | number; name?: string; node_id?: string; nodeId?: string };
   pull_request?: {
     body?: string | null;
@@ -44,5 +45,13 @@ export interface WebhookPayload {
     url?: string;
   };
   repository?: { name: string; owner: { login: string } };
+  repositories?: WebhookRepositoryReference[];
+  repositories_added?: WebhookRepositoryReference[];
   sender?: { login?: string; type?: string };
+}
+
+export interface WebhookRepositoryReference {
+  full_name?: string;
+  name?: string;
+  owner?: { login?: string };
 }

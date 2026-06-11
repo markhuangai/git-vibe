@@ -13,8 +13,7 @@ event_delivery:
     interval_seconds: 300
 
 github_auth:
-  mode: webhook-pat
-  token_secret: GITVIBE_GITHUB_TOKEN
+  mode: github-app
 
 tests:
   commands:

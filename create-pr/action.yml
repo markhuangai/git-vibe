@@ -2,9 +2,6 @@ name: GitVibe create PR
 description: Create or update the GitVibe pull request for an implementation issue.
 
 inputs:
-  token:
-    description: GitHub token used for API access.
-    required: true
   issue-number:
     description: Issue number being implemented.
     required: true
@@ -40,6 +37,9 @@ runs:
   steps:
     - name: Build GitVibe action runtime
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: |
         cd "$GITHUB_ACTION_PATH/.."
         if command -v corepack >/dev/null 2>&1 && corepack enable; then
@@ -55,11 +55,13 @@ runs:
         "${pnpm_cmd[@]}" build
     - name: Set up configured AI CLI
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" create-pr
     - id: run
       shell: bash
       env:
-        GITVIBE_GITHUB_TOKEN: ${{ inputs.token }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}

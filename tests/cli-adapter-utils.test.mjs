@@ -32,7 +32,7 @@ describe("CLI profile environment bundle", () => {
       {
         CLAUDE_CODE_OAUTH_TOKEN: "old-claude-token",
         CODEX_AUTH_JSON: "old-codex-auth",
-        GITVIBE_GITHUB_TOKEN: "repo-token",
+        GITVIBE_GITHUB_APP_TOKEN: "repo-token",
         GITVIBE_AI_API_KEY: "old-ai-key",
         GITVIBE_AI_BASE_URL: "https://old-ai.test/v1",
         GITVIBE_AI_ENV_JSON: JSON.stringify({
@@ -53,7 +53,7 @@ describe("CLI profile environment bundle", () => {
     expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(env.CODEX_AUTH_JSON).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
-    expect(env.GITVIBE_GITHUB_TOKEN).toBeUndefined();
+    expect(env.GITVIBE_GITHUB_APP_TOKEN).toBeUndefined();
     expect(env.GITVIBE_AI_API_KEY).toBeUndefined();
     expect(env.GITVIBE_AI_BASE_URL).toBeUndefined();
     expect(env.UNUSED_KEY).toBeUndefined();

@@ -8,6 +8,8 @@ import {
   verifyGitHubSignature,
 } from "./server-http.js";
 import type { WebhookPayload } from "./types.js";
+import type { ActionsCodexAuthWritebackResponse } from "./actions-codex-auth.js";
+import type { ActionsTokenResponse } from "./actions-token.js";
 
 export interface RequestHandlerState {
   config: {
@@ -18,16 +20,34 @@ export interface RequestHandlerState {
 }
 
 export type WebhookHandler = (event: string, payload: WebhookPayload) => Promise<void>;
+export type ActionsCodexAuthWritebackHandler = (
+  body: string,
+) => Promise<ActionsCodexAuthWritebackResponse>;
+export type ActionsTokenHandler = (body: string) => Promise<ActionsTokenResponse>;
 
 export async function handleRequest(
   state: RequestHandlerState,
   req: IncomingMessage,
   res: ServerResponse,
   handleWebhook: WebhookHandler,
+  handleActionsToken: ActionsTokenHandler,
+  handleActionsCodexAuthWriteback: ActionsCodexAuthWritebackHandler,
 ): Promise<void> {
   try {
     if (req.method === "GET" && req.url === "/health") {
       sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/actions/token") {
+      const body = await readBody(req, 256 * 1024);
+      sendJson(res, 200, await handleActionsToken(body));
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/actions/codex-auth") {
+      const body = await readBody(req, 256 * 1024);
+      sendJson(res, 200, await handleActionsCodexAuthWriteback(body));
       return;
     }
 

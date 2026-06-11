@@ -21,6 +21,7 @@ jobs:
   release:
     runs-on: rootless-docker
     outputs:
+      app_changed: ${{ steps.app_changes.outputs.app_changed }}
       prerelease: ${{ steps.release.outputs.prerelease }}
       release_tag: ${{ steps.release.outputs.release_tag }}
     env:
@@ -41,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}-[0-9A-Za-z._-]+$ ]]; then
+          if [[ "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}-[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
             prerelease=true
             required_ref=refs/heads/dev
           elif [[ "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}$ ]]; then
@@ -90,7 +91,49 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Detect app-impacting changes
+        id: app_changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_ref=""
+          while IFS= read -r tag; do
+            if git merge-base --is-ancestor "$tag" HEAD; then
+              base_ref="$tag"
+              break
+            fi
+          done < <(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/v*')
+
+          if [ -n "$base_ref" ]; then
+            changed_files="$(git diff --name-only "$base_ref..HEAD")"
+          else
+            changed_files="$(git ls-tree -r --name-only HEAD)"
+          fi
+
+          app_changed=false
+          while IFS= read -r file; do
+            case "$file" in
+              Dockerfile|docker-compose.yml|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.json|tsconfig.build.json|packages/*/package.json|src/app/*|src/shared/*|.github/workflows/app-deploy.yml|.github/workflows/release.yml)
+                app_changed=true
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          {
+            echo "app_changed=$app_changed"
+            echo "base_ref=$base_ref"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$app_changed" = "true" ]; then
+            echo "App image will be built; app-impacting changes exist since ${base_ref:-initial tree}."
+          else
+            echo "App image build skipped; no app-impacting changes since ${base_ref:-initial tree}."
+          fi
+
       - name: Set up Docker builder
+        if: steps.app_changes.outputs.app_changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -104,6 +147,7 @@ jobs:
           fi
 
       - name: Build and push release image
+        if: steps.app_changes.outputs.app_changed == 'true'
         env:
           DOCKER_TAGS: ${{ steps.release.outputs.docker_tags }}
         run: |
@@ -117,20 +161,27 @@ jobs:
           docker buildx build --push "${tag_args[@]}" .
 
       - name: Clean Docker release artifacts
+        if: steps.app_changes.outputs.app_changed == 'true'
         run: |
           docker buildx prune --force --filter until=48h || true
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          APP_BASE_REF: ${{ steps.app_changes.outputs.base_ref }}
+          APP_CHANGED: ${{ steps.app_changes.outputs.app_changed }}
           IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
           set -euo pipefail
 
           {
-            echo "Docker image: \`${{ steps.release.outputs.release_image }}\`"
-            if [ "$IS_PRERELEASE" = "false" ]; then
-              echo "Latest image: \`${{ steps.release.outputs.latest_image }}\`"
+            if [ "$APP_CHANGED" = "true" ]; then
+              echo "Docker image: \`${{ steps.release.outputs.release_image }}\`"
+              if [ "$IS_PRERELEASE" = "false" ]; then
+                echo "Latest image: \`${{ steps.release.outputs.latest_image }}\`"
+              fi
+            else
+              echo "Docker image: not built; no app-impacting changes since \`${APP_BASE_REF:-initial tree}\`."
             fi
             echo
             echo "Release commit: \`$GITHUB_SHA\`"
@@ -154,7 +205,7 @@ jobs:
 
   deploy-prerelease:
     needs: release
-    if: needs.release.outputs.prerelease == 'true'
+    if: needs.release.outputs.prerelease == 'true' && needs.release.outputs.app_changed == 'true'
     uses: ./.github/workflows/app-deploy.yml
     with:
       release_tag: ${{ needs.release.outputs.release_tag }}

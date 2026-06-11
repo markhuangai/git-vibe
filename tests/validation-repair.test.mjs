@@ -258,12 +258,12 @@ describe("validation repair helpers", () => {
   });
 
   it("runs validation commands without runner secrets in the child environment", () => {
-    process.env.GITVIBE_GITHUB_TOKEN = "repo-token";
+    process.env.GITVIBE_GITHUB_APP_TOKEN = "repo-token";
     process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ MINIMAX_API_KEY: "bundle-secret" });
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const script = [
-      "process.stdout.write(process.env.GITVIBE_GITHUB_TOKEN || 'missing-token')",
+      "process.stdout.write(process.env.GITVIBE_GITHUB_APP_TOKEN || 'missing-token')",
       "process.stderr.write(process.env.GITVIBE_AI_ENV_JSON || 'missing-bundle')",
     ].join(";");
 

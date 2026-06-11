@@ -8,6 +8,7 @@ import { runStageSecurityReview } from "../stage-runner.js";
 import { parseSourceComment } from "../../shared/source-comments.js";
 import { parseStage } from "../../shared/stages.js";
 import type { Stage } from "../../shared/types.js";
+import { githubAppToken } from "./github-app-token.js";
 
 export interface SecurityReviewRuntime {
   appendFile?: (path: string, content: string) => void;
@@ -15,6 +16,8 @@ export interface SecurityReviewRuntime {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   error?: (message: string) => void;
+  fetch?: typeof fetch;
+  githubToken?: () => Promise<string>;
   log?: (message: string) => void;
   runStageSecurityReview?: typeof runStageSecurityReview;
 }
@@ -27,7 +30,7 @@ export async function securityReview(runtime: SecurityReviewRuntime = {}): Promi
 
   try {
     const stage = parseStage(argv[0] || envValue(env, "GITVIBE_STAGE"));
-    const token = requiredEnv(env, "GITVIBE_GITHUB_TOKEN");
+    const token = await resolveGitHubToken(runtime, env);
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
     const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
     const target = readTargetInputs(stage, env);
@@ -54,6 +57,19 @@ export async function securityReview(runtime: SecurityReviewRuntime = {}): Promi
     error(redactLogText(caught instanceof Error ? caught.message : String(caught)));
     return 1;
   }
+}
+
+function resolveGitHubToken(
+  runtime: SecurityReviewRuntime,
+  env: NodeJS.ProcessEnv,
+): Promise<string> {
+  return runtime.githubToken
+    ? runtime.githubToken()
+    : githubAppToken({
+        env,
+        fetch: runtime.fetch || fetch,
+        permissionProfile: "runner-status-write",
+      });
 }
 
 export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): boolean {

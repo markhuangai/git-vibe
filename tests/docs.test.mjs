@@ -6,7 +6,7 @@ describe("documentation workflow descriptions", () => {
     const readme = readFileSync("README.md", "utf8");
 
     expect(readme).toContain("https://github.com/markhuangai/git-vibe/wiki");
-    expect(readme).toContain("Security-and-Permissions#fine-grained-pat-permissions");
+    expect(readme).toContain("Security-and-Permissions");
     expect(readme).toContain("Configuration#repository-prompt-additions");
     expect(readme).toContain("Workflows-and-Lifecycle");
   });

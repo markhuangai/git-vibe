@@ -65,9 +65,6 @@ on:
         type: string
         default: ""
     secrets:
-      GITVIBE_GITHUB_TOKEN:
-        description: Fine-grained PAT used for GitHub API access.
-        required: true
       GITVIBE_AI_ENV_JSON:
         description: JSON env bundle for AI provider config and CLI profiles.
         required: true
@@ -88,6 +85,7 @@ jobs:
       status: ${{ steps.security.outputs.status }}
       summary: ${{ steps.security.outputs.summary }}
     permissions:
+      id-token: write
       contents: read
       discussions: write
       issues: write
@@ -112,7 +110,6 @@ jobs:
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           stage: materialize
           discussion-number: ${{ inputs.discussion-number }}
           stage-timeout-minutes: 10
@@ -128,6 +125,7 @@ jobs:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
       GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
     permissions:
+      id-token: write
       contents: read
       discussions: write
       issues: write
@@ -151,7 +149,6 @@ jobs:
           node-version: 22
       - uses: ./.git-vibe/actions/materialize
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           discussion-number: ${{ inputs.discussion-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}

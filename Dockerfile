@@ -23,7 +23,6 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist/app ./dist/app
 COPY --from=build /app/dist/shared ./dist/shared
-COPY --from=build /app/app ./app
 
 EXPOSE 3000
 

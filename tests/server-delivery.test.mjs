@@ -23,6 +23,7 @@ describe("GitVibe app delivery de-duplication", () => {
         node_id: "issue-comment-node",
       },
       issue: { number: 9 },
+      installation: { id: 123 },
       repository: repositoryPayload(),
       sender: { login: "owner" },
     };

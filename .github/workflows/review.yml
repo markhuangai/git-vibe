@@ -65,9 +65,6 @@ on:
         type: string
         default: ""
     secrets:
-      GITVIBE_GITHUB_TOKEN:
-        description: Fine-grained PAT used for GitHub API access.
-        required: true
       GITVIBE_AI_ENV_JSON:
         description: JSON env bundle for AI provider config and CLI profiles.
         required: true
@@ -92,6 +89,7 @@ jobs:
       status: ${{ steps.security.outputs.status }}
       summary: ${{ steps.security.outputs.summary }}
     permissions:
+      id-token: write
       contents: read
       issues: write
       pull-requests: write
@@ -116,7 +114,6 @@ jobs:
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           stage: review-matrix
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: 10
@@ -137,6 +134,7 @@ jobs:
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
     permissions:
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -162,7 +160,7 @@ jobs:
           stage: review-matrix
 
   review-matrix-members:
-    name: ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
+    name: git-vibe-review-member-${{ matrix.index }} / ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
     needs: plan-review-matrix
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
@@ -176,6 +174,7 @@ jobs:
       matrix:
         index: ${{ fromJSON(needs.plan-review-matrix.outputs.indexes || '[0]') }}
     permissions:
+      id-token: write
       contents: read
       issues: read
       pull-requests: read
@@ -199,7 +198,6 @@ jobs:
           node-version: 22
       - uses: ./.git-vibe/actions/review-matrix
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
@@ -231,6 +229,7 @@ jobs:
       status: ${{ steps.review.outputs.status }}
       summary: ${{ steps.review.outputs.summary }}
     permissions:
+      id-token: write
       actions: write
       contents: read
       issues: write
@@ -262,7 +261,6 @@ jobs:
       - id: review
         uses: ./.git-vibe/actions/review-matrix
         with:
-          token: ${{ secrets.GITVIBE_GITHUB_TOKEN || github.token }}
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}

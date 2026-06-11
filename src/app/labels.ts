@@ -12,6 +12,22 @@ export async function ensureGitVibeLabels(options: {
   }
 }
 
+export async function bootstrapRepositoryLabels(options: {
+  bootstrappedRepositories: Set<string>;
+  client: GitHubClient;
+  log: (message: string) => void;
+  owner: string;
+  repo: string;
+  token: string;
+}): Promise<void> {
+  const key = `${options.owner}/${options.repo}`;
+  if (options.bootstrappedRepositories.has(key)) return;
+
+  await ensureGitVibeLabels(options);
+  options.bootstrappedRepositories.add(key);
+  options.log(`bootstrapped labels for ${key}`);
+}
+
 export async function removeIssueLabel(options: {
   client: GitHubClient;
   issueNumber: string;

@@ -102,8 +102,9 @@ describe("git-vibe-setup installation", () => {
     });
 
     expect(logs[0]).toContain("GITVIBE_AI_ENV_JSON");
-    expect(logs[0]).toContain("GITVIBE_GITHUB_TOKEN");
-    expect(logs[0]).toContain("WEBHOOK_SECRET");
+    expect(logs[0]).toContain("GITVIBE_MCP_ENV_JSON");
+    expect(logs[0]).not.toContain("GITVIBE_GITHUB_TOKEN");
+    expect(logs[0]).not.toContain("WEBHOOK_SECRET");
     expect(logs[0]).toContain("GITVIBE_BASE_BRANCH");
     expect(logs[0]).toContain("/blob/v1.2.3/examples/consumer/GITVIBE_AI_ENV_JSON.example.json");
   });
@@ -131,7 +132,7 @@ describe("git-vibe-setup installation", () => {
 });
 
 describe("git-vibe-setup workflow updates", () => {
-  it("updates workflow wrappers without touching config or role prompts", async () => {
+  it("updates config and workflow wrappers without touching role prompts", async () => {
     const cwd = workspace();
 
     await runSetup({
@@ -150,9 +151,9 @@ describe("git-vibe-setup workflow updates", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(readFileSync(join(cwd, ".github", "git-vibe.yml"), "utf8")).toBe(
-      "version: 1\ncustom: true\n",
-    );
+    const config = readFileSync(join(cwd, ".github", "git-vibe.yml"), "utf8");
+    expect(config).toContain("custom: true");
+    expect(config).toContain("github_auth:\n  mode: github-app\n");
     expect(readFileSync(join(cwd, ".git-vibe", "role-group", "correctness.md"), "utf8")).toBe(
       "custom role\n",
     );

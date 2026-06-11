@@ -432,7 +432,11 @@ describe("bundled action runtime", () => {
     const bundle = readFileSync("dist/actions/run-action.js", "utf8");
     const result = spawnSync(process.execPath, ["dist/actions/run-action.js", "investigate"], {
       encoding: "utf8",
-      env: withoutEnv("GITVIBE_GITHUB_TOKEN"),
+      env: withoutEnv(
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "GITVIBE_GITHUB_APP_TOKEN",
+      ),
     });
 
     expect(bundle.startsWith("#!/usr/bin/env node\n")).toBe(true);
@@ -443,7 +447,7 @@ describe("bundled action runtime", () => {
         .some((line) => line.startsWith("#!")),
     ).toBe(false);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("GITVIBE_GITHUB_TOKEN is required.");
+    expect(result.stderr).toContain("ACTIONS_ID_TOKEN_REQUEST_URL is required.");
   }, 30000);
 });
 

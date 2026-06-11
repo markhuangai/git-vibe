@@ -3,14 +3,26 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { checkRepositoryDiscussions, createRepositoryDiscussion } from "../shared/discussions.js";
-import { GitHubClient, splitRepository } from "../shared/github.js";
+import { createRepositoryDiscussion } from "../shared/discussions.js";
+import { GitHubClient } from "../shared/github.js";
+import {
+  defaultTrustedWorkflowRefPattern,
+  exchangeActionsToken,
+  RemoteGitHubActionsOidcVerifier,
+  type GitHubActionsOidcVerifier,
+} from "./actions-token.js";
+import { writeBackActionsCodexAuth } from "./actions-codex-auth.js";
+import {
+  GitHubAppInstallationTokenProvider,
+  type InstallationTokenProvider,
+} from "./github-app-auth.js";
 import {
   gitVibeInternalLabels,
   gitVibeLabels,
   isGitVibeRuntimeLabel,
   isInternalGitVibeLabel,
 } from "../shared/labels.js";
+import { defaultActionsOidcAudience } from "../shared/hosted-app.js";
 import {
   buildDiscussionBody,
   buildDiscussionTitle,
@@ -20,7 +32,7 @@ import {
   hasDiscussionSetupMarker,
   isFeatureRequestIssue,
 } from "./intake.js";
-import { ensureGitVibeLabels, isProtectedGitVibeLabel, removeIssueLabel } from "./labels.js";
+import { bootstrapRepositoryLabels, isProtectedGitVibeLabel, removeIssueLabel } from "./labels.js";
 import { parseCommand } from "./commands.js";
 import {
   acknowledgeCommand,
@@ -54,37 +66,44 @@ import { handleApprovedIssueLabel } from "./approval-labels.js";
 import { handleReviewPullRequestLabel } from "./review-labels.js";
 import { createDeliveryDeduplicator, type DeliveryDeduplicator } from "./delivery-dedup.js";
 import { handleRequest as handleHttpRequest } from "./request-handler.js";
+import {
+  handleInstallationRepositorySetup,
+  isInstallationRepositorySetupEvent,
+} from "./repository-setup.js";
 import { requiredEnv } from "./server-http.js";
 import type { WebhookPayload } from "./types.js";
 
 export interface GitVibeApp {
   handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void>;
   handleWebhook(event: string, payload: WebhookPayload): Promise<void>;
-  runStartupPreflight(): Promise<void>;
 }
 
 export interface GitVibeAppOptions {
+  actionsOidcAudience?: string;
+  actionsOidcVerifier?: GitHubActionsOidcVerifier;
+  appAuth: InstallationTokenProvider;
   client?: GitHubClient;
-  configuredRepository?: string;
   discussionCategory?: string;
   errorLog?: (message: string) => void;
-  githubToken: string;
   log?: (message: string) => void;
+  trustedWorkflowRefPattern?: RegExp;
   webhookSecret: string;
 }
 
 interface AppState {
+  actionsOidcVerifier: GitHubActionsOidcVerifier;
+  appAuth: InstallationTokenProvider;
   bootstrappedRepositories: Set<string>;
   client: GitHubClient;
   config: {
-    configuredRepository: string;
+    actionsOidcAudience: string;
     discussionCategory: string;
-    githubToken: string;
     webhookSecret: string;
   };
   deliveries: DeliveryDeduplicator;
   errorLog: (message: string) => void;
   log: (message: string) => void;
+  trustedWorkflowRefPattern: RegExp;
 }
 
 interface WebhookContext extends AppState {
@@ -96,39 +115,53 @@ interface WebhookContext extends AppState {
 
 export function createGitVibeApp(options: GitVibeAppOptions): GitVibeApp {
   const state: AppState = {
+    actionsOidcVerifier: options.actionsOidcVerifier || new RemoteGitHubActionsOidcVerifier(),
+    appAuth: options.appAuth,
     bootstrappedRepositories: new Set<string>(),
     client: options.client || new GitHubClient(),
     config: {
-      configuredRepository: options.configuredRepository || "",
+      actionsOidcAudience: options.actionsOidcAudience || defaultActionsOidcAudience,
       discussionCategory: options.discussionCategory || "Ideas",
-      githubToken: options.githubToken,
       webhookSecret: options.webhookSecret,
     },
     deliveries: createDeliveryDeduplicator(),
     errorLog: options.errorLog || ((message) => console.error(`[git-vibe] ${message}`)),
     log: options.log || ((message) => console.log(`[git-vibe] ${message}`)),
+    trustedWorkflowRefPattern:
+      options.trustedWorkflowRefPattern || defaultTrustedWorkflowRefPattern,
   };
 
   return {
     handleRequest: (req, res) =>
-      handleHttpRequest(state, req, res, (event, payload) => handleWebhook(state, event, payload)),
+      handleHttpRequest(
+        state,
+        req,
+        res,
+        (event, payload) => handleWebhook(state, event, payload),
+        (body) => handleActionsToken(state, body),
+        (body) => handleActionsCodexAuthWriteback(state, body),
+      ),
     handleWebhook: (event, payload) => handleWebhook(state, event, payload),
-    runStartupPreflight: () => runStartupPreflight(state),
   };
 }
 
 export function startServerFromEnv(env: NodeJS.ProcessEnv = process.env): Server {
   const port = Number(env.PORT || 3000);
+  const client = new GitHubClient();
   const app = createGitVibeApp({
-    configuredRepository: env.GITHUB_REPOSITORY || "",
+    actionsOidcAudience: env.GITVIBE_ACTIONS_OIDC_AUDIENCE || defaultActionsOidcAudience,
+    appAuth: new GitHubAppInstallationTokenProvider({
+      appId: requiredEnv(env, "GITHUB_APP_ID"),
+      client,
+      privateKey: requiredEnv(env, "GITVIBE_APP_PRIVATE_KEY"),
+    }),
+    client,
     discussionCategory: env.GITVIBE_DISCUSSION_CATEGORY || "Ideas",
-    githubToken: requiredEnv(env, "GITVIBE_GITHUB_TOKEN"),
     webhookSecret: requiredEnv(env, "GITHUB_WEBHOOK_SECRET"),
   });
 
   return createServer(app.handleRequest).listen(port, () => {
     console.log(`[git-vibe] app server listening on :${port}`);
-    void app.runStartupPreflight();
   });
 }
 
@@ -137,92 +170,49 @@ export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): bo
   return Boolean(entrypoint && moduleUrl === pathToFileURL(resolve(entrypoint)).href);
 }
 
-async function runStartupPreflight(state: AppState): Promise<void> {
-  const repository = state.config.configuredRepository;
-  if (!repository) {
-    state.log(
-      "startup preflight skipped: GITHUB_REPOSITORY is unavailable; labels and Discussions will be checked when repository webhooks arrive",
-    );
-    return;
-  }
-
-  try {
-    const { owner, repo } = splitRepository(repository);
-    await bootstrapRepositoryLabels(state, owner, repo, state.config.githubToken);
-  } catch (error) {
-    state.errorLog(
-      `startup label bootstrap failed for ${repository}: ${summarizeError(error)}. Ensure GITVIBE_GITHUB_TOKEN has Issues write permission.`,
-    );
-  }
-
-  try {
-    const result = await checkRepositoryDiscussions({
-      categoryName: state.config.discussionCategory,
-      client: state.client,
-      repository,
-      token: state.config.githubToken,
-    });
-    logDiscussionPreflightResult(state, result);
-  } catch (error) {
-    state.errorLog(
-      `startup preflight failed: GitHub Discussions unavailable for ${repository}: ${summarizeError(error)}. Enable repository Discussions, create category "${state.config.discussionCategory}", and ensure GITVIBE_GITHUB_TOKEN has Discussions read/write permission.`,
-    );
-  }
-}
-
-function logDiscussionPreflightResult(
-  state: AppState,
-  result: { categoryName: string; matchedConfiguredCategory: boolean; repository: string },
-): void {
-  if (result.matchedConfiguredCategory) {
-    state.log(
-      `startup preflight ok: GitHub Discussions available for ${result.repository} using category "${result.categoryName}"`,
-    );
-    return;
-  }
-
-  state.log(
-    `startup preflight warning: GitHub Discussions available for ${result.repository}, but category "${state.config.discussionCategory}" was not found; using "${result.categoryName}"`,
-  );
-}
-
 async function handleWebhook(
   state: AppState,
   event: string,
   payload: WebhookPayload,
 ): Promise<void> {
-  if (!payload.repository) {
-    state.log(`ignored ${event}: missing repository`);
+  if (isInstallationRepositorySetupEvent(event)) {
+    await handleInstallationRepositorySetup({
+      appAuth: state.appAuth,
+      bootstrappedRepositories: state.bootstrappedRepositories,
+      client: state.client,
+      errorLog: state.errorLog,
+      event,
+      log: state.log,
+      payload,
+    });
     return;
   }
 
-  const repo = payload.repository.name;
-  const owner = payload.repository.owner.login;
-  const token = state.config.githubToken;
-  await bootstrapRepositoryLabels(state, owner, repo, token);
+  const context = await webhookContext(state, event, payload);
+  if (!context) return;
 
   if (event === "issues" && payload.action === "opened" && payload.issue) {
-    await handleIssueOpened({ ...state, owner, payload, repo, token });
+    await handleIssueOpened(context);
     return;
   }
 
   if (event === "issue_comment" && payload.action === "created" && payload.issue) {
-    await handleIssueComment({ ...state, owner, payload, repo, token });
+    await handleIssueComment(context);
     return;
   }
 
   if (event === "discussion_comment" && payload.action === "created" && payload.discussion) {
-    await handleDiscussionComment({ ...state, owner, payload, repo, token });
+    await handleDiscussionComment(context);
     return;
   }
 
   if (event === "pull_request_review" && payload.action === "submitted" && payload.pull_request) {
-    await handlePullRequestReviewSubmitted({ ...state, owner, payload, repo, token });
+    await handlePullRequestReviewSubmitted(context);
     return;
   }
 
   if (event === "pull_request" && payload.action === "closed" && payload.pull_request) {
-    await handlePullRequestClosed({ ...state, owner, payload, repo, token });
+    await handlePullRequestClosed(context);
     return;
   }
 
@@ -233,27 +223,74 @@ async function handleWebhook(
     (payload.label?.name === gitVibeLabels.review.name ||
       payload.label?.name === gitVibeLabels.acceptRisk.name)
   ) {
-    await handleIssueLabeled({
-      ...state,
-      owner,
-      payload: pullRequestLabelPayload(payload),
-      repo,
-      token,
-    });
+    await handleIssueLabeled({ ...context, payload: pullRequestLabelPayload(payload) });
     return;
   }
 
   if (event === "issues" && payload.action === "labeled" && payload.issue) {
-    await handleIssueLabeled({ ...state, owner, payload, repo, token });
+    await handleIssueLabeled(context);
     return;
   }
 
   if (event === "discussion" && payload.action === "labeled" && payload.discussion) {
-    await handleDiscussionLabeled({ ...state, owner, payload, repo, token });
+    await handleDiscussionLabeled(context);
     return;
   }
 
   state.log(`ignored ${event}.${payload.action || "unknown"}`);
+}
+
+async function webhookContext(state: AppState, event: string, payload: WebhookPayload) {
+  if (!payload.repository) {
+    state.log(`ignored ${event}: missing repository`);
+    return undefined;
+  }
+
+  const repo = payload.repository.name;
+  const owner = payload.repository.owner.login;
+  const installationId = payload.installation?.id;
+  if (!installationId) {
+    state.log(`ignored ${event}: missing GitHub App installation id`);
+    return undefined;
+  }
+
+  const token = await state.appAuth.tokenForRepository({
+    installationId,
+    owner,
+    profile: "server",
+    repo,
+  });
+  await bootstrapRepositoryLabels({
+    bootstrappedRepositories: state.bootstrappedRepositories,
+    client: state.client,
+    log: state.log,
+    owner,
+    repo,
+    token,
+  });
+  return { ...state, owner, payload, repo, token };
+}
+
+function handleActionsToken(state: AppState, body: string) {
+  return exchangeActionsToken({
+    audience: state.config.actionsOidcAudience,
+    body,
+    client: state.client,
+    tokenProvider: state.appAuth,
+    trustedWorkflowRefPattern: state.trustedWorkflowRefPattern,
+    verifier: state.actionsOidcVerifier,
+  });
+}
+
+function handleActionsCodexAuthWriteback(state: AppState, body: string) {
+  return writeBackActionsCodexAuth({
+    audience: state.config.actionsOidcAudience,
+    body,
+    client: state.client,
+    tokenProvider: state.appAuth,
+    trustedWorkflowRefPattern: state.trustedWorkflowRefPattern,
+    verifier: state.actionsOidcVerifier,
+  });
 }
 
 function pullRequestLabelPayload(payload: WebhookPayload): WebhookPayload {
@@ -266,20 +303,6 @@ function pullRequestLabelPayload(payload: WebhookPayload): WebhookPayload {
       title: payload.pull_request?.title,
     },
   };
-}
-
-async function bootstrapRepositoryLabels(
-  state: AppState,
-  owner: string,
-  repo: string,
-  token: string,
-): Promise<void> {
-  const key = `${owner}/${repo}`;
-  if (state.bootstrappedRepositories.has(key)) return;
-
-  await ensureGitVibeLabels({ client: state.client, owner, repo, token });
-  state.bootstrappedRepositories.add(key);
-  state.log(`bootstrapped labels for ${key}`);
 }
 
 async function handleIssueOpened(options: WebhookContext): Promise<void> {

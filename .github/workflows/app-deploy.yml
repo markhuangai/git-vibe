@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}-[0-9A-Za-z._-]+$ ]]; then
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+([.][0-9]+){0,2}-[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
             echo "::error::app-deploy only accepts prerelease tags such as v3.1.1-rc.1."
             exit 1
           fi
@@ -39,9 +39,10 @@ jobs:
           password: ${{ github.token }}
       - name: Deploy app with Docker Compose
         env:
+          GITHUB_APP_ID: ${{ vars.GITVIBE_GITHUB_APP_ID }}
           GITHUB_WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          GITVIBE_APP_PRIVATE_KEY: ${{ secrets.GITVIBE_APP_PRIVATE_KEY }}
           GITVIBE_DISCUSSION_CATEGORY: ${{ vars.GITVIBE_DISCUSSION_CATEGORY }}
-          GITVIBE_GITHUB_TOKEN: ${{ secrets.GITVIBE_GITHUB_TOKEN }}
           GITVIBE_IMAGE: ${{ env.GITVIBE_IMAGE }}
         run: |
           compose_files=(-f docker-compose.yml)
