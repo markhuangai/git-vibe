@@ -168,12 +168,30 @@ function workflowFileFromJobWorkflowRef(value: string): string | undefined {
 
 function jobNameFromCheckRun(value: string): string {
   const name = value.trim();
+  if (knownGitVibeJobName(name)) return name;
   const separator = name.indexOf(" / ");
-  return separator >= 0 ? name.slice(separator + 3).trim() : name;
+  if (separator < 0) return name;
+  const suffix = name.slice(separator + 3).trim();
+  return knownGitVibeJobName(suffix) ? suffix : name;
 }
 
 function listedJob(jobs: Record<string, string[]>, workflowFile: string, jobName: string): boolean {
   return jobs[workflowFile]?.includes(jobName) || false;
+}
+
+function knownGitVibeJobName(jobName: string): boolean {
+  return (
+    memberJob(jobName) ||
+    listedAnyJob(readOnlyJobs, jobName) ||
+    listedAnyJob(statusWriteJobs, jobName) ||
+    listedAnyJob(workflowWriteJobs, jobName) ||
+    listedAnyJob(contentWriteJobs, jobName) ||
+    listedAnyJob(codexAuthWritebackJobs, jobName)
+  );
+}
+
+function listedAnyJob(jobs: Record<string, string[]>, jobName: string): boolean {
+  return Object.values(jobs).some((jobNames) => jobNames.includes(jobName));
 }
 
 function memberJob(jobName: string): boolean {
