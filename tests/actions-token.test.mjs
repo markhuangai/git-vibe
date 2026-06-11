@@ -135,6 +135,28 @@ describe("GitHub Actions token exchange rejection", () => {
 });
 
 describe("GitHub Actions token workflow ref trust", () => {
+  it("trusts stable and prerelease GitVibe reusable workflow release refs", async () => {
+    const tokenProvider = tokenProviderForProfiles();
+    const verifier = { verify: vi.fn() };
+
+    for (const jobWorkflowRef of [
+      "markhuangai/git-vibe/.github/workflows/develop.yml@v4.0.0",
+      "markhuangai/git-vibe/.github/workflows/develop.yml@v4.0.0-rc.1",
+      "markhuangai/git-vibe/.github/workflows/develop.yml@refs/tags/v4.0.0-rc.1",
+    ]) {
+      verifier.verify.mockResolvedValueOnce({ ...trustedClaims, jobWorkflowRef });
+      await expect(
+        exchangeActionsToken({
+          audience: "audience",
+          body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
+          client: clientWithCheckRun({ head_sha: "abc123", name: "develop / security-review" }),
+          tokenProvider,
+          verifier,
+        }),
+      ).resolves.toEqual({ expires_in: 3600, token: "runner-token" });
+    }
+  });
+
   it("trusts GitVibe reusable workflows from canonical local branches only", async () => {
     const tokenProvider = tokenProviderForProfiles();
     const verifier = {
@@ -164,6 +186,25 @@ describe("GitHub Actions token workflow ref trust", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-read" }),
         client: clientWithCheckRun(),
         tokenProvider,
+        verifier,
+      }),
+    ).rejects.toThrow("job_workflow_ref is not trusted");
+  });
+
+  it("rejects malformed prerelease GitVibe workflow refs", async () => {
+    const verifier = {
+      verify: vi.fn(async () => ({
+        ...trustedClaims,
+        jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/develop.yml@v4.0.0-",
+      })),
+    };
+
+    await expect(
+      exchangeActionsToken({
+        audience: "audience",
+        body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
+        client: clientWithCheckRun(),
+        tokenProvider: tokenProviderForProfiles(),
         verifier,
       }),
     ).rejects.toThrow("job_workflow_ref is not trusted");

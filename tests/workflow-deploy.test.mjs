@@ -28,6 +28,7 @@ describe("GitVibe app deployment boundary", () => {
     expect(
       deploySteps.some((step) => step.run?.includes("app-deploy only accepts prerelease tags")),
     ).toBe(true);
+    expect(content).toContain("[0-9A-Za-z][0-9A-Za-z._-]*");
     expect(deploySteps.some((step) => step.uses === "docker/login-action@v3")).toBe(true);
     expect(deploySteps.some((step) => step.run?.includes("docker compose"))).toBe(true);
     expect(content).not.toContain("docker/build-push-action");
@@ -56,6 +57,9 @@ describe("GitVibe release deployment boundary", () => {
   it("publishes prereleases from dev and stable releases from main", () => {
     const workflow = readWorkflow(".github/workflows/release.yml");
     const content = readFileSync(".github/workflows/release.yml", "utf8");
+    const releaseSteps = /** @type {Array<{ name?: string, if?: string }>} */ (
+      workflow.jobs?.release?.steps || []
+    );
 
     expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
       default: "v3",
@@ -71,12 +75,17 @@ describe("GitVibe release deployment boundary", () => {
       DOCKER_CONTEXT: "default",
     });
     expect(content).toContain("prerelease=true");
+    expect(content).toContain("[0-9A-Za-z][0-9A-Za-z._-]*");
     expect(content).toContain("required_ref=refs/heads/dev");
     expect(content).toContain("prerelease=false");
     expect(content).toContain("required_ref=refs/heads/main");
     expect(content).toContain("Stable releases must run from main; prereleases must run from dev.");
     expect(content).toContain("collaborators/$REQUEST_ACTOR/permission");
     expect(content).toContain('permission" != "admin"');
+    expect(content).toContain("Detect app-impacting changes");
+    expect(content).toContain("app_changed=false");
+    expect(content).toContain("src/app/*|src/shared/*");
+    expect(content).toContain("Docker image: not built; no app-impacting changes");
     expect(content).toContain("docker buildx inspect rootless --bootstrap");
     expect(content).toContain("docker buildx rm rootless");
     expect(content).toContain("docker buildx create --name rootless --use default");
@@ -91,13 +100,23 @@ describe("GitVibe release deployment boundary", () => {
     expect(content).toContain("docker buildx prune --force --filter until=48h");
     expect(content).toContain("gh release create");
     expect(content).toContain("--generate-notes");
+    for (const stepName of [
+      "Set up Docker builder",
+      "Build and push release image",
+      "Clean Docker release artifacts",
+    ]) {
+      expect(releaseSteps.find((step) => step.name === stepName)?.if).toBe(
+        "steps.app_changes.outputs.app_changed == 'true'",
+      );
+    }
     expect(workflow.jobs?.release?.outputs).toMatchObject({
+      app_changed: "${{ steps.app_changes.outputs.app_changed }}",
       prerelease: "${{ steps.release.outputs.prerelease }}",
       release_tag: "${{ steps.release.outputs.release_tag }}",
     });
     expect(workflow.jobs?.["deploy-prerelease"]).toMatchObject({
       needs: "release",
-      if: "needs.release.outputs.prerelease == 'true'",
+      if: "needs.release.outputs.prerelease == 'true' && needs.release.outputs.app_changed == 'true'",
       uses: "./.github/workflows/app-deploy.yml",
       with: {
         release_tag: "${{ needs.release.outputs.release_tag }}",
