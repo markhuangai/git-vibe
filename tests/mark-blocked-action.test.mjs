@@ -93,13 +93,46 @@ describe("markBlocked", () => {
     expect(request).toHaveBeenLastCalledWith(blockedRequest());
   });
 
+  it("requests hosted App tokens with the status-write profile", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }));
+    const request = vi.fn(async () => ({}));
+
+    const exitCode = await markBlocked({
+      client: { request },
+      env: {
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+        ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
+        GITHUB_REPOSITORY: "markhuangai/git-vibe",
+        GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
+        GITVIBE_ISSUE_NUMBER: "22",
+      },
+      fetch: fetchImpl,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(fetchImpl.mock.calls[1]).toMatchObject([
+      "https://git-vibe.example/actions/token",
+      {
+        body: JSON.stringify({
+          oidcToken: "oidc-token",
+          permissionProfile: "runner-status-write",
+        }),
+        method: "POST",
+      },
+    ]);
+    expect(request).toHaveBeenLastCalledWith({ ...blockedRequest(), token: "installation-token" });
+  });
+
   it("reports missing required environment", async () => {
     const error = vi.fn();
 
     const exitCode = await markBlocked({
       env: {
         GITHUB_REPOSITORY: "markhuangai/git-vibe",
-        GITVIBE_GITHUB_TOKEN: "token",
+        GITVIBE_GITHUB_APP_TOKEN: "token",
       },
       error,
     });
@@ -137,7 +170,7 @@ function issueOptions(request, overrides = {}) {
 function actionEnv(overrides = {}) {
   return {
     GITHUB_REPOSITORY: "markhuangai/git-vibe",
-    GITVIBE_GITHUB_TOKEN: "token",
+    GITVIBE_GITHUB_APP_TOKEN: "token",
     GITVIBE_ISSUE_NUMBER: "22",
     ...overrides,
   };
@@ -149,5 +182,13 @@ function blockedRequest() {
     method: "POST",
     path: "/repos/markhuangai/git-vibe/issues/22/labels",
     token: "token",
+  };
+}
+
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body),
   };
 }

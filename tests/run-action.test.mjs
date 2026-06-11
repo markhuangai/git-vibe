@@ -6,7 +6,7 @@ import { isDirectRun, runAction } from "../src/runner/actions/run-action.ts";
 
 const baseEnv = {
   GITHUB_REPOSITORY: "example/repo",
-  GITVIBE_GITHUB_TOKEN: "token",
+  GITVIBE_GITHUB_APP_TOKEN: "token",
   GITVIBE_ISSUE_NUMBER: "12",
 };
 
@@ -86,6 +86,71 @@ describe("GitVibe action launcher", () => {
   });
 });
 
+describe("GitVibe action launcher hosted auth", () => {
+  it("requests hosted App tokens with the stage permission profile", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }))
+      .mockResolvedValueOnce(jsonResponse({ value: "writeback-oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ updated: true }));
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "",
+      parsedOutput: {},
+      schemaId: "review-matrix.v1",
+      status: "completed",
+      summary: "Done",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        argv: ["review-matrix"],
+        env: {
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+          ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
+          GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_ACTIONS_CODEX_AUTH_URL: "https://git-vibe.example/actions/codex-auth",
+          GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
+          GITVIBE_ISSUE_NUMBER: "12",
+        },
+        fetch: fetchImpl,
+        runStage,
+      }),
+    ).resolves.toBe(0);
+
+    expect(fetchImpl.mock.calls[1]).toMatchObject([
+      "https://git-vibe.example/actions/token",
+      {
+        body: JSON.stringify({
+          oidcToken: "oidc-token",
+          permissionProfile: "runner-workflow-write",
+        }),
+        method: "POST",
+      },
+    ]);
+    expect(runStage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubAuthWriteback: expect.any(Function),
+        token: "installation-token",
+      }),
+    );
+
+    await runStage.mock.calls[0][0].githubAuthWriteback(JSON.stringify({ CODEX_AUTH_JSON: "{}" }));
+
+    expect(fetchImpl.mock.calls[3]).toMatchObject([
+      "https://git-vibe.example/actions/codex-auth",
+      {
+        body: JSON.stringify({
+          oidcToken: "writeback-oidc-token",
+          value: JSON.stringify({ CODEX_AUTH_JSON: "{}" }),
+        }),
+        method: "POST",
+      },
+    ]);
+  });
+});
+
 describe("GitVibe create-pr action outputs", () => {
   it("writes pull request outputs for create-pr", async () => {
     const appendFile = vi.fn();
@@ -155,6 +220,18 @@ function roleGroupWorkspace() {
   return cwd;
 }
 
+/**
+ * @param {unknown} body
+ * @param {number} [status]
+ */
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body),
+  };
+}
+
 describe("GitVibe action launcher investigation readiness", () => {
   it("fails an investigation action when not-ready gating is enabled", async () => {
     const error = vi.fn();
@@ -193,7 +270,9 @@ describe("GitVibe action launcher validation", () => {
   it("validates required env and common inputs", async () => {
     const error = vi.fn();
     await expect(runAction({ argv: ["investigate"], env: {}, error })).resolves.toBe(1);
-    expect(error).toHaveBeenCalledWith("GITVIBE_GITHUB_TOKEN is required.");
+    expect(error).toHaveBeenCalledWith(
+      "ACTIONS_ID_TOKEN_REQUEST_URL is required. Add permissions: id-token: write to this job.",
+    );
 
     await expect(
       runAction({
@@ -218,7 +297,7 @@ describe("GitVibe action launcher validation", () => {
         argv: ["validate"],
         env: {
           GITHUB_REPOSITORY: "example/repo",
-          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_GITHUB_APP_TOKEN: "token",
           GITVIBE_MAX_TURNS: "0",
           GITVIBE_ISSUE_NUMBER: "1",
         },
@@ -230,7 +309,7 @@ describe("GitVibe action launcher validation", () => {
     await expect(
       runAction({
         argv: ["investigate"],
-        env: { GITVIBE_GITHUB_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
+        env: { GITVIBE_GITHUB_APP_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
         error,
       }),
     ).resolves.toBe(1);
@@ -348,7 +427,7 @@ describe("GitVibe action launcher target validation", () => {
     await expect(
       runAction({
         argv: ["address-pr-feedback"],
-        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
       }),
     ).resolves.toBe(1);
@@ -357,7 +436,7 @@ describe("GitVibe action launcher target validation", () => {
     await expect(
       runAction({
         argv: ["investigate"],
-        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
       }),
     ).resolves.toBe(1);
@@ -368,7 +447,7 @@ describe("GitVibe action launcher target validation", () => {
     await expect(
       runAction({
         argv: ["validate"],
-        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
       }),
     ).resolves.toBe(1);
@@ -379,7 +458,7 @@ describe("GitVibe action launcher target validation", () => {
     await expect(
       runAction({
         argv: ["review-matrix"],
-        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
       }),
     ).resolves.toBe(1);
@@ -390,7 +469,7 @@ describe("GitVibe action launcher target validation", () => {
     await expect(
       runAction({
         argv: ["implement"],
-        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
       }),
     ).resolves.toBe(1);
@@ -405,7 +484,7 @@ describe("GitVibe action launcher target validation", () => {
         argv: ["validate"],
         env: {
           GITHUB_REPOSITORY: "example/repo",
-          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_GITHUB_APP_TOKEN: "token",
           GITVIBE_ISSUE_NUMBER: "1",
           GITVIBE_SOURCE_COMMENT: "{bad",
         },
@@ -433,7 +512,7 @@ describe("GitVibe action launcher targets and defaults", () => {
         env: {
           GITHUB_REPOSITORY: "example/repo",
           GITVIBE_DISCUSSION_NUMBER: "5",
-          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_GITHUB_APP_TOKEN: "token",
         },
         runStage,
       }),
@@ -443,7 +522,7 @@ describe("GitVibe action launcher targets and defaults", () => {
         argv: ["address-pr-feedback"],
         env: {
           GITHUB_REPOSITORY: "example/repo",
-          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_GITHUB_APP_TOKEN: "token",
           GITVIBE_PR_NUMBER: "8",
         },
         runStage,
@@ -454,7 +533,7 @@ describe("GitVibe action launcher targets and defaults", () => {
         argv: ["investigate"],
         env: {
           GITHUB_REPOSITORY: "example/repo",
-          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_GITHUB_APP_TOKEN: "token",
           GITVIBE_PR_NUMBER: "8",
         },
         runStage,
@@ -494,7 +573,7 @@ describe("GitVibe action launcher targets and defaults", () => {
         env: {
           GITHUB_REPOSITORY: "example/repo",
           GITHUB_WORKSPACE: "/workspace",
-          GITVIBE_GITHUB_TOKEN: "token",
+          GITVIBE_GITHUB_APP_TOKEN: "token",
           GITVIBE_ISSUE_NUMBER: "9",
         },
         runStage,
@@ -585,7 +664,7 @@ describe("GitVibe action launcher failure paths", () => {
       await expect(
         runAction({
           argv: ["validate"],
-          env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_TOKEN: "token" },
+          env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         }),
       ).resolves.toBe(1);
       expect(consoleError).toHaveBeenCalledWith(

@@ -1,7 +1,5 @@
 const requiredSecrets = [
   ["GITVIBE_AI_ENV_JSON", "JSON env bundle for AI provider config and CLI auth."],
-  ["GITVIBE_GITHUB_TOKEN", "Fine-grained PAT for GitVibe workflow and server writes."],
-  ["WEBHOOK_SECRET", "Webhook shared secret mapped to GITHUB_WEBHOOK_SECRET in deployment."],
 ] as const;
 
 const usefulVariables = [
@@ -15,8 +13,9 @@ export function renderManualSetupInstructions(releaseTag: string): string {
   const lines = [
     `GitVibe starter files installed with reusable workflows pinned to ${releaseTag}.`,
     "",
-    "Configure these GitHub secrets manually before running the workflows:",
+    "Configure this GitHub secret manually before running the workflows:",
     ...requiredSecrets.map(([name, description]) => `- ${name}: ${description}`),
+    "- GITVIBE_MCP_ENV_JSON: optional JSON env bundle for MCP credentials.",
     "",
     "Optional repository variables:",
     ...usefulVariables.map((name) => `- ${name}`),

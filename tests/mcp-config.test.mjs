@@ -9,7 +9,7 @@ describe("MCP stage configuration resolution", () => {
   it("resolves stage MCP servers, allowlists, credentials, and context templates", () => {
     const env = {
       GITVIBE_AI_ENV_JSON: JSON.stringify({ AI_KEY: "hidden-ai" }),
-      GITVIBE_GITHUB_TOKEN: "hidden-token",
+      GITVIBE_GITHUB_APP_TOKEN: "hidden-token",
       GITVIBE_MCP_ENV_JSON: JSON.stringify({
         DENSE_MEM_TOKEN: "dense-token",
         DOCS_TOKEN: "docs-token",
@@ -43,7 +43,7 @@ describe("MCP stage configuration resolution", () => {
       PATH: "/bin",
     });
     expect(servers[0].server?.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
-    expect(servers[0].server?.env.GITVIBE_GITHUB_TOKEN).toBeUndefined();
+    expect(servers[0].server?.env.GITVIBE_GITHUB_APP_TOKEN).toBeUndefined();
     expect(servers[0].server?.env.GITVIBE_MCP_ENV_JSON).toBeUndefined();
     expect(servers[1]).toMatchObject({
       allowContextTools: [],

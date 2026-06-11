@@ -5,14 +5,24 @@ import { vi } from "vitest";
 import { createGitVibeApp } from "../../src/app/server.ts";
 
 export function createApp(options = {}) {
-  return createGitVibeApp({
+  const app = createGitVibeApp({
+    actionsOidcAudience: options.actionsOidcAudience,
+    actionsOidcVerifier: options.actionsOidcVerifier,
+    appAuth: options.appAuth || createAppAuth(),
     client: options.client || createClient(),
-    configuredRepository: options.configuredRepository || "",
     errorLog: options.errorLog || vi.fn(),
-    githubToken: "token",
     log: options.log || vi.fn(),
+    trustedWorkflowRefPattern: options.trustedWorkflowRefPattern,
     webhookSecret: "secret",
   });
+  return {
+    ...app,
+    handleWebhook: (event, payload) => app.handleWebhook(event, appWebhookPayload(payload)),
+  };
+}
+
+export function createAppAuth() {
+  return { tokenForRepository: vi.fn(async () => "token") };
 }
 
 export function createClient(options = {}) {
@@ -265,10 +275,15 @@ export async function requestJson(baseUrl, method, path, body = "", headers = {}
 
 export async function requestSignedWebhook(app, payload, event) {
   return withHttpServer(app.handleRequest, (url) => {
-    const body = JSON.stringify(payload);
+    const body = JSON.stringify(appWebhookPayload(payload));
     return requestJson(url, "POST", "/webhooks", body, {
       "x-github-event": event,
       "x-hub-signature-256": signature(body),
     });
   });
+}
+
+function appWebhookPayload(payload) {
+  if (!payload?.repository || payload.installation) return payload;
+  return { ...payload, installation: { id: 123 } };
 }

@@ -9,7 +9,7 @@ import { githubTokenFromEnvironment } from "./github-api.js";
 import {
   blockingInstallPaths,
   buildInstallFiles,
-  buildWorkflowUpdateFiles,
+  buildUpdateFiles,
   existingFilesError,
   installFiles,
   unmanagedWorkflowUpdateError,
@@ -71,14 +71,14 @@ export async function runUpdate(runtime: SetupCliRuntime = {}): Promise<void> {
   const githubToken = runtime.githubToken || githubTokenFromEnvironment();
   const releaseTag = await resolveReleaseTag(runtime, fetchImpl, githubToken);
   const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, githubToken, releaseTag });
-  const files = buildWorkflowUpdateFiles({ cwd, releaseTag, sourceFiles });
+  const files = buildUpdateFiles({ cwd, releaseTag, sourceFiles });
   const unmanagedPaths = unmanagedWorkflowUpdatePaths(files);
 
   if (unmanagedPaths.length > 0) throw unmanagedWorkflowUpdateError(unmanagedPaths, cwd);
 
   updateFiles(files);
   (runtime.log || console.log)(
-    `GitVibe workflow files updated with reusable workflows pinned to ${releaseTag}.`,
+    `GitVibe config and workflow files updated with reusable workflows pinned to ${releaseTag}.`,
   );
 }
 

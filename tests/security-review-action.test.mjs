@@ -4,7 +4,7 @@ import { isDirectRun, securityReview } from "../src/runner/actions/security-revi
 
 const baseEnv = {
   GITHUB_REPOSITORY: "example/repo",
-  GITVIBE_GITHUB_TOKEN: "token",
+  GITVIBE_GITHUB_APP_TOKEN: "token",
   GITVIBE_ISSUE_NUMBER: "12",
 };
 
@@ -69,6 +69,49 @@ describe("GitVibe security review action", () => {
       "status<<GITVIBE_OUTPUT\nblocked\nGITVIBE_OUTPUT\n",
       "result-file<<GITVIBE_OUTPUT\n/tmp/git-vibe-investigate-result.json\nGITVIBE_OUTPUT\n",
     ]);
+  });
+});
+
+describe("GitVibe security review hosted auth", () => {
+  it("requests hosted App tokens with the status-write profile", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
+      .mockResolvedValueOnce(jsonResponse({ token: "installation-token" }));
+    const runStageSecurityReview = vi.fn().mockResolvedValue({
+      allowed: true,
+      status: "allowed",
+      summary: "Security review passed.",
+    });
+
+    await expect(
+      securityReview({
+        argv: ["investigate"],
+        env: {
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
+          ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
+          GITHUB_REPOSITORY: "example/repo",
+          GITVIBE_ACTIONS_TOKEN_URL: "https://git-vibe.example/actions/token",
+          GITVIBE_ISSUE_NUMBER: "12",
+        },
+        fetch: fetchImpl,
+        runStageSecurityReview,
+      }),
+    ).resolves.toBe(0);
+
+    expect(fetchImpl.mock.calls[1]).toMatchObject([
+      "https://git-vibe.example/actions/token",
+      {
+        body: JSON.stringify({
+          oidcToken: "oidc-token",
+          permissionProfile: "runner-status-write",
+        }),
+        method: "POST",
+      },
+    ]);
+    expect(runStageSecurityReview).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "installation-token" }),
+    );
   });
 });
 
@@ -167,13 +210,14 @@ describe("GitVibe security review action validation", () => {
       },
       {
         argv: ["implement"],
-        env: { GITVIBE_GITHUB_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
+        env: { GITVIBE_GITHUB_APP_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
         error: "GITHUB_REPOSITORY is required.",
       },
       {
         argv: ["implement"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_ISSUE_NUMBER: "1" },
-        error: "GITVIBE_GITHUB_TOKEN is required.",
+        error:
+          "ACTIONS_ID_TOKEN_REQUEST_URL is required. Add permissions: id-token: write to this job.",
       },
     ];
 
@@ -209,3 +253,15 @@ describe("GitVibe security review action entrypoints", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * @param {unknown} body
+ * @param {number} [status]
+ */
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body),
+  };
+}

@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { GitHubClient, splitRepository, type GitHubRequest } from "../../shared/github.js";
 import { gitVibeLabels } from "../../shared/labels.js";
 import { redactLogText } from "../logging.js";
+import { githubAppToken } from "./github-app-token.js";
 
 interface GitHubRequester {
   request<T extends Record<string, unknown> | unknown[] = Record<string, unknown>>(
@@ -16,6 +17,8 @@ export interface MarkBlockedRuntime {
   client?: GitHubRequester;
   env?: NodeJS.ProcessEnv;
   error?: (message: string) => void;
+  fetch?: typeof fetch;
+  githubToken?: () => Promise<string>;
   log?: (message: string) => void;
 }
 
@@ -34,7 +37,7 @@ export async function markBlocked(runtime: MarkBlockedRuntime = {}): Promise<num
   const log = runtime.log ?? console.log;
 
   try {
-    const token = requiredEnv(env, "GITVIBE_GITHUB_TOKEN");
+    const token = await resolveGitHubToken(runtime, env);
     const repository = requiredEnv(env, "GITHUB_REPOSITORY");
     const issueNumber = requiredEnv(env, "GITVIBE_ISSUE_NUMBER");
     const { owner, repo } = splitRepository(repository);
@@ -54,6 +57,16 @@ export async function markBlocked(runtime: MarkBlockedRuntime = {}): Promise<num
     error(redactLogText(`failed to mark issue blocked: ${message}`));
     return 1;
   }
+}
+
+function resolveGitHubToken(runtime: MarkBlockedRuntime, env: NodeJS.ProcessEnv): Promise<string> {
+  return runtime.githubToken
+    ? runtime.githubToken()
+    : githubAppToken({
+        env,
+        fetch: runtime.fetch || fetch,
+        permissionProfile: "runner-status-write",
+      });
 }
 
 export async function markIssueBlocked(options: MarkBlockedOptions): Promise<void> {

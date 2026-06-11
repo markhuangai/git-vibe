@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createGitVibeApp } from "../src/app/server.ts";
 import {
   createApp,
+  createAppAuth,
   createClient,
   discussionCommentBodies,
   featureIssue,
@@ -55,61 +56,80 @@ describe("GitVibe app server", () => {
       },
     );
   });
+});
 
-  it("checks discussion setup during startup preflight", async () => {
+describe("GitVibe app repository setup", () => {
+  it("bootstraps repository labels when the App is installed or repositories are added", async () => {
     const log = vi.fn();
-    const errorLog = vi.fn();
-    const matching = createApp({
-      client: createClient(),
-      configuredRepository: "example/repo",
-      errorLog,
-      log,
+    const appAuth = createAppAuth();
+    const app = createApp({ appAuth, client: createClient(), log });
+
+    await app.handleWebhook("installation", {
+      action: "created",
+      installation: { account: { login: "example" }, id: 123 },
+      repositories: [{ name: "repo" }],
     });
 
-    await matching.runStartupPreflight();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("startup preflight ok"));
+    expect(appAuth.tokenForRepository).toHaveBeenCalledWith(
+      expect.objectContaining({ installationId: 123, owner: "example", repo: "repo" }),
+    );
+    expect(log).toHaveBeenCalledWith("bootstrapped labels for example/repo");
 
-    const fallback = createApp({
-      client: createClient({ categories: [{ id: "general", name: "General", slug: "general" }] }),
-      configuredRepository: "example/repo",
-      log,
+    await app.handleWebhook("installation_repositories", {
+      action: "added",
+      installation: { id: 456 },
+      repositories_added: [{ full_name: "other/repo" }],
     });
-    await fallback.runStartupPreflight();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("startup preflight warning"));
-
-    const missing = createApp({ client: createClient(), log });
-    await missing.runStartupPreflight();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("startup preflight skipped"));
-
-    const failing = createApp({
-      client: createClient({ categories: [] }),
-      configuredRepository: "example/repo",
-      errorLog,
-    });
-    await failing.runStartupPreflight();
-    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining("startup preflight failed"));
+    expect(appAuth.tokenForRepository).toHaveBeenCalledWith(
+      expect.objectContaining({ installationId: 456, owner: "other", repo: "repo" }),
+    );
+    expect(log).toHaveBeenCalledWith("bootstrapped labels for other/repo");
   });
 
-  it("logs startup label bootstrap failures with the default error logger", async () => {
+  it("does not require Discussions during installation setup", async () => {
+    const log = vi.fn();
+    const errorLog = vi.fn();
+    const client = createClient({ categories: [] });
+    const app = createApp({
+      client,
+      errorLog,
+      log,
+    });
+
+    await app.handleWebhook("installation", installationPayload());
+
+    expect(log).toHaveBeenCalledWith("bootstrapped labels for example/repo");
+    expect(client.graphql).not.toHaveBeenCalled();
+    expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it("logs repository setup label bootstrap failures with the default error logger", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const app = createGitVibeApp({
+      appAuth: createAppAuth(),
       client: /** @type {import("../src/shared/github.ts").GitHubClient} */ (
         /** @type {unknown} */ (createClient({ labelError: new Error("label write failed") }))
       ),
-      configuredRepository: "example/repo",
-      githubToken: "token",
       log: vi.fn(),
       webhookSecret: "secret",
     });
 
-    await app.runStartupPreflight();
+    await app.handleWebhook("installation", installationPayload());
 
     expect(consoleError).toHaveBeenCalledWith(
-      expect.stringContaining("startup label bootstrap failed for example/repo"),
+      expect.stringContaining("repository setup label bootstrap failed for example/repo"),
     );
     consoleError.mockRestore();
   });
 });
+
+function installationPayload() {
+  return {
+    action: "created",
+    installation: { id: 123 },
+    repositories: [{ full_name: "example/repo" }],
+  };
+}
 
 describe("GitVibe app server issue intake", () => {
   it("converts feature issue forms into discussions", async () => {
