@@ -17,6 +17,10 @@ const aiEnv = {
 const mcpEnv = {
   GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
 };
+const scrubbedOidcEnv = {
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN: "",
+  ACTIONS_ID_TOKEN_REQUEST_URL: "",
+};
 const legacyAiEnvNames = [
   "GITVIBE_AI_API_KEY",
   "GITVIBE_AI_BASE_URL",
@@ -401,6 +405,26 @@ describe("GitVibe workflow repository selection", () => {
 });
 
 describe("GitVibe action runtime setup", () => {
+  it("clears hosted auth OIDC env from setup-only composite action steps", () => {
+    const oidcEntrypoints = [
+      "dist/actions/mark-blocked.js",
+      "dist/actions/run-action.js",
+      "dist/actions/security-review.js",
+    ];
+
+    for (const file of actionFiles) {
+      const action = readAction(file);
+      for (const step of action.runs?.steps || []) {
+        const run = String(step.run || "");
+        if (!run || oidcEntrypoints.some((entrypoint) => run.includes(entrypoint))) continue;
+
+        expect(step.env, `${file} ${step.name || step.id} clears hosted auth OIDC`).toMatchObject(
+          scrubbedOidcEnv,
+        );
+      }
+    }
+  });
+
   it("builds generated action runtime inside composite actions", () => {
     for (const file of actionFiles) {
       const content = readFileSync(file, "utf8");
@@ -630,4 +654,9 @@ function workflowJobsHaveIdToken(workflow) {
 /** @param {string} file @returns {Workflow} */
 function readWorkflow(file) {
   return /** @type {Workflow} */ (parse(readFileSync(file, "utf8")));
+}
+
+/** @param {string} file @returns {{ runs?: { steps?: WorkflowStep[] } }} */
+function readAction(file) {
+  return /** @type {{ runs?: { steps?: WorkflowStep[] } }} */ (parse(readFileSync(file, "utf8")));
 }

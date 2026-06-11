@@ -15,6 +15,9 @@ runs:
   steps:
     - name: Build GitVibe action runtime
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: |
         cd "$GITHUB_ACTION_PATH/.."
         if command -v corepack >/dev/null 2>&1 && corepack enable; then

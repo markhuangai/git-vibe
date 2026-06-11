@@ -47,6 +47,9 @@ runs:
   steps:
     - name: Build GitVibe action runtime
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: |
         cd "$GITHUB_ACTION_PATH/.."
         if command -v corepack >/dev/null 2>&1 && corepack enable; then
@@ -62,6 +65,9 @@ runs:
         "${pnpm_cmd[@]}" build
     - name: Set up configured AI CLI
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" implement
     - id: run
       shell: bash

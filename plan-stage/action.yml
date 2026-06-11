@@ -28,6 +28,9 @@ runs:
   steps:
     - name: Build GitVibe action runtime
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: |
         cd "$GITHUB_ACTION_PATH/.."
         if command -v corepack >/dev/null 2>&1 && corepack enable; then
@@ -43,4 +46,7 @@ runs:
         "${pnpm_cmd[@]}" build
     - id: plan
       shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: node "$GITHUB_ACTION_PATH/../dist/actions/plan-stage.js" "${{ inputs.stage }}"
