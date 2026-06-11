@@ -246,7 +246,7 @@ jq -Rs . < ~/.codex/auth.json
 ```
 
 Hosted GitVibe uses the installed GitHub App for GitHub writes. Customers do not
-create a repository webhook or `GITVIBE_GITHUB_TOKEN` secret.
+create a repo-level webhook or `GITVIBE_GITHUB_TOKEN` secret.
 
 ### 4. Run the app server
 
@@ -288,7 +288,7 @@ uses the repository `default_branch` reported by GitHub.
 
 Install the GitVibe GitHub App on the repositories you want GitVibe to manage.
 The App registration owns webhook delivery, so repositories do not create
-repository webhooks.
+repo-level webhooks.
 
 GitHub App registration values:
 

@@ -45,6 +45,7 @@ describe("GitVibe app deployment boundary", () => {
     expect(dockerfile).toContain("corepack pnpm build:app");
     expect(dockerfile).toContain("COPY --from=build /app/dist/app ./dist/app");
     expect(dockerfile).toContain("COPY --from=build /app/dist/shared ./dist/shared");
+    expect(dockerfile).not.toContain("COPY --from=build /app/app ./app");
     expect(dockerfile).not.toContain("COPY --from=build /app/dist ./dist");
     expect(dockerfile).not.toContain("COPY --from=build /app/prompts ./prompts");
     expect(dockerfile).not.toContain("COPY --from=build /app/schemas ./schemas");
