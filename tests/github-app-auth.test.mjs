@@ -238,6 +238,7 @@ describe("GitHub Actions hosted auth job mapping", () => {
     expect(profile("review.yml", "review / git-vibe-review-member-1 / security")).toBe(
       "runner-read",
     );
+    expect(profile("review.yml", "git-vibe-review-member-1 / security")).toBe("runner-read");
     expect(profile("review.yml", "review / security")).toBeUndefined();
   });
 
@@ -245,6 +246,7 @@ describe("GitHub Actions hosted auth job mapping", () => {
     expect(canWriteback("develop.yml", "develop / implement")).toBe(true);
     expect(canWriteback("review.yml", "review / review-matrix")).toBe(true);
     expect(canWriteback("review.yml", "review / git-vibe-review-member-1 / security")).toBe(true);
+    expect(canWriteback("review.yml", "git-vibe-review-member-1 / security")).toBe(true);
     expect(canWriteback("develop.yml", "develop / security-review")).toBe(false);
     expect(canWriteback("review.yml", "review / plan-review-matrix")).toBe(false);
   });
