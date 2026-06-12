@@ -1,4 +1,5 @@
-import { SignJWT, importPKCS8 } from "jose";
+import { createPrivateKey, type KeyObject } from "node:crypto";
+import { SignJWT } from "jose";
 import { GitHubClient } from "../shared/github.js";
 import {
   permissionsForProfile,
@@ -59,7 +60,7 @@ export class GitHubAppInstallationTokenProvider implements InstallationTokenProv
   private readonly installationIds = new Map<string, string>();
   private readonly now: () => Date;
   private readonly privateKey: string;
-  private signingKey: CryptoKey | Uint8Array | undefined;
+  private signingKey: KeyObject | undefined;
 
   constructor(options: GitHubAppInstallationTokenProviderOptions) {
     this.appId = options.appId;
@@ -111,8 +112,8 @@ export class GitHubAppInstallationTokenProvider implements InstallationTokenProv
       .sign(key);
   }
 
-  private async privateSigningKey(): Promise<CryptoKey | Uint8Array> {
-    this.signingKey ||= await importPKCS8(this.privateKey, "RS256");
+  private async privateSigningKey(): Promise<KeyObject> {
+    this.signingKey ||= createPrivateKey(this.privateKey);
     return this.signingKey;
   }
 
