@@ -85,6 +85,34 @@ describe("GitHub App installation token provider", () => {
   });
 });
 
+describe("GitHub App installation token private keys", () => {
+  it("accepts GitHub App RSA private keys downloaded from GitHub", async () => {
+    const client = {
+      request: vi.fn(async () => ({
+        expires_at: "2026-06-09T02:00:00.000Z",
+        token: "installation-token",
+      })),
+    };
+    const provider = new GitHubAppInstallationTokenProvider({
+      appId: "12345",
+      client,
+      now: () => new Date("2026-06-09T01:00:00.000Z"),
+      privateKey: testPrivateKey("pkcs1"),
+    });
+
+    await expect(
+      provider.tokenForRepository({
+        installationId: 987,
+        owner: "example",
+        profile: "runner-status-write",
+        repo: "repo",
+      }),
+    ).resolves.toBe("installation-token");
+
+    expect(client.request.mock.calls[0][0].token.split(".")).toHaveLength(3);
+  });
+});
+
 describe("GitHub App installation token provider profile caching", () => {
   it("reuses resolved installation IDs across permission profiles", async () => {
     const client = {
@@ -252,9 +280,9 @@ describe("GitHub Actions hosted auth job mapping", () => {
   });
 });
 
-function testPrivateKey() {
+function testPrivateKey(type = "pkcs8") {
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  return privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+  return privateKey.export({ format: "pem", type }).toString();
 }
 
 function profile(workflowFile, checkRunName) {
