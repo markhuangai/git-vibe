@@ -229,6 +229,7 @@ function matchingCheckRunSha(
   checkRun: { head_sha: string; pull_requests?: CheckRunPullRequest[] },
 ): boolean {
   if (checkRun.head_sha === claims.sha) return true;
+  if (!sameRepositoryPullRequest(claims, checkRun)) return false;
   return sameRepositoryPullRequests(claims, checkRun).some(
     (pullRequest) => pullRequest.base?.sha === claims.sha,
   );

@@ -380,7 +380,9 @@ describe("GitHub Actions token pull request check run rejection", () => {
       }),
     ).rejects.toThrow("OIDC sha does not match the check run head SHA");
   });
+});
 
+describe("GitHub Actions token cross-repository pull request rejection", () => {
   it("rejects checkout sha drift when any linked pull request is cross-repository", async () => {
     await expect(
       exchangeActionsToken({
@@ -396,6 +398,31 @@ describe("GitHub Actions token pull request check run rejection", () => {
             },
             {
               base: { repo: { id: 123 }, sha: "base-sha" },
+              head: { repo: { id: 456 }, sha: "pr-head" },
+            },
+          ],
+        }),
+        tokenProvider: tokenProviderForProfiles(),
+        verifier: { verify: vi.fn(async () => trustedClaims) },
+      }),
+    ).rejects.toThrow("OIDC sha does not match the check run head SHA");
+  });
+
+  it("rejects base sha matches when any linked pull request is cross-repository", async () => {
+    await expect(
+      exchangeActionsToken({
+        audience: "audience",
+        body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
+        client: clientWithCheckRun({
+          head_sha: "pr-head",
+          name: "develop / security-review",
+          pull_requests: [
+            {
+              base: { repo: { id: 123 }, sha: "abc123" },
+              head: { repo: { id: 123 }, sha: "pr-head" },
+            },
+            {
+              base: { repo: { id: 123 }, sha: "abc123" },
               head: { repo: { id: 456 }, sha: "pr-head" },
             },
           ],
