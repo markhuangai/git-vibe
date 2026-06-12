@@ -229,20 +229,32 @@ function matchingCheckRunSha(
   checkRun: { head_sha: string; pull_requests?: CheckRunPullRequest[] },
 ): boolean {
   if (checkRun.head_sha === claims.sha) return true;
-  return (checkRun.pull_requests || []).some((pullRequest) => pullRequest.base?.sha === claims.sha);
+  return sameRepositoryPullRequests(claims, checkRun).some(
+    (pullRequest) => pullRequest.base?.sha === claims.sha,
+  );
 }
 
 function sameRepositoryPullRequest(
   claims: GitHubActionsClaims,
   checkRun: { head_sha: string; pull_requests?: CheckRunPullRequest[] },
 ): boolean {
+  const pullRequests = checkRun.pull_requests || [];
+  return (
+    pullRequests.length > 0 &&
+    pullRequests.length === sameRepositoryPullRequests(claims, checkRun).length &&
+    pullRequests.some((pullRequest) => pullRequest.head?.sha === checkRun.head_sha)
+  );
+}
+
+function sameRepositoryPullRequests(
+  claims: GitHubActionsClaims,
+  checkRun: { pull_requests?: CheckRunPullRequest[] },
+): CheckRunPullRequest[] {
   const repositoryId = Number(claims.repositoryId);
-  if (!Number.isSafeInteger(repositoryId)) return false;
-  return (checkRun.pull_requests || []).some(
+  if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0) return [];
+  return (checkRun.pull_requests || []).filter(
     (pullRequest) =>
-      pullRequest.base?.repo?.id === repositoryId &&
-      pullRequest.head?.repo?.id === repositoryId &&
-      pullRequest.head?.sha === checkRun.head_sha,
+      pullRequest.base?.repo?.id === repositoryId && pullRequest.head?.repo?.id === repositoryId,
   );
 }
 
