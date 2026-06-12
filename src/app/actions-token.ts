@@ -172,13 +172,17 @@ async function actionsCheckRun(
     owner: string;
     repo: string;
   },
-): Promise<{ head_sha: string; name: string }> {
+): Promise<{ head_sha: string; name: string; pull_requests?: CheckRunPullRequest[] }> {
   const token = await options.tokenProvider.tokenForRepository({
     owner: options.owner,
     profile: "server-checks-read",
     repo: options.repo,
   });
-  const checkRun = await options.client.request<{ head_sha?: string; name?: string }>({
+  const checkRun = await options.client.request<{
+    head_sha?: string;
+    name?: string;
+    pull_requests?: CheckRunPullRequest[];
+  }>({
     method: "GET",
     path: `/repos/${options.owner}/${options.repo}/check-runs/${options.claims.checkRunId}`,
     token,
@@ -186,16 +190,60 @@ async function actionsCheckRun(
   if (!checkRun.name || !checkRun.head_sha) {
     throw httpError("GitHub check run response was missing name or head_sha.", 502);
   }
-  return { head_sha: checkRun.head_sha, name: checkRun.name };
+  return {
+    head_sha: checkRun.head_sha,
+    name: checkRun.name,
+    pull_requests: checkRun.pull_requests,
+  };
 }
 
 function assertMatchingCheckRun(
   claims: GitHubActionsClaims,
-  checkRun: { head_sha: string; name: string },
+  checkRun: { head_sha: string; name: string; pull_requests?: CheckRunPullRequest[] },
 ): void {
-  if (checkRun.head_sha !== claims.sha) {
-    throw httpError("GitHub Actions OIDC sha does not match the check run head SHA.", 403);
+  if (!matchingCheckRunSha(claims, checkRun) && !sameRepositoryPullRequest(claims, checkRun)) {
+    throw httpError(
+      "GitHub Actions OIDC sha does not match the check run head SHA or a linked same-repository pull request.",
+      403,
+    );
   }
+}
+
+interface CheckRunPullRequest {
+  base?: {
+    repo?: {
+      id?: number;
+    };
+    sha?: string;
+  };
+  head?: {
+    repo?: {
+      id?: number;
+    };
+    sha?: string;
+  };
+}
+
+function matchingCheckRunSha(
+  claims: GitHubActionsClaims,
+  checkRun: { head_sha: string; pull_requests?: CheckRunPullRequest[] },
+): boolean {
+  if (checkRun.head_sha === claims.sha) return true;
+  return (checkRun.pull_requests || []).some((pullRequest) => pullRequest.base?.sha === claims.sha);
+}
+
+function sameRepositoryPullRequest(
+  claims: GitHubActionsClaims,
+  checkRun: { head_sha: string; pull_requests?: CheckRunPullRequest[] },
+): boolean {
+  const repositoryId = Number(claims.repositoryId);
+  if (!Number.isSafeInteger(repositoryId)) return false;
+  return (checkRun.pull_requests || []).some(
+    (pullRequest) =>
+      pullRequest.base?.repo?.id === repositoryId &&
+      pullRequest.head?.repo?.id === repositoryId &&
+      pullRequest.head?.sha === checkRun.head_sha,
+  );
 }
 
 function requiredClaim(payload: JWTPayload, name: string): string {
