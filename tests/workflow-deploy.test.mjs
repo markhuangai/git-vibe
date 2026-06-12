@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 describe("GitVibe app deployment boundary", () => {
-  it("deploys only prerelease images passed by the release workflow", () => {
+  it("deploys only release images passed by the release workflow", () => {
     const workflow = readWorkflow(".github/workflows/app-deploy.yml");
     const content = readFileSync(".github/workflows/app-deploy.yml", "utf8");
     const deploySteps = /** @type {Array<{ uses?: string, run?: string }>} */ (
@@ -26,8 +26,9 @@ describe("GitVibe app deployment boundary", () => {
     );
     expect(workflow.jobs?.build).toBeUndefined();
     expect(
-      deploySteps.some((step) => step.run?.includes("app-deploy only accepts prerelease tags")),
+      deploySteps.some((step) => step.run?.includes("app-deploy only accepts release tags")),
     ).toBe(true);
+    expect(deploySteps.some((step) => step.run?.includes("v4.0.0 or v4.0.0-rc.1"))).toBe(true);
     expect(content).toContain("[0-9A-Za-z][0-9A-Za-z._-]*");
     expect(deploySteps.some((step) => step.uses === "docker/login-action@v3")).toBe(true);
     expect(deploySteps.some((step) => step.run?.includes("docker compose"))).toBe(true);
@@ -114,9 +115,9 @@ describe("GitVibe release deployment boundary", () => {
       prerelease: "${{ steps.release.outputs.prerelease }}",
       release_tag: "${{ steps.release.outputs.release_tag }}",
     });
-    expect(workflow.jobs?.["deploy-prerelease"]).toMatchObject({
+    expect(workflow.jobs?.["deploy-app"]).toMatchObject({
       needs: "release",
-      if: "needs.release.outputs.prerelease == 'true' && needs.release.outputs.app_changed == 'true'",
+      if: "needs.release.outputs.app_changed == 'true'",
       uses: "./.github/workflows/app-deploy.yml",
       with: {
         release_tag: "${{ needs.release.outputs.release_tag }}",

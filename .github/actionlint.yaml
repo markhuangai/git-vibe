@@ -3,6 +3,7 @@ self-hosted-runner:
     - pipeline
     - app
     - docker-runner
+    - ubuntu
     - rootless-docker
 
 config-variables: null

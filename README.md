@@ -286,11 +286,12 @@ uses the repository `default_branch` reported by GitHub.
 
 ### 5. Install the GitHub App
 
-Install the GitVibe GitHub App on the repositories you want GitVibe to manage.
-The App registration owns webhook delivery, so repositories do not create
-repo-level webhooks.
+Install the hosted GitVibe GitHub App from
+[GitVibe for GitHub](https://github.com/apps/gitvibe-for-github) on the
+repositories you want GitVibe to manage. The App registration owns webhook
+delivery, so repositories do not create repo-level webhooks.
 
-GitHub App registration values:
+Hosted GitVibe App registration values for operators:
 
 ```text
 Homepage URL: https://markhuang.ai/manuals/git-vibe
