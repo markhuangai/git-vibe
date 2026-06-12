@@ -245,7 +245,11 @@ describe("GitVibe workflow call wiring", () => {
       expect(workflowCall?.secrets?.GITVIBE_MCP_ENV_JSON).toMatchObject({ required: false });
       expect(workflowCall?.secrets?.GITVIBE_GITHUB_TOKEN).toBeUndefined();
       expect(workflowCall?.secrets?.GITVIBE_AI_API_KEY, `${file} omits old AI key`).toBeUndefined();
-      expect(workflowJobsHaveIdToken(workflow), `${file} grants OIDC tokens`).toBe(true);
+      const oidcJobs = workflowJobsRequiringIdToken(workflow);
+      expect(oidcJobs.length, `${file} has GitVibe jobs that request hosted auth`).toBeGreaterThan(
+        0,
+      );
+      expect(workflowJobsHaveIdToken(workflow, oidcJobs), `${file} grants OIDC tokens`).toBe(true);
       expect(actionSourceSteps.length).toBeGreaterThan(0);
       for (const step of actionSourceSteps) {
         expect(step.with?.repository).toBe("${{ job.workflow_repository }}");
@@ -264,6 +268,9 @@ describe("GitVibe workflow call wiring", () => {
 
       const reusableJob = reusableJobs[0];
       expect(reusableJobs.length, `${file} should call a GitVibe reusable workflow`).toBe(1);
+      expect(reusableJob?.uses, `${file} uses hosted-auth reusable workflow release`).toMatch(
+        /@v4\.0\.0$/,
+      );
       expect(reusableJob?.secrets).toMatchObject({
         GITVIBE_AI_ENV_JSON: "${{ secrets.GITVIBE_AI_ENV_JSON }}",
         GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
@@ -644,11 +651,23 @@ function workflowStep(workflow, jobName, stepName) {
   return workflow.jobs?.[jobName]?.steps?.find((step) => step.name === stepName);
 }
 
-/** @param {Workflow} workflow @returns {boolean} */
-function workflowJobsHaveIdToken(workflow) {
-  return Object.values(workflow.jobs || {}).every(
-    (job) => job.permissions?.["id-token"] === "write",
-  );
+/** @param {Workflow} workflow @param {string[]} requiredJobs @returns {boolean} */
+function workflowJobsHaveIdToken(workflow, requiredJobs) {
+  const workflowLevelIdToken = workflow.permissions?.["id-token"] === "write";
+  return requiredJobs.every((jobName) => {
+    const job = workflow.jobs?.[jobName];
+    if (!job) return false;
+    return workflowLevelIdToken || job.permissions?.["id-token"] === "write";
+  });
+}
+
+/** @param {Workflow} workflow @returns {string[]} */
+function workflowJobsRequiringIdToken(workflow) {
+  return Object.entries(workflow.jobs || {})
+    .filter(([, job]) =>
+      (job.steps || []).some((step) => String(step.uses || "").startsWith("./.git-vibe/actions/")),
+    )
+    .map(([jobName]) => jobName);
 }
 
 /** @param {string} file @returns {Workflow} */

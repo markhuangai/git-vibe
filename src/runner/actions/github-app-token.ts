@@ -41,14 +41,20 @@ export async function githubAppCodexAuthWriteback(
   const env = runtime.env || process.env;
   const fetchImpl = runtime.fetch || fetch;
   const oidcToken = await requestActionsOidcToken(env, fetchImpl);
-  const response = await fetchImpl(actionsCodexAuthUrl(env), {
-    body: JSON.stringify({ oidcToken, value }),
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
+  const response = await fetchWithTimeout(
+    env,
+    fetchImpl,
+    "GitVibe actions Codex auth",
+    actionsCodexAuthUrl(env),
+    {
+      body: JSON.stringify({ oidcToken, value }),
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      method: "POST",
     },
-    method: "POST",
-  });
+  );
   const data = await responseJson<ActionsCodexAuthResponse>(response, "GitVibe actions Codex auth");
   if (data.updated !== true) {
     throw new Error("GitVibe actions Codex auth response was missing updated=true.");
@@ -82,7 +88,7 @@ async function requestActionsOidcToken(
   const url = new URL(requestUrl);
   url.searchParams.set("audience", actionsOidcAudience(env));
 
-  const response = await fetchImpl(url, {
+  const response = await fetchWithTimeout(env, fetchImpl, "GitHub Actions OIDC token", url, {
     headers: { authorization: `Bearer ${requestToken}` },
   });
   const data = await responseJson<OidcTokenResponse>(response, "GitHub Actions OIDC token");
@@ -96,14 +102,20 @@ async function exchangeActionsOidcToken(
   oidcToken: string,
   permissionProfile: GitHubActionsRunnerPermissionProfile,
 ): Promise<string> {
-  const response = await fetchImpl(actionsTokenUrl(env), {
-    body: JSON.stringify({ oidcToken, permissionProfile }),
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
+  const response = await fetchWithTimeout(
+    env,
+    fetchImpl,
+    "GitVibe actions token",
+    actionsTokenUrl(env),
+    {
+      body: JSON.stringify({ oidcToken, permissionProfile }),
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      method: "POST",
     },
-    method: "POST",
-  });
+  );
   const data = await responseJson<ActionsTokenResponse>(response, "GitVibe actions token");
   if (!data.token) throw new Error("GitVibe actions token response was missing token.");
   return data.token;
@@ -121,12 +133,47 @@ async function responseJson<T>(response: Response, label: string): Promise<T> {
   const text = await response.text();
   const data = text ? (JSON.parse(text) as unknown) : {};
   if (!response.ok) {
-    throw new Error(`${label} request failed: ${response.status} ${JSON.stringify(data)}`);
+    throw new Error(`${label} request failed: ${response.status}`);
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error(`${label} response must be a JSON object.`);
   }
   return data as T;
+}
+
+async function fetchWithTimeout(
+  env: NodeJS.ProcessEnv,
+  fetchImpl: typeof fetch,
+  label: string,
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  const timeoutMs = requestTimeoutMs(env);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetchImpl(input, { ...(init || {}), signal: controller.signal });
+  } catch (error) {
+    if (timedOut) throw new Error(`${label} request timed out after ${timeoutMs}ms.`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function requestTimeoutMs(env: NodeJS.ProcessEnv): number {
+  const raw = env.GITVIBE_HTTP_TIMEOUT_MS?.trim();
+  if (!raw) return 15_000;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error("GITVIBE_HTTP_TIMEOUT_MS must be a positive integer.");
+  }
+  return value;
 }
 
 function actionsTokenUrl(env: NodeJS.ProcessEnv): string {
