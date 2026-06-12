@@ -61,6 +61,7 @@ describe("GitHub App token action resolver", () => {
     expect(fetchImpl.mock.calls[0][1]).toMatchObject({
       headers: { authorization: "Bearer request-token" },
     });
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(globalThis.AbortSignal);
     expect(fetchImpl.mock.calls[1]).toMatchObject([
       "https://git-vibe.markhuang.ai/actions/token",
       {
@@ -71,6 +72,7 @@ describe("GitHub App token action resolver", () => {
         method: "POST",
       },
     ]);
+    expect(fetchImpl.mock.calls[1][1].signal).toBeInstanceOf(globalThis.AbortSignal);
   });
 
   it("selects least-privilege runner profiles from stage and execution mode", () => {
@@ -207,13 +209,13 @@ describe("GitHub App token action response validation", () => {
       }),
     ).rejects.toThrow("GitVibe actions token response was missing token");
 
-    await expect(
-      githubAppToken({
-        env: tokenRequestEnv(),
-        fetch: vi.fn().mockResolvedValueOnce(jsonResponse({ error: "nope" }, 403)),
-        permissionProfile: "runner-status-write",
-      }),
-    ).rejects.toThrow('GitHub Actions OIDC token request failed: 403 {"error":"nope"}');
+    const secretResponse = githubAppToken({
+      env: tokenRequestEnv(),
+      fetch: vi.fn().mockResolvedValueOnce(jsonResponse({ error: "nope", token: "secret" }, 403)),
+      permissionProfile: "runner-status-write",
+    });
+    await expect(secretResponse).rejects.toThrow("GitHub Actions OIDC token request failed: 403");
+    await expect(secretResponse).rejects.not.toThrow("secret");
 
     await expect(
       githubAppToken({
@@ -232,6 +234,36 @@ describe("GitHub App token action response validation", () => {
           .mockResolvedValueOnce(textResponse("", 200)),
       }),
     ).rejects.toThrow("GitVibe actions Codex auth response was missing updated=true");
+  });
+
+  it("fails hosted auth HTTP calls with a clear timeout error", async () => {
+    const fetchImpl = vi.fn(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+
+    await expect(
+      githubAppToken({
+        env: { ...tokenRequestEnv(), GITVIBE_HTTP_TIMEOUT_MS: "1" },
+        fetch: fetchImpl,
+        permissionProfile: "runner-status-write",
+      }),
+    ).rejects.toThrow("GitHub Actions OIDC token request timed out after 1ms.");
+  });
+
+  it("rejects invalid hosted auth timeout configuration", async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(
+      githubAppToken({
+        env: { ...tokenRequestEnv(), GITVIBE_HTTP_TIMEOUT_MS: "later" },
+        fetch: fetchImpl,
+        permissionProfile: "runner-status-write",
+      }),
+    ).rejects.toThrow("GITVIBE_HTTP_TIMEOUT_MS must be a positive integer");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("requires an explicit hosted token permission profile", async () => {
