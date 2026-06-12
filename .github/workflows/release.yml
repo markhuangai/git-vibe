@@ -203,9 +203,9 @@ jobs:
           gh release create "${{ steps.release.outputs.release_tag }}" \
             "${release_flags[@]}"
 
-  deploy-prerelease:
+  deploy-app:
     needs: release
-    if: needs.release.outputs.prerelease == 'true' && needs.release.outputs.app_changed == 'true'
+    if: needs.release.outputs.app_changed == 'true'
     uses: ./.github/workflows/app-deploy.yml
     with:
       release_tag: ${{ needs.release.outputs.release_tag }}
