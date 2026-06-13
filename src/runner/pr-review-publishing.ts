@@ -48,8 +48,10 @@ export async function publishPullRequestReviewResult(options: {
   if (!shouldPublishPullRequestReview(options)) return false;
 
   const findings = reviewFindingComments(options.parsedOutput.inline_comments);
-  const reconciliation = await reconcileReviewFindings({ ...options, findings });
-  const comments = reconciliation.newFindings.map((finding) => finding.reviewComment);
+  const newFindings = shouldReconcileReviewFindings(options.parsedOutput)
+    ? (await reconcileReviewFindings({ ...options, findings })).newFindings
+    : findings;
+  const comments = newFindings.map((finding) => finding.reviewComment);
   const body = pullRequestReviewBody({
     comments,
     output: options.parsedOutput,
@@ -105,6 +107,14 @@ function shouldPublishPullRequestReview(options: {
 }): boolean {
   return (
     options.runner.stage === "review-matrix" && options.context.artifact.type === "pull-request"
+  );
+}
+
+function shouldReconcileReviewFindings(output: JsonObject): boolean {
+  return (
+    String(output.status || "")
+      .trim()
+      .toLowerCase() === "completed"
   );
 }
 

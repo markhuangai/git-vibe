@@ -88,6 +88,32 @@ describe("pull request review publishing thread reconciliation", () => {
   });
 });
 
+describe("pull request review publishing blocked outputs", () => {
+  it("does not mark prior findings outdated when review output is blocked", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: context([priorReviewFinding()]),
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        next_state: "blocked",
+        stage: "review-matrix",
+        status: "blocked",
+        summary: "Review could not complete.",
+      },
+      runner: runner(),
+    });
+
+    expect(requestCalls(client).map((request) => request.path)).not.toContain(
+      "/repos/example/repo/pulls/12/comments/123/replies",
+    );
+    expect(reviewRequest(client).body.body).toContain("**Status:** `blocked`");
+    expect(client.graphql).not.toHaveBeenCalled();
+  });
+});
+
 describe("pull request review publishing reconciliation edge cases", () => {
   it("does not duplicate an existing finding update reply for the same commit", async () => {
     const client = createClient();
