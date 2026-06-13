@@ -692,6 +692,6 @@ function blockedResultComment({
     node_id: "review-100",
     submitted_at: "2026-01-02T00:00:00Z",
     updated_at: "2026-01-04T00:00:00Z",
-    user: { login: "github-actions[bot]" },
+    user: { login: "gitvibe-for-github[bot]" },
   };
 }

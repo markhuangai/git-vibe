@@ -634,7 +634,7 @@ function acceptedRiskMetadataComment({ body, title = "Issue title" }) {
       "2026-01-04T00:00:00Z",
     ),
     author_association: "OWNER",
-    user: { login: "github-actions[bot]" },
+    user: { login: "gitvibe-for-github[bot]" },
   };
 }
 

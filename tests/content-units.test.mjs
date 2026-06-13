@@ -194,7 +194,7 @@ describe("accepted-risk metadata context unit filtering", () => {
     };
     context.timeline = [
       {
-        author: "github-actions[bot]",
+        author: "gitvibe-for-github[bot]",
         body: resultBody,
         createdAt: "2026-01-04T00:00:00Z",
         id: "100",

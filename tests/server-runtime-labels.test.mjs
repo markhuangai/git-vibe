@@ -13,14 +13,14 @@ import {
 } from "./support/server-app.mjs";
 
 describe("GitVibe app server managed runtime labels", () => {
-  it("accepts managed runtime issue labels from GitHub Actions", async () => {
+  it("accepts managed runtime issue labels from the GitVibe App bot", async () => {
     const client = createClient({ permission: new Error("GitHub API GET permission failed: 404") });
     await createApp({ client }).handleWebhook("issues", {
       action: "labeled",
       issue: { number: 11 },
       label: { name: gitVibeLabels.blocked.name },
       repository: repositoryPayload(),
-      sender: { login: "github-actions[bot]" },
+      sender: { login: "gitvibe-for-github[bot]" },
     });
 
     expect(workflowDispatches(client)).toEqual([]);
@@ -47,7 +47,7 @@ describe("GitVibe app server managed runtime labels", () => {
     );
   });
 
-  it("accepts managed runtime discussion labels from GitHub Actions", async () => {
+  it("accepts managed runtime discussion labels from the GitVibe App bot", async () => {
     const client = createClient({ permission: new Error("GitHub API GET permission failed: 404") });
     const app = createApp({ client });
 
@@ -56,7 +56,7 @@ describe("GitVibe app server managed runtime labels", () => {
       discussion: { node_id: "discussion-node", number: 5 },
       label: { name: gitVibeLabels.blocked.name, node_id: "blocked-label-node" },
       repository: repositoryPayload(),
-      sender: { login: "github-actions[bot]" },
+      sender: { login: "gitvibe-for-github[bot]" },
     });
 
     expect(workflowDispatches(client)).toEqual([]);
@@ -85,14 +85,14 @@ describe("GitVibe app server managed runtime labels", () => {
     );
   });
 
-  it("ignores managed runtime pull request label events from GitHub Actions", async () => {
+  it("ignores managed runtime pull request label events from the GitVibe App bot", async () => {
     const client = createClient({ permission: new Error("GitHub API GET permission failed: 404") });
     await createApp({ client }).handleWebhook("pull_request", {
       action: "labeled",
       label: { name: gitVibeLabels.blocked.name },
       pull_request: { number: 12 },
       repository: repositoryPayload(),
-      sender: { login: "github-actions[bot]" },
+      sender: { login: "gitvibe-for-github[bot]" },
     });
 
     expect(workflowDispatches(client)).toEqual([]);
