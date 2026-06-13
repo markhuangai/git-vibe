@@ -251,6 +251,35 @@ describe("prompt-injection safety gate extra sources", () => {
     expect(gate).toMatchObject({ allowed: false, severity: "high" });
     expect(gate.findings.join("\n")).toContain("validation repair stdout");
   });
+
+  it("includes a bounded matched excerpt for matrix member safety findings", () => {
+    const gate = safetyGateForStage({
+      config: {},
+      context: context({ comment: "" }),
+      extraSources: [
+        {
+          label: "matrix member result 2",
+          text: [
+            "`accepted_risk.skip` event with reason `workflow-run-attempt-changed`.",
+            "- **SHA validation** ensures the rerun points at the current PR head.",
+          ].join("\n"),
+        },
+      ],
+      stage: "review-matrix",
+    });
+    const output = safetyBlockedOutput({
+      context: context({ comment: "" }),
+      gate,
+      runner: runner("review-matrix"),
+    });
+
+    expect(gate).toMatchObject({ allowed: false, severity: "high" });
+    expect(gate.findings.join("\n")).toContain("matrix member result 2");
+    expect(gate.findings.join("\n")).toContain("matched excerpt");
+    expect(gate.findings.join("\n")).toContain("'accepted_risk.skip'");
+    expect(gate.findings.join("\n")).toContain("SHA validation");
+    expect(output.comment_body).toContain("matched excerpt");
+  });
 });
 
 describe("prompt-injection safety gate direct categories", () => {
