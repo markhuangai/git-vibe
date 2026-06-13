@@ -14,9 +14,11 @@ import {
   stageResultStatus,
   type StageResultMarker,
 } from "../shared/stage-result-markers.js";
+import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { Stage } from "../shared/types.js";
 import {
+  addIssueLabel,
   createDiscussionComment,
   createIssueComment,
   dispatchWorkflow,
@@ -24,6 +26,7 @@ import {
   postQueuedWorkflowComment,
   repositoryWorkflowBudgetInputs,
   removeDiscussionLabelFromPayload,
+  removeIssueLabelIfPresent,
   type WebhookActionContext,
 } from "./server-actions.js";
 import { removeIssueLabel } from "./labels.js";
@@ -132,6 +135,7 @@ export async function handleAcceptRiskLabel(
   const stored = await storeRunBoundAcceptedRisk(options, label, result, plan, boundAcceptance);
   if (!stored) return;
 
+  await markAcceptedRiskWorkflowRunning(options, plan);
   await removeAcceptRiskLabel(options, label);
   await postQueuedWorkflowComment(options, {
     artifact: plan.artifact,
@@ -183,6 +187,19 @@ async function storeRunBoundAcceptedRisk(
     );
     return false;
   }
+}
+
+async function markAcceptedRiskWorkflowRunning(
+  options: WebhookActionContext,
+  plan: ResumePlan,
+): Promise<void> {
+  if (plan.artifact !== "pull-request" || plan.workflow !== "review.yml") return;
+
+  await removeIssueLabelIfPresent(options, plan.number, gitVibeLabels.readyForApproval.name);
+  await removeIssueLabelIfPresent(options, plan.number, gitVibeLabels.blocked.name);
+  await removeIssueLabelIfPresent(options, plan.number, gitVibeLabels.reviewing.name);
+  await removeIssueLabelIfPresent(options, plan.number, gitVibeInternalLabels.reviewFix.name);
+  await addIssueLabel(options, plan.number, gitVibeLabels.reviewing.name);
 }
 
 function workflowRunIdFromDispatch(dispatch: AcceptedRiskWorkflowDispatch): string {

@@ -208,6 +208,18 @@ describe("GitVibe app server accept-risk pull request reviews", () => {
     expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
       "Pull request head SHA: `head-sha`",
     );
+    expect(requestPaths(client, "DELETE")).toEqual(
+      expect.arrayContaining([
+        "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+        "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
+        "/repos/example/repo/issues/12/labels/gvi%3Areviewing",
+        "/repos/example/repo/issues/12/labels/gvi%3Areview-fix",
+        "/repos/example/repo/issues/12/labels/git-vibe%3Aaccept-risk",
+      ]),
+    );
+    expect(requestBodies(client, "POST", "/issues/12/labels")).toContainEqual({
+      labels: ["gvi:reviewing"],
+    });
   });
 });
 
