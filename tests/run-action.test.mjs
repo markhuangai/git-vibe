@@ -36,6 +36,7 @@ describe("GitVibe action launcher", () => {
         env: {
           ...baseEnv,
           GITHUB_OUTPUT: "/tmp/output",
+          GITHUB_RUN_ATTEMPT: "3",
           GITHUB_RUN_ID: "99",
           GITHUB_SERVER_URL: "https://github.enterprise.test",
           GITVIBE_DRY_RUN: "true",
@@ -71,6 +72,7 @@ describe("GitVibe action launcher", () => {
         stageTimeoutMinutes: 34,
         validationRepairAttempts: 3,
         validationRepairMaxTurns: 45,
+        workflowRunAttempt: "3",
         workflowRunUrl: "https://github.enterprise.test/example/repo/actions/runs/99",
       }),
     );

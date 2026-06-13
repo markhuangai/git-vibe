@@ -67,6 +67,7 @@ export function acceptedRiskFromContext(options: {
     artifactSha: candidate.metadata.artifactSha,
     cutoff: candidate.metadata.cutoff,
     run: candidate.metadata.run,
+    runAttempt: candidate.metadata.runAttempt,
     stages: candidate.metadata.stages,
   };
 }
@@ -104,6 +105,14 @@ export function acceptedRiskApplies(options: {
       });
       return false;
     }
+  }
+  if (accepted.runAttempt && accepted.runAttempt !== options.runner.workflowRunAttempt) {
+    options.logger.event("accepted_risk.skip", {
+      accepted_attempt: accepted.runAttempt,
+      current_attempt: options.runner.workflowRunAttempt || "",
+      reason: "workflow-run-attempt-changed",
+    });
+    return false;
   }
   if (options.context.artifact.type !== "pull-request") return true;
   if (!accepted.artifactSha) {
@@ -323,7 +332,8 @@ function acceptedRiskMetadataBoundToCurrentRun(
   runner: RunnerOptions,
 ): boolean {
   const run = workflowRunIdFromUrl(runner.workflowRunUrl);
-  return Boolean(run && metadata.run && metadata.run === run);
+  if (!run || !metadata.run || metadata.run !== run) return false;
+  return !metadata.runAttempt || metadata.runAttempt === runner.workflowRunAttempt;
 }
 
 function acceptedRiskAuditForCurrentRun(context: ContextPacket, runner: RunnerOptions): boolean {

@@ -44,6 +44,39 @@ describe("accepted-risk workflow run binding", () => {
     });
   });
 
+  it("derives accepted risk from metadata bound to the current workflow attempt", () => {
+    const logger = { event: vi.fn() };
+
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [
+            blockedResultComment({
+              metadata: acceptedRiskMetadata({
+                run: "99",
+                runAttempt: "3",
+                stage: "implement",
+                stages: ["implement", "create-pr"],
+              }),
+              stage: "implement",
+            }),
+          ],
+        }),
+        logger,
+        runner: runner({
+          acceptedRisk: undefined,
+          stage: "implement",
+          workflowRunAttempt: "3",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
+      }),
+    ).toMatchObject({
+      run: "99",
+      runAttempt: "3",
+      stages: ["implement", "create-pr"],
+    });
+  });
+
   it("does not use the accept-risk label as runner authority", () => {
     expect(
       acceptedRiskFromContext({
@@ -121,6 +154,33 @@ describe("accepted-risk workflow run binding rejection", () => {
       accepted_run: "88",
       current_run: "99",
       reason: "workflow-run-changed",
+    });
+  });
+
+  it("rejects explicit accepted risk when the workflow run attempt changes", () => {
+    const loggerMock = logger();
+
+    expect(
+      acceptedRiskApplies({
+        context: issueContext(),
+        logger: loggerMock,
+        runner: runner({
+          acceptedRisk: {
+            cutoff: "2026-01-04T00:00:00Z",
+            run: "99",
+            runAttempt: "2",
+            stages: ["review-matrix"],
+          },
+          stage: "review-matrix",
+          workflowRunAttempt: "3",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
+      }),
+    ).toBe(false);
+    expect(loggerMock.event).toHaveBeenCalledWith("accepted_risk.skip", {
+      accepted_attempt: "2",
+      current_attempt: "3",
+      reason: "workflow-run-attempt-changed",
     });
   });
 });
