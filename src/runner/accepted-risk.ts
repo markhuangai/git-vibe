@@ -31,6 +31,7 @@ interface AcceptedRiskAuditMarker {
   artifact?: string;
   number?: string;
   run?: string;
+  "run-attempt"?: string;
   stage?: string;
 }
 
@@ -210,13 +211,15 @@ function acceptedRiskAuditBody(options: {
   const cutoff = options.runner.acceptedRisk?.cutoff;
   const run = workflowRunIdFromUrl(options.runner.workflowRunUrl);
   const runAttribute = run ? ` run=${run}` : "";
+  const attempt = options.runner.workflowRunAttempt;
+  const attemptAttribute = attempt ? ` run-attempt=${attempt}` : "";
   const riskLine = options.result
     ? "The high-risk findings remain visible in the GitVibe blocked result above."
     : cutoff
       ? `GitVibe did not detect high-risk prompt-injection content in context created or edited after \`${cutoff}\`.`
       : "The security scan did not detect high-risk prompt-injection content in this run.";
   return [
-    `<!-- git-vibe:risk-accepted stage=${options.runner.stage} artifact=${options.context.artifact.type} number=${options.context.artifact.number}${runAttribute} -->`,
+    `<!-- git-vibe:risk-accepted stage=${options.runner.stage} artifact=${options.context.artifact.type} number=${options.context.artifact.number}${runAttribute}${attemptAttribute} -->`,
     "## GitVibe Risk Accepted",
     "",
     `${actorLabel(actor)} accepted prompt-injection input risk for one \`${options.runner.stage}\` run.`,
@@ -345,9 +348,18 @@ function acceptedRiskAuditForCurrentRun(context: ContextPacket, runner: RunnerOp
     return (
       marker?.artifact === context.artifact.type &&
       marker.number === context.artifact.number &&
-      marker.run === run
+      marker.run === run &&
+      auditMarkerAttemptMatches(marker, runner)
     );
   });
+}
+
+function auditMarkerAttemptMatches(
+  marker: AcceptedRiskAuditMarker,
+  runner: RunnerOptions,
+): boolean {
+  const attempt = stringValue(runner.workflowRunAttempt);
+  return !attempt || marker["run-attempt"] === attempt;
 }
 
 function parseAcceptedRiskAuditMarker(
@@ -380,6 +392,7 @@ function acceptedRiskMetadataMatches(options: {
     options.metadata.number === options.context.artifact.number &&
     options.metadata.cutoff === options.accepted.cutoff &&
     (!options.accepted.run || options.metadata.run === options.accepted.run) &&
+    (!options.accepted.runAttempt || options.metadata.runAttempt === options.accepted.runAttempt) &&
     options.metadata.stages.includes(options.runner.stage)
   );
 }

@@ -99,6 +99,37 @@ describe("accepted-risk workflow run binding", () => {
   });
 });
 
+describe("accepted-risk workflow run audit binding", () => {
+  it("derives accepted risk from audit markers bound to the current workflow attempt", () => {
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [
+            blockedResultComment({
+              metadata: acceptedRiskMetadata({
+                stage: "implement",
+                stages: ["implement", "create-pr"],
+              }),
+              stage: "implement",
+            }),
+            riskAcceptedAuditComment({ run: "99", runAttempt: "3", stage: "implement" }),
+          ],
+        }),
+        logger: logger(),
+        runner: runner({
+          acceptedRisk: undefined,
+          stage: "create-pr",
+          workflowRunAttempt: "3",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
+      }),
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["implement", "create-pr"],
+    });
+  });
+});
+
 describe("accepted-risk workflow run binding rejection", () => {
   it("ignores metadata bound to a different workflow run", () => {
     const loggerMock = logger();
@@ -185,6 +216,43 @@ describe("accepted-risk workflow run binding rejection", () => {
   });
 });
 
+describe("accepted-risk workflow run audit binding rejection", () => {
+  it("ignores run audit markers without the current workflow attempt", () => {
+    const metadata = acceptedRiskMetadata({ stage: "implement", stages: ["implement"] });
+    const runnerOptions = runner({
+      acceptedRisk: undefined,
+      stage: "implement",
+      workflowRunAttempt: "3",
+      workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+    });
+
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [
+            blockedResultComment({ metadata, stage: "implement" }),
+            riskAcceptedAuditComment({ run: "99", stage: "implement" }),
+          ],
+        }),
+        logger: logger(),
+        runner: runnerOptions,
+      }),
+    ).toBeUndefined();
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [
+            blockedResultComment({ metadata, stage: "implement" }),
+            riskAcceptedAuditComment({ run: "99", runAttempt: "2", stage: "implement" }),
+          ],
+        }),
+        logger: logger(),
+        runner: runnerOptions,
+      }),
+    ).toBeUndefined();
+  });
+});
+
 function logger() {
   return { event: vi.fn() };
 }
@@ -267,5 +335,21 @@ function blockedResultComment({
     id: "100",
     kind: "comment",
     url: "https://github.com/example/repo/issues/12#issuecomment-100",
+  };
+}
+
+function riskAcceptedAuditComment({ run, runAttempt, stage }) {
+  const attemptAttribute = runAttempt ? ` run-attempt=${runAttempt}` : "";
+  return {
+    author: "gitvibe-for-github[bot]",
+    authorAssociation: "NONE",
+    body: [
+      `<!-- git-vibe:risk-accepted stage=${stage} artifact=issue number=12 run=${run}${attemptAttribute} -->`,
+      "## GitVibe Risk Accepted",
+    ].join("\n"),
+    createdAt: "2026-01-04T00:01:00Z",
+    id: "101",
+    kind: "comment",
+    url: "https://github.com/example/repo/issues/12#issuecomment-101",
   };
 }

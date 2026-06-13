@@ -91,11 +91,13 @@ interface AcceptedRiskWorkflowDispatch extends Record<string, unknown> {
   ref: string;
   runAttempt?: string;
   run_url?: string;
+  startAfterMetadata?: () => Promise<void>;
   workflow_run_id?: number | string;
 }
 
 interface WorkflowRunResponse extends Record<string, unknown> {
   head_branch?: string;
+  head_sha?: string;
   html_url?: string;
   path?: string;
   run_attempt?: number | string;
@@ -127,7 +129,7 @@ export async function handleAcceptRiskLabel(
   }
 
   const acceptance = await acceptedRiskMetadata(options, plan, result.marker.stage);
-  const workflowRun = await startAcceptedRiskWorkflow(options, label, plan, result);
+  const workflowRun = await startAcceptedRiskWorkflow(options, label, plan, result, acceptance);
   if (!workflowRun) return;
 
   const run = workflowRunIdFromDispatch(workflowRun);
@@ -144,6 +146,7 @@ export async function handleAcceptRiskLabel(
   const stored = await storeRunBoundAcceptedRisk(options, label, result, plan, boundAcceptance);
   if (!stored) return;
 
+  await workflowRun.startAfterMetadata?.();
   await markAcceptedRiskWorkflowRunning(options, plan);
   await removeAcceptRiskLabel(options, label);
   await postQueuedWorkflowComment(options, {
@@ -161,8 +164,9 @@ async function startAcceptedRiskWorkflow(
   label: string,
   plan: ResumePlan,
   result: StageResult,
+  acceptance: AcceptedRiskMetadata,
 ): Promise<AcceptedRiskWorkflowDispatch | undefined> {
-  const rerun = await rerunAcceptedRiskWorkflow(options, plan, result);
+  const rerun = await rerunAcceptedRiskWorkflow(options, plan, result, acceptance);
   if (rerun) return rerun;
   return dispatchAcceptedRiskWorkflow(options, label, plan);
 }
@@ -171,14 +175,21 @@ async function rerunAcceptedRiskWorkflow(
   options: WebhookActionContext,
   plan: ResumePlan,
   result: StageResult,
+  acceptance: AcceptedRiskMetadata,
 ): Promise<AcceptedRiskWorkflowDispatch | undefined> {
   const run = result.marker.run;
   if (plan.artifact !== "pull-request" || !run) return undefined;
 
-  const details = await workflowRunDetails(options, run).catch((error: unknown) => {
-    if (error instanceof Error && /\bfailed: 404\b/.test(error.message)) return undefined;
-    throw error;
-  });
+  const details = await options.client
+    .request<WorkflowRunResponse>({
+      method: "GET",
+      path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}`,
+      token: options.token,
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Error && /\bfailed: 404\b/.test(error.message)) return undefined;
+      throw error;
+    });
   if (!details) {
     options.log(`accepted-risk rerun skipped: workflow run ${run} is unavailable`);
     return undefined;
@@ -187,38 +198,30 @@ async function rerunAcceptedRiskWorkflow(
     options.log(`accepted-risk rerun skipped: workflow run ${run} does not match ${plan.workflow}`);
     return undefined;
   }
+  const runHeadSha = stringField(details.head_sha);
+  if (!runHeadSha || runHeadSha !== acceptance.artifactSha) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} head SHA does not match`);
+    return undefined;
+  }
   const runAttempt = nextWorkflowRunAttempt(details.run_attempt);
   if (!runAttempt) {
     options.log(`accepted-risk rerun skipped: workflow run ${run} has no run_attempt`);
     return undefined;
   }
-  await rerunWorkflowRun(options, run);
   return {
     html_url: details.html_url,
     ref: stringField(details.head_branch) || `run-${run}`,
     runAttempt,
     run_url: details.url,
+    startAfterMetadata: async () => {
+      await options.client.request({
+        method: "POST",
+        path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}/rerun`,
+        token: options.token,
+      });
+    },
     workflow_run_id: run,
   };
-}
-
-async function workflowRunDetails(
-  options: WebhookActionContext,
-  run: string,
-): Promise<WorkflowRunResponse> {
-  return options.client.request<WorkflowRunResponse>({
-    method: "GET",
-    path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}`,
-    token: options.token,
-  });
-}
-
-async function rerunWorkflowRun(options: WebhookActionContext, run: string): Promise<void> {
-  await options.client.request({
-    method: "POST",
-    path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}/rerun`,
-    token: options.token,
-  });
 }
 
 async function dispatchAcceptedRiskWorkflow(

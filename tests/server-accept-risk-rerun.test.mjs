@@ -18,6 +18,7 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
       pullRequestReviews: [stageResultReview({ run: "88" })],
       workflowRun: {
         head_branch: "dev",
+        head_sha: "head-sha",
         html_url: "https://github.com/example/repo/actions/runs/88",
         path: ".github/workflows/review.yml@dev",
         run_attempt: 2,
@@ -28,6 +29,7 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
     await createApp({ client }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
 
     expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
+    expectMetadataUpdateBeforeRerun(client);
     expect(workflowDispatches(client)).toEqual([]);
     const updatedResult = requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body;
     expect(updatedResult).toContain("run=88");
@@ -85,6 +87,34 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
   });
 });
 
+describe("GitVibe app server accept-risk pull request rerun SHA checks", () => {
+  it("dispatches review when the prior workflow run head SHA differs", async () => {
+    const log = vi.fn();
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      pullRequestHeadSha: "head-sha",
+      pullRequestReviews: [stageResultReview({ run: "88" })],
+      workflowRun: {
+        head_branch: "dev",
+        head_sha: "old-sha",
+        html_url: "https://github.com/example/repo/actions/runs/88",
+        path: ".github/workflows/review.yml@dev",
+        run_attempt: 2,
+      },
+    });
+
+    await createApp({ client, log }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
+
+    expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({ inputs: { "pr-number": "12" } }),
+    ]);
+    expect(log).toHaveBeenCalledWith(
+      "accepted-risk rerun skipped: workflow run 88 head SHA does not match",
+    );
+  });
+});
+
 describe("GitVibe app server accept-risk pull request rerun failures", () => {
   it("does not dispatch review when workflow run lookup fails unexpectedly", async () => {
     const client = createClient({
@@ -129,6 +159,19 @@ function acceptRiskPullRequestPayload() {
     repository: repositoryPayload(),
     sender: { login: "maintainer" },
   };
+}
+
+function expectMetadataUpdateBeforeRerun(client) {
+  const calls = client.request.mock.calls.map(([request]) => request);
+  const metadataIndex = calls.findIndex(
+    (request) => request.method === "PUT" && request.path.includes("/pulls/12/reviews/200"),
+  );
+  const rerunIndex = calls.findIndex(
+    (request) => request.method === "POST" && request.path.endsWith("/actions/runs/88/rerun"),
+  );
+  expect(metadataIndex).toBeGreaterThan(-1);
+  expect(rerunIndex).toBeGreaterThan(-1);
+  expect(metadataIndex).toBeLessThan(rerunIndex);
 }
 
 function stageResultReview({ run }) {

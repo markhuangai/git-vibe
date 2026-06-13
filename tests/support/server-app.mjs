@@ -118,6 +118,7 @@ function requestResponseFor(request, options) {
     return (
       options.workflowRun || {
         head_branch: "main",
+        head_sha: options.workflowRunHeadSha || options.pullRequestHeadSha || "head-sha",
         html_url: "https://github.com/example/repo/actions/runs/88",
         path: ".github/workflows/review.yml@main",
         run_attempt: 1,
