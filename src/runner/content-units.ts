@@ -480,6 +480,8 @@ function packedTimelineItem(item: TimelineItem, index: number): JsonObject {
     kind: item.kind,
     parentId: item.parentId,
     reactions: item.reactions,
+    reviewThreadId: item.reviewThreadId,
+    reviewThreadIsOutdated: item.reviewThreadIsOutdated,
     url: item.url,
   };
 }

@@ -75,6 +75,8 @@ export interface TimelineItem {
   kind: string;
   parentId?: string;
   reactions?: JsonObject;
+  reviewThreadId?: string;
+  reviewThreadIsOutdated?: boolean;
   updatedAt?: string;
   url: string;
 }
