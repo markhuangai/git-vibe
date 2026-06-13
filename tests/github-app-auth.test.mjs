@@ -221,7 +221,14 @@ describe("GitHub App installation token error handling", () => {
 
 describe("GitHub App permission profiles", () => {
   it("defines least-privilege permission profiles for server and runner tokens", () => {
-    expect(permissionsForProfile("server")).not.toHaveProperty("secrets");
+    expect(permissionsForProfile("server")).toEqual({
+      actions: "write",
+      actions_variables: "read",
+      contents: "write",
+      discussions: "write",
+      issues: "write",
+      pull_requests: "write",
+    });
     expect(permissionsForProfile("server-checks-read")).toEqual({ checks: "read" });
     expect(permissionsForProfile("server-secrets-write")).toEqual({ secrets: "write" });
     expect(permissionsForProfile("runner-read")).toEqual({

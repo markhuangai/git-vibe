@@ -83,6 +83,7 @@ export function permissionsForProfile(
     case "server":
       return {
         actions: "write",
+        actions_variables: "read",
         contents: "write",
         discussions: "write",
         issues: "write",
