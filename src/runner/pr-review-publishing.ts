@@ -319,7 +319,7 @@ async function priorReviewFindings(options: {
   if (!login) return new Map();
 
   const findings = new Map<string, PriorReviewFinding>();
-  const updates = reviewFindingUpdatesByThread(options.context);
+  const updates = reviewFindingUpdatesByThread(options.context, login);
   for (const candidate of candidates) {
     if (!sameGitHubLogin(candidate.author, login)) continue;
     findings.set(candidate.findingId, {
@@ -350,10 +350,14 @@ function priorReviewFindingCandidates(
   return candidates;
 }
 
-function reviewFindingUpdatesByThread(context: ContextPacket): Map<string, Set<string>> {
+function reviewFindingUpdatesByThread(
+  context: ContextPacket,
+  login: string,
+): Map<string, Set<string>> {
   const updates = new Map<string, Set<string>>();
   for (const item of context.timeline) {
     if (item.kind !== "pull-request-review-comment" || !item.reviewThreadId) continue;
+    if (!sameGitHubLogin(item.author, login)) continue;
     const marker = parseReviewFindingUpdateMarker(item.body);
     if (!marker) continue;
     const key = reviewFindingUpdateKey(marker);

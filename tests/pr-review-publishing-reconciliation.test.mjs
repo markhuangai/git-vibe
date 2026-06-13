@@ -124,6 +124,36 @@ describe("pull request review publishing reconciliation edge cases", () => {
     });
   });
 
+  it("ignores duplicate update markers from non-GitVibe authors", async () => {
+    const client = createClient();
+
+    await publishStageResultComment({
+      client,
+      context: context([priorReviewFinding(), priorFindingUpdateReply({ author: "maintainer" })]),
+      logger: createLogger(),
+      parsedOutput: {
+        ...output(),
+        findings: ["src/app.ts:42 still misses pull_request.labeled."],
+        inline_comments: [
+          {
+            body: "This still misses `pull_request.labeled` handling.",
+            finding_id: "review-1",
+            line: 42,
+            path: "src/app.ts",
+          },
+        ],
+        next_state: "changes-required",
+        stage: "review-matrix",
+      },
+      runner: runner(),
+    });
+
+    const reply = requestCalls(client).find((request) =>
+      request.path.endsWith("/pulls/12/comments/123/replies"),
+    );
+    expect(reply.body.body).toContain("This issue still exists after commit `abcdef123456`.");
+  });
+
   it("uses latest reviewed commit wording when the PR head SHA is unavailable", async () => {
     const client = createClient();
 
@@ -185,7 +215,7 @@ function priorReviewFinding(overrides = {}) {
   };
 }
 
-function priorFindingUpdateReply() {
+function priorFindingUpdateReply(overrides = {}) {
   return {
     author: "git-vibe",
     body: "<!-- git-vibe:review-finding-update id=review-1 status=still-present sha=abcdef123456 -->\nAlready noted.",
@@ -197,6 +227,7 @@ function priorFindingUpdateReply() {
     reviewThreadId: "thread-1",
     reviewThreadIsOutdated: false,
     url: "https://github.com/example/repo/pull/12#discussion_r124",
+    ...overrides,
   };
 }
 

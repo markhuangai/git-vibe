@@ -51,7 +51,7 @@ describe("pull request review thread pagination", () => {
                 nodes: [
                   {
                     comments: {
-                      nodes: [{ body: "First", id: "comment-1" }],
+                      nodes: [{ body: "First", databaseId: 1, id: "comment-1" }],
                       pageInfo: { hasNextPage: true, endCursor: "comment-cursor" },
                     },
                     id: "thread-1",
@@ -68,7 +68,7 @@ describe("pull request review thread pagination", () => {
         .mockResolvedValueOnce({
           node: {
             comments: {
-              nodes: [{ body: "Second", id: "comment-2", path: "src/b.ts" }],
+              nodes: [{ body: "Second", databaseId: 2, id: "comment-2", path: "src/b.ts" }],
               pageInfo: { hasNextPage: false, endCursor: null },
             },
           },
@@ -79,7 +79,7 @@ describe("pull request review thread pagination", () => {
               reviewThreads: {
                 nodes: [
                   {
-                    comments: { nodes: [{ body: "Third", id: "comment-3" }] },
+                    comments: { nodes: [{ body: "Third", databaseId: 3, id: "comment-3" }] },
                     id: "thread-2",
                     isOutdated: false,
                     isResolved: false,
@@ -104,6 +104,7 @@ describe("pull request review thread pagination", () => {
     ).resolves.toMatchObject([
       {
         body: "First",
+        databaseId: 1,
         id: "comment-1",
         path: "src/a.ts",
         reviewThreadId: "thread-1",
@@ -111,6 +112,7 @@ describe("pull request review thread pagination", () => {
       },
       {
         body: "Second",
+        databaseId: 2,
         id: "comment-2",
         path: "src/b.ts",
         reviewThreadId: "thread-1",
@@ -118,6 +120,7 @@ describe("pull request review thread pagination", () => {
       },
       {
         body: "Third",
+        databaseId: 3,
         id: "comment-3",
         path: "src/c.ts",
         reviewThreadId: "thread-2",

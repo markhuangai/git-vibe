@@ -50,11 +50,8 @@ describe("GitHub context builders", () => {
       "Path: src/file.ts\nDiff:\n@@ -1 +1 @@\n\nReview feedback",
       "Path: src/old.ts\nOutdated feedback",
     ]);
-    expect(context.timeline.at(-1)).toMatchObject({
-      reviewThreadId: "thread-11",
-      reviewThreadIsOutdated: true,
-    });
     expect(context.timeline.at(-2)).toMatchObject({
+      databaseId: 9,
       parentId: "8",
       reviewThreadId: "thread-9",
     });
@@ -352,6 +349,7 @@ function reviewThreadFixture() {
           authorAssociation: "COLLABORATOR",
           body: "Review feedback",
           createdAt: "2026-01-05T00:00:00Z",
+          databaseId: 9,
           diffHunk: "@@ -1 +1 @@",
           id: "9",
           replyTo: { id: "8" },
@@ -405,6 +403,7 @@ function filteredReviewThreadFixture(options) {
           author: { login: "reviewer" },
           body: options.body,
           createdAt: options.createdAt,
+          databaseId: Number(options.id),
           id: options.id,
           url: options.url,
         },

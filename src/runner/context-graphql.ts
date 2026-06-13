@@ -403,6 +403,7 @@ const pullRequestReviewThreadsQuery = `
               pageInfo { hasNextPage endCursor }
               nodes {
                 id
+                databaseId
                 body
                 createdAt
                 updatedAt
@@ -429,6 +430,7 @@ const pullRequestReviewThreadCommentsQuery = `
           pageInfo { hasNextPage endCursor }
           nodes {
             id
+            databaseId
             body
             createdAt
             updatedAt
