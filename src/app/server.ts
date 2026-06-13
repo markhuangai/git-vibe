@@ -426,9 +426,9 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
 
   const issueNumber = String(options.payload.issue?.number || "");
   const runtimeLabel = isGitVibeRuntimeLabel(label);
-  const githubActionsActor = options.payload.sender?.login === "github-actions[bot]";
+  const gitVibeAppActor = options.payload.sender?.login === gitVibeAppBotLogin;
 
-  if (!(runtimeLabel && githubActionsActor) && !(await isTrustedActor(options))) {
+  if (!(runtimeLabel && gitVibeAppActor) && !(await isTrustedActor(options))) {
     await removeIssueLabel({
       client: options.client,
       issueNumber,
@@ -537,9 +537,9 @@ async function handleDiscussionLabeled(options: WebhookContext): Promise<void> {
 
   const discussionNumber = String(options.payload.discussion?.number || "");
   const runtimeLabel = isGitVibeRuntimeLabel(label);
-  const githubActionsActor = options.payload.sender?.login === "github-actions[bot]";
+  const gitVibeAppActor = options.payload.sender?.login === gitVibeAppBotLogin;
 
-  if (!(runtimeLabel && githubActionsActor) && !(await isTrustedActor(options))) {
+  if (!(runtimeLabel && gitVibeAppActor) && !(await isTrustedActor(options))) {
     await removeDiscussionLabelFromPayload(options, label);
     await createDiscussionComment(options, protectedLabelRejectionBody(options, label));
     return;
@@ -687,6 +687,7 @@ async function isTrustedActor(options: WebhookContext): Promise<boolean> {
   );
 }
 
+const gitVibeAppBotLogin = "gitvibe-for-github[bot]";
 const trustedPermissions = new Set(["admin", "maintain", "write"]);
 
 function summarizeError(error: unknown): string {
