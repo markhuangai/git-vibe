@@ -433,6 +433,17 @@ describe("pull request review publishing validation", () => {
         [{ body: "Invalid finding ID.", finding_id: "invalid id", line: 4, path: "src/app.ts" }],
         "finding_id must match the allowed pattern",
       ],
+      [
+        [
+          { body: "Explicit duplicate.", finding_id: "review-1", line: 4, path: "src/app.ts" },
+          {
+            body: "<!-- git-vibe:review-finding id=review-1 -->\nMarker duplicate.",
+            line: 5,
+            path: "src/app.ts",
+          },
+        ],
+        "finding_id must be unique: review-1",
+      ],
     ]);
 
     for (const [inlineComments, message] of cases) {

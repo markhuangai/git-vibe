@@ -456,7 +456,17 @@ function reviewFindingComments(value: unknown): ReviewFindingComment[] {
   if (!Array.isArray(value)) {
     throw new Error("review-matrix inline_comments must be an array.");
   }
-  return value.map((item, index) => reviewFindingComment(item, index));
+  const comments = value.map((item, index) => reviewFindingComment(item, index));
+  const findingIds = new Set<string>();
+  for (const comment of comments) {
+    if (findingIds.has(comment.findingId)) {
+      throw new Error(
+        `review-matrix inline_comments finding_id must be unique: ${comment.findingId}.`,
+      );
+    }
+    findingIds.add(comment.findingId);
+  }
+  return comments;
 }
 
 function reviewFindingComment(value: unknown, index: number): ReviewFindingComment {
