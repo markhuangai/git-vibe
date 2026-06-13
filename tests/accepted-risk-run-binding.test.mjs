@@ -184,7 +184,7 @@ function acceptedRiskMetadata(overrides = {}) {
 }
 
 function blockedResultComment({
-  author = "github-actions[bot]",
+  author = "gitvibe-for-github[bot]",
   authorAssociation = "NONE",
   markerArtifact = "issue",
   markerNumber = "12",
