@@ -252,7 +252,7 @@ describe("accepted-risk context marker rejection", () => {
 });
 
 describe("accepted-risk context trusted automation", () => {
-  it("trusts GitHub Actions metadata when author association is absent", () => {
+  it("trusts GitVibe App metadata when author association is absent", () => {
     expect(
       acceptedRiskFromContext({
         context: issueContext({
@@ -581,7 +581,7 @@ function acceptedRiskMetadata(overrides = {}) {
 }
 
 function blockedResultComment({
-  author = "github-actions[bot]",
+  author = "gitvibe-for-github[bot]",
   authorAssociation = "NONE",
   markerArtifact = "issue",
   markerNumber = "12",
@@ -609,7 +609,7 @@ function blockedResultComment({
 
 function issueTimelineComment(body) {
   return {
-    author: "github-actions[bot]",
+    author: "gitvibe-for-github[bot]",
     authorAssociation: "NONE",
     body,
     createdAt: "2026-01-04T00:01:00Z",
@@ -620,7 +620,7 @@ function issueTimelineComment(body) {
 }
 
 function riskAcceptedAuditComment({
-  author = "github-actions[bot]",
+  author = "gitvibe-for-github[bot]",
   authorAssociation = "NONE",
   run,
   stage,

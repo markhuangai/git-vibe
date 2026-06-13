@@ -58,7 +58,7 @@ describe("pull request review publishing", () => {
             side: "RIGHT",
           },
           {
-            body: "The range should share the same right-side anchor.",
+            body: expect.stringContaining("The range should share the same right-side anchor."),
             line: 48,
             path: "src/app.ts",
             side: "RIGHT",
@@ -349,7 +349,7 @@ describe("pull request review publishing rerun inline comment guards", () => {
         body: expect.objectContaining({
           comments: [
             {
-              body: "New line-specific feedback.",
+              body: expect.stringContaining("New line-specific feedback."),
               line: 42,
               path: "src/app.ts",
               side: "RIGHT",
@@ -429,6 +429,21 @@ describe("pull request review publishing validation", () => {
         [{ body: "Invalid range.", line: 4, path: "src/app.ts", start_line: 6 }],
         "start_line must be less than or equal to line",
       ],
+      [
+        [{ body: "Invalid finding ID.", finding_id: "invalid id", line: 4, path: "src/app.ts" }],
+        "finding_id must match the allowed pattern",
+      ],
+      [
+        [
+          { body: "Explicit duplicate.", finding_id: "review-1", line: 4, path: "src/app.ts" },
+          {
+            body: "<!-- git-vibe:review-finding id=review-1 -->\nMarker duplicate.",
+            line: 5,
+            path: "src/app.ts",
+          },
+        ],
+        "finding_id must be unique: review-1",
+      ],
     ]);
 
     for (const [inlineComments, message] of cases) {
@@ -460,20 +475,22 @@ describe("pull request review publishing validation", () => {
 
 /**
  * @param {ContextPacket["artifact"]["type"]} type
+ * @param {Partial<ContextPacket> & { pullRequestHead?: ContextPacket["artifact"]["pullRequestHead"] }} [overrides]
  * @returns {ContextPacket}
  */
-function context(type) {
+function context(type, overrides = {}) {
   return {
     artifact: {
       body: "Body",
       number: "12",
+      pullRequestHead: overrides.pullRequestHead,
       title: "Title",
       type,
       url: `https://github.com/example/repo/${type}s/12`,
     },
     generatedAt: "2026-01-01T00:00:00Z",
     repository: "example/repo",
-    timeline: [],
+    timeline: overrides.timeline || [],
   };
 }
 

@@ -123,7 +123,7 @@ function contextPacket({ artifact = "pull-request" } = {}) {
 }
 
 function timelineComment({
-  author = "github-actions[bot]",
+  author = "gitvibe-for-github[bot]",
   authorAssociation = "NONE",
   body,
   createdAt = "2026-01-04T00:00:00Z",

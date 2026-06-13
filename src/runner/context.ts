@@ -441,6 +441,8 @@ function toPullRequestReviewTimelineItem(item: PullRequestReviewCommentNode): Ti
     authorAssociation: item.authorAssociation,
     databaseId: item.databaseId,
     parentId: item.replyTo?.id ? String(item.replyTo.id) : undefined,
+    reviewThreadId: item.reviewThreadId,
+    reviewThreadIsOutdated: item.reviewThreadIsOutdated,
   };
 }
 

@@ -19,7 +19,7 @@ import type {
 import { acceptedRiskDeltaContentUnits, type ContentUnit } from "./content-units.js";
 import type { StageLogger } from "./logging.js";
 
-const trustedAutomationAuthors = new Set(["github-actions[bot]"]);
+const trustedAutomationAuthors = new Set(["gitvibe-for-github[bot]"]);
 
 interface AcceptedRiskMetadataCandidate {
   metadata: AcceptedRiskMetadata;
