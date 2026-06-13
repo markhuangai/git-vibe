@@ -33,13 +33,7 @@ describe("GitHub context builders", () => {
   it("builds issue context from issue body and sorted comments", async () => {
     const client = pullRequestContextClient();
 
-    const context = await buildIssueContext({
-      client,
-      issueNumber: "4",
-      repository: "example/repo",
-      token: "token",
-      type: "pull-request",
-    });
+    const context = await buildPullRequestContext(client);
 
     expect(context.artifact).toMatchObject({
       labels: ["git-vibe:accept-risk", "custom"],
@@ -54,12 +48,15 @@ describe("GitHub context builders", () => {
       "Second",
       "<!-- git-vibe:stage-result stage=review-matrix artifact=pull-request number=4 -->\n## GitVibe Review Matrix",
       "Path: src/file.ts\nDiff:\n@@ -1 +1 @@\n\nReview feedback",
+      "Path: src/old.ts\nOutdated feedback",
     ]);
     expect(context.timeline.at(-1)).toMatchObject({
-      id: "9",
-      kind: "pull-request-review-comment",
+      reviewThreadId: "thread-11",
+      reviewThreadIsOutdated: true,
+    });
+    expect(context.timeline.at(-2)).toMatchObject({
       parentId: "8",
-      updatedAt: "2026-01-05T01:00:00Z",
+      reviewThreadId: "thread-9",
     });
     expect(context.artifact.updatedAt).toBe("2026-01-06T00:00:00Z");
     expect(context.timeline[0].updatedAt).toBeUndefined();
@@ -188,6 +185,17 @@ describe("GitHub pull request feedback context", () => {
     );
   });
 });
+
+/** @param {MockGitHubClient} client */
+function buildPullRequestContext(client) {
+  return buildIssueContext({
+    client,
+    issueNumber: "4",
+    repository: "example/repo",
+    token: "token",
+    type: "pull-request",
+  });
+}
 
 function pullRequestContextClient() {
   return mockGitHubClient({
@@ -352,6 +360,7 @@ function reviewThreadFixture() {
         },
       ],
     },
+    id: "thread-9",
     isOutdated: false,
     isResolved: false,
     path: "src/file.ts",
@@ -401,6 +410,7 @@ function filteredReviewThreadFixture(options) {
         },
       ],
     },
+    id: `thread-${options.id}`,
     isOutdated: options.isOutdated || false,
     isResolved: options.isResolved || false,
     path: "src/old.ts",
@@ -669,12 +679,7 @@ describe("GitVibe config and labels", () => {
   });
 });
 
-/**
- * @param {number} status
- * @param {unknown} value
- * @param {boolean} [ok]
- * @returns {any}
- */
+/** @param {number} status @param {unknown} value @param {boolean} [ok] */
 function response(status, value, ok = status >= 200 && status < 300) {
   return {
     ok,
@@ -683,10 +688,6 @@ function response(status, value, ok = status >= 200 && status < 300) {
   };
 }
 
-/**
- * @param {Partial<MockGitHubClient>} [overrides]
- * @returns {MockGitHubClient}
- */
 function mockGitHubClient(overrides = {}) {
   return /** @type {MockGitHubClient} */ ({
     apiBaseUrl: "https://api.github.test",

@@ -58,7 +58,7 @@ describe("pull request review publishing", () => {
             side: "RIGHT",
           },
           {
-            body: "The range should share the same right-side anchor.",
+            body: expect.stringContaining("The range should share the same right-side anchor."),
             line: 48,
             path: "src/app.ts",
             side: "RIGHT",
@@ -349,7 +349,7 @@ describe("pull request review publishing rerun inline comment guards", () => {
         body: expect.objectContaining({
           comments: [
             {
-              body: "New line-specific feedback.",
+              body: expect.stringContaining("New line-specific feedback."),
               line: 42,
               path: "src/app.ts",
               side: "RIGHT",
@@ -460,20 +460,22 @@ describe("pull request review publishing validation", () => {
 
 /**
  * @param {ContextPacket["artifact"]["type"]} type
+ * @param {Partial<ContextPacket> & { pullRequestHead?: ContextPacket["artifact"]["pullRequestHead"] }} [overrides]
  * @returns {ContextPacket}
  */
-function context(type) {
+function context(type, overrides = {}) {
   return {
     artifact: {
       body: "Body",
       number: "12",
+      pullRequestHead: overrides.pullRequestHead,
       title: "Title",
       type,
       url: `https://github.com/example/repo/${type}s/12`,
     },
     generatedAt: "2026-01-01T00:00:00Z",
     repository: "example/repo",
-    timeline: [],
+    timeline: overrides.timeline || [],
   };
 }
 

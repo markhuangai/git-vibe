@@ -228,6 +228,7 @@ describe("stage prompt standards guidance", () => {
     expect(prompts.system).toContain("pull request or merge-preparation change");
     expect(prompts.prompt).toContain("PR can proceed to approval");
     expect(prompts.prompt).toContain("inline_comments");
+    expect(prompts.prompt).toContain("finding_id");
     expect(properties.inline_comments).toMatchObject({ type: "array" });
     expect(prompts.prompt).not.toContain("before PR creation");
   });

@@ -12,6 +12,7 @@ describe("review-matrix contract", () => {
       inline_comments: [
         {
           body: "Handle `pull_request.labeled` here so adding `git-vibe:review` to a PR starts review.",
+          finding_id: "review-1",
           line: 42,
           path: "src/app.ts",
           severity: "high",

@@ -55,7 +55,7 @@ describe("pull request review thread pagination", () => {
                       pageInfo: { hasNextPage: true, endCursor: "comment-cursor" },
                     },
                     id: "thread-1",
-                    isOutdated: false,
+                    isOutdated: true,
                     isResolved: false,
                     path: "src/a.ts",
                   },
@@ -102,9 +102,27 @@ describe("pull request review thread pagination", () => {
         token: "token",
       }),
     ).resolves.toMatchObject([
-      { body: "First", id: "comment-1", path: "src/a.ts" },
-      { body: "Second", id: "comment-2", path: "src/b.ts" },
-      { body: "Third", id: "comment-3", path: "src/c.ts" },
+      {
+        body: "First",
+        id: "comment-1",
+        path: "src/a.ts",
+        reviewThreadId: "thread-1",
+        reviewThreadIsOutdated: true,
+      },
+      {
+        body: "Second",
+        id: "comment-2",
+        path: "src/b.ts",
+        reviewThreadId: "thread-1",
+        reviewThreadIsOutdated: true,
+      },
+      {
+        body: "Third",
+        id: "comment-3",
+        path: "src/c.ts",
+        reviewThreadId: "thread-2",
+        reviewThreadIsOutdated: false,
+      },
     ]);
   });
 });

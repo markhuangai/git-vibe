@@ -22,6 +22,8 @@ export interface PullRequestReviewCommentNode {
   id: string;
   path?: string;
   replyTo?: { id?: string } | null;
+  reviewThreadId?: string;
+  reviewThreadIsOutdated?: boolean;
   updatedAt?: string;
   url?: string;
 }
@@ -130,9 +132,14 @@ export async function openPullRequestReviewComments(options: {
     token: options.token,
   });
   return threads
-    .filter((thread) => !thread.isResolved && !thread.isOutdated)
+    .filter((thread) => !thread.isResolved)
     .flatMap((thread) =>
-      thread.comments.nodes.map((comment) => ({ ...comment, path: comment.path || thread.path })),
+      thread.comments.nodes.map((comment) => ({
+        ...comment,
+        path: comment.path || thread.path,
+        reviewThreadId: thread.id,
+        reviewThreadIsOutdated: thread.isOutdated,
+      })),
     );
 }
 
