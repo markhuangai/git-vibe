@@ -37,6 +37,8 @@ interface ReviewedCommit {
 
 type ReviewFindingUpdateStatus = "outdated" | "still-present";
 
+const gitVibeAppReviewAuthors = ["gitvibe-for-github", "gitvibe-for-github[bot]"];
+
 export async function publishPullRequestReviewResult(options: {
   client: GitHubClient;
   context: ContextPacket;
@@ -320,18 +322,10 @@ async function priorReviewFindings(options: {
   const candidates = priorReviewFindingCandidates(options.context);
   if (!candidates.length) return new Map();
 
-  const login = await authenticatedGitHubLogin({
-    client: options.client,
-    eventName: "github.pr.review_thread.reconcile.skip",
-    logger: options.logger,
-    token: options.runner.token,
-  });
-  if (!login) return new Map();
-
   const findings = new Map<string, PriorReviewFinding>();
-  const updates = reviewFindingUpdatesByThread(options.context, login);
+  const updates = reviewFindingUpdatesByThread(options.context);
   for (const candidate of candidates) {
-    if (!sameGitHubLogin(candidate.author, login)) continue;
+    if (!isGitVibeAppReviewAuthor(candidate.author)) continue;
     findings.set(candidate.findingId, {
       ...candidate,
       updateKeys: updates.get(candidate.reviewThreadId) || new Set(),
@@ -360,14 +354,11 @@ function priorReviewFindingCandidates(
   return candidates;
 }
 
-function reviewFindingUpdatesByThread(
-  context: ContextPacket,
-  login: string,
-): Map<string, Set<string>> {
+function reviewFindingUpdatesByThread(context: ContextPacket): Map<string, Set<string>> {
   const updates = new Map<string, Set<string>>();
   for (const item of context.timeline) {
     if (item.kind !== "pull-request-review-comment" || !item.reviewThreadId) continue;
-    if (!sameGitHubLogin(item.author, login)) continue;
+    if (!isGitVibeAppReviewAuthor(item.author)) continue;
     const marker = parseReviewFindingUpdateMarker(item.body);
     if (!marker) continue;
     const key = reviewFindingUpdateKey(marker);
@@ -492,12 +483,23 @@ function reviewFindingComment(value: unknown, index: number): ReviewFindingComme
     reviewComment.start_line = startLine;
     reviewComment.start_side = side;
   }
+  const explicitFindingId = value.finding_id;
+  const normalizedExplicitFindingId = normalizedFindingId(explicitFindingId);
+  if (explicitFindingId !== undefined && !normalizedExplicitFindingId) {
+    throw new Error(
+      `review-matrix inline_comments[${index}].finding_id must match the allowed pattern.`,
+    );
+  }
   const findingId =
-    normalizedFindingId(value.finding_id) ||
+    normalizedExplicitFindingId ||
     parseReviewFindingMarker(rawBody)?.id ||
     generatedFindingId({ body, line, path, startLine });
   reviewComment.body = `${reviewFindingMarker(findingId)}\n${body}`;
   return { body, findingId, reviewComment };
+}
+
+function isGitVibeAppReviewAuthor(login: string): boolean {
+  return gitVibeAppReviewAuthors.some((author) => sameGitHubLogin(login, author));
 }
 
 function reviewFindingMarker(id: string): string {

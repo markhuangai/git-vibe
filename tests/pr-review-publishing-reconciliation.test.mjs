@@ -4,7 +4,7 @@ import { publishStageResultComment } from "../src/runner/stage-publishing.ts";
 
 describe("pull request review publishing thread reconciliation", () => {
   it("replies to an existing GitVibe thread when the same finding still exists", async () => {
-    const client = createClient();
+    const client = createClient({ userLookupError: true });
 
     await publishStageResultComment({
       client,
@@ -36,6 +36,7 @@ describe("pull request review publishing thread reconciliation", () => {
     expect(reply.body.body).toContain("This issue still exists after commit `abcdef123456`.");
     expect(reply.body.body).toContain("This still misses `pull_request.labeled` handling.");
     expect(reviewRequest(client).body.comments).toBeUndefined();
+    expect(requestCalls(client).map((request) => request.path)).not.toContain("/user");
     expect(client.graphql).not.toHaveBeenCalled();
   });
 
@@ -69,7 +70,9 @@ describe("pull request review publishing thread reconciliation", () => {
       client.graphql.mock.invocationCallOrder[0],
     );
   });
+});
 
+describe("pull request review publishing thread ownership", () => {
   it("does not reconcile review threads authored by someone else", async () => {
     const client = createClient();
 
@@ -85,6 +88,26 @@ describe("pull request review publishing thread reconciliation", () => {
       "/repos/example/repo/pulls/12/comments/123/replies",
     );
     expect(client.graphql).not.toHaveBeenCalled();
+  });
+
+  it("recognizes REST-style GitVibe bot review authors", async () => {
+    const client = createClient({ userLookupError: true });
+
+    await publishStageResultComment({
+      client,
+      context: context([priorReviewFinding({ author: "gitvibe-for-github[bot]" })]),
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "review-passed", stage: "review-matrix" },
+      runner: runner(),
+    });
+
+    const reply = requestCalls(client).find((request) =>
+      request.path.endsWith("/pulls/12/comments/123/replies"),
+    );
+    expect(reply.body.body).toContain(
+      "<!-- git-vibe:review-finding-update id=review-1 status=outdated sha=abcdef123456 -->",
+    );
+    expect(requestCalls(client).map((request) => request.path)).not.toContain("/user");
   });
 });
 
@@ -228,7 +251,7 @@ function context(timeline = [], overrides = {}) {
 
 function priorReviewFinding(overrides = {}) {
   return {
-    author: "git-vibe",
+    author: "gitvibe-for-github",
     body: "<!-- git-vibe:review-finding id=review-1 -->\nOriginal GitVibe finding.",
     createdAt: "2026-01-01T00:00:00Z",
     databaseId: 123,
@@ -243,7 +266,7 @@ function priorReviewFinding(overrides = {}) {
 
 function priorFindingUpdateReply(overrides = {}) {
   return {
-    author: "git-vibe",
+    author: "gitvibe-for-github",
     body: "<!-- git-vibe:review-finding-update id=review-1 status=still-present sha=abcdef123456 -->\nAlready noted.",
     createdAt: "2026-01-01T00:01:00Z",
     databaseId: 124,
@@ -284,11 +307,15 @@ function runner() {
   };
 }
 
-function createClient() {
+function createClient(options = {}) {
   return {
     apiBaseUrl: "https://api.github.test",
     graphql: vi.fn(async () => ({})),
-    request: vi.fn(async (request) => (request.path === "/user" ? { login: "git-vibe" } : {})),
+    request: vi.fn(async (request) => {
+      if (request.path !== "/user") return {};
+      if (options.userLookupError) throw new Error("Resource not accessible by integration");
+      return { login: "git-vibe" };
+    }),
     retryBaseDelayMs: 0,
   };
 }
