@@ -89,8 +89,17 @@ interface ResumePlan {
 interface AcceptedRiskWorkflowDispatch extends Record<string, unknown> {
   html_url?: string;
   ref: string;
+  runAttempt?: string;
   run_url?: string;
   workflow_run_id?: number | string;
+}
+
+interface WorkflowRunResponse extends Record<string, unknown> {
+  head_branch?: string;
+  html_url?: string;
+  path?: string;
+  run_attempt?: number | string;
+  url?: string;
 }
 
 export async function handleAcceptRiskLabel(
@@ -118,10 +127,10 @@ export async function handleAcceptRiskLabel(
   }
 
   const acceptance = await acceptedRiskMetadata(options, plan, result.marker.stage);
-  const dispatch = await dispatchAcceptedRiskWorkflow(options, label, plan);
-  if (!dispatch) return;
+  const workflowRun = await startAcceptedRiskWorkflow(options, label, plan, result);
+  if (!workflowRun) return;
 
-  const run = workflowRunIdFromDispatch(dispatch);
+  const run = workflowRunIdFromDispatch(workflowRun);
   if (!run) {
     await removeAcceptRiskLabel(options, label);
     await postAcceptRiskNoopComment(
@@ -131,7 +140,7 @@ export async function handleAcceptRiskLabel(
     return;
   }
 
-  const boundAcceptance = { ...acceptance, run };
+  const boundAcceptance = { ...acceptance, run, runAttempt: workflowRun.runAttempt };
   const stored = await storeRunBoundAcceptedRisk(options, label, result, plan, boundAcceptance);
   if (!stored) return;
 
@@ -142,8 +151,73 @@ export async function handleAcceptRiskLabel(
     number: plan.number,
     reason: `accepted prompt-injection risk for \`${result.marker.stage}\` from \`${label}\` label`,
     workflow: plan.workflow,
-    ref: dispatch.ref,
-    workflowRunUrl: dispatch.html_url,
+    ref: workflowRun.ref,
+    workflowRunUrl: workflowRun.html_url,
+  });
+}
+
+async function startAcceptedRiskWorkflow(
+  options: WebhookActionContext,
+  label: string,
+  plan: ResumePlan,
+  result: StageResult,
+): Promise<AcceptedRiskWorkflowDispatch | undefined> {
+  const rerun = await rerunAcceptedRiskWorkflow(options, plan, result);
+  if (rerun) return rerun;
+  return dispatchAcceptedRiskWorkflow(options, label, plan);
+}
+
+async function rerunAcceptedRiskWorkflow(
+  options: WebhookActionContext,
+  plan: ResumePlan,
+  result: StageResult,
+): Promise<AcceptedRiskWorkflowDispatch | undefined> {
+  const run = result.marker.run;
+  if (plan.artifact !== "pull-request" || !run) return undefined;
+
+  const details = await workflowRunDetails(options, run).catch((error: unknown) => {
+    if (error instanceof Error && /\bfailed: 404\b/.test(error.message)) return undefined;
+    throw error;
+  });
+  if (!details) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} is unavailable`);
+    return undefined;
+  }
+  if (!workflowRunMatchesPlan(details, plan)) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} does not match ${plan.workflow}`);
+    return undefined;
+  }
+  const runAttempt = nextWorkflowRunAttempt(details.run_attempt);
+  if (!runAttempt) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} has no run_attempt`);
+    return undefined;
+  }
+  await rerunWorkflowRun(options, run);
+  return {
+    html_url: details.html_url,
+    ref: stringField(details.head_branch) || `run-${run}`,
+    runAttempt,
+    run_url: details.url,
+    workflow_run_id: run,
+  };
+}
+
+async function workflowRunDetails(
+  options: WebhookActionContext,
+  run: string,
+): Promise<WorkflowRunResponse> {
+  return options.client.request<WorkflowRunResponse>({
+    method: "GET",
+    path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}`,
+    token: options.token,
+  });
+}
+
+async function rerunWorkflowRun(options: WebhookActionContext, run: string): Promise<void> {
+  await options.client.request({
+    method: "POST",
+    path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}/rerun`,
+    token: options.token,
   });
 }
 
@@ -209,6 +283,16 @@ function workflowRunIdFromDispatch(dispatch: AcceptedRiskWorkflowDispatch): stri
     workflowRunIdFromUrl(dispatch.run_url) ||
     ""
   );
+}
+
+function workflowRunMatchesPlan(details: WorkflowRunResponse, plan: ResumePlan): boolean {
+  const workflowPath = stringField(details.path).split("@")[0] || "";
+  return workflowPath.endsWith(`/${plan.workflow}`);
+}
+
+function nextWorkflowRunAttempt(value: unknown): string {
+  const attempt = Number(stringValue(value) || "");
+  return Number.isInteger(attempt) && attempt >= 1 ? String(attempt + 1) : "";
 }
 
 async function latestTrustedStageResult(

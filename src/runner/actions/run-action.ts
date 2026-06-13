@@ -75,6 +75,7 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       token,
       validationRepairAttempts: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_ATTEMPTS", 3),
       validationRepairMaxTurns: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_MAX_TURNS", 45),
+      workflowRunAttempt: envValue(env, "GITHUB_RUN_ATTEMPT") || undefined,
       workflowRunUrl: workflowRunUrl(env),
     });
 
