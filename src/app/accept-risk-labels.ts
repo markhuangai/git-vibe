@@ -162,10 +162,9 @@ async function startAcceptedRiskWorkflow(
   plan: ResumePlan,
   result: StageResult,
 ): Promise<AcceptedRiskWorkflowDispatch | undefined> {
-  return (
-    (await rerunAcceptedRiskWorkflow(options, plan, result)) ||
-    (await dispatchAcceptedRiskWorkflow(options, label, plan))
-  );
+  const rerun = await rerunAcceptedRiskWorkflow(options, plan, result);
+  if (rerun) return rerun;
+  return dispatchAcceptedRiskWorkflow(options, label, plan);
 }
 
 async function rerunAcceptedRiskWorkflow(
@@ -176,31 +175,31 @@ async function rerunAcceptedRiskWorkflow(
   const run = result.marker.run;
   if (plan.artifact !== "pull-request" || !run) return undefined;
 
-  try {
-    const details = await workflowRunDetails(options, run);
-    if (!workflowRunMatchesPlan(details, plan)) {
-      options.log(
-        `accepted-risk rerun skipped: workflow run ${run} does not match ${plan.workflow}`,
-      );
-      return undefined;
-    }
-    const runAttempt = nextWorkflowRunAttempt(details.run_attempt);
-    if (!runAttempt) {
-      options.log(`accepted-risk rerun skipped: workflow run ${run} has no run_attempt`);
-      return undefined;
-    }
-    await rerunWorkflowRun(options, run);
-    return {
-      html_url: details.html_url,
-      ref: stringField(details.head_branch) || `run-${run}`,
-      runAttempt,
-      run_url: details.url,
-      workflow_run_id: run,
-    };
-  } catch (error) {
-    options.log(`accepted-risk workflow rerun failed: ${errorSummary(error)}`);
+  const details = await workflowRunDetails(options, run).catch((error: unknown) => {
+    if (error instanceof Error && /\bfailed: 404\b/.test(error.message)) return undefined;
+    throw error;
+  });
+  if (!details) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} is unavailable`);
     return undefined;
   }
+  if (!workflowRunMatchesPlan(details, plan)) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} does not match ${plan.workflow}`);
+    return undefined;
+  }
+  const runAttempt = nextWorkflowRunAttempt(details.run_attempt);
+  if (!runAttempt) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} has no run_attempt`);
+    return undefined;
+  }
+  await rerunWorkflowRun(options, run);
+  return {
+    html_url: details.html_url,
+    ref: stringField(details.head_branch) || `run-${run}`,
+    runAttempt,
+    run_url: details.url,
+    workflow_run_id: run,
+  };
 }
 
 async function workflowRunDetails(

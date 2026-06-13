@@ -25,13 +25,7 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
       },
     });
 
-    await createApp({ client }).handleWebhook("pull_request", {
-      action: "labeled",
-      label: { name: gitVibeLabels.acceptRisk.name },
-      pull_request: { head: { sha: "head-sha" }, number: 12 },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
+    await createApp({ client }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
 
     expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(workflowDispatches(client)).toEqual([]);
@@ -61,13 +55,7 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
       },
     });
 
-    await createApp({ client, log }).handleWebhook("pull_request", {
-      action: "labeled",
-      label: { name: gitVibeLabels.acceptRisk.name },
-      pull_request: { head: { sha: "head-sha" }, number: 12 },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
+    await createApp({ client, log }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
 
     expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(workflowDispatches(client)).toEqual([
@@ -77,7 +65,71 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
       "accepted-risk rerun skipped: workflow run 88 does not match review.yml",
     );
   });
+
+  it("dispatches review when the prior workflow run is unavailable", async () => {
+    const log = vi.fn();
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      pullRequestHeadSha: "head-sha",
+      pullRequestReviews: [stageResultReview({ run: "88" })],
+      workflowRunError: new Error("GitHub API GET /actions/runs/88 failed: 404 {}"),
+    });
+
+    await createApp({ client, log }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
+
+    expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
+    expect(workflowDispatches(client)).toEqual([
+      expect.objectContaining({ inputs: { "pr-number": "12" } }),
+    ]);
+    expect(log).toHaveBeenCalledWith("accepted-risk rerun skipped: workflow run 88 is unavailable");
+  });
 });
+
+describe("GitVibe app server accept-risk pull request rerun failures", () => {
+  it("does not dispatch review when workflow run lookup fails unexpectedly", async () => {
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      pullRequestHeadSha: "head-sha",
+      pullRequestReviews: [stageResultReview({ run: "404" })],
+      workflowRunError: new Error("GitHub API GET /actions/runs/404 failed: 403 {}"),
+    });
+
+    await expect(
+      createApp({ client }).handleWebhook("pull_request", acceptRiskPullRequestPayload()),
+    ).rejects.toThrow("403");
+
+    expect(requestPaths(client, "POST")).not.toContain(
+      "/repos/example/repo/actions/runs/404/rerun",
+    );
+    expect(workflowDispatches(client)).toEqual([]);
+  });
+
+  it("does not dispatch review when rerun request fails", async () => {
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      pullRequestHeadSha: "head-sha",
+      pullRequestReviews: [stageResultReview({ run: "88" })],
+      workflowRerunError: new Error("GitHub API POST /actions/runs/88/rerun failed: 403 {}"),
+    });
+
+    await expect(
+      createApp({ client }).handleWebhook("pull_request", acceptRiskPullRequestPayload()),
+    ).rejects.toThrow("403");
+
+    expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
+    expect(workflowDispatches(client)).toEqual([]);
+  });
+});
+
+function acceptRiskPullRequestPayload() {
+  return {
+    action: "labeled",
+    label: { name: gitVibeLabels.acceptRisk.name },
+    pull_request: { head: { sha: "head-sha" }, number: 12 },
+    repository: repositoryPayload(),
+    sender: { login: "maintainer" },
+  };
+}
 
 function stageResultReview({ run }) {
   return {
