@@ -36,7 +36,7 @@ interface StageResult {
   time: number;
 }
 
-const trustedAutomationAuthors = new Set(["github-actions[bot]"]);
+const trustedAutomationAuthors = new Set(["gitvibe-for-github[bot]"]);
 
 interface PullRequestReviewResponse {
   author_association?: string;

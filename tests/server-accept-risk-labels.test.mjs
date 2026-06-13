@@ -177,9 +177,11 @@ describe("GitVibe app server accept-risk pull request reviews", () => {
       pullRequestReviews: [
         stageResultReview({
           artifact: "pull-request",
+          authorAssociation: "NONE",
           number: 12,
           stage: "review-matrix",
           submittedAt: "2026-01-02T00:00:00Z",
+          user: "gitvibe-for-github[bot]",
         }),
       ],
     });
@@ -287,7 +289,7 @@ describe("GitVibe app server accept-risk label result selection", () => {
             submittedAt: "2026-01-03T00:00:00Z",
           }),
           author_association: "NONE",
-          user: { login: "github-actions[bot]" },
+          user: { login: "gitvibe-for-github[bot]" },
         },
         stageResultComment({
           artifact: "issue",
@@ -650,13 +652,20 @@ function stageResultComment({
   };
 }
 
-function stageResultReview({ artifact, number, stage, submittedAt = "2026-01-01T00:00:00Z" }) {
+function stageResultReview({
+  artifact,
+  authorAssociation = "OWNER",
+  number,
+  stage,
+  submittedAt = "2026-01-01T00:00:00Z",
+  user = "maintainer",
+}) {
   return {
-    author_association: "OWNER",
+    author_association: authorAssociation,
     body: stageResultBody({ artifact, number, stage }),
     id: 200,
     submitted_at: submittedAt,
-    user: { login: "maintainer" },
+    user: { login: user },
   };
 }
 

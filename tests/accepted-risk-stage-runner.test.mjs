@@ -180,7 +180,7 @@ function acceptedRiskMetadataComment({ body, title = "Issue title" }) {
     html_url: "https://github.com/example/repo/issues/12#issuecomment-3",
     id: 3,
     updated_at: "2026-01-04T00:00:00Z",
-    user: { login: "github-actions[bot]" },
+    user: { login: "gitvibe-for-github[bot]" },
   };
 }
 
