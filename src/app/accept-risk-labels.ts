@@ -14,7 +14,7 @@ import {
   stageResultStatus,
   type StageResultMarker,
 } from "../shared/stage-result-markers.js";
-import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { Stage } from "../shared/types.js";
 import {
@@ -259,7 +259,6 @@ async function markAcceptedRiskWorkflowRunning(
   await removeIssueLabelIfPresent(options, plan.number, gitVibeLabels.readyForApproval.name);
   await removeIssueLabelIfPresent(options, plan.number, gitVibeLabels.blocked.name);
   await removeIssueLabelIfPresent(options, plan.number, gitVibeLabels.reviewing.name);
-  await removeIssueLabelIfPresent(options, plan.number, gitVibeInternalLabels.reviewFix.name);
   await addIssueLabel(options, plan.number, gitVibeLabels.reviewing.name);
 }
 
@@ -429,14 +428,6 @@ function issueResumePlan(marker: StageResultMarker): ResumePlan | undefined {
       workflow: "validate.yml",
     };
   }
-  if (marker.stage === "implement" || marker.stage === "create-pr") {
-    return {
-      artifact: "issue",
-      number,
-      riskStages: ["implement", "create-pr"],
-      workflow: "develop.yml",
-    };
-  }
   return undefined;
 }
 
@@ -448,14 +439,6 @@ function pullRequestResumePlan(marker: StageResultMarker): ResumePlan | undefine
       number,
       riskStages: [marker.stage],
       workflow: "review.yml",
-    };
-  }
-  if (marker.stage === "investigate" || marker.stage === "address-pr-feedback") {
-    return {
-      artifact: "pull-request",
-      number,
-      riskStages: ["investigate", "address-pr-feedback"],
-      workflow: "address-feedback.yml",
     };
   }
   return undefined;

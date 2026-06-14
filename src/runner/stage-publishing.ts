@@ -1,6 +1,6 @@
 import { addDiscussionComment, deleteDiscussionComment } from "../shared/discussions.js";
 import { GitHubClient, splitRepository } from "../shared/github.js";
-import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import {
   matchesTransientStatusScope,
   parseTransientStatusMarker,
@@ -530,25 +530,19 @@ function labelForStage(
   if (runner.stage === "validate" && isReadyForApproval(output.next_state)) {
     return gitVibeLabels.readyForApproval.name;
   }
-  if (runner.stage === "implement") return gitVibeLabels.inProgress.name;
   if (runner.stage === "investigate" && context.artifact.type === "pull-request") {
     if (state === "fixes-required") return gitVibeLabels.investigated.name;
     if (state === "no-fixes-needed") return gitVibeLabels.readyForApproval.name;
     if (state === "blocked") return gitVibeLabels.blocked.name;
   }
-  if (runner.stage === "address-pr-feedback") return gitVibeLabels.inProgress.name;
   if (runner.stage === "review-matrix" && context.artifact.type === "pull-request") {
     if (state === "review-passed") return gitVibeLabels.readyForApproval.name;
     if (state === "changes-required") return gitVibeLabels.blocked.name;
   }
-  if (runner.stage === "create-pr") return gitVibeLabels.prOpened.name;
   return undefined;
 }
 
 function labelForStageStart(context: ContextPacket, runner: RunnerOptions): string | undefined {
-  if (context.artifact.type === "issue" && runner.stage === "implement") {
-    return gitVibeLabels.inProgress.name;
-  }
   if (context.artifact.type === "pull-request" && runner.stage === "review-matrix") {
     return gitVibeLabels.reviewing.name;
   }
@@ -575,16 +569,6 @@ function staleLabelsForTransition(
       ? staleLabels.filter((staleLabel) => staleLabel !== gitVibeLabels.approved.name)
       : staleLabels;
   }
-  if (label === gitVibeLabels.inProgress.name) {
-    return isPullRequest
-      ? [
-          gitVibeLabels.blocked.name,
-          gitVibeLabels.investigating.name,
-          gitVibeLabels.reviewing.name,
-          gitVibeLabels.readyForApproval.name,
-        ]
-      : [gitVibeLabels.investigating.name];
-  }
   if (label === gitVibeLabels.investigated.name) {
     return isPullRequest
       ? [
@@ -602,7 +586,6 @@ function staleLabelsForTransition(
           gitVibeLabels.inProgress.name,
           gitVibeLabels.investigating.name,
           gitVibeLabels.reviewing.name,
-          gitVibeInternalLabels.reviewFix.name,
         ]
       : [];
   }
@@ -614,16 +597,8 @@ function staleLabelsForTransition(
           gitVibeLabels.investigated.name,
           gitVibeLabels.investigating.name,
           gitVibeLabels.readyForApproval.name,
-          gitVibeInternalLabels.reviewFix.name,
         ]
       : [];
-  }
-  if (label === gitVibeLabels.prOpened.name) {
-    return [
-      gitVibeLabels.inProgress.name,
-      gitVibeLabels.investigated.name,
-      gitVibeLabels.readyForApproval.name,
-    ];
   }
   return [];
 }

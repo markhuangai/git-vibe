@@ -1,11 +1,11 @@
 <h1 align="center">GitVibe</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/GitVibe-AI_development_pipeline-2563eb?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitVibe" />
+  <img src="https://img.shields.io/badge/GitVibe-AI_repo_workflow-2563eb?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitVibe" />
 </p>
 
 <p align="center">
-  <strong>Turn GitHub issues, discussions, labels, Actions, branches, and pull requests into a maintainer-gated AI development pipeline.</strong>
+  <strong>Turn GitHub issues, discussions, labels, Actions, and pull requests into a maintainer-gated AI workflow.</strong>
 </p>
 
 <p align="center">
@@ -45,13 +45,13 @@ It listens to GitHub App webhooks, verifies who is allowed to act, dispatches
 reusable GitHub workflows, runs stage-specific AI workers, validates structured
 AI output, and writes routine GitHub state changes with deterministic code.
 
-| GitHub problem                                  | GitVibe answer                                                                                                     |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then apply the protected approval label |
-| Feature requests become scattered issue threads | Start in Discussions, validate acceptance criteria, then materialize one or more implementation issues             |
-| AI tools can bypass normal repo process         | Keep approvals, labels, comments, branches, PRs, and merges inside GitHub                                          |
-| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers                        |
-| Consumer repositories should stay small         | Copy tiny `.github` and `.git-vibe` starters and call reusable workflows from `markhuangai/git-vibe`               |
+| GitHub problem                                  | GitVibe answer                                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Bug reports need triage before code changes     | Investigate first, ask for expected behavior, validate maintainer context, then hand off clear findings |
+| Feature requests become scattered issue threads | Start in Discussions, validate acceptance criteria, then materialize one or more implementation issues  |
+| AI tools can bypass normal repo process         | Keep approvals, labels, comments, issues, reviews, and merges inside GitHub                             |
+| Agent output is hard to audit                   | Require structured stage results, render traceable comments, and keep hidden source markers             |
+| Consumer repositories should stay small         | Copy tiny `.github` and `.git-vibe` starters and call reusable workflows from `markhuangai/git-vibe`    |
 
 ## Pipeline at a glance
 
@@ -64,68 +64,37 @@ flowchart LR
   E --> F[Member AI worker jobs]
   F --> G[Finalizer validates one stage result]
   G --> H{Deterministic GitVibe write}
-  H --> I[Comment or label]
-  H --> J[Commit and push issue branch]
-  H --> K[Create or update PR]
-  H --> N[Update existing PR branch]
-  H --> L[Run PR review]
-  I --> M[Human review and merge]
-  J --> K
-  K --> L
-  N --> L
-  L --> M
+  H --> I[Comment, label, or issue]
+  I --> J[Human implementation, review, and merge]
 ```
 
-GitVibe does not auto-merge, approve its own pull requests, or treat AI output as
-authority. Maintainers stay in control of approval and release decisions.
+GitVibe does not write code, open pull requests, auto-merge, approve its own pull
+requests, or treat AI output as authority. Maintainers stay in control of
+implementation, review, and release decisions.
 
 ## Workflows
 
-| Workflow               | Use it for                                                            | Writes code?                           |
-| ---------------------- | --------------------------------------------------------------------- | -------------------------------------- |
-| `investigate.yml`      | Bug investigation and likely-root-cause analysis                      | No                                     |
-| `validate.yml`         | Check whether maintainer context is coherent and actionable           | No                                     |
-| `materialize.yml`      | Convert a validated Discussion into one or more implementation issues | No                                     |
-| `develop.yml`          | Implement an approved issue, create or update a PR, then review it    | Yes, on `git-vibe/{root-issue}`        |
-| `review.yml`           | Review an existing pull request with the configured review matrix     | No                                     |
-| `address-feedback.yml` | Investigate PR feedback, apply required fixes, then review            | Conditional, on the existing PR branch |
-| `ai-smoke.yml`         | Verify AI provider or trusted CLI setup on a runner                   | No repo changes                        |
+| Workflow          | Use it for                                                            | Writes code?    |
+| ----------------- | --------------------------------------------------------------------- | --------------- |
+| `investigate.yml` | Bug investigation and likely-root-cause analysis                      | No              |
+| `validate.yml`    | Check whether maintainer context is coherent and actionable           | No              |
+| `materialize.yml` | Convert a validated Discussion into one or more implementation issues | No              |
+| `review.yml`      | Review an existing pull request with the configured review matrix     | No              |
+| `ai-smoke.yml`    | Verify AI provider or trusted CLI setup on a runner                   | No repo changes |
 
 The reusable workflows install Node `22` and pnpm `10.33.3` before building the
 source-backed composite actions. Each composite action then reads
 `.github/git-vibe.yml` for its stage and installs Codex CLI or Claude Code only
 when the selected profile uses `cli-codex` or `cli-claude-code`.
 
-`develop.yml` starts at implementation after investigation has already marked an
-issue ready. Implementation validates with the repository's configured
-`tests.commands`; failed validation output is fed back into a repair attempt
-before GitVibe commits to the deterministic issue branch. GitVibe then creates
-or updates the pull request and runs the PR-scoped review matrix. A passing review adds
-`gvi:ready-for-approval` to the PR. A failing review posts the review result on
-the PR and leaves it `gvi:blocked`.
-
 `review.yml` runs the same PR-scoped review matrix for an existing pull request.
 Trusted maintainers trigger it with the `git-vibe:review` label on a PR. GitVibe
 removes stale ready/blocked state, adds `gvi:reviewing`, and then marks the PR
 ready or blocked based on the review result.
 
-Set `ai.stages.implement.enabled: false` to keep investigation, issue creation,
-and PR review automation while disabling approved issue development. In that
-mode, `git-vibe:approved` on an investigated issue is removed with an
-explanation so maintainers can implement locally and still trigger review with
-`git-vibe:review` on the pull request.
-
-`address-feedback.yml` runs PR feedback investigation first. GitVibe replies to
-false-positive, obsolete, or already-addressed review comments without coding. If
-the investigation finds required fixes, GitVibe uses the same deterministic
-branch-update engine as issue implementation but targets the existing PR head
-branch. It does not create a new PR. After pushing the fix commit, it dispatches
-the normal PR review workflow and restores `gvi:ready-for-approval` only after
-review passes. If that review still returns `changes-required`, GitVibe
-posts the review result on the PR, keeps the PR at `gvi:blocked`, and queues
-another `address-feedback.yml` run when feedback automation is enabled. PR
-feedback review retries stop after `ai.budgets.pr_feedback_max_iterations`
-iterations, defaulting to three.
+The old development and PR feedback remediation workflows are removed. Applying
+`git-vibe:approved` to an issue is a trusted no-op; applying it to a validated
+Discussion still dispatches `materialize.yml`.
 
 ## Quick Start
 
@@ -186,8 +155,8 @@ The starter workflows call the public reusable workflow namespace:
 
 ```yaml
 jobs:
-  develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@<latest-stable-tag>
+  validate:
+    uses: markhuangai/git-vibe/.github/workflows/validate.yml@<latest-stable-tag>
 ```
 
 Reusable workflows operate on the repository where the workflow run starts
@@ -280,9 +249,9 @@ Runtime variables:
 | `GITHUB_API_URL`                | Optional | Defaults to `https://api.github.com`                      |
 | `GITVIBE_DISCUSSION_CATEGORY`   | Optional | Defaults to `Ideas`                                       |
 
-Workflow dispatch, new implementation branch bases, and pull request bases use
-the repository variable `GITVIBE_BASE_BRANCH`. Empty or missing means GitVibe
-uses the repository `default_branch` reported by GitHub.
+Workflow dispatches use the repository variable `GITVIBE_BASE_BRANCH` as the
+workflow ref. Empty or missing means GitVibe uses the repository
+`default_branch` reported by GitHub.
 
 ### 5. Install the GitHub App
 
@@ -339,20 +308,19 @@ Do not use "Send me everything"; GitVibe only needs the curated event set above.
 
 Use `/git-vibe` for the remaining comment-triggered workflows:
 
-| Command                      | Typical surface           | Effect                                                        |
-| ---------------------------- | ------------------------- | ------------------------------------------------------------- |
-| `/git-vibe investigate`      | Bug issue                 | Runs investigation-only analysis and posts findings/questions |
-| `/git-vibe address-feedback` | Pull request conversation | Investigates open PR feedback and fixes only actionable items |
+| Command                 | Typical surface | Effect                                                        |
+| ----------------------- | --------------- | ------------------------------------------------------------- |
+| `/git-vibe investigate` | Bug issue       | Runs investigation-only analysis and posts findings/questions |
 
 Use protected labels for investigation, validation, materialization, and approval transitions:
 
-| Label                  | Typical surface      | Effect                                                                         |
-| ---------------------- | -------------------- | ------------------------------------------------------------------------------ |
-| `git-vibe:investigate` | Bug issue            | Runs investigation, then GitVibe replaces the trigger with `gvi:investigating` |
-| `git-vibe:validate`    | Issue or Discussion  | Runs validation, then GitVibe removes the trigger label                        |
-| `git-vibe:approved`    | Implementation issue | Dispatches the development pipeline                                            |
-| `git-vibe:approved`    | Feature Discussion   | Dispatches materialization after `gvi:validated`                               |
-| `git-vibe:review`      | Pull request         | Dispatches PR review and marks the PR `gvi:reviewing` while it runs            |
+| Label                  | Typical surface     | Effect                                                                         |
+| ---------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| `git-vibe:investigate` | Bug issue           | Runs investigation, then GitVibe replaces the trigger with `gvi:investigating` |
+| `git-vibe:validate`    | Issue or Discussion | Runs validation, then GitVibe removes the trigger label                        |
+| `git-vibe:approved`    | Issue               | Trusted no-op retained for compatibility                                       |
+| `git-vibe:approved`    | Feature Discussion  | Dispatches materialization after `gvi:validated`                               |
+| `git-vibe:review`      | Pull request        | Dispatches PR review and marks the PR `gvi:reviewing` while it runs            |
 
 `@git-vibe ...` is intentionally unsupported so commands do not look like GitHub
 account mentions.
@@ -362,11 +330,11 @@ reaction before GitVibe dispatches the workflow. When the reaction succeeds,
 GitVibe does not also post a queued comment. If the reaction cannot be added,
 GitVibe posts the queued workflow comment as a visible fallback.
 
-Protected label dispatches and trusted `changes_requested` review dispatches
-also post queued comments after dispatch succeeds. The queued comment includes
-the exact workflow run URL when GitHub returns it; runner stages still post a
-separate running comment when the GitHub Actions job starts. Approval reviews
-and untrusted reviews do not start automation.
+Protected label dispatches also post queued comments after dispatch succeeds.
+The queued comment includes the exact workflow run URL when GitHub returns it;
+runner stages still post a separate running comment when the GitHub Actions job
+starts. Approval reviews and `changes_requested` reviews do not start
+remediation automation.
 
 ## Configuration
 
@@ -429,18 +397,12 @@ ai:
       role_group: review_gate
     materialize:
       profile: local_proxy
-    implement:
-      profile: local_proxy
     review-matrix:
       role_group: review_gate
       # mcp:
       #   dense_mem:
       #     required: false
       #     tools: ["search_memory"]
-    create-pr:
-      profile: local_proxy
-    address-pr-feedback:
-      profile: local_proxy
 
 tests:
   commands: []
@@ -475,7 +437,7 @@ its lint, typecheck, unit test, or integration test commands.
 Optional repository prompt additions live under
 `.git-vibe/prompts/<stage>/system.md` and `.git-vibe/prompts/<stage>/user.md`.
 They append to GitVibe's built-in prompts without replacing stage contracts,
-schema requirements, or branch/file mutation boundaries. See
+schema requirements, or GitHub write boundaries. See
 [Repository Prompt Additions](https://github.com/markhuangai/git-vibe/wiki/Configuration#repository-prompt-additions).
 
 Current implementation status:
@@ -502,8 +464,8 @@ canonical long-form documentation.
 | Labels        | Public `git-vibe:` trigger labels are policy-gated; internal `gvi:` labels are GitVibe-managed    |
 | Secrets       | App private keys and AI credentials stay in GitHub secrets or server runtime env, never in config |
 | AI output     | Stage results are validated before deterministic GitVibe code writes GitHub state                 |
-| Branch writes | Implementation uses `git-vibe/{root-issue}`; PR feedback updates the existing PR branch           |
-| Pull requests | GitVibe can open or update PRs, but humans review and merge                                       |
+| Code writes   | GitVibe does not commit, push, or update repository files                                         |
+| Pull requests | GitVibe reviews existing PRs, but humans author code, review, and merge                           |
 
 Installation tokens are short-lived, repository-scoped, and minted from the
 GitHub App private key. Never log or render App private keys, OIDC tokens, or
@@ -529,7 +491,7 @@ Detailed docs:
 | Wiki page                                                                                         | Covers                                                                    |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | [Architecture](https://github.com/markhuangai/git-vibe/wiki/Architecture)                         | System shape, GitHub App auth model, event delivery modes, consumer setup |
-| [Workflows and Lifecycle](https://github.com/markhuangai/git-vibe/wiki/Workflows-and-Lifecycle)   | Issue, Discussion, label, approval, PR feedback, and traceability flows   |
+| [Workflows and Lifecycle](https://github.com/markhuangai/git-vibe/wiki/Workflows-and-Lifecycle)   | Issue, Discussion, label, approval, review, and traceability flows        |
 | [AI and Stage Contracts](https://github.com/markhuangai/git-vibe/wiki/AI-and-Stage-Contracts)     | Context assembly, AI contracts, provider strategy, tool policy, budgets   |
 | [Configuration](https://github.com/markhuangai/git-vibe/wiki/Configuration)                       | `.github/git-vibe.yml`, profiles, role groups, MCP, tests, budgets        |
 | [Development and Testing](https://github.com/markhuangai/git-vibe/wiki/Development-and-Testing)   | Repo shape, quality gates, smoke tests, assumptions                       |
@@ -551,8 +513,8 @@ steps:
 
 ```yaml
 jobs:
-  git-vibe-develop:
-    uses: markhuangai/git-vibe/.github/workflows/develop.yml@v3
+  git-vibe-validate:
+    uses: markhuangai/git-vibe/.github/workflows/validate.yml@v3
     with:
       issue-number: "123"
       runner: docker-runner
@@ -562,9 +524,8 @@ jobs:
 ```
 
 For source-repo testing, dispatch `investigate.yml`, `validate.yml`,
-`materialize.yml`, `develop.yml`, `review.yml`, or
-`address-feedback.yml` directly. Leave `action-repository` and `action-ref`
-empty to test the current repository and ref.
+`materialize.yml`, or `review.yml` directly. Leave `action-repository` and
+`action-ref` empty to test the current repository and ref.
 
 ## Development
 

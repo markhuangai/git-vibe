@@ -50,7 +50,7 @@ async function testDefaultInputOutputLogging() {
         toolCalls: [
           {
             input: {
-              content: '{"stage":"implement","status":"completed","summary":"bundle-secret-value"}',
+              content: '{"stage":"validate","status":"completed","summary":"bundle-secret-value"}',
             },
             toolName: "output_validator",
           },
@@ -61,7 +61,7 @@ async function testDefaultInputOutputLogging() {
   });
 
   await expect(
-    runImplementStage({
+    runValidateStage({
       logger,
       prompt: `Prompt ${"x".repeat(250)} tail-marker bundle-secret-value`,
       system: "System bundle-secret-value",
@@ -69,8 +69,8 @@ async function testDefaultInputOutputLogging() {
   ).resolves.toContain("bundle-secret-value");
 
   const log = messages.join("\n");
-  expect(log).toContain("::group::[git-vibe] implement ai-sdk-agentool input");
-  expect(log).toContain("::group::[git-vibe] implement ai-sdk-agentool output");
+  expect(log).toContain("::group::[git-vibe] validate ai-sdk-agentool input");
+  expect(log).toContain("::group::[git-vibe] validate ai-sdk-agentool output");
   expect(log).toContain("--- system ---");
   expect(log).toContain("--- prompt ---");
   expect(log).toContain("--- raw_text ---");
@@ -85,13 +85,13 @@ async function testAssistantStepLogging() {
   const { logger, messages } = testLogger();
   generateText.mockImplementationOnce(mockGenerateTextWithAssistantStep);
 
-  await runImplementStage({ logger, prompt: "Prompt", system: "System" });
+  await runValidateStage({ logger, prompt: "Prompt", system: "System" });
 
   const log = messages.join("\n");
   expect(log).toContain("ai.tool.start");
   expect(log).toContain("ai.tool.done");
   expect(log).toContain('tool="read"');
-  expect(log).toContain("::group::[git-vibe] implement ai-sdk-agentool assistant");
+  expect(log).toContain("::group::[git-vibe] validate ai-sdk-agentool assistant");
   expect(log).toContain("--- assistant_text ---");
   expect(log).toContain("--- assistant_reasoning ---");
   expect(log).toContain("assistant_text_chars=272");
@@ -131,7 +131,7 @@ async function mockGenerateTextWithAssistantStep(request) {
       totalTokens: 14,
     },
   });
-  const content = '{"stage":"implement","status":"completed"}';
+  const content = '{"stage":"validate","status":"completed"}';
   return {
     steps: [
       {
@@ -144,13 +144,13 @@ async function mockGenerateTextWithAssistantStep(request) {
 
 function testLogger() {
   const messages = [];
-  const logger = createStageLogger("implement", {
+  const logger = createStageLogger("validate", {
     write: (message) => messages.push(message),
   });
   return { logger, messages };
 }
 
-async function runImplementStage({ logger, prompt, system }) {
+async function runValidateStage({ logger, prompt, system }) {
   return runAiStage({
     config: localProxyConfig(),
     cwd: process.cwd(),
@@ -158,9 +158,9 @@ async function runImplementStage({ logger, prompt, system }) {
     maxTurns: 2,
     prompt,
     schema: {},
-    schemaId: "implement.v1",
-    stage: "implement",
-    stageDefinition: stageDefinitions.implement,
+    schemaId: "validate.v1",
+    stage: "validate",
+    stageDefinition: stageDefinitions.validate,
     system,
   });
 }
@@ -178,7 +178,7 @@ function localProxyConfig() {
           },
         },
       },
-      stages: { implement: { profile: "local_proxy" } },
+      stages: { validate: { profile: "local_proxy" } },
     },
   };
 }

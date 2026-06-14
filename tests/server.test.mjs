@@ -196,7 +196,7 @@ describe("GitVibe app server issue intake", () => {
 });
 
 describe("GitVibe app server command dispatch", () => {
-  it("dispatches trusted issue and discussion commands", async () => {
+  it("dispatches trusted issue commands", async () => {
     const client = createClient();
     const app = createApp({ client });
 
@@ -207,24 +207,14 @@ describe("GitVibe app server command dispatch", () => {
       repository: repositoryPayload(),
       sender: { login: "maintainer" },
     });
-    await app.handleWebhook("issue_comment", {
-      action: "created",
-      comment: { body: "/git-vibe address-feedback", node_id: "pr-feedback-comment" },
-      issue: { number: 3, pull_request: {} },
-      repository: repositoryPayload(),
-      sender: { login: "maintainer" },
-    });
     expect(workflowDispatches(client)).toEqual([
       expect.objectContaining({ inputs: expect.objectContaining({ "issue-number": "2" }) }),
-      expect.objectContaining({ inputs: expect.objectContaining({ "pr-number": "3" }) }),
     ]);
-    expect(sourceCommentKinds(client)).toEqual(["issue-comment", "pull-request-comment"]);
+    expect(sourceCommentKinds(client)).toEqual(["issue-comment"]);
     expect(reactionVariables(client)).toEqual([
       { content: "ROCKET", subjectId: "issue-investigate-comment" },
-      { content: "ROCKET", subjectId: "pr-feedback-comment" },
     ]);
     expect(requestBodies(client, "POST", "/issues/2/comments")).toEqual([]);
-    expect(requestBodies(client, "POST", "/issues/3/comments")).toEqual([]);
     expect(discussionCommentBodies(client)).toEqual([]);
   });
 });
@@ -528,12 +518,10 @@ describe("GitVibe app server command workflow variants", () => {
 });
 
 describe("GitVibe app server PR review dispatch", () => {
-  it("dispatches trusted changes-requested review submissions with review metadata", async () => {
-    const client = createClient({
-      configContent:
-        "ai:\n  budgets:\n    default_max_turns: 90\n    feedback_max_turns: 123\n    feedback_timeout_minutes: 124\n",
-    });
-    const app = createApp({ client });
+  it("ignores changes-requested review submissions", async () => {
+    const client = createClient();
+    const log = vi.fn();
+    const app = createApp({ client, log });
 
     await app.handleWebhook("pull_request_review", {
       action: "submitted",
@@ -549,26 +537,10 @@ describe("GitVibe app server PR review dispatch", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({
-        inputs: expect.objectContaining({
-          "pr-number": "12",
-          max_turns: "123",
-          timeout_minutes: "124",
-        }),
-        ref: "main",
-        return_run_details: true,
-      }),
-    ]);
-    expect(sourceComments(client)[0]).toMatchObject({
-      id: "99",
-      kind: "pull-request-review",
-      nodeId: "review-node",
-      url: "https://github.com/example/repo/pull/12#pullrequestreview-99",
-    });
-    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
-      "GitVibe Workflow Queued",
-    );
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(sourceComments(client)).toEqual([]);
+    expect(requestBodies(client, "POST", "/issues/12/comments")).toEqual([]);
+    expect(log).toHaveBeenCalledWith("ignored pull_request_review.changes_requested for PR #12");
   });
 
   it("ignores non-change and untrusted PR review submissions", async () => {
@@ -596,9 +568,7 @@ describe("GitVibe app server PR review dispatch", () => {
 
     expect(workflowDispatches(client)).toEqual([]);
     expect(log).toHaveBeenCalledWith("ignored pull_request_review.commented for PR #12");
-    expect(log).toHaveBeenCalledWith(
-      "ignored changes_requested review from untrusted actor @guest on PR #12",
-    );
+    expect(log).toHaveBeenCalledWith("ignored pull_request_review.changes_requested for PR #12");
   });
 });
 

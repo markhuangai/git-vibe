@@ -67,7 +67,6 @@ export function runnerPermissionProfileForStage(
 ): GitHubActionsRunnerPermissionProfile {
   if (executionMode === "member") return "runner-read";
   if (stage === "review-matrix") return "runner-workflow-write";
-  if (stage === "implement" || stage === "address-pr-feedback") return "runner-content-write";
   return "runner-status-write";
 }
 

@@ -36,10 +36,10 @@ afterEach(() => {
 describe("AI output validator stop condition", () => {
   it("continues with fallback assistant text when no validator content is returned", async () => {
     generateText.mockResolvedValueOnce({ text: "" });
-    generateText.mockResolvedValueOnce(aiResult("implement"));
+    generateText.mockResolvedValueOnce(aiResult("validate"));
 
-    await expect(runImplement({ maxTurns: 25 })).resolves.toBe(
-      '{"stage":"implement","status":"completed"}',
+    await expect(runValidate({ maxTurns: 25 })).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
     );
 
     expect(generateText.mock.calls[1][0].messages).toEqual(
@@ -52,30 +52,30 @@ describe("AI output validator stop condition", () => {
     );
   });
 
-  it("uses default OpenAI-compatible provider type and allows bash-readonly override", async () => {
-    generateText.mockResolvedValueOnce(aiResult("implement"));
+  it("uses default OpenAI-compatible provider type and allows read override", async () => {
+    generateText.mockResolvedValueOnce(aiResult("validate"));
 
     await expect(
-      runImplement({
+      runValidate({
         config: defaultProviderConfig(),
-        toolOverride: ["bash-readonly"],
+        toolOverride: ["read"],
       }),
-    ).resolves.toBe('{"stage":"implement","status":"completed"}');
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
 
     expect(createOpenAI).toHaveBeenCalledWith(
       expect.objectContaining({ baseURL: "https://proxy.test/v1" }),
     );
-    expect(Object.keys(generateText.mock.calls[0][0].tools)).toEqual(["output_validator", "bash"]);
+    expect(Object.keys(generateText.mock.calls[0][0].tools)).toEqual(["output_validator", "read"]);
   });
 
   it("rejects tool overrides outside the stage tool boundary", async () => {
-    await expect(runImplement({ toolOverride: ["web-search"] })).rejects.toThrow(
-      "AI tool override for implement includes disallowed tools: web-search.",
+    await expect(runValidate({ toolOverride: ["edit"] })).rejects.toThrow(
+      "AI tool override for validate includes disallowed tools: edit.",
     );
   });
 });
 
-function runImplement(overrides = {}) {
+function runValidate(overrides = {}) {
   return runAiStage({
     config: config(),
     cwd: process.cwd(),
@@ -84,8 +84,8 @@ function runImplement(overrides = {}) {
     reserveFinalizationTurns: true,
     schema: {},
     schemaId: "schema",
-    stage: "implement",
-    stageDefinition: stageDefinitions.implement,
+    stage: "validate",
+    stageDefinition: stageDefinitions.validate,
     system: "System",
     ...overrides,
   });
@@ -115,7 +115,7 @@ function config() {
           },
         },
       },
-      stages: { implement: { profile: "test" } },
+      stages: { validate: { profile: "test" } },
     },
   };
 }
@@ -132,7 +132,7 @@ function defaultProviderConfig() {
           },
         },
       },
-      stages: { implement: { profile: "test" } },
+      stages: { validate: { profile: "test" } },
     },
   };
 }

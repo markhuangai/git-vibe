@@ -6,7 +6,6 @@ import type {
   Stage,
 } from "../shared/types.js";
 import { chunkContentUnits, contentUnitsForContext, type ContentUnit } from "./content-units.js";
-import { issueBranch } from "./review-fix.js";
 
 export type SafetySeverity = "none" | "low" | "medium" | "high";
 
@@ -27,12 +26,7 @@ interface PatternMatch {
   severity: Exclude<SafetySeverity, "none">;
 }
 
-const writeStages = new Set<Stage>([
-  "address-pr-feedback",
-  "create-pr",
-  "implement",
-  "materialize",
-]);
+const writeStages = new Set<Stage>(["materialize"]);
 
 const highRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
   {
@@ -183,25 +177,8 @@ export function safetyBlockedOutput(options: {
     return { ...base, blocking_questions: [question], implementation_plan: [] };
   }
   if (options.runner.stage === "materialize") return { ...base, issues: [] };
-  if (options.runner.stage === "implement") {
-    return {
-      ...base,
-      branch: issueBranch(options.context),
-      tests: ["Not run because GitVibe paused before write-capable execution."],
-    };
-  }
-  if (options.runner.stage === "create-pr") {
-    return { ...base, branch: issueBranch(options.context), pr_body: "", pr_title: "" };
-  }
   if (options.runner.stage === "review-matrix") {
     return { ...base, inline_comments: [], tests: [] };
-  }
-  if (options.runner.stage === "address-pr-feedback") {
-    return {
-      ...base,
-      skipped_feedback: options.gate.findings,
-      tests: ["Not run because GitVibe paused before write-capable execution."],
-    };
   }
   return base;
 }
@@ -222,9 +199,6 @@ function readOnlyOutputAdvancesPrivilegedState(
   if (!output || normalizedState(output.status) !== "completed") return false;
   const nextState = normalizedState(output.next_state);
   const privilegedStates: Partial<Record<Stage, string[]>> = {
-    "address-pr-feedback": ["feedback-addressed"],
-    "create-pr": ["pr-draft-ready"],
-    implement: ["changes-ready-for-commit"],
     investigate: ["fixes-required", "no-fixes-needed", "ready-for-implementation"],
     materialize: ["implementation-issue-ready", "implementation-issues-ready"],
     "review-matrix": ["changes-required", "review-passed"],

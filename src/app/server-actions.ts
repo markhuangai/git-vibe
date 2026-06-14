@@ -19,7 +19,7 @@ import {
   repositoryActionsVariable,
   repositoryDefaultBranch,
 } from "../shared/github.js";
-import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import { encodeSourceComment } from "../shared/source-comments.js";
 import {
   matchesTransientStatusScope,
@@ -27,11 +27,7 @@ import {
   workflowQueuedMarker,
   workflowRunIdFromUrl,
 } from "../shared/status-comments.js";
-import {
-  gitVibeTraceabilityIssueNumbers,
-  pullRequestReviewFixFromBody,
-  reviewFixTraceFromBody,
-} from "../shared/traceability.js";
+import { gitVibeTraceabilityIssueNumbers } from "../shared/traceability.js";
 import type { SourceComment, SourceCommentKind } from "../shared/types.js";
 import type { GitVibeConfig, Stage } from "../shared/types.js";
 import type { IntakeComment } from "./intake.js";
@@ -187,18 +183,6 @@ export function commandInputs(
     ...inputs,
     "source-comment": sourceCommentInput(options, kind),
   };
-}
-
-export function sourceReviewInput(options: WebhookActionContext): string {
-  const review = options.payload.review;
-  if (!review) return "";
-  return encodeSourceComment({
-    body: review.body,
-    id: review.id === undefined ? undefined : String(review.id),
-    kind: "pull-request-review",
-    nodeId: review.node_id || review.nodeId,
-    url: review.html_url || review.url,
-  });
 }
 
 export async function postQueuedWorkflowComment(
@@ -390,42 +374,6 @@ export async function removeIssueLabelIfPresent(
     if (error instanceof Error && error.message.includes("404")) return;
     throw error;
   }
-}
-
-export async function handleManagedReviewFixLabel(
-  options: WebhookActionContext,
-  issueNumber: string,
-): Promise<void> {
-  const label = gitVibeInternalLabels.reviewFix.name;
-  if (await hasManagedReviewFixMarker(options, issueNumber)) {
-    const subject = options.payload.issue?.pull_request ? "PR" : "issue";
-    options.log(`accepted managed internal review-fix label on ${subject} #${issueNumber}`);
-    return;
-  }
-
-  await removeIssueLabel({
-    client: options.client,
-    issueNumber,
-    label,
-    owner: options.owner,
-    repo: options.repo,
-    token: options.token,
-  });
-  await createIssueComment(options, issueNumber, internalLabelRejectionBody(label));
-}
-
-async function hasManagedReviewFixMarker(
-  options: WebhookActionContext,
-  issueNumber: string,
-): Promise<boolean> {
-  if (!options.payload.issue?.pull_request) {
-    return Boolean(reviewFixTraceFromBody(options.payload.issue?.body || ""));
-  }
-
-  const comments = await issueComments(options, issueNumber);
-  return comments.some(
-    (comment) => pullRequestReviewFixFromBody(comment.body || "")?.pullRequest === issueNumber,
-  );
 }
 
 export function commandWorkflow(command: string): string | null {

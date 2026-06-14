@@ -1,11 +1,4 @@
-export type Stage =
-  | "investigate"
-  | "validate"
-  | "materialize"
-  | "implement"
-  | "review-matrix"
-  | "create-pr"
-  | "address-pr-feedback";
+export type Stage = "investigate" | "validate" | "materialize" | "review-matrix";
 
 export type JsonObject = Record<string, unknown>;
 export type SourceCommentKind =
@@ -49,8 +42,6 @@ export interface RunnerOptions {
   stage: Stage;
   stageTimeoutMinutes: number;
   token: string;
-  validationRepairAttempts?: number;
-  validationRepairMaxTurns?: number;
   workflowRunAttempt?: string;
   workflowRunUrl?: string;
 }

@@ -3,15 +3,11 @@ import { GitHubClient, isGitHubGraphQLForbiddenError, splitRepository } from "..
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { ContextPacket, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
-
-interface PullRequestReviewComment {
-  body: string;
-  line: number;
-  path: string;
-  side: "LEFT" | "RIGHT";
-  start_line?: number;
-  start_side?: "LEFT" | "RIGHT";
-}
+import {
+  createPullRequestReview,
+  type PullRequestReviewComment,
+  updatePullRequestReview,
+} from "./pr-review-github.js";
 
 interface ReviewFindingComment {
   body: string;
@@ -87,16 +83,40 @@ export async function publishPullRequestReviewResult(options: {
     comments: comments.length,
     pull_request: options.context.artifact.number,
   });
-  await createPullRequestReview({
-    body,
-    client: options.client,
-    comments,
-    pullNumber: options.context.artifact.number,
-    repository: options.runner.repository,
-    token: options.runner.token,
-  });
+  let publishedComments = comments.length;
+  try {
+    await createPullRequestReview({
+      body,
+      client: options.client,
+      comments,
+      pullNumber: options.context.artifact.number,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+  } catch (error) {
+    if (!isUnresolvedReviewLineError(error) || comments.length === 0) throw error;
+    options.logger.event("github.pr.review.inline_comments.retry", {
+      comments: comments.length,
+      pull_request: options.context.artifact.number,
+      reason: "line-unresolved",
+    });
+    await createPullRequestReview({
+      body: pullRequestReviewBody({
+        comments: [],
+        output: options.parsedOutput,
+        stageResultBody: options.stageResultBody,
+        workflowRunUrl: options.runner.workflowRunUrl,
+      }),
+      client: options.client,
+      comments: [],
+      pullNumber: options.context.artifact.number,
+      repository: options.runner.repository,
+      token: options.runner.token,
+    });
+    publishedComments = 0;
+  }
   options.logger.event("github.pr.review.done", {
-    comments: comments.length,
+    comments: publishedComments,
     pull_request: options.context.artifact.number,
   });
   return true;
@@ -187,6 +207,11 @@ function reviewInlineCommentCount(body: string): number {
   return match ? Number(match[1]) : 0;
 }
 
+function isUnresolvedReviewLineError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b422\b/.test(message) && /Line could not be resolved/i.test(message);
+}
+
 function reviewDatabaseId(value: number | string | undefined): string | undefined {
   if (typeof value === "number" && Number.isInteger(value) && value > 0) return String(value);
   if (typeof value === "string" && /^\d+$/.test(value)) return value;
@@ -224,44 +249,6 @@ async function authenticatedGitHubLogin(options: {
     return undefined;
   }
   return login;
-}
-
-async function createPullRequestReview(options: {
-  body: string;
-  client: GitHubClient;
-  comments: PullRequestReviewComment[];
-  pullNumber: string;
-  repository: string;
-  token: string;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.repository);
-  await options.client.request({
-    body: {
-      body: options.body,
-      comments: options.comments.length ? options.comments : undefined,
-      event: "COMMENT",
-    },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/reviews`,
-    token: options.token,
-  });
-}
-
-async function updatePullRequestReview(options: {
-  body: string;
-  client: GitHubClient;
-  pullNumber: string;
-  repository: string;
-  reviewId: string;
-  token: string;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.repository);
-  await options.client.request({
-    body: { body: options.body },
-    method: "PUT",
-    path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/reviews/${options.reviewId}`,
-    token: options.token,
-  });
 }
 
 async function reconcileReviewFindings(options: {

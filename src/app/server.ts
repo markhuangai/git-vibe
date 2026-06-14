@@ -16,12 +16,7 @@ import {
   GitHubAppInstallationTokenProvider,
   type InstallationTokenProvider,
 } from "./github-app-auth.js";
-import {
-  gitVibeInternalLabels,
-  gitVibeLabels,
-  isGitVibeRuntimeLabel,
-  isInternalGitVibeLabel,
-} from "../shared/labels.js";
+import { gitVibeLabels, isGitVibeRuntimeLabel, isInternalGitVibeLabel } from "../shared/labels.js";
 import { defaultActionsOidcAudience } from "../shared/hosted-app.js";
 import {
   buildDiscussionBody,
@@ -46,7 +41,6 @@ import {
   createIssueComment,
   dispatchWorkflow,
   discussionHasLabel,
-  handleManagedReviewFixLabel,
   internalLabelRejectionBody,
   issueComments,
   labelReason,
@@ -59,10 +53,8 @@ import {
   removeDiscussionLabelFromPayload,
   removeIssueLabelIfPresent,
   repositoryWorkflowBudgetInputs,
-  sourceReviewInput,
 } from "./server-actions.js";
 import { handleAcceptRiskLabel } from "./accept-risk-labels.js";
-import { handleApprovedIssueLabel } from "./approval-labels.js";
 import { handleReviewPullRequestLabel } from "./review-labels.js";
 import { createDeliveryDeduplicator, type DeliveryDeduplicator } from "./delivery-dedup.js";
 import { handleRequest as handleHttpRequest } from "./request-handler.js";
@@ -342,25 +334,6 @@ async function handleIssueComment(options: WebhookContext): Promise<void> {
   await requireTrustedActor(options);
 
   const issueNumber = String(options.payload.issue?.number || "");
-  if (parsed.command === "address-feedback" && options.payload.issue?.pull_request) {
-    const acknowledged = await acknowledgeCommand(options);
-    const workflow = "address-feedback.yml";
-    const dispatch = await dispatchWorkflow(options, workflow, {
-      ...(await repositoryWorkflowBudgetInputs(options, workflow)),
-      ...commandInputs(options, { "pr-number": issueNumber }, "pull-request-comment"),
-    });
-    if (!acknowledged)
-      await postQueuedWorkflowComment(options, {
-        artifact: "pull-request",
-        number: issueNumber,
-        reason: commandReason(parsed.raw),
-        workflow,
-        ref: dispatch.ref,
-        workflowRunUrl: dispatch.html_url,
-      });
-    return;
-  }
-
   const workflow = commandWorkflow(parsed.command);
   if (workflow && !options.payload.issue?.pull_request) {
     const acknowledged = await acknowledgeCommand(options);
@@ -461,11 +434,6 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
     return;
   }
 
-  if (label === gitVibeLabels.approved.name) {
-    await handleApprovedIssueLabel(options, issueNumber, label);
-    return;
-  }
-
   if (label === gitVibeLabels.validate.name) {
     const workflow = "validate.yml";
     const dispatch = await dispatchWorkflow(options, workflow, {
@@ -488,11 +456,6 @@ async function handleIssueLabeled(options: WebhookContext): Promise<void> {
       ref: dispatch.ref,
       workflowRunUrl: dispatch.html_url,
     });
-    return;
-  }
-
-  if (label === gitVibeInternalLabels.reviewFix.name) {
-    await handleManagedReviewFixLabel(options, issueNumber);
     return;
   }
 
@@ -617,31 +580,7 @@ async function handlePullRequestReviewSubmitted(options: WebhookContext): Promis
     return;
   }
 
-  if (state !== "changes_requested") {
-    options.log(`ignored pull_request_review.${state || "unknown"} for PR #${prNumber}`);
-    return;
-  }
-  if (!(await isTrustedActor(options))) {
-    options.log(
-      `ignored changes_requested review from untrusted actor @${options.payload.sender?.login || "<missing>"} on PR #${prNumber}`,
-    );
-    return;
-  }
-
-  const workflow = "address-feedback.yml";
-  const dispatch = await dispatchWorkflow(options, workflow, {
-    ...(await repositoryWorkflowBudgetInputs(options, workflow)),
-    "pr-number": prNumber,
-    "source-comment": sourceReviewInput(options),
-  });
-  await postQueuedWorkflowComment(options, {
-    artifact: "pull-request",
-    number: prNumber,
-    reason: "trusted changes-requested review",
-    workflow,
-    ref: dispatch.ref,
-    workflowRunUrl: dispatch.html_url,
-  });
+  options.log(`ignored pull_request_review.${state || "unknown"} for PR #${prNumber}`);
 }
 
 async function handlePullRequestClosed(options: WebhookContext): Promise<void> {

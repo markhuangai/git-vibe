@@ -39,10 +39,10 @@ describe("accepted-risk source binding", () => {
 
   it("derives the trusted source before filtering copied metadata", () => {
     const context = contextPacket({ artifact: "issue" });
-    const metadata = acceptedRiskMetadataFor(context, { stage: "implement" });
+    const metadata = acceptedRiskMetadataFor(context, { stage: "materialize" });
     context.timeline = [
       timelineComment({
-        body: blockedResultBody(metadata, "implement"),
+        body: blockedResultBody(metadata, "materialize"),
         id: "100",
         updatedAt: cutoff,
       }),
@@ -57,8 +57,8 @@ describe("accepted-risk source binding", () => {
     ];
 
     const units = acceptedRiskContextUnits(context, {
-      acceptedRisk: { cutoff, stages: ["implement"] },
-      stage: "implement",
+      acceptedRisk: { cutoff, stages: ["materialize"] },
+      stage: "materialize",
     });
 
     expect(units.map((unit) => unit.id)).toEqual(["timeline-1-comment-copy"]);

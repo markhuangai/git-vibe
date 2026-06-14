@@ -98,12 +98,12 @@ describe("accepted-risk context derivation", () => {
       timeline: [
         blockedResultComment({
           metadata: acceptedRiskMetadata({
-            stage: "implement",
-            stages: ["implement", "create-pr"],
+            stage: "materialize",
+            stages: ["materialize", "validate"],
           }),
-          stage: "implement",
+          stage: "materialize",
         }),
-        riskAcceptedAuditComment({ run: "99", stage: "implement" }),
+        riskAcceptedAuditComment({ run: "99", stage: "materialize" }),
       ],
     });
 
@@ -113,7 +113,7 @@ describe("accepted-risk context derivation", () => {
         logger: logger(),
         runner: runner({
           acceptedRisk: undefined,
-          stage: "create-pr",
+          stage: "validate",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
@@ -121,7 +121,7 @@ describe("accepted-risk context derivation", () => {
       actor: "maintainer",
       artifactSha: undefined,
       cutoff: "2026-01-04T00:00:00Z",
-      stages: ["implement", "create-pr"],
+      stages: ["materialize", "validate"],
     });
   });
 });
@@ -129,22 +129,22 @@ describe("accepted-risk context derivation", () => {
 describe("accepted-risk context rejection", () => {
   it("ignores stale run audits and untrusted accepted-risk metadata", () => {
     const trustedMetadata = acceptedRiskMetadata({
-      stage: "implement",
-      stages: ["implement"],
+      stage: "materialize",
+      stages: ["materialize"],
     });
 
     expect(
       acceptedRiskFromContext({
         context: issueContext({
           timeline: [
-            blockedResultComment({ metadata: trustedMetadata, stage: "implement" }),
-            riskAcceptedAuditComment({ run: "88", stage: "implement" }),
+            blockedResultComment({ metadata: trustedMetadata, stage: "materialize" }),
+            riskAcceptedAuditComment({ run: "88", stage: "materialize" }),
           ],
         }),
         logger: logger(),
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
@@ -159,39 +159,39 @@ describe("accepted-risk context rejection", () => {
               author: "outside-user",
               authorAssociation: "NONE",
               metadata: trustedMetadata,
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger: logger(),
-        runner: runner({ acceptedRisk: undefined, stage: "implement" }),
+        runner: runner({ acceptedRisk: undefined, stage: "materialize" }),
       }),
     ).toBeUndefined();
   });
 
   it("ignores current run audit markers from untrusted authors", () => {
     const trustedMetadata = acceptedRiskMetadata({
-      stage: "implement",
-      stages: ["implement"],
+      stage: "materialize",
+      stages: ["materialize"],
     });
 
     expect(
       acceptedRiskFromContext({
         context: issueContext({
           timeline: [
-            blockedResultComment({ metadata: trustedMetadata, stage: "implement" }),
+            blockedResultComment({ metadata: trustedMetadata, stage: "materialize" }),
             riskAcceptedAuditComment({
               author: "outside-user",
               authorAssociation: "NONE",
               run: "99",
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger: logger(),
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
@@ -208,13 +208,13 @@ describe("accepted-risk context marker rejection", () => {
           timeline: [
             blockedResultComment({
               markerArtifact: "pull-request",
-              metadata: acceptedRiskMetadata({ stage: "implement" }),
-              stage: "implement",
+              metadata: acceptedRiskMetadata({ stage: "materialize" }),
+              stage: "materialize",
             }),
           ],
         }),
         logger: logger(),
-        runner: runner({ acceptedRisk: undefined, stage: "implement" }),
+        runner: runner({ acceptedRisk: undefined, stage: "materialize" }),
       }),
     ).toBeUndefined();
   });
@@ -223,8 +223,8 @@ describe("accepted-risk context marker rejection", () => {
     const context = issueContext({
       timeline: [
         blockedResultComment({
-          metadata: acceptedRiskMetadata({ stage: "implement" }),
-          stage: "implement",
+          metadata: acceptedRiskMetadata({ stage: "materialize" }),
+          stage: "materialize",
         }),
         issueTimelineComment("Audit text without a marker"),
       ],
@@ -234,7 +234,7 @@ describe("accepted-risk context marker rejection", () => {
       acceptedRiskFromContext({
         context,
         logger: logger(),
-        runner: runner({ acceptedRisk: undefined, stage: "implement", workflowRunUrl: "" }),
+        runner: runner({ acceptedRisk: undefined, stage: "materialize", workflowRunUrl: "" }),
       }),
     ).toBeUndefined();
     expect(
@@ -243,7 +243,7 @@ describe("accepted-risk context marker rejection", () => {
         logger: logger(),
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
@@ -261,17 +261,17 @@ describe("accepted-risk context trusted automation", () => {
               authorAssociation: null,
               metadata: acceptedRiskMetadata({
                 run: "99",
-                stage: "implement",
-                stages: ["implement"],
+                stage: "materialize",
+                stages: ["materialize"],
               }),
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger: logger(),
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),

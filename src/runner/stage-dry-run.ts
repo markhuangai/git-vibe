@@ -1,14 +1,8 @@
 import type { StageLogger } from "./logging.js";
-import { issueBranch } from "./review-fix.js";
-import { issueBranchForStage } from "./stage-branches.js";
 import type { ContextPacket, JsonObject } from "../shared/types.js";
 
-export function stageContract(stage: string, context: ContextPacket): string {
-  const deterministicBranch = issueBranchForStage(stage, context);
-  const branchRule = deterministicBranch
-    ? ` GitVibe has already prepared branch ${deterministicBranch}; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.`
-    : "";
-  return `Stage ${stage} is running.${branchRule} Return only JSON matching the schema.`;
+export function stageContract(stage: string, _context: ContextPacket): string {
+  return `Stage ${stage} is running. Return only JSON matching the schema.`;
 }
 
 export function dryRunContent(stage: string, context: ContextPacket, logger: StageLogger): string {
@@ -27,15 +21,6 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
     status: "completed",
     summary: `Dry run completed for ${stage}.`,
   };
-
-  if (stage === "create-pr") {
-    return {
-      ...base,
-      branch: issueBranch(context),
-      pr_body: `Dry-run pull request for ${context.artifact.url}`,
-      pr_title: `GitVibe dry run: ${context.artifact.title}`,
-    };
-  }
 
   if (stage === "materialize") {
     return {
@@ -75,29 +60,11 @@ function dryRunOutput(stage: string, context: ContextPacket): JsonObject {
     };
   }
 
-  if (stage === "implement") {
-    return {
-      ...base,
-      tests: [],
-    };
-  }
-
-  if (stage === "address-pr-feedback") {
-    return {
-      ...base,
-      skipped_feedback: [],
-      tests: [],
-    };
-  }
-
   return base;
 }
 
 function dryRunNextState(stage: string): string {
   const nextStates: Record<string, string> = {
-    "address-pr-feedback": "feedback-addressed",
-    "create-pr": "pr-draft-ready",
-    implement: "changes-ready-for-commit",
     investigate: "needs-info",
     materialize: "implementation-issues-ready",
     "review-matrix": "review-passed",

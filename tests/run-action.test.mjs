@@ -70,8 +70,6 @@ describe("GitVibe action launcher", () => {
         },
         stage: "investigate",
         stageTimeoutMinutes: 34,
-        validationRepairAttempts: 3,
-        validationRepairMaxTurns: 45,
         workflowRunAttempt: "3",
         workflowRunUrl: "https://github.enterprise.test/example/repo/actions/runs/99",
       }),
@@ -149,43 +147,6 @@ describe("GitVibe action launcher hosted auth", () => {
         }),
         method: "POST",
       },
-    ]);
-  });
-});
-
-describe("GitVibe create-pr action outputs", () => {
-  it("writes pull request outputs for create-pr", async () => {
-    const appendFile = vi.fn();
-    const runStage = vi.fn().mockResolvedValue({
-      commentBody: "PR body",
-      parsedOutput: {
-        next_state: "pr-draft-ready",
-        pr_number: "22",
-        pr_url: "https://github.com/example/repo/pull/22",
-      },
-      schemaId: "create-pr.v1",
-      status: "completed",
-      summary: "Created PR",
-      validationErrors: [],
-    });
-
-    await expect(
-      runAction({
-        appendFile,
-        argv: ["create-pr"],
-        cwd: "/repo",
-        env: { ...baseEnv, GITHUB_OUTPUT: "/tmp/output" },
-        runStage,
-      }),
-    ).resolves.toBe(0);
-
-    expect(appendFile.mock.calls.map((call) => call[1])).toEqual([
-      "summary<<GITVIBE_OUTPUT\nCreated PR\nGITVIBE_OUTPUT\n",
-      "status<<GITVIBE_OUTPUT\ncompleted\nGITVIBE_OUTPUT\n",
-      "comment-body<<GITVIBE_OUTPUT\nPR body\nGITVIBE_OUTPUT\n",
-      "next-state<<GITVIBE_OUTPUT\npr-draft-ready\nGITVIBE_OUTPUT\n",
-      "pr-number<<GITVIBE_OUTPUT\n22\nGITVIBE_OUTPUT\n",
-      "pr-url<<GITVIBE_OUTPUT\nhttps://github.com/example/repo/pull/22\nGITVIBE_OUTPUT\n",
     ]);
   });
 });
@@ -428,15 +389,6 @@ describe("GitVibe action launcher target validation", () => {
 
     await expect(
       runAction({
-        argv: ["address-pr-feedback"],
-        env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
-        error,
-      }),
-    ).resolves.toBe(1);
-    expect(error).toHaveBeenCalledWith("GITVIBE_PR_NUMBER is required for address-pr-feedback.");
-
-    await expect(
-      runAction({
         argv: ["investigate"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
@@ -470,12 +422,12 @@ describe("GitVibe action launcher target validation", () => {
 
     await expect(
       runAction({
-        argv: ["implement"],
+        argv: ["materialize"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_GITHUB_APP_TOKEN: "token" },
         error,
       }),
     ).resolves.toBe(1);
-    expect(error).toHaveBeenCalledWith("GITVIBE_ISSUE_NUMBER is required for this stage.");
+    expect(error).toHaveBeenCalledWith("GITVIBE_DISCUSSION_NUMBER is required for this stage.");
   });
 
   it("validates JSON target metadata", async () => {
@@ -521,17 +473,6 @@ describe("GitVibe action launcher targets and defaults", () => {
     ).resolves.toBe(0);
     await expect(
       runAction({
-        argv: ["address-pr-feedback"],
-        env: {
-          GITHUB_REPOSITORY: "example/repo",
-          GITVIBE_GITHUB_APP_TOKEN: "token",
-          GITVIBE_PR_NUMBER: "8",
-        },
-        runStage,
-      }),
-    ).resolves.toBe(0);
-    await expect(
-      runAction({
         argv: ["investigate"],
         env: {
           GITHUB_REPOSITORY: "example/repo",
@@ -544,10 +485,6 @@ describe("GitVibe action launcher targets and defaults", () => {
 
     expect(runStage.mock.calls[0][0]).toMatchObject({ issueNumber: "", stage: "validate" });
     expect(runStage.mock.calls[1][0]).toMatchObject({
-      prNumber: "8",
-      stage: "address-pr-feedback",
-    });
-    expect(runStage.mock.calls[2][0]).toMatchObject({
       prNumber: "8",
       stage: "investigate",
     });

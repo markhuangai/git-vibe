@@ -8,98 +8,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * @typedef {import("../src/runner/logging.ts").StageLogger} StageLogger
  */
 
-const execFileSync = vi.fn();
 const addDiscussionComment = vi.fn();
 const closeDiscussion = vi.fn();
 const applyStageLabelTransition = vi.fn();
-const cleanupStageStatusComments = vi.fn();
 const publishFeedbackInvestigationReplies = vi.fn();
 const publishStageResultComment = vi.fn();
-const appendIssueTraceability = vi.fn((body) => `traced:${body}`);
-const handleReviewFixRequired = vi.fn(async ({ result }) => ({
-  ...result,
-  summary: "review fix required",
-}));
-const issueBranch = vi.fn(() => "git-vibe/12");
-const issueChain = vi.fn(async () => []);
-const branchForWriteStage = vi.fn(() => "feature");
-const runnerBaseBranch = vi.fn(async () => ({
-  base: "main",
-  defaultBranch: "main",
-  targetsDefault: true,
-}));
-const dispatchPullRequestReviewWorkflow = vi.fn(async () => undefined);
-const runValidationCommand = vi.fn();
-const validationRepairAttemptsFor = vi.fn(() => 1);
 
-vi.mock("node:child_process", () => ({ execFileSync }));
 vi.mock("../src/shared/discussions.js", () => ({ addDiscussionComment, closeDiscussion }));
 vi.mock("../src/runner/stage-publishing.js", () => ({
   applyStageLabelTransition,
-  cleanupStageStatusComments,
   publishFeedbackInvestigationReplies,
   publishStageResultComment,
 }));
-vi.mock("../src/runner/review-fix.js", () => ({
-  appendIssueTraceability,
-  handleReviewFixRequired,
-  issueBranch,
-  issueChain,
-}));
-vi.mock("../src/runner/stage-branches.js", () => ({
-  branchForWriteStage,
-  runnerBaseBranch,
-}));
-vi.mock("../src/runner/pr-review-dispatch.js", () => ({
-  dispatchPullRequestReviewWorkflow,
-}));
-vi.mock("../src/runner/validation.js", () => ({
-  runValidationCommand,
-  validationRepairAttemptsFor,
-}));
 
-const { applyDeterministicWrites, markPullRequestFeedbackInvestigationStarted } =
-  await import("../src/runner/stage-writes.ts");
+const { applyDeterministicWrites } = await import("../src/runner/stage-writes.ts");
 
 /** @typedef {Parameters<typeof applyDeterministicWrites>[0]} ApplyOptions */
 
 beforeEach(() => {
   for (const mock of [
-    execFileSync,
     addDiscussionComment,
     closeDiscussion,
     applyStageLabelTransition,
-    cleanupStageStatusComments,
     publishFeedbackInvestigationReplies,
     publishStageResultComment,
-    appendIssueTraceability,
-    handleReviewFixRequired,
-    issueBranch,
-    issueChain,
-    branchForWriteStage,
-    runnerBaseBranch,
-    dispatchPullRequestReviewWorkflow,
-    runValidationCommand,
-    validationRepairAttemptsFor,
   ]) {
     mock.mockClear();
   }
-  appendIssueTraceability.mockImplementation((body) => `traced:${body}`);
-  handleReviewFixRequired.mockImplementation(async ({ result }) => ({
-    ...result,
-    summary: "review fix required",
-  }));
-  issueBranch.mockReturnValue("git-vibe/12");
-  issueChain.mockResolvedValue([]);
-  branchForWriteStage.mockReturnValue("feature");
-  runnerBaseBranch.mockResolvedValue({
-    base: "main",
-    defaultBranch: "main",
-    targetsDefault: true,
-  });
-  runValidationCommand.mockImplementation(() => undefined);
-  validationRepairAttemptsFor.mockReturnValue(1);
-  execFileSync.mockReturnValue(Buffer.from(""));
   addDiscussionComment.mockResolvedValue(undefined);
   closeDiscussion.mockResolvedValue(undefined);
 });
@@ -115,21 +50,6 @@ describe("stage deterministic writes", () => {
 
     expect(publishStageResultComment).toHaveBeenCalledTimes(1);
     expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
-  });
-
-  it("delegates issue review fixes before normal publishing", async () => {
-    const reviewResult = result({
-      parsedOutput: { next_state: "changes_required", status: "completed" },
-    });
-
-    await expect(
-      applyDeterministicWrites(
-        options({ result: reviewResult, runner: runner({ stage: "review-matrix" }) }),
-      ),
-    ).resolves.toMatchObject({ summary: "review fix required" });
-
-    expect(cleanupStageStatusComments).toHaveBeenCalledTimes(1);
-    expect(handleReviewFixRequired).toHaveBeenCalledTimes(1);
   });
 
   it("publishes PR investigation replies for read-only investigate runs", async () => {
@@ -332,172 +252,6 @@ describe("stage deterministic materialize fallback writes", () => {
   });
 });
 
-describe("stage deterministic pull request writes", () => {
-  it("creates or updates pull requests and exposes pull request outputs", async () => {
-    const updateClient = createClient([
-      [{ number: 7 }],
-      { html_url: "https://github.com/example/repo/pull/7", number: 7 },
-    ]);
-    const updatedResult = await applyDeterministicWrites(
-      options({ client: updateClient, runner: runner({ stage: "create-pr" }) }),
-    );
-
-    expect(updateClient.request).toHaveBeenCalledWith(
-      expect.objectContaining({ method: "PATCH", path: "/repos/example/repo/pulls/7" }),
-    );
-    expect(updatedResult.parsedOutput).toMatchObject({
-      pr_number: "7",
-      pr_url: "https://github.com/example/repo/pull/7",
-    });
-
-    const createClientWithoutNumber = createClient([
-      [],
-      { html_url: "https://github.com/example/repo/pull/new" },
-    ]);
-    await applyDeterministicWrites(
-      options({ client: createClientWithoutNumber, runner: runner({ stage: "create-pr" }) }),
-    );
-
-    expect(createClientWithoutNumber.request).toHaveBeenCalledWith(
-      expect.objectContaining({ method: "POST", path: "/repos/example/repo/pulls" }),
-    );
-  });
-});
-
-describe("stage deterministic git commits", () => {
-  it("uses the shared branch update path for issue implementation", async () => {
-    await applyDeterministicWrites(options({ runner: runner({ stage: "implement" }) }));
-
-    expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
-    expect(branchForWriteStage).toHaveBeenCalledWith(
-      "implement",
-      expect.objectContaining({ artifact: expect.objectContaining({ type: "issue" }) }),
-    );
-    expect(publishStageResultComment).not.toHaveBeenCalled();
-  });
-
-  it("uses the shared branch update path for pull request feedback remediation", async () => {
-    const client = createClient();
-
-    await applyDeterministicWrites(
-      options({
-        client,
-        context: context("pull-request", {
-          pullRequestHead: { branch: "feature", repository: "example/repo" },
-        }),
-        runner: runner({ stage: "address-pr-feedback" }),
-      }),
-    );
-
-    expect(applyStageLabelTransition).toHaveBeenCalledTimes(1);
-    expect(branchForWriteStage).toHaveBeenCalledWith(
-      "address-pr-feedback",
-      expect.objectContaining({ artifact: expect.objectContaining({ type: "pull-request" }) }),
-    );
-    expect(publishStageResultComment).toHaveBeenCalledTimes(1);
-    expect(dispatchPullRequestReviewWorkflow).not.toHaveBeenCalled();
-    expect(client.request).not.toHaveBeenCalled();
-  });
-
-  it("commits only after validation succeeds and changed files are staged", async () => {
-    execFileSync.mockImplementation((command, args) => {
-      const joined = `${command} ${args.join(" ")}`;
-      if (joined === "git status --porcelain") return Buffer.from(" M file.js\n");
-      if (joined === "git diff --cached --name-status") return Buffer.from("M\tfile.js\n");
-      if (joined === "git rev-parse --short HEAD") return Buffer.from("abc123\n");
-      return Buffer.from("");
-    });
-
-    await applyDeterministicWrites(options({ runner: runner({ stage: "address-pr-feedback" }) }));
-
-    expect(runValidationCommand).not.toHaveBeenCalled();
-    expect(execFileSync).toHaveBeenCalledWith(
-      "git",
-      expect.arrayContaining(["commit"]),
-      expect.any(Object),
-    );
-    expect(execFileSync).toHaveBeenCalledWith(
-      "git",
-      expect.arrayContaining(["push"]),
-      expect.any(Object),
-    );
-    const pushCall = execFileSync.mock.calls.find(([, args]) => args?.includes("push"));
-    expect(pushCall).toBeTruthy();
-    expect(pushCall?.[1].join(" ")).not.toContain("token");
-    expect(pushCall?.[2].env.GIT_CONFIG_VALUE_0).toBe("AUTHORIZATION: bearer token");
-    expect(dispatchPullRequestReviewWorkflow).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns repaired blocked results without committing", async () => {
-    const failure = Object.assign(new Error("failed"), {
-      failure: { command: "check", exitCode: 1, output: "bad" },
-    });
-    runValidationCommand.mockImplementation(() => {
-      throw failure;
-    });
-    const repaired = result({ status: "blocked" });
-    const repair = vi.fn(async () => repaired);
-
-    await expect(
-      applyDeterministicWrites(
-        options({
-          config: { tests: { commands: ["check"] } },
-          repair,
-          runner: runner({ stage: "implement" }),
-        }),
-      ),
-    ).resolves.toBe(repaired);
-
-    expect(repair).toHaveBeenCalledWith(failure.failure, 1, 1);
-    expect(publishStageResultComment).toHaveBeenCalledTimes(1);
-    expect(execFileSync).not.toHaveBeenCalled();
-  });
-});
-
-describe("pull request feedback investigation labels", () => {
-  it("removes stale PR labels and adds investigating", async () => {
-    const client = createClient();
-    client.request
-      .mockRejectedValueOnce(new Error("404 Not Found"))
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({});
-
-    await markPullRequestFeedbackInvestigationStarted({
-      client,
-      context: context("pull-request"),
-      logger: logger(),
-      options: runner({ stage: "investigate" }),
-    });
-
-    expect(client.request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: "POST",
-        path: "/repos/example/repo/issues/12/labels",
-      }),
-    );
-    expect(client.request.mock.calls.map(([request]) => request.path)).toEqual(
-      expect.arrayContaining([
-        "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
-        "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
-      ]),
-    );
-  });
-
-  it("rethrows unexpected label removal failures", async () => {
-    const client = createClient();
-    client.request.mockRejectedValueOnce(new Error("500"));
-
-    await expect(
-      markPullRequestFeedbackInvestigationStarted({
-        client,
-        context: context("pull-request"),
-        logger: logger(),
-        options: runner({ stage: "investigate" }),
-      }),
-    ).rejects.toThrow("500");
-  });
-});
-
 /**
  * @param {Partial<ApplyOptions> & { dryRun?: boolean; runner?: RunnerOptions }} [overrides]
  * @returns {ApplyOptions}
@@ -509,11 +263,9 @@ function options(overrides = {}) {
 
   return /** @type {ApplyOptions} */ ({
     client: createClient(),
-    config: { tests: { commands: [] } },
     context: context("issue"),
     logger: logger(),
     options: runnerOptions,
-    repair: vi.fn(async () => result()),
     result: result(),
     transientComments: [],
     ...rest,

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import type { ConsumerStarterFile } from "./consumer-starter.js";
 
@@ -16,8 +16,6 @@ interface FileSnapshot {
 
 const requiredInstallSourcePaths = [
   ".github/git-vibe.yml",
-  ".github/workflows/address-feedback.yml",
-  ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
   ".github/workflows/review.yml",
@@ -93,6 +91,10 @@ export function updateFiles(files: InstallFile[]): void {
       snapshots.push(snapshotFile(file.targetPath));
       writeFileSync(file.targetPath, file.content);
     }
+    for (const targetPath of obsoleteManagedWorkflowPaths(files)) {
+      snapshots.push(snapshotFile(targetPath));
+      rmSync(targetPath, { force: true });
+    }
   } catch (error) {
     rollbackUpdate(snapshots, createdDirectories);
     throw error;
@@ -126,12 +128,28 @@ export function migrateGitVibeConfigContent(content: string): string {
 }
 
 function isManagedWorkflowTarget(file: InstallFile): boolean {
+  return isManagedWorkflowFile(file.targetPath, basename(file.targetPath));
+}
+
+function isManagedWorkflowFile(targetPath: string, workflowName: string): boolean {
   try {
-    const workflowName = basename(file.targetPath);
-    return managedWorkflowPattern(workflowName).test(readFileSync(file.targetPath, "utf8"));
+    return managedWorkflowPattern(workflowName).test(readFileSync(targetPath, "utf8"));
   } catch {
     return false;
   }
+}
+
+function obsoleteManagedWorkflowPaths(files: InstallFile[]): string[] {
+  const workflowDirectory = dirname(files.find(isWorkflowInstallFile)?.targetPath || "");
+  if (!workflowDirectory || workflowDirectory === ".") return [];
+  const currentWorkflowNames = new Set(
+    files.filter(isWorkflowInstallFile).map((file) => basename(file.targetPath)),
+  );
+  return readdirSync(workflowDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && !currentWorkflowNames.has(entry.name))
+    .map((entry) => join(workflowDirectory, entry.name))
+    .filter((targetPath) => isManagedWorkflowFile(targetPath, basename(targetPath)))
+    .sort();
 }
 
 function managedWorkflowPattern(workflowName: string): RegExp {

@@ -38,8 +38,8 @@ describe("AI stage finalization turn reserve", () => {
   it("reserves ten turns from large requested budgets", async () => {
     mockOutput();
 
-    await expect(runImplementWithBudget(200)).resolves.toBe(
-      '{"stage":"implement","status":"completed"}',
+    await expect(runValidateWithBudget(200)).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
     );
 
     expect(generateText).toHaveBeenCalledWith(
@@ -52,8 +52,8 @@ describe("AI stage finalization turn reserve", () => {
   it("does not reserve turns from small requested budgets", async () => {
     mockOutput();
 
-    await expect(runImplementWithBudget(5)).resolves.toBe(
-      '{"stage":"implement","status":"completed"}',
+    await expect(runValidateWithBudget(5)).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
     );
 
     expect(generateText).toHaveBeenCalledWith(
@@ -78,7 +78,7 @@ describe("AI stage finalization turn reserve", () => {
       text: "{}",
     });
 
-    await expect(runImplementWithBudget(5, stageSchema())).rejects.toThrow(
+    await expect(runValidateWithBudget(5, stageSchema())).rejects.toThrow(
       "AI output failed schema validation",
     );
 
@@ -103,7 +103,7 @@ describe("AI stage finalization turn reserve", () => {
           {
             toolCalls: [
               {
-                input: { content: '{"stage":"implement","status":"completed"}' },
+                input: { content: '{"stage":"validate","status":"completed"}' },
                 toolName: "output_validator",
               },
             ],
@@ -124,8 +124,8 @@ describe("AI stage finalization continuation", () => {
     });
     mockOutput();
 
-    await expect(runImplementWithBudget(25)).resolves.toBe(
-      '{"stage":"implement","status":"completed"}',
+    await expect(runValidateWithBudget(25)).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
     );
 
     expect(generateText).toHaveBeenCalledTimes(2);
@@ -144,7 +144,7 @@ describe("AI stage finalization continuation", () => {
     );
   });
 
-  it("continues non-implementation stages by default when the model skips output_validator", async () => {
+  it("continues when the model skips output_validator", async () => {
     generateText.mockResolvedValueOnce({
       steps: [],
       text: '{"stage":"validate","status":"completed"}',
@@ -170,7 +170,7 @@ describe("AI stage finalization continuation", () => {
     generateText.mockResolvedValueOnce({ steps: [], text: "not json" });
     generateText.mockResolvedValueOnce({ steps: [], text: "still not json" });
 
-    await expect(runImplementWithBudget(25)).rejects.toThrow(
+    await expect(runValidateWithBudget(25)).rejects.toThrow(
       "AI response did not call output_validator",
     );
   });
@@ -179,12 +179,12 @@ describe("AI stage finalization continuation", () => {
 /**
  * @param {number} maxTurns
  */
-function runImplementWithBudget(maxTurns, schema = {}) {
-  return runStageWithBudget("implement", maxTurns, schema);
+function runValidateWithBudget(maxTurns, schema = {}) {
+  return runStageWithBudget("validate", maxTurns, schema);
 }
 
 /**
- * @param {"implement" | "validate"} stage
+ * @param {"validate"} stage
  * @param {number} maxTurns
  */
 function runStageWithBudget(stage, maxTurns, schema = {}) {
@@ -201,7 +201,7 @@ function runStageWithBudget(stage, maxTurns, schema = {}) {
   });
 }
 
-function mockOutput(stage = "implement") {
+function mockOutput(stage = "validate") {
   generateText.mockResolvedValueOnce({
     steps: [
       {
@@ -221,7 +221,7 @@ function stageSchema() {
   return {
     additionalProperties: true,
     properties: {
-      stage: { const: "implement" },
+      stage: { const: "validate" },
       status: { type: "string" },
     },
     required: ["stage", "status"],
@@ -229,7 +229,7 @@ function stageSchema() {
   };
 }
 
-function config(stage = "implement") {
+function config(stage = "validate") {
   return {
     ai: {
       profiles: {
