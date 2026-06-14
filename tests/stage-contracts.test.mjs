@@ -25,9 +25,6 @@ const baseContext = {
 describe("stage contracts", () => {
   it("defines every public action stage", () => {
     expect(Object.keys(stageDefinitions).sort()).toEqual([
-      "address-pr-feedback",
-      "create-pr",
-      "implement",
       "investigate",
       "materialize",
       "review-matrix",
@@ -136,21 +133,6 @@ describe("stage contract prompt loading", () => {
     }
   });
 
-  it("documents deterministic implementation branches in stage prompts", () => {
-    const schema = loadStageSchema(stageDefinitions.implement.schemaFile);
-    const prompts = renderPrompts({
-      context: baseContext,
-      outputSchema: schema,
-      promptDir: stageDefinitions.implement.promptDir,
-      repositoryContext: "## main",
-      stageContract:
-        "Stage implement is running. GitVibe has already prepared branch git-vibe/123; stay on that branch, use it exactly, and do not fetch, checkout, reset, merge, push, or invent a branch name.",
-    });
-
-    expect(prompts.prompt).toContain("git-vibe/123");
-    expect(prompts.prompt).toContain("invent a branch name");
-  });
-
   it("keeps validate capability sections in structured fields", () => {
     const schema = loadStageSchema(stageDefinitions.validate.schemaFile);
     const prompts = renderPrompts({
@@ -188,26 +170,6 @@ describe("stage prompt standards guidance", () => {
     );
     expect(prompts.prompt).toContain(
       "Describe the repo rules and required checks that matter for the implementation",
-    );
-  });
-
-  it("requires implementation to verify repository standards before editing", () => {
-    const schema = loadStageSchema(stageDefinitions.implement.schemaFile);
-    const prompts = renderPrompts({
-      context: baseContext,
-      outputSchema: schema,
-      promptDir: stageDefinitions.implement.promptDir,
-      repositoryContext: "## main",
-      stageContract: "Return JSON.",
-    });
-
-    expect(prompts.prompt).toContain("Before editing, verify current repository standards");
-    expect(prompts.prompt).toContain("`.github/git-vibe.yml` `tests.commands`");
-    expect(prompts.prompt).toContain("required validation context");
-    expect(prompts.prompt).toContain("fix it before returning final JSON");
-    expect(prompts.prompt).toContain("Do not dismiss a failing configured check as pre-existing");
-    expect(prompts.prompt).toContain(
-      "repository standards or validation requirements discovered before or while coding",
     );
   });
 
@@ -275,33 +237,6 @@ describe("stage schema constraints", () => {
   });
 });
 
-describe("stage output validation", () => {
-  it("validates stage output with agentool output-validator", async () => {
-    const schema = loadStageSchema(stageDefinitions["create-pr"].schemaFile);
-    const output = {
-      assumptions: [],
-      branch: "git-vibe/123",
-      comment_body: "Ready for review.",
-      findings: [],
-      next_state: "pr-draft-ready",
-      pr_body: "Refs #123",
-      pr_title: "GitVibe: Title",
-      references: ["https://github.com/example/repo/issues/123"],
-      stage: "create-pr",
-      status: "completed",
-      summary: "PR draft is ready.",
-    };
-
-    await expect(
-      validateOutput({
-        content: JSON.stringify(output),
-        schema,
-        schemaId: stageDefinitions["create-pr"].schemaId,
-      }),
-    ).resolves.toMatchObject({ stage: "create-pr" });
-  });
-});
-
 describe("materialize output validation", () => {
   it("validates materialized issue contracts", async () => {
     const schema = loadStageSchema(stageDefinitions.materialize.schemaFile);
@@ -351,45 +286,43 @@ describe("materialize output validation", () => {
 
 describe("stage output validation failures", () => {
   it("rejects malformed and schema-invalid stage output", async () => {
-    const schema = loadStageSchema(stageDefinitions["create-pr"].schemaFile);
+    const schema = loadStageSchema(stageDefinitions.validate.schemaFile);
 
     await expect(
       validateOutput({
         content: "not json",
         schema,
-        schemaId: stageDefinitions["create-pr"].schemaId,
+        schemaId: stageDefinitions.validate.schemaId,
       }),
     ).rejects.toThrow();
     await expect(
       validateOutput({
-        content: JSON.stringify({ stage: "create-pr", status: "completed" }),
+        content: JSON.stringify({ stage: "validate", status: "completed" }),
         schema,
-        schemaId: stageDefinitions["create-pr"].schemaId,
+        schemaId: stageDefinitions.validate.schemaId,
       }),
-    ).rejects.toThrow("AI output failed create-pr.v1 validation");
+    ).rejects.toThrow("AI output failed validate.v1 validation");
     await expect(
       validateOutput({
         content: JSON.stringify({
           assumptions: [],
-          branch: "git-vibe/123",
-          comment_body: "Ready for review.",
+          comment_body: "Ready for implementation.",
           findings: [],
           next_state: "gvi:pr-opened",
-          pr_body: "Refs #123",
-          pr_title: "GitVibe: Title",
+          questions: [],
           references: [],
-          stage: "create-pr",
+          stage: "validate",
           status: "completed",
-          summary: "PR draft is ready.",
+          summary: "Validation is ready.",
         }),
         schema,
-        schemaId: stageDefinitions["create-pr"].schemaId,
+        schemaId: stageDefinitions.validate.schemaId,
       }),
-    ).rejects.toThrow("AI output failed create-pr.v1 validation");
+    ).rejects.toThrow("AI output failed validate.v1 validation");
   });
 
   it("prefers the JSON passed to output_validator when extracting AI stage output", () => {
-    const content = JSON.stringify({ stage: "create-pr", status: "completed" });
+    const content = JSON.stringify({ stage: "validate", status: "completed" });
 
     expect(
       extractValidatedOutput({
@@ -519,14 +452,14 @@ describe("repository prompt additions", () => {
   });
 
   it("appends user.md from .git-vibe/prompts/<stage>/ when present", () => {
-    const cwd = createRepoPromptWorkspace(stageDefinitions.implement.promptDir, {
-      "user.md": "Custom implementation guidance.",
+    const cwd = createRepoPromptWorkspace(stageDefinitions.validate.promptDir, {
+      "user.md": "Custom validation guidance.",
     });
-    const prompts = renderStagePrompts("implement", cwd);
+    const prompts = renderStagePrompts("validate", cwd);
 
     expect(prompts.prompt).toContain("<stage_goal>");
     expect(prompts.prompt).toContain("<repository_prompt_addition>");
-    expect(prompts.prompt).toContain("Custom implementation guidance.");
+    expect(prompts.prompt).toContain("Custom validation guidance.");
     expect(prompts.prompt).toContain("</repository_prompt_addition>");
     expect(prompts.prompt.indexOf("<repository_prompt_addition>")).toBeGreaterThan(
       prompts.prompt.indexOf("<stage_goal>"),

@@ -8,7 +8,6 @@ Investigate the reported bug and produce a triage-quality result. The result sho
 - Before planning implementation, discover repository standards and validation requirements that a later coding agent must follow. Inspect discoverable rule and check sources such as `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING*`, `README*`, relevant docs, `.github/git-vibe.yml` `tests.commands`, package scripts, lint/test/coverage configs, and hook configs like `.husky`, `lint-staged`, `lefthook`, or `.pre-commit-config.yaml` when present.
 - Identify reproduction steps, environment details, affected commands, workflows, or files when present.
 - Inspect likely code paths or tests if the report names them or if repository context makes them discoverable.
-- If the issue is a GitVibe review-fix issue, treat it as continuation work on the linked root issue. First check the repository context for the root branch name, whether GitVibe found the remote branch, and the current branch state, then focus the plan on the required review fixes.
 - Call out contradictions, missing expected behavior, missing reproduction data, or claims that could not be verified.
 - Put maintainer decisions or missing facts that would materially change implementation in `blocking_questions`; do not hide blockers in `questions`.
 - Resolve discoverable technical unknowns during investigation. If a required technical detail cannot be verified before coding, put it in `blocking_questions` and do not mark the issue ready for implementation.
@@ -35,9 +34,9 @@ When the context artifact type is `pull-request`, investigate open pull request 
 - Compare each item against the current PR branch and related issue/discussion context.
 - Use `requires-fix` only when a current feedback item needs a code change on the PR branch.
 - For false positives, obsolete comments, comments that only need an answer, or items already addressed by the PR branch, set the item status to `answered`, `rejected`, or `already-addressed` and include a concise `reply` with evidence.
-- Use `blocked` when a maintainer decision or missing information is required before GitVibe can safely change code.
+- Use `blocked` when a maintainer decision or missing information is required before a code change can proceed safely.
 - `feedback_items`: Include one entry for each open feedback item, using the timeline item id.
-- `implementation_plan`: Include only code changes for `requires-fix` items.
+- `implementation_plan`: Include only code changes maintainers need for `requires-fix` items.
 - `next_state`: For pull request artifacts, use `fixes-required`, `no-fixes-needed`, or `blocked`.
 
 </pull_request_feedback_mode>

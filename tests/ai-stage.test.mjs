@@ -131,15 +131,15 @@ describe("AI stage runner tool telemetry", () => {
 
     await expect(
       runAiStage({
-        config: localProxyConfig({ stage: "implement" }),
+        config: localProxyConfig({ stage: "validate" }),
         cwd: process.cwd(),
         logger,
         maxTurns: 2,
         prompt: "Prompt",
         schema: {},
         schemaId: "schema",
-        stage: "implement",
-        stageDefinition: stageDefinitions.implement,
+        stage: "validate",
+        stageDefinition: stageDefinitions.validate,
         system: "System",
       }),
     ).resolves.toBe('{"stage":"validate","status":"completed"}');

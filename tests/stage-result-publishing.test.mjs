@@ -78,88 +78,6 @@ describe("stage result publishing", () => {
   });
 });
 
-describe("stage result PR replies", () => {
-  it("posts PR feedback completion results to the pull request conversation", async () => {
-    const cwd = await workspace();
-    commitAll(cwd);
-    generateText.mockResolvedValueOnce(aiResult(feedbackOutput()));
-    const fetch = fetchMock([
-      issueResponse("PR body"),
-      commentsResponse([]),
-      pullRequestResponse("git-vibe/12"),
-      reviewThreadsResponse(),
-      pullRequestReviewsResponse(),
-      pullRequestFilesResponse([]),
-      response(200, {}),
-    ]);
-    globalThis.fetch = fetch;
-
-    await runStage({
-      cwd,
-      dryRun: false,
-      issueNumber: "",
-      maxTurns: 2,
-      prNumber: "12",
-      repository: "example/repo",
-      sourceComment: {
-        kind: "pull-request-comment",
-        url: "https://github.com/example/repo/pull/12#issuecomment-2",
-      },
-      stage: "address-pr-feedback",
-      stageTimeoutMinutes: 1,
-      token: "token",
-    });
-
-    const commentCall = issueCommentCall(fetch);
-    expect(commentCall[0]).toContain("/repos/example/repo/issues/12/comments");
-    expect(JSON.parse(commentCall[1].body).body).toContain("## GitVibe PR Feedback Update");
-    expect(JSON.parse(commentCall[1].body).body).toContain(
-      "In reply to: https://github.com/example/repo/pull/12#issuecomment-2",
-    );
-  });
-
-  it("posts PR feedback completion results as review comment replies", async () => {
-    const cwd = await workspace();
-    commitAll(cwd);
-    generateText.mockResolvedValueOnce(aiResult(feedbackOutput()));
-    const fetch = fetchMock([
-      issueResponse("PR body"),
-      commentsResponse([]),
-      pullRequestResponse("git-vibe/12"),
-      reviewThreadsResponse(),
-      pullRequestReviewsResponse(),
-      pullRequestFilesResponse([]),
-      response(200, {}),
-    ]);
-    globalThis.fetch = fetch;
-
-    await runStage({
-      cwd,
-      dryRun: false,
-      issueNumber: "",
-      maxTurns: 2,
-      prNumber: "12",
-      repository: "example/repo",
-      sourceComment: {
-        id: "88",
-        kind: "pull-request-review-comment",
-        url: "https://github.com/example/repo/pull/12#discussion_r88",
-      },
-      stage: "address-pr-feedback",
-      stageTimeoutMinutes: 1,
-      token: "token",
-    });
-
-    const replyCall = fetch.mock.calls.find(([url]) =>
-      String(url).includes("/repos/example/repo/pulls/12/comments/88/replies"),
-    );
-    expect(replyCall).toBeDefined();
-    expect(JSON.parse(String(replyCall?.[1]?.body)).body).toContain(
-      "## GitVibe PR Feedback Update",
-    );
-  });
-});
-
 /**
  * @param {string} [config]
  * @returns {Promise<string>}
@@ -171,16 +89,6 @@ async function workspace(config = "") {
   writeFileSync(join(cwd, ".github", "git-vibe.yml"), workspaceConfigWithTestAi(config));
   execFileSync("git", ["init"], { cwd, stdio: "ignore" });
   return cwd;
-}
-
-/**
- * @param {string} cwd
- */
-function commitAll(cwd) {
-  execFileSync("git", ["config", "user.name", "tester"], { cwd });
-  execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd });
-  execFileSync("git", ["add", "-A"], { cwd });
-  execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" });
 }
 
 /**
@@ -206,21 +114,6 @@ function validateOutput() {
     stage: "validate",
     status: "completed",
     summary: "Validation complete.",
-  };
-}
-
-function feedbackOutput() {
-  return {
-    assumptions: [],
-    comment_body: "Feedback addressed.",
-    findings: ["No code changes were needed."],
-    next_state: "feedback-addressed",
-    references: [],
-    skipped_feedback: [],
-    stage: "address-pr-feedback",
-    status: "completed",
-    summary: "PR feedback handled.",
-    tests: [],
   };
 }
 
@@ -270,24 +163,6 @@ function genericGraphqlResponse(url, init) {
 }
 
 /**
- * @param {any} fetch
- */
-function issueCommentCall(fetch) {
-  return fetch.mock.calls.find(
-    /**
-     * @param {any[]} call
-     */
-    (call) => {
-      const [url, init] = call;
-      return (
-        String(url).includes("/repos/example/repo/issues/12/comments") &&
-        String(init?.method || "GET").toUpperCase() === "POST"
-      );
-    },
-  );
-}
-
-/**
  * @param {any} url
  * @param {any} init
  */
@@ -317,32 +192,6 @@ function issueResponse(body) {
  */
 function commentsResponse(comments) {
   return response(200, comments);
-}
-
-function reviewThreadsResponse() {
-  return graphqlResponse({
-    repository: {
-      pullRequest: {
-        reviewThreads: { nodes: [] },
-      },
-    },
-  });
-}
-
-function pullRequestReviewsResponse() {
-  return response(200, []);
-}
-
-/** @param {unknown[]} files */
-function pullRequestFilesResponse(files) {
-  return response(200, files);
-}
-
-/**
- * @param {string} branch
- */
-function pullRequestResponse(branch) {
-  return response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });
 }
 
 /**

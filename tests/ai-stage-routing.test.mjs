@@ -143,10 +143,10 @@ describe("AI stage runner agent tool routing", () => {
     expect(generateText).not.toHaveBeenCalled();
   });
 
-  it("rejects agent tool overrides on write stages", async () => {
+  it("rejects agent tool overrides outside canonical stage permissions", async () => {
     await expect(
       runAiStage(
-        implementStageOptions({
+        materializeStageOptions({
           ai: {
             profiles: {
               local_proxy: {
@@ -159,7 +159,7 @@ describe("AI stage runner agent tool routing", () => {
               },
             },
             stages: {
-              implement: {
+              materialize: {
                 profile: "local_proxy",
                 tools: ["agent"],
               },
@@ -167,7 +167,7 @@ describe("AI stage runner agent tool routing", () => {
           },
         }),
       ),
-    ).rejects.toThrow("ai.stages.implement.tools includes disallowed tools: agent.");
+    ).rejects.toThrow("ai.stages.materialize.tools includes disallowed tools: agent.");
 
     expect(generateText).not.toHaveBeenCalled();
   });
@@ -364,11 +364,11 @@ describe("AI stage runner stage fallbacks", () => {
 
 describe("AI stage runner Codex CLI defaults", () => {
   it("uses command, model, and auth defaults for Codex CLI profiles", async () => {
-    mockCodexOutput('{"stage":"implement","status":"completed"}');
+    mockCodexOutput('{"stage":"validate","status":"completed"}');
 
     await expect(
       runAiStage(
-        implementStageOptions({
+        validateStageOptions({
           ai: {
             profiles: {
               codex_cli: {
@@ -377,14 +377,14 @@ describe("AI stage runner Codex CLI defaults", () => {
               },
             },
             stages: {
-              implement: {
+              validate: {
                 profile: "codex_cli",
               },
             },
           },
         }),
       ),
-    ).resolves.toBe('{"stage":"implement","status":"completed"}');
+    ).resolves.toBe('{"stage":"validate","status":"completed"}');
 
     const args = spawn.mock.calls[0][1];
     expect(spawn.mock.calls[0][0]).toBe("codex");
@@ -537,17 +537,11 @@ function validateStageOptions(config) {
   };
 }
 
-function implementStageOptions(config) {
+function materializeStageOptions(config) {
   return {
-    config,
-    cwd: process.cwd(),
-    maxTurns: 1,
-    prompt: "Prompt",
-    schema: {},
-    schemaId: "schema",
-    stage: "implement",
-    stageDefinition: stageDefinitions.implement,
-    system: "System",
+    ...validateStageOptions(config),
+    stage: "materialize",
+    stageDefinition: stageDefinitions.materialize,
   };
 }
 

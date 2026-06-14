@@ -1,19 +1,12 @@
 import { describe, expect, it } from "vitest";
-import {
-  blockedImplementOutput,
-  mcpBlockedOutput,
-  zeroMatrixResultsOutput,
-} from "../src/runner/stage-blocked-outputs.ts";
+import { mcpBlockedOutput, zeroMatrixResultsOutput } from "../src/runner/stage-blocked-outputs.ts";
 
 describe("stage blocked outputs", () => {
   it("builds schema-specific MCP blocked outputs", () => {
     const stages = /** @type {Array<import("../src/shared/types.ts").Stage>} */ ([
       "investigate",
       "materialize",
-      "implement",
-      "create-pr",
       "review-matrix",
-      "address-pr-feedback",
       "validate",
     ]);
     const outputByStage = Object.fromEntries(
@@ -32,22 +25,9 @@ describe("stage blocked outputs", () => {
       implementation_plan: [],
     });
     expect(outputByStage.materialize).toMatchObject({ issues: [] });
-    expect(outputByStage.implement).toMatchObject({
-      branch: "git-vibe/12",
-      tests: ["Not run because required MCP context was unavailable."],
-    });
-    expect(outputByStage["create-pr"]).toMatchObject({
-      branch: "git-vibe/12",
-      pr_body: "",
-      pr_title: "",
-    });
     expect(outputByStage["review-matrix"]).toMatchObject({
       inline_comments: [],
       tests: [],
-    });
-    expect(outputByStage["address-pr-feedback"]).toMatchObject({
-      skipped_feedback: ["dense_mem is required but unavailable."],
-      tests: ["Not run because required MCP context was unavailable."],
     });
     expect(outputByStage.validate).toMatchObject({
       next_state: "blocked",
@@ -57,18 +37,12 @@ describe("stage blocked outputs", () => {
     });
   });
 
-  it("builds matrix and implementation validation blocked outputs", () => {
+  it("builds matrix finalization blocked outputs", () => {
     const context = contextPacket({ url: "" });
     const zeroMatrix = zeroMatrixResultsOutput({
       context,
       expected: 3,
       options: runner("investigate", { workflowRunUrl: undefined }),
-    });
-    const implement = blockedImplementOutput({
-      context: contextPacket(),
-      finalError: new Error("final parse failed"),
-      firstError: new Error("initial parse failed"),
-      options: runner("implement"),
     });
 
     expect(zeroMatrix).toMatchObject({
@@ -76,15 +50,6 @@ describe("stage blocked outputs", () => {
       implementation_plan: [],
       references: [],
       summary: "No investigate matrix member results were available for synthesis. Expected 3.",
-    });
-    expect(implement).toMatchObject({
-      branch: "git-vibe/12",
-      findings: [
-        "Initial structured output failure: initial parse failed",
-        "Finalization failure: final parse failed",
-      ],
-      next_state: "blocked",
-      tests: ["Not run after the implement stage failed to produce schema-valid JSON."],
     });
   });
 });

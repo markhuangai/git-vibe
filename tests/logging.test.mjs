@@ -31,7 +31,7 @@ describe("stage logging", () => {
   it("can be disabled and summarizes errors without stack traces", () => {
     /** @type {string[]} */
     const messages = [];
-    const logger = createStageLogger("implement", {
+    const logger = createStageLogger("validate", {
       enabled: false,
       write: (message) => messages.push(message),
     });

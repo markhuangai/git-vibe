@@ -12,12 +12,7 @@ import { stageExecutionPlan } from "../src/runner/role-groups.ts";
 
 const consumerRoot = join(process.cwd(), "examples", "consumer");
 const roleGroupStages = /** @type {Stage[]} */ (["investigate", "validate", "review-matrix"]);
-const profileStages = /** @type {Stage[]} */ ([
-  "materialize",
-  "implement",
-  "create-pr",
-  "address-pr-feedback",
-]);
+const profileStages = /** @type {Stage[]} */ (["materialize"]);
 
 describe("consumer examples", () => {
   it("include wrappers for every reusable GitVibe workflow", () => {

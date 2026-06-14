@@ -28,7 +28,7 @@ describe("GitHub App installation token provider", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner-content-write",
+        profile: "runner-workflow-write",
         repo: "repo",
       }),
     ).resolves.toBe("installation-token");
@@ -36,7 +36,7 @@ describe("GitHub App installation token provider", () => {
       provider.tokenForRepository({
         installationId: 987,
         owner: "example",
-        profile: "runner-content-write",
+        profile: "runner-workflow-write",
         repo: "repo",
       }),
     ).resolves.toBe("installation-token");
@@ -46,11 +46,10 @@ describe("GitHub App installation token provider", () => {
       body: {
         permissions: {
           actions: "write",
-          contents: "write",
+          contents: "read",
           discussions: "write",
           issues: "write",
           pull_requests: "write",
-          workflows: "write",
         },
         repositories: ["repo"],
       },
@@ -250,11 +249,7 @@ describe("GitHub App permission profiles", () => {
       issues: "write",
       pull_requests: "write",
     });
-    expect(permissionsForProfile("runner-content-write")).toMatchObject({
-      contents: "write",
-      workflows: "write",
-    });
-    expect(permissionsForProfile("runner-content-write")).not.toHaveProperty("secrets");
+    expect(permissionsForProfile("runner-workflow-write")).not.toHaveProperty("secrets");
   });
 
   it("recognizes server and runner permission profile names", () => {
@@ -266,8 +261,8 @@ describe("GitHub App permission profiles", () => {
 
 describe("GitHub Actions hosted auth job mapping", () => {
   it("derives runner profiles from trusted reusable workflow files and check run job names", () => {
-    expect(profile("develop.yml", "develop / implement")).toBe("runner-content-write");
-    expect(profile("develop.yml", "develop / review-matrix")).toBe("runner-workflow-write");
+    expect(profile("validate.yml", "validate / validate")).toBe("runner-status-write");
+    expect(profile("review.yml", "review / review-matrix")).toBe("runner-workflow-write");
     expect(profile("review.yml", "review / plan-review-matrix")).toBe("runner-read");
     expect(profile("review.yml", "review / security-review")).toBe("runner-status-write");
     expect(profile("review.yml", "review / git-vibe-review-member-1 / security")).toBe(
@@ -278,11 +273,11 @@ describe("GitHub Actions hosted auth job mapping", () => {
   });
 
   it("allows Codex auth writeback only for AI execution jobs", () => {
-    expect(canWriteback("develop.yml", "develop / implement")).toBe(true);
+    expect(canWriteback("validate.yml", "validate / validate")).toBe(true);
     expect(canWriteback("review.yml", "review / review-matrix")).toBe(true);
     expect(canWriteback("review.yml", "review / git-vibe-review-member-1 / security")).toBe(true);
     expect(canWriteback("review.yml", "git-vibe-review-member-1 / security")).toBe(true);
-    expect(canWriteback("develop.yml", "develop / security-review")).toBe(false);
+    expect(canWriteback("validate.yml", "validate / security-review")).toBe(false);
     expect(canWriteback("review.yml", "review / plan-review-matrix")).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { setupCli } from "../src/cli.ts";
@@ -28,7 +28,7 @@ describe("git-vibe-setup update migrations", () => {
         "  token_secret: GITVIBE_GITHUB_TOKEN",
         "ai:",
         "  stages:",
-        "    implement:",
+        "    validate:",
         "      enabled: false",
         "",
       ].join("\n"),
@@ -97,3 +97,106 @@ describe("git-vibe-setup update migrations", () => {
     expect(validateWorkflow).not.toContain("GITVIBE_GITHUB_TOKEN");
   });
 });
+
+describe("git-vibe-setup obsolete workflow cleanup", () => {
+  it("removes obsolete managed workflow wrappers during update", async () => {
+    const cwd = workspace();
+    const workflows = join(cwd, ".github", "workflows");
+    const staleWorkflows = ["stale-writer.yml", "stale-review.yml"].map((name) =>
+      join(workflows, name),
+    );
+
+    mkdirSync(workflows, { recursive: true });
+    writeFileSync(join(cwd, ".github", "git-vibe.yml"), "version: 1\n");
+    for (const staleWorkflow of staleWorkflows) {
+      writeFileSync(staleWorkflow, obsoleteManagedWorkflow(staleWorkflow));
+    }
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchGitHubOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(staleWorkflows.every((staleWorkflow) => !existsSync(staleWorkflow))).toBe(true);
+  });
+
+  it("preserves obsolete workflow files that are not managed GitVibe wrappers", async () => {
+    const cwd = workspace();
+    const workflows = join(cwd, ".github", "workflows");
+    const staleWorkflow = join(workflows, "stale-local.yml");
+    const localWorkflow = [
+      "name: Local stale workflow",
+      "on:",
+      "  workflow_dispatch:",
+      "jobs:",
+      "  test:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - run: echo local",
+      "",
+    ].join("\n");
+
+    mkdirSync(workflows, { recursive: true });
+    writeFileSync(join(cwd, ".github", "git-vibe.yml"), "version: 1\n");
+    writeFileSync(staleWorkflow, localWorkflow);
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchGitHubOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(readFileSync(staleWorkflow, "utf8")).toBe(localWorkflow);
+  });
+
+  it("preserves customized obsolete GitVibe wrappers without an ownership marker", async () => {
+    const cwd = workspace();
+    const workflows = join(cwd, ".github", "workflows");
+    const staleWorkflow = join(workflows, "stale-writer.yml");
+    /** @type {string[]} */
+    const logs = [];
+    const customizedWorkflow = [
+      "name: Custom stale writer",
+      "jobs:",
+      "  stale-writer:",
+      "    uses: markhuangai/git-vibe/.github/workflows/stale-writer.yml@v3.3.0",
+      "    with:",
+      "      runner: self-hosted",
+      "",
+    ].join("\n");
+
+    mkdirSync(workflows, { recursive: true });
+    writeFileSync(join(cwd, ".github", "git-vibe.yml"), "version: 1\n");
+    writeFileSync(staleWorkflow, customizedWorkflow);
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchGitHubOk([release({ tag_name: "v1.2.3" })]),
+      log: (message) => logs.push(message),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(readFileSync(staleWorkflow, "utf8")).toBe(customizedWorkflow);
+    expect(logs.join("\n")).toContain("Obsolete workflow files were left in place");
+    expect(logs.join("\n")).toContain(".github/workflows/stale-writer.yml");
+  });
+});
+
+/** @param {string} workflowPath */
+function obsoleteManagedWorkflow(workflowPath) {
+  const workflowName = workflowPath.split(/[\\/]/).at(-1) || "stale.yml";
+  return [
+    "# GitVibe managed workflow wrapper",
+    `name: GitVibe ${workflowName}`,
+    "jobs:",
+    "  git-vibe:",
+    `    uses: markhuangai/git-vibe/.github/workflows/${workflowName}@v3.3.0`,
+    "",
+  ].join("\n");
+}

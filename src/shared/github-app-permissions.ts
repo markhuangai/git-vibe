@@ -3,8 +3,7 @@ export type GitHubAppPermission = "read" | "write";
 export type GitHubActionsRunnerPermissionProfile =
   | "runner-read"
   | "runner-status-write"
-  | "runner-workflow-write"
-  | "runner-content-write";
+  | "runner-workflow-write";
 
 export type GitHubAppServerPermissionProfile =
   | "server"
@@ -24,7 +23,6 @@ const runnerPermissionProfiles = new Set<string>([
   "runner-read",
   "runner-status-write",
   "runner-workflow-write",
-  "runner-content-write",
 ]);
 
 const serverPermissionProfiles = new Set<string>([
@@ -34,16 +32,12 @@ const serverPermissionProfiles = new Set<string>([
 ]);
 
 const readOnlyJobs: Record<string, string[]> = {
-  "address-feedback.yml": ["plan-investigate-feedback"],
-  "develop.yml": ["plan-review-matrix"],
   "investigate.yml": ["plan-investigate"],
   "review.yml": ["plan-review-matrix"],
   "validate.yml": ["plan-validate"],
 };
 
 const statusWriteJobs: Record<string, string[]> = {
-  "address-feedback.yml": ["investigate-feedback", "security-review"],
-  "develop.yml": ["create-pr", "implementation-blocked-cleanup", "security-review"],
   "investigate.yml": ["investigate", "security-review"],
   "materialize.yml": ["materialize", "security-review"],
   "review.yml": ["security-review"],
@@ -51,18 +45,10 @@ const statusWriteJobs: Record<string, string[]> = {
 };
 
 const workflowWriteJobs: Record<string, string[]> = {
-  "develop.yml": ["review-matrix"],
   "review.yml": ["review-matrix"],
 };
 
-const contentWriteJobs: Record<string, string[]> = {
-  "address-feedback.yml": ["address-feedback"],
-  "develop.yml": ["implement"],
-};
-
 const codexAuthWritebackJobs: Record<string, string[]> = {
-  "address-feedback.yml": ["address-feedback", "investigate-feedback"],
-  "develop.yml": ["create-pr", "implement", "review-matrix"],
   "investigate.yml": ["investigate"],
   "materialize.yml": ["materialize"],
   "review.yml": ["review-matrix"],
@@ -70,7 +56,6 @@ const codexAuthWritebackJobs: Record<string, string[]> = {
 };
 
 const memberJobPrefixes = [
-  "git-vibe-investigate-feedback-member-",
   "git-vibe-investigate-member-",
   "git-vibe-review-member-",
   "git-vibe-validate-member-",
@@ -119,15 +104,6 @@ export function permissionsForProfile(
         issues: "write",
         pull_requests: "write",
       };
-    case "runner-content-write":
-      return {
-        actions: "write",
-        contents: "write",
-        discussions: "write",
-        issues: "write",
-        pull_requests: "write",
-        workflows: "write",
-      };
   }
 }
 
@@ -150,7 +126,6 @@ export function runnerPermissionProfileForGitHubActionsJob(
   if (memberJob(jobName) || listedJob(readOnlyJobs, workflowFile, jobName)) return "runner-read";
   if (listedJob(statusWriteJobs, workflowFile, jobName)) return "runner-status-write";
   if (listedJob(workflowWriteJobs, workflowFile, jobName)) return "runner-workflow-write";
-  if (listedJob(contentWriteJobs, workflowFile, jobName)) return "runner-content-write";
   return undefined;
 }
 
@@ -186,7 +161,6 @@ function knownGitVibeJobName(jobName: string): boolean {
     listedAnyJob(readOnlyJobs, jobName) ||
     listedAnyJob(statusWriteJobs, jobName) ||
     listedAnyJob(workflowWriteJobs, jobName) ||
-    listedAnyJob(contentWriteJobs, jobName) ||
     listedAnyJob(codexAuthWritebackJobs, jobName)
   );
 }

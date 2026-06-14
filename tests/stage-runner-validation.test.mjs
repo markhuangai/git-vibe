@@ -101,8 +101,8 @@ describe("stage runner context coverage", () => {
   });
 });
 
-describe("stage runner write skips and branch validation", () => {
-  it("skips deterministic writes for non-completed statuses and rejects invalid branch numbers", async () => {
+describe("stage runner blocked publishing", () => {
+  it("publishes blocked deterministic results", async () => {
     const cwd = await workspace();
     generateText.mockResolvedValueOnce({
       steps: [
@@ -112,14 +112,12 @@ describe("stage runner write skips and branch validation", () => {
               input: {
                 content: JSON.stringify({
                   assumptions: [],
-                  branch: "git-vibe/12",
                   comment_body: "Blocked.",
                   findings: [],
                   next_state: "blocked",
-                  pr_body: "Refs #12",
-                  pr_title: "GitVibe: blocked",
+                  questions: [],
                   references: [],
-                  stage: "create-pr",
+                  stage: "validate",
                   status: "blocked",
                   summary: "Blocked.",
                 }),
@@ -134,7 +132,6 @@ describe("stage runner write skips and branch validation", () => {
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
-      response(200, { default_branch: "main" }),
       response(200, {}),
       response(200, {}),
     ]);
@@ -148,43 +145,13 @@ describe("stage runner write skips and branch validation", () => {
         maxTurns: 2,
         prNumber: "",
         repository: "example/repo",
-        stage: "create-pr",
+        stage: "validate",
         stageTimeoutMinutes: 1,
         token: "token",
       }),
     ).resolves.toMatchObject({ status: "blocked" });
     expect(issueCommentCall(fetch)?.[0]).toContain("/repos/example/repo/issues/12/comments");
     expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
-
-    globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "abc",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "create-pr",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).rejects.toThrow("GitVibe branch requires a numeric issue number");
-
-    globalThis.fetch = fetchMock([issueWithoutNumberResponse("Issue body"), commentsResponse([])]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "create-pr",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).rejects.toThrow("GitVibe branch requires a numeric issue number, got <missing>");
   });
 });
 
@@ -254,14 +221,6 @@ function issueResponse(body, overrides = {}) {
     title: "Issue title",
     user: { login: "octocat" },
     ...overrides,
-  });
-}
-
-/** @param {string} body */
-function issueWithoutNumberResponse(body) {
-  return issueResponse(body, {
-    html_url: "https://github.com/example/repo/issues/abc",
-    number: undefined,
   });
 }
 

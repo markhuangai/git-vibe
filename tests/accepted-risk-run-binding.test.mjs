@@ -15,17 +15,17 @@ describe("accepted-risk workflow run binding", () => {
             blockedResultComment({
               metadata: acceptedRiskMetadata({
                 run: "99",
-                stage: "implement",
-                stages: ["implement", "create-pr"],
+                stage: "materialize",
+                stages: ["materialize", "validate"],
               }),
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger,
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
@@ -34,13 +34,13 @@ describe("accepted-risk workflow run binding", () => {
       artifactSha: undefined,
       cutoff: "2026-01-04T00:00:00Z",
       run: "99",
-      stages: ["implement", "create-pr"],
+      stages: ["materialize", "validate"],
     });
     expect(logger.event).toHaveBeenCalledWith("accepted_risk.context.detected", {
       cutoff: "2026-01-04T00:00:00Z",
       source: "run-binding",
-      stage: "implement",
-      stages: "implement,create-pr",
+      stage: "materialize",
+      stages: "materialize,validate",
     });
   });
 
@@ -55,17 +55,17 @@ describe("accepted-risk workflow run binding", () => {
               metadata: acceptedRiskMetadata({
                 run: "99",
                 runAttempt: "3",
-                stage: "implement",
-                stages: ["implement", "create-pr"],
+                stage: "materialize",
+                stages: ["materialize", "validate"],
               }),
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger,
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunAttempt: "3",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
@@ -73,7 +73,7 @@ describe("accepted-risk workflow run binding", () => {
     ).toMatchObject({
       run: "99",
       runAttempt: "3",
-      stages: ["implement", "create-pr"],
+      stages: ["materialize", "validate"],
     });
   });
 
@@ -85,15 +85,15 @@ describe("accepted-risk workflow run binding", () => {
           timeline: [
             blockedResultComment({
               metadata: acceptedRiskMetadata({
-                stage: "implement",
-                stages: ["implement", "create-pr"],
+                stage: "materialize",
+                stages: ["materialize", "validate"],
               }),
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger: logger(),
-        runner: runner({ acceptedRisk: undefined, stage: "implement" }),
+        runner: runner({ acceptedRisk: undefined, stage: "materialize" }),
       }),
     ).toBeUndefined();
   });
@@ -107,25 +107,25 @@ describe("accepted-risk workflow run audit binding", () => {
           timeline: [
             blockedResultComment({
               metadata: acceptedRiskMetadata({
-                stage: "implement",
-                stages: ["implement", "create-pr"],
+                stage: "materialize",
+                stages: ["materialize", "validate"],
               }),
-              stage: "implement",
+              stage: "materialize",
             }),
-            riskAcceptedAuditComment({ run: "99", runAttempt: "3", stage: "implement" }),
+            riskAcceptedAuditComment({ run: "99", runAttempt: "3", stage: "materialize" }),
           ],
         }),
         logger: logger(),
         runner: runner({
           acceptedRisk: undefined,
-          stage: "create-pr",
+          stage: "validate",
           workflowRunAttempt: "3",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
     ).toMatchObject({
       cutoff: "2026-01-04T00:00:00Z",
-      stages: ["implement", "create-pr"],
+      stages: ["materialize", "validate"],
     });
   });
 });
@@ -141,17 +141,17 @@ describe("accepted-risk workflow run binding rejection", () => {
             blockedResultComment({
               metadata: acceptedRiskMetadata({
                 run: "88",
-                stage: "implement",
-                stages: ["implement"],
+                stage: "materialize",
+                stages: ["materialize"],
               }),
-              stage: "implement",
+              stage: "materialize",
             }),
           ],
         }),
         logger: loggerMock,
         runner: runner({
           acceptedRisk: undefined,
-          stage: "implement",
+          stage: "materialize",
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
@@ -159,7 +159,7 @@ describe("accepted-risk workflow run binding rejection", () => {
     expect(loggerMock.event).toHaveBeenCalledWith("accepted_risk.skip", {
       reason: "workflow-run-not-bound",
       run: "99",
-      stage: "implement",
+      stage: "materialize",
     });
   });
 
@@ -218,10 +218,10 @@ describe("accepted-risk workflow run binding rejection", () => {
 
 describe("accepted-risk workflow run audit binding rejection", () => {
   it("ignores run audit markers without the current workflow attempt", () => {
-    const metadata = acceptedRiskMetadata({ stage: "implement", stages: ["implement"] });
+    const metadata = acceptedRiskMetadata({ stage: "materialize", stages: ["materialize"] });
     const runnerOptions = runner({
       acceptedRisk: undefined,
-      stage: "implement",
+      stage: "materialize",
       workflowRunAttempt: "3",
       workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
@@ -230,8 +230,8 @@ describe("accepted-risk workflow run audit binding rejection", () => {
       acceptedRiskFromContext({
         context: issueContext({
           timeline: [
-            blockedResultComment({ metadata, stage: "implement" }),
-            riskAcceptedAuditComment({ run: "99", stage: "implement" }),
+            blockedResultComment({ metadata, stage: "materialize" }),
+            riskAcceptedAuditComment({ run: "99", stage: "materialize" }),
           ],
         }),
         logger: logger(),
@@ -242,8 +242,8 @@ describe("accepted-risk workflow run audit binding rejection", () => {
       acceptedRiskFromContext({
         context: issueContext({
           timeline: [
-            blockedResultComment({ metadata, stage: "implement" }),
-            riskAcceptedAuditComment({ run: "99", runAttempt: "2", stage: "implement" }),
+            blockedResultComment({ metadata, stage: "materialize" }),
+            riskAcceptedAuditComment({ run: "99", runAttempt: "2", stage: "materialize" }),
           ],
         }),
         logger: logger(),

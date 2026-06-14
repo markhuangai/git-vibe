@@ -1,9 +1,9 @@
 import { runAiStage, type RunAiStageOptions } from "./ai.js";
-import { promptInjectionBlockedResult } from "./safety-gate-runner.js";
 import type { SafetySource } from "./safety-gate.js";
-import { blockedImplementOutput, zeroMatrixResultsOutput } from "./stage-blocked-outputs.js";
+import { zeroMatrixResultsOutput } from "./stage-blocked-outputs.js";
 import { dryRunContent } from "./stage-dry-run.js";
 import { stageRunResult } from "./stage-results.js";
+import { promptInjectionBlockedResult } from "./safety-gate-runner.js";
 import {
   loadMatrixStageResults,
   roleGroupSynthesisMembers,
@@ -11,9 +11,7 @@ import {
   synthesisPromptAddition,
   synthesizerSystemAddition,
 } from "./role-groups.js";
-import { buildValidationRepairPrompt, validationRepairMaxTurnsFor } from "./validation.js";
-import type { ValidationCommandFailure } from "./validation.js";
-import { summarizeError, type StageLogger } from "./logging.js";
+import type { StageLogger } from "./logging.js";
 import { stageDefinitions } from "../shared/stages.js";
 import type {
   ContextPacket,
@@ -36,65 +34,6 @@ export async function runStageResultForMode(options: {
     return runMatrixFinalizerResult(options);
   }
   return runStageAiResult(options);
-}
-
-export function validationRepairRunner({
-  aiRunOptions,
-  config,
-  context,
-  definition,
-  logger,
-  options,
-}: {
-  aiRunOptions: Parameters<typeof runAiStage>[0];
-  config: GitVibeConfig;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  logger: StageLogger;
-  options: RunnerOptions;
-}) {
-  return async (
-    failure: ValidationCommandFailure,
-    attempt: number,
-    maxAttempts: number,
-  ): Promise<StageRunResult> => {
-    const buildResult = stageResultBuilder({ context, definition, logger, options });
-    const blocked = await promptInjectionBlockedResult({
-      buildResult,
-      config,
-      context,
-      extraSources: validationFailureSafetySources(failure),
-      logger,
-      phase: "input",
-      runner: options,
-    });
-    if (blocked) return blocked;
-
-    const repaired = await buildResult(
-      await runAiStage({
-        ...aiRunOptions,
-        maxTurns: validationRepairMaxTurnsFor(config, options),
-        prompt: buildValidationRepairPrompt({
-          attempt,
-          basePrompt: aiRunOptions.prompt,
-          cwd: options.cwd,
-          failure,
-          maxAttempts,
-          runner: options,
-        }),
-      }),
-    );
-    const outputBlocked = await promptInjectionBlockedResult({
-      buildResult,
-      config,
-      context,
-      logger,
-      phase: "output",
-      result: repaired,
-      runner: options,
-    });
-    return outputBlocked || repaired;
-  };
 }
 
 export function promptSafetySources(prompts: { prompt: string; system: string }): SafetySource[] {
@@ -120,25 +59,7 @@ async function runStageAiResult({
   const buildResult = stageResultBuilder({ context, definition, logger, options });
   if (options.dryRun) return buildResult(dryRunContent(options.stage, context, logger));
 
-  try {
-    return await buildResult(await runAiStage(aiRunOptions));
-  } catch (error) {
-    if (options.stage !== "implement" || !isStructuredOutputFailure(error)) throw error;
-    logger.event("output.finalize.failed", {
-      error: summarizeError(error),
-      recovery: "same_session_exhausted",
-    });
-    return buildResult(
-      JSON.stringify(
-        blockedImplementOutput({
-          context,
-          finalError: error,
-          firstError: error,
-          options,
-        }),
-      ),
-    );
-  }
+  return buildResult(await runAiStage(aiRunOptions));
 }
 
 async function runMatrixFinalizerResult({
@@ -245,14 +166,6 @@ function matrixFinalizerRoleSafetySources(options: {
   }));
 }
 
-function validationFailureSafetySources(failure: ValidationCommandFailure): SafetySource[] {
-  return [
-    { label: "validation repair command", text: failure.command },
-    { label: "validation repair stdout", text: failure.stdout },
-    { label: "validation repair stderr", text: failure.stderr },
-  ];
-}
-
 function matrixFinalizerSafetySources(options: {
   members: ReturnType<typeof roleGroupSynthesisMembers>;
   results: ReturnType<typeof loadMatrixStageResults>;
@@ -285,13 +198,4 @@ function stageResultBuilder(options: {
       logger: options.logger,
       options: options.options,
     });
-}
-
-function isStructuredOutputFailure(error: unknown): boolean {
-  const message = summarizeError(error);
-  return (
-    message === "AI response did not call output_validator" ||
-    message === "AI response did not contain a JSON object" ||
-    /^AI output failed .+ validation:/.test(message)
-  );
 }

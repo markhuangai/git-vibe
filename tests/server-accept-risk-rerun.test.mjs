@@ -79,7 +79,7 @@ describe("GitVibe app server accept-risk pull request rerun unavailable", () => 
       workflowRun: {
         head_branch: "dev",
         html_url: "https://github.com/example/repo/actions/runs/88",
-        path: ".github/workflows/develop.yml@dev",
+        path: ".github/workflows/validate.yml@dev",
         run_attempt: 2,
       },
     });

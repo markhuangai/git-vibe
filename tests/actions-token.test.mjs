@@ -7,17 +7,17 @@ import {
 
 const trustedClaims = {
   checkRunId: "123456",
-  jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/develop.yml@v3",
+  jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/validate.yml@v3",
   repository: "example/repo",
   repositoryId: "123",
   repositoryOwner: "example",
   sha: "abc123",
-  workflowRef: "example/repo/.github/workflows/develop.yml@refs/heads/main",
+  workflowRef: "example/repo/.github/workflows/validate.yml@refs/heads/main",
 };
 
 describe("GitHub Actions token exchange", () => {
   it("derives the runner profile from the trusted workflow check run", async () => {
-    const client = clientWithCheckRun({ head_sha: "abc123", name: "develop / security-review" });
+    const client = clientWithCheckRun({ head_sha: "abc123", name: "validate / security-review" });
     const tokenProvider = tokenProviderForProfiles();
     const verifier = { verify: vi.fn(async () => trustedClaims) };
 
@@ -69,7 +69,7 @@ describe("GitHub Actions token exchange", () => {
       exchangeActionsToken({
         audience: "audience",
         body: JSON.stringify({ oidc_token: "oidc", permission_profile: "runner-status-write" }),
-        client: clientWithCheckRun({ head_sha: "abc123", name: "develop / create-pr" }),
+        client: clientWithCheckRun({ head_sha: "abc123", name: "validate / validate" }),
         tokenProvider,
         verifier,
       }),
@@ -85,7 +85,7 @@ describe("GitHub Actions token exchange", () => {
       exchangeActionsToken({
         audience: "audience",
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-read" }),
-        client: clientWithCheckRun({ head_sha: "abc123", name: "develop / security-review" }),
+        client: clientWithCheckRun({ head_sha: "abc123", name: "validate / security-review" }),
         tokenProvider,
         verifier: { verify: vi.fn(async () => trustedClaims) },
       }),
@@ -106,7 +106,7 @@ describe("GitHub Actions token exchange rejection", () => {
     const verifier = {
       verify: vi.fn(async () => ({
         ...trustedClaims,
-        jobWorkflowRef: "example/repo/.github/workflows/develop.yml@refs/heads/main",
+        jobWorkflowRef: "example/repo/.github/workflows/validate.yml@refs/heads/main",
       })),
     };
 
@@ -140,16 +140,16 @@ describe("GitHub Actions token workflow ref trust", () => {
     const verifier = { verify: vi.fn() };
 
     for (const jobWorkflowRef of [
-      "markhuangai/git-vibe/.github/workflows/develop.yml@v4.0.0",
-      "markhuangai/git-vibe/.github/workflows/develop.yml@v4.0.0-rc.1",
-      "markhuangai/git-vibe/.github/workflows/develop.yml@refs/tags/v4.0.0-rc.1",
+      "markhuangai/git-vibe/.github/workflows/validate.yml@v4.0.0",
+      "markhuangai/git-vibe/.github/workflows/validate.yml@v4.0.0-rc.1",
+      "markhuangai/git-vibe/.github/workflows/validate.yml@refs/tags/v4.0.0-rc.1",
     ]) {
       verifier.verify.mockResolvedValueOnce({ ...trustedClaims, jobWorkflowRef });
       await expect(
         exchangeActionsToken({
           audience: "audience",
           body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
-          client: clientWithCheckRun({ head_sha: "abc123", name: "develop / security-review" }),
+          client: clientWithCheckRun({ head_sha: "abc123", name: "validate / security-review" }),
           tokenProvider,
           verifier,
         }),
@@ -195,7 +195,7 @@ describe("GitHub Actions token workflow ref trust", () => {
     const verifier = {
       verify: vi.fn(async () => ({
         ...trustedClaims,
-        jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/develop.yml@v4.0.0-",
+        jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/validate.yml@v4.0.0-",
       })),
     };
 
@@ -229,7 +229,7 @@ describe("GitHub Actions token check run verification", () => {
       exchangeActionsToken({
         audience: "audience",
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
-        client: clientWithCheckRun({ head_sha: "other", name: "develop / security-review" }),
+        client: clientWithCheckRun({ head_sha: "other", name: "validate / security-review" }),
         tokenProvider: tokenProviderForProfiles(),
         verifier: { verify: vi.fn(async () => trustedClaims) },
       }),
@@ -253,7 +253,7 @@ describe("GitHub Actions token check run verification", () => {
       exchangeActionsToken({
         audience: "audience",
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
-        client: clientWithCheckRun({ head_sha: "abc123", name: "develop / security-review" }),
+        client: clientWithCheckRun({ head_sha: "abc123", name: "validate / security-review" }),
         tokenProvider: tokenProviderForProfiles(),
         verifier: { verify: vi.fn(async () => ({ ...trustedClaims, sha: "" })) },
       }),
@@ -265,7 +265,7 @@ describe("GitHub Actions token check run verification", () => {
       exchangeActionsToken({
         audience: "audience",
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
-        client: clientWithCheckRun({ head_sha: "abc123", name: "develop / untrusted-job" }),
+        client: clientWithCheckRun({ head_sha: "abc123", name: "validate / untrusted-job" }),
         tokenProvider: tokenProviderForProfiles(),
         verifier: { verify: vi.fn(async () => trustedClaims) },
       }),
@@ -281,7 +281,7 @@ describe("GitHub Actions token pull request check run verification", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 123 }, sha: "abc123" },
@@ -302,7 +302,7 @@ describe("GitHub Actions token pull request check run verification", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 123 }, sha: "base-sha" },
@@ -325,7 +325,7 @@ describe("GitHub Actions token pull request check run rejection", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 123 }, sha: "base-sha" },
@@ -346,7 +346,7 @@ describe("GitHub Actions token pull request check run rejection", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 123 }, sha: "abc123" },
@@ -367,7 +367,7 @@ describe("GitHub Actions token pull request check run rejection", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 999 }, sha: "base-sha" },
@@ -390,7 +390,7 @@ describe("GitHub Actions token cross-repository pull request rejection", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 123 }, sha: "base-sha" },
@@ -415,7 +415,7 @@ describe("GitHub Actions token cross-repository pull request rejection", () => {
         body: JSON.stringify({ oidcToken: "oidc", permissionProfile: "runner-status-write" }),
         client: clientWithCheckRun({
           head_sha: "pr-head",
-          name: "develop / security-review",
+          name: "validate / security-review",
           pull_requests: [
             {
               base: { repo: { id: 123 }, sha: "abc123" },
@@ -491,7 +491,7 @@ describe("GitHub Actions token request validation", () => {
   });
 });
 
-function clientWithCheckRun(checkRun = { head_sha: "abc123", name: "develop / security-review" }) {
+function clientWithCheckRun(checkRun = { head_sha: "abc123", name: "validate / security-review" }) {
   return {
     request: vi.fn(async () => checkRun),
   };

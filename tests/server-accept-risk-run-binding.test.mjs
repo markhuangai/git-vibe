@@ -103,7 +103,7 @@ describe("GitVibe app server accept-risk run-bound metadata failures", () => {
       workflowRun: {
         head_branch: "main",
         html_url: "https://github.com/example/repo/actions/runs/88",
-        path: ".github/workflows/develop.yml@main",
+        path: ".github/workflows/validate.yml@main",
         run_attempt: 1,
         url: "https://api.github.com/repos/example/repo/actions/runs/88",
       },
@@ -130,7 +130,7 @@ describe("GitVibe app server accept-risk run-bound metadata failures", () => {
   });
 });
 
-function stageResultComment({ stage = "implement" } = {}) {
+function stageResultComment({ stage = "validate" } = {}) {
   return {
     author_association: "OWNER",
     body: stageResultBody({ artifact: "issue", number: 9, stage }),

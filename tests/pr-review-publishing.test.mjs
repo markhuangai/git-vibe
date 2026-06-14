@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { publishPullRequestReviewResult } from "../src/runner/pr-review-publishing.ts";
 import { publishStageResultComment } from "../src/runner/stage-publishing.ts";
 
 /**
@@ -81,6 +82,42 @@ describe("pull request review publishing", () => {
   });
 });
 
+describe("pull request review publishing inline anchor errors", () => {
+  it("surfaces GitHub validation errors when inline anchors are rejected", async () => {
+    const client = createClient({ unresolvedReviewLineError: true });
+    const logger = createLogger();
+
+    await expect(
+      publishStageResultComment({
+        client,
+        context: context("pull-request"),
+        logger,
+        parsedOutput: {
+          ...output(),
+          findings: ["src/app.ts:42 is not anchorable in the current pull request diff."],
+          inline_comments: [
+            {
+              body: "This generated inline anchor cannot be resolved by GitHub.",
+              line: 42,
+              path: "src/app.ts",
+            },
+          ],
+          next_state: "changes-required",
+          stage: "review-matrix",
+        },
+        runner: runner({ stage: "review-matrix" }),
+      }),
+    ).rejects.toThrow("Line could not be resolved");
+
+    const reviews = requestCalls(client).filter((request) =>
+      request.path.endsWith("/pulls/12/reviews"),
+    );
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].body.comments).toHaveLength(1);
+    expect(logger.event).not.toHaveBeenCalledWith("github.pr.review.done", expect.anything());
+  });
+});
+
 describe("pull request review publishing passed reviews", () => {
   it("submits a top-level pull request review when review-matrix passes", async () => {
     const client = createClient();
@@ -107,6 +144,30 @@ describe("pull request review publishing passed reviews", () => {
     });
     expect(requestCalls(client).map((request) => request.path)).not.toContain(
       "/repos/example/repo/issues/12/comments",
+    );
+  });
+
+  it("adds the workflow run URL when a supplied review body omits it", async () => {
+    const client = createClient();
+
+    await publishPullRequestReviewResult({
+      client,
+      context: context("pull-request"),
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "review-passed", stage: "review-matrix" },
+      runner: runner({
+        stage: "review-matrix",
+        workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+      }),
+      stageResultBody: "Review summary without run.",
+    });
+
+    const review = requestCalls(client).find((request) =>
+      request.path.endsWith("/pulls/12/reviews"),
+    );
+    expect(review.body.body).toContain("Review summary without run.");
+    expect(review.body.body).toContain(
+      "Workflow run: https://github.com/example/repo/actions/runs/99",
     );
   });
 });
@@ -574,14 +635,27 @@ function runner(overrides = {}) {
 }
 
 /**
- * @param {{ login?: string; userLookupError?: boolean }} [options]
+ * @param {{ login?: string; unresolvedReviewLineError?: boolean; userLookupError?: boolean }} [options]
  * @returns {MockGitHubClient}
  */
 function createClient(options = {}) {
+  let rejectedInlineReview = false;
   return /** @type {MockGitHubClient} */ ({
     apiBaseUrl: "https://api.github.test",
     graphql: vi.fn(async () => ({})),
     request: vi.fn(async (request) => {
+      if (
+        options.unresolvedReviewLineError &&
+        !rejectedInlineReview &&
+        request.method === "POST" &&
+        request.path.endsWith("/pulls/12/reviews") &&
+        request.body?.comments
+      ) {
+        rejectedInlineReview = true;
+        throw new Error(
+          'GitHub API POST /repos/example/repo/pulls/12/reviews failed: 422 {"message":"Unprocessable Entity","errors":["Line could not be resolved"],"status":"422"}',
+        );
+      }
       if (request.path !== "/user") return {};
       if (options.userLookupError) throw new Error("Resource not accessible by integration");
       return { login: options.login || "git-vibe" };

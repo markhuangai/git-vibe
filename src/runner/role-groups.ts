@@ -43,12 +43,7 @@ export interface RoleGroupSynthesisMember {
 }
 
 const roleGroupStages = new Set<Stage>(["investigate", "review-matrix", "validate"]);
-const writeOrPublishStages = new Set<Stage>([
-  "address-pr-feedback",
-  "create-pr",
-  "implement",
-  "materialize",
-]);
+const writeOrPublishStages = new Set<Stage>(["materialize"]);
 
 export function stageExecutionPlan(
   config: GitVibeConfig,

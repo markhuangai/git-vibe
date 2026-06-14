@@ -50,13 +50,6 @@ describe("stage label PR feedback transitions", () => {
       client,
       context: prContext,
       logger: createLogger(),
-      parsedOutput: { ...output(), next_state: "feedback-addressed", stage: "address-pr-feedback" },
-      runner: runner({ stage: "address-pr-feedback" }),
-    });
-    await applyStageLabelTransition({
-      client,
-      context: prContext,
-      logger: createLogger(),
       parsedOutput: { ...output(), next_state: "review-passed", stage: "review-matrix" },
       runner: runner({ stage: "review-matrix" }),
     });
@@ -65,15 +58,47 @@ describe("stage label PR feedback transitions", () => {
       requestCalls(client)
         .filter((request) => request.method === "POST")
         .map((request) => request.body.labels[0]),
-    ).toEqual(["gvi:investigated", "gvi:in-progress", "gvi:ready-for-approval"]);
+    ).toEqual(["gvi:investigated", "gvi:ready-for-approval"]);
     expect(requestCalls(client).map((request) => request.path)).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating",
-        "/repos/example/repo/issues/12/labels/gvi%3Ain-progress",
         "/repos/example/repo/issues/12/labels/gvi%3Ainvestigated",
       ]),
     );
+  });
+
+  it("marks pull requests ready or blocked from active PR stage outcomes", async () => {
+    const client = createClient();
+    const prContext = context("pull-request");
+
+    await applyStageLabelTransition({
+      client,
+      context: prContext,
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "no-fixes-needed", stage: "investigate" },
+      runner: runner({ stage: "investigate" }),
+    });
+    await applyStageLabelTransition({
+      client,
+      context: prContext,
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "blocked", stage: "investigate" },
+      runner: runner({ stage: "investigate" }),
+    });
+    await applyStageLabelTransition({
+      client,
+      context: prContext,
+      logger: createLogger(),
+      parsedOutput: { ...output(), next_state: "changes-required", stage: "review-matrix" },
+      runner: runner({ stage: "review-matrix" }),
+    });
+
+    expect(
+      requestCalls(client)
+        .filter((request) => request.method === "POST")
+        .map((request) => request.body.labels[0]),
+    ).toEqual(["gvi:ready-for-approval", "gvi:blocked", "gvi:blocked"]);
   });
 });
 
@@ -86,7 +111,7 @@ describe("stage label investigation blocking", () => {
       context: context("issue"),
       logger: createLogger(),
       parsedOutput: { ...output(), status: "blocked" },
-      runner: runner({ stage: "implement" }),
+      runner: runner({ stage: "validate" }),
     });
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
@@ -264,7 +289,7 @@ describe("stage label safety block approval preservation", () => {
       context: context("issue"),
       logger: createLogger(),
       preserveApproval: true,
-      runner: runner({ stage: "implement" }),
+      runner: runner({ stage: "validate" }),
     });
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
@@ -284,7 +309,7 @@ describe("stage label safety block approval preservation", () => {
       logger: createLogger(),
       parsedOutput: { ...output(), status: "blocked" },
       preserveApproval: true,
-      runner: runner({ stage: "implement" }),
+      runner: runner({ stage: "validate" }),
     });
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
@@ -325,7 +350,7 @@ describe("stage label safety block guards", () => {
         client,
         context: context("issue"),
         logger: createLogger(),
-        runner: runner({ stage: "implement" }),
+        runner: runner({ stage: "validate" }),
       }),
     ).resolves.toBeUndefined();
 
@@ -345,7 +370,7 @@ describe("stage label safety block guards", () => {
         client,
         context: context("issue"),
         logger,
-        runner: runner({ stage: "implement" }),
+        runner: runner({ stage: "validate" }),
       }),
     ).rejects.toThrow("delete unavailable");
 

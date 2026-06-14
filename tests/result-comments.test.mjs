@@ -8,42 +8,39 @@ describe("stage result comments", () => {
   it("renders every stage result as compact action-focused Markdown", () => {
     const body = renderStageResultComment({
       context: context("issue"),
-      links: [{ label: "Pull request #22", url: "https://github.com/example/repo/pull/22" }],
+      links: [{ label: "Review run", url: "https://github.com/example/repo/actions/runs/22" }],
       parsedOutput: {
         assumptions: ["Existing API remains stable"],
-        branch: "git-vibe/12",
         comment_body: "Detailed notes for reviewers.",
         findings: ["The request is implementable"],
         implementation_plan: ["src/app/server.ts: add command routing test coverage"],
         issue_body: "Create the implementation tracking issue.",
         issue_title: "Implement GitVibe command routing",
         missing_capabilities: ["Threaded PR review replies are not implemented"],
-        next_state: "pr-draft-ready",
+        next_state: "ready-for-implementation",
         partial_capabilities: ["Issue comments are flat replies with source links"],
-        pr_body: "Refs #12",
-        pr_title: "GitVibe: implement feature",
         proposed_labels: ["gvi:ready-for-approval"],
         references: ["https://github.com/example/repo/issues/12"],
-        stage: "create-pr",
+        stage: "validate",
         status: "completed",
         summary: "Validation finished.",
         tests: ["corepack pnpm test"],
         working_capabilities: ["Discussion comments can be posted"],
       },
-      stage: "create-pr",
+      stage: "validate",
       workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
 
     expect(body).toContain(
-      "<!-- git-vibe:stage-result stage=create-pr artifact=issue number=12 run=99 -->",
+      "<!-- git-vibe:stage-result stage=validate artifact=issue number=12 run=99 -->",
     );
-    expect(body).toContain("## GitVibe Pull Request Update");
+    expect(body).toContain("## GitVibe Validation");
     expect(body).toContain("**Status:** `completed`");
-    expect(body).toContain("**Next state:** `pr-draft-ready`");
+    expect(body).toContain("**Next state:** `ready-for-implementation`");
     expect(body).toContain("Validation finished.");
-    expect(body).toContain("### Next Action\nContinue with `pr-draft-ready`.");
+    expect(body).toContain("### Next Action\nContinue with `ready-for-implementation`.");
     expect(body).toContain("Full details are in the workflow run summary.");
-    expect(body).toContain("Pull request #22: https://github.com/example/repo/pull/22");
+    expect(body).toContain("Review run: https://github.com/example/repo/actions/runs/22");
     expect(body).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
     expect(body).not.toContain("### Details");
     expect(body).not.toContain("### Findings");
@@ -158,12 +155,12 @@ describe("stage start comments", () => {
   it("renders start markers and optional workflow links", () => {
     const body = renderStageStartComment({
       context: context("pull-request"),
-      stage: "address-pr-feedback",
+      stage: "review-matrix",
       workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
     });
 
     expect(body).toContain(
-      "<!-- git-vibe:stage-start artifact=pull-request number=12 run=99 stage=address-pr-feedback -->",
+      "<!-- git-vibe:stage-start artifact=pull-request number=12 run=99 stage=review-matrix -->",
     );
     expect(body).toContain("Workflow run: https://github.com/example/repo/actions/runs/99");
 

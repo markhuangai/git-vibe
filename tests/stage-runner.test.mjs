@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
+/**
+ * @typedef {{ body?: Record<string, any>; method: string; url: string }} FetchRequest
+ * @typedef {{ mock: { calls: Array<[string | URL, { body?: string; method?: string }?]> } }} MockFetch
+ */
+
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
@@ -33,7 +38,6 @@ beforeEach(() => {
       GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
   };
-  delete process.env.GITVIBE_BASE_BRANCH;
 });
 
 afterEach(() => {
@@ -73,7 +77,7 @@ describe("stage runner issue dry-runs", () => {
 });
 
 describe("stage runner discussion dry-runs", () => {
-  it("renders dry-run outputs for materialize and feedback stages", async () => {
+  it("renders dry-run outputs for materialize", async () => {
     const cwd = await workspace();
     process.env.GITVIBE_DISCUSSION_NUMBER = "5";
     globalThis.fetch = fetchMock([discussionResponse()]);
@@ -92,67 +96,6 @@ describe("stage runner discussion dry-runs", () => {
       }),
     ).resolves.toMatchObject({
       parsedOutput: { issues: [{ title: "GitVibe dry run: Discussion title" }] },
-    });
-
-    globalThis.fetch = fetchMock([
-      issueResponse("PR body"),
-      commentsResponse([]),
-      pullRequestResponse("git-vibe/12"),
-      reviewThreadsResponse(),
-      pullRequestReviewsResponse(),
-      pullRequestFilesResponse([]),
-    ]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "",
-        maxTurns: 2,
-        prNumber: "12",
-        repository: "example/repo",
-        stage: "address-pr-feedback",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).resolves.toMatchObject({ parsedOutput: { skipped_feedback: [], tests: [] } });
-  });
-});
-
-describe("stage runner branch dry-runs", () => {
-  it("renders dry-run outputs for implementation and pull request stages", async () => {
-    const cwd = await workspace();
-    delete process.env.RUNNER_TEMP;
-
-    globalThis.fetch = fetchMock([issueResponse("Issue body"), commentsResponse([])]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "12",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "implement",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).resolves.toMatchObject({ parsedOutput: { tests: [] } });
-
-    globalThis.fetch = fetchMock([issueResponse("Issue body"), commentsResponse([])]);
-    await expect(
-      runStage({
-        cwd,
-        dryRun: true,
-        issueNumber: "12",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "create-pr",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).resolves.toMatchObject({
-      parsedOutput: { branch: "git-vibe/12", pr_title: "GitVibe dry run: Issue title" },
     });
   });
 });
@@ -200,74 +143,6 @@ describe("stage runner discussion context selection", () => {
     ).resolves.toMatchObject({
       parsedOutput: { comment_body: "GitVibe dry run for materialize on discussion #5." },
     });
-  });
-});
-
-describe("stage runner implementation writes", () => {
-  it("runs implementation tests and skips git writes when there are no changes", async () => {
-    const cwd = await workspace("tests:\n  commands:\n    - 'true'\n");
-    commitAll(cwd);
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  comment_body: "No changes.",
-                  findings: [],
-                  next_state: "changes-ready-for-commit",
-                  references: [],
-                  stage: "implement",
-                  status: "completed",
-                  summary: "No changes.",
-                  tests: ["true"],
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
-    });
-    const fetch = fetchMock([
-      issueResponse("Issue body"),
-      commentsResponse([]),
-      response(200, { default_branch: "main" }),
-      response(200, {}),
-    ]);
-    globalThis.fetch = fetch;
-
-    await expect(
-      runStage({
-        cwd,
-        dryRun: false,
-        issueNumber: "12",
-        maxTurns: 2,
-        prNumber: "",
-        repository: "example/repo",
-        stage: "implement",
-        stageTimeoutMinutes: 1,
-        token: "token",
-      }),
-    ).resolves.toMatchObject({ status: "completed" });
-
-    const firstInProgressLabelIndex = fetch.mock.calls.findIndex(([url, init]) => {
-      if (!String(url).includes("/repos/example/repo/issues/12/labels")) return false;
-      if (String(init?.method || "GET").toUpperCase() !== "POST") return false;
-      return JSON.parse(String(init?.body || "{}")).labels?.[0] === "gvi:in-progress";
-    });
-    const repositoryLookupIndex = fetch.mock.calls.findIndex(([url, init]) => {
-      return (
-        String(url).includes("/repos/example/repo") &&
-        !String(url).includes("/issues/") &&
-        String(init?.method || "GET").toUpperCase() === "GET"
-      );
-    });
-    expect(firstInProgressLabelIndex).toBeGreaterThan(1);
-    expect(firstInProgressLabelIndex).toBeLessThan(repositoryLookupIndex);
   });
 });
 
@@ -411,146 +286,68 @@ describe("stage runner materialize fallbacks", () => {
   });
 });
 
-describe("stage runner pull request writes", () => {
-  it("creates and updates pull requests from structured AI output", async () => {
+describe("stage runner review-matrix start labels", () => {
+  it("marks pull requests as reviewing at stage start without requiring a workflow run URL", async () => {
     const cwd = await workspace();
-    process.env.GITVIBE_BASE_BRANCH = "develop";
-    await runCreatePr(cwd, [], {
-      expectedMethod: "POST",
-      expectedPath: "/repos/example/repo/pulls",
-      expectedBase: "develop",
-    });
-    await runCreatePr(cwd, [{ number: 22 }], {
-      expectedMethod: "PATCH",
-      expectedPath: "/repos/example/repo/pulls/22",
-    });
-  });
-
-  it("creates pull requests with deterministic fallback fields and repository default base", async () => {
-    const cwd = await workspace();
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  branch: "git-vibe/12",
-                  comment_body: "",
-                  findings: [],
-                  next_state: "pr-draft-ready",
-                  pr_body: "",
-                  pr_title: "",
-                  references: [],
-                  stage: "create-pr",
-                  status: "completed",
-                  summary: "Fallback summary.",
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
-    });
+    generateText.mockResolvedValueOnce(reviewMatrixAiResult());
     const fetch = fetchMock([
-      issueResponse("Issue body"),
+      issueResponse("PR body"),
       commentsResponse([]),
-      response(200, { default_branch: "main" }),
-      response(200, []),
-      response(200, { number: 22 }),
-      response(200, {}),
-      response(200, {}),
+      pullRequestResponse("feature/review"),
+      reviewThreadsResponse(),
+      pullRequestReviewsResponse([]),
+      pullRequestFilesResponse([]),
       response(200, {}),
     ]);
     globalThis.fetch = fetch;
 
-    await runStage({
+    const result = await runStage({
       cwd,
       dryRun: false,
-      issueNumber: "12",
+      issueNumber: "",
       maxTurns: 2,
-      prNumber: "",
+      prNumber: "12",
       repository: "example/repo",
-      stage: "create-pr",
+      stage: "review-matrix",
       stageTimeoutMinutes: 1,
       token: "token",
     });
 
-    const body = JSON.parse(fetch.mock.calls[4][1].body);
-    expect(body).toMatchObject({
-      base: "main",
-      body: "Fallback summary.\n\n## GitVibe Traceability\n\nCloses #12",
-      head: "git-vibe/12",
-      title: "GitVibe: Issue title",
+    expect(result).toMatchObject({
+      parsedOutput: { next_state: "review-passed" },
+      status: "completed",
     });
+    const requests = fetchRequests(fetch);
+    const reviewingLabelIndex = requests.findIndex(
+      (request) =>
+        request.method === "POST" &&
+        request.url.endsWith("/repos/example/repo/issues/12/labels") &&
+        request.body?.labels?.includes("gvi:reviewing"),
+    );
+    const reviewPostIndex = requests.findIndex(
+      (request) =>
+        request.method === "POST" && request.url.endsWith("/repos/example/repo/pulls/12/reviews"),
+    );
+    expect(reviewingLabelIndex).toBeGreaterThan(-1);
+    expect(reviewPostIndex).toBeGreaterThan(-1);
+    expect(reviewingLabelIndex).toBeLessThan(reviewPostIndex);
+    expect(requests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "DELETE",
+          url: expect.stringContaining(
+            "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+          ),
+        }),
+        expect.objectContaining({
+          body: { labels: ["gvi:reviewing"] },
+          method: "POST",
+          url: expect.stringContaining("/repos/example/repo/issues/12/labels"),
+        }),
+      ]),
+    );
   });
 });
-
-/**
- * @param {string} cwd
- * @param {unknown[]} existingPulls
- * @param {{ expectedBase?: string; expectedMethod: string; expectedPath: string }} expected
- */
-async function runCreatePr(cwd, existingPulls, expected) {
-  generateText.mockResolvedValueOnce({
-    steps: [
-      {
-        toolCalls: [
-          {
-            input: {
-              content: JSON.stringify({
-                assumptions: [],
-                branch: "git-vibe/12",
-                comment_body: "PR ready.",
-                findings: [],
-                next_state: "pr-draft-ready",
-                pr_body: "Refs #12",
-                pr_title: "GitVibe: title",
-                references: [],
-                stage: "create-pr",
-                status: "completed",
-                summary: "Created PR.",
-              }),
-            },
-            toolName: "output_validator",
-          },
-        ],
-      },
-    ],
-    text: "{}",
-  });
-  const fetch = fetchMock([
-    issueResponse("Issue body"),
-    commentsResponse([]),
-    response(200, { default_branch: "main" }),
-    response(200, existingPulls),
-    response(200, { html_url: "https://github.com/example/repo/pull/22", number: 22 }),
-    response(200, {}),
-    response(200, {}),
-    response(200, {}),
-  ]);
-  globalThis.fetch = fetch;
-
-  await runStage({
-    cwd,
-    dryRun: false,
-    issueNumber: "12",
-    maxTurns: 2,
-    prNumber: "",
-    repository: "example/repo",
-    stage: "create-pr",
-    stageTimeoutMinutes: 1,
-    token: "token",
-  });
-
-  expect(fetch.mock.calls[4][0]).toContain(expected.expectedPath);
-  expect(fetch.mock.calls[4][1].method).toBe(expected.expectedMethod);
-  if (expected.expectedBase)
-    expect(JSON.parse(fetch.mock.calls[4][1].body).base).toBe(expected.expectedBase);
-}
 
 /**
  * @param {string} [config]
@@ -563,16 +360,6 @@ async function workspace(config = "") {
   writeFileSync(join(cwd, ".github", "git-vibe.yml"), workspaceConfigWithTestAi(config));
   execFileSync("git", ["init"], { cwd, stdio: "ignore" });
   return cwd;
-}
-
-/**
- * @param {string} cwd
- */
-function commitAll(cwd) {
-  execFileSync("git", ["config", "user.name", "tester"], { cwd });
-  execFileSync("git", ["config", "user.email", "tester@example.com"], { cwd });
-  execFileSync("git", ["add", "-A"], { cwd });
-  execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" });
 }
 
 /**
@@ -622,14 +409,6 @@ function issueResponse(body, overrides = {}) {
 
 /** @param {unknown[]} comments */
 const commentsResponse = (comments) => response(200, comments);
-const reviewThreadsResponse = () =>
-  graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
-const pullRequestReviewsResponse = () => response(200, []);
-/** @param {unknown[]} files */
-const pullRequestFilesResponse = (files) => response(200, files);
-/** @param {string} branch */
-const pullRequestResponse = (branch) =>
-  response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });
 function discussionResponse() {
   return graphqlResponse({
     repository: {
@@ -666,6 +445,52 @@ function discussionWithoutIdResponse() {
       },
     },
   });
+}
+
+/**
+ * @param {string} branch
+ * @param {string} [sha]
+ */
+function pullRequestResponse(branch, sha = "current-sha") {
+  return response(200, { head: { ref: branch, repo: { full_name: "example/repo" }, sha } });
+}
+
+function reviewThreadsResponse() {
+  return graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
+}
+
+/** @param {unknown[]} reviews */
+const pullRequestReviewsResponse = (reviews) => response(200, reviews);
+/** @param {unknown[]} files */
+const pullRequestFilesResponse = (files) => response(200, files);
+
+function reviewMatrixAiResult() {
+  const content = JSON.stringify({
+    assumptions: [],
+    comment_body: "Reviewed.",
+    findings: [],
+    next_state: "review-passed",
+    references: [],
+    stage: "review-matrix",
+    status: "completed",
+    summary: "Reviewed.",
+  });
+  return {
+    steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
+    text: content,
+  };
+}
+
+/**
+ * @param {MockFetch} fetch
+ * @returns {FetchRequest[]}
+ */
+function fetchRequests(fetch) {
+  return fetch.mock.calls.map(([url, init = {}]) => ({
+    body: init.body ? JSON.parse(init.body) : undefined,
+    method: String(init.method || "GET").toUpperCase(),
+    url: String(url),
+  }));
 }
 
 /** @param {Record<string, unknown>} data */

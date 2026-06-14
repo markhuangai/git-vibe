@@ -11,13 +11,13 @@ describe("documentation workflow descriptions", () => {
     expect(readme).toContain("Workflows-and-Lifecycle");
   });
 
-  it("keeps Mermaid workflow docs aligned with PR-first review", () => {
+  it("keeps Mermaid workflow docs aligned with the no-code workflow", () => {
     const readme = readFileSync("README.md", "utf8");
 
-    expect(readme).toContain("K[Create or update PR]");
-    expect(readme).toContain("N[Update existing PR branch]");
-    expect(readme).toContain("K --> L");
-    expect(readme).toContain("N --> L");
+    expect(readme).toContain("H --> I[Comment, label, or issue]");
+    expect(readme).toContain("I --> J[Human implementation, review, and merge]");
+    expect(readme).not.toContain("K[Create or update PR]");
+    expect(readme).not.toContain("N[Update existing PR branch]");
   });
 
   it("documents the local git-vibe-setup installer behavior", () => {

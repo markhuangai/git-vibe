@@ -53,7 +53,7 @@ describe("transient status comment markers", () => {
           artifact: "pull-request",
           number: "7",
           run: "44",
-          stage: "address-pr-feedback",
+          stage: "review-matrix",
         }),
       ),
     ).toMatchObject({
@@ -61,7 +61,7 @@ describe("transient status comment markers", () => {
       kind: "stage-start",
       number: "7",
       run: "44",
-      stage: "address-pr-feedback",
+      stage: "review-matrix",
     });
     expect(
       parseTransientStatusMarker(

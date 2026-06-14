@@ -3,15 +3,11 @@ import { GitHubClient, isGitHubGraphQLForbiddenError, splitRepository } from "..
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { ContextPacket, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
-
-interface PullRequestReviewComment {
-  body: string;
-  line: number;
-  path: string;
-  side: "LEFT" | "RIGHT";
-  start_line?: number;
-  start_side?: "LEFT" | "RIGHT";
-}
+import {
+  createPullRequestReview,
+  type PullRequestReviewComment,
+  updatePullRequestReview,
+} from "./pr-review-github.js";
 
 interface ReviewFindingComment {
   body: string;
@@ -224,44 +220,6 @@ async function authenticatedGitHubLogin(options: {
     return undefined;
   }
   return login;
-}
-
-async function createPullRequestReview(options: {
-  body: string;
-  client: GitHubClient;
-  comments: PullRequestReviewComment[];
-  pullNumber: string;
-  repository: string;
-  token: string;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.repository);
-  await options.client.request({
-    body: {
-      body: options.body,
-      comments: options.comments.length ? options.comments : undefined,
-      event: "COMMENT",
-    },
-    method: "POST",
-    path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/reviews`,
-    token: options.token,
-  });
-}
-
-async function updatePullRequestReview(options: {
-  body: string;
-  client: GitHubClient;
-  pullNumber: string;
-  repository: string;
-  reviewId: string;
-  token: string;
-}): Promise<void> {
-  const { owner, repo } = splitRepository(options.repository);
-  await options.client.request({
-    body: { body: options.body },
-    method: "PUT",
-    path: `/repos/${owner}/${repo}/pulls/${options.pullNumber}/reviews/${options.reviewId}`,
-    token: options.token,
-  });
 }
 
 async function reconcileReviewFindings(options: {

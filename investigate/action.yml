@@ -1,12 +1,12 @@
 name: GitVibe investigate
-description: Inspect an approved issue or pull request feedback and produce implementation context.
+description: Inspect an issue or pull request and produce maintainer handoff context.
 
 inputs:
   issue-number:
     description: Issue number to investigate. Required unless pr-number is set.
     required: false
   pr-number:
-    description: Pull request number whose feedback should be investigated. Required unless issue-number is set.
+    description: Pull request number to investigate. Required unless issue-number is set.
     required: false
   stage-timeout-minutes:
     description: Maximum minutes allocated to this stage.

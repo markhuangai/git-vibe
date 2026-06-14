@@ -1,6 +1,6 @@
 import { reviewWorkflowBudgetInputs } from "../shared/budgets.js";
 import { gitVibeConfigPath, stageEnabled } from "../shared/config.js";
-import { gitVibeInternalLabels, gitVibeLabels } from "../shared/labels.js";
+import { gitVibeLabels } from "../shared/labels.js";
 import {
   addIssueLabel,
   createIssueComment,
@@ -48,7 +48,6 @@ export async function handleReviewPullRequestLabel(
   await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.readyForApproval.name);
   await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.blocked.name);
   await removeIssueLabelIfPresent(options, issueNumber, gitVibeLabels.reviewing.name);
-  await removeIssueLabelIfPresent(options, issueNumber, gitVibeInternalLabels.reviewFix.name);
   await addIssueLabel(options, issueNumber, gitVibeLabels.reviewing.name);
   await postQueuedWorkflowComment(options, {
     artifact: "pull-request",

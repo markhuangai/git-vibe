@@ -274,7 +274,7 @@ describe("git-vibe-setup workflow update safety", () => {
     expect(readFileSync(join(cwd, ".github", "workflows", "validate.yml"), "utf8")).toBe(
       "name: Custom validate\n",
     );
-    expect(existsSync(join(cwd, ".github", "workflows", "develop.yml"))).toBe(false);
+    expect(existsSync(join(cwd, ".github", "workflows", "review.yml"))).toBe(false);
   });
 
   it("fails without writing when the release starter is missing a workflow wrapper", async () => {
@@ -541,7 +541,7 @@ describe("git-vibe-setup setup failures", () => {
     const errors = [];
 
     mkdirSync(join(cwd, ".github", "workflows"), { recursive: true });
-    writeFileSync(join(cwd, ".github", "workflows", "develop.yml"), "existing");
+    writeFileSync(join(cwd, ".github", "workflows", "review.yml"), "existing");
 
     const exitCode = await setupCli({
       cwd,
@@ -551,7 +551,7 @@ describe("git-vibe-setup setup failures", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(errors[0]).toContain(".github/workflows/develop.yml");
+    expect(errors[0]).toContain(".github/workflows/review.yml");
     expect(existsSync(join(cwd, ".github", "git-vibe.yml"))).toBe(false);
     expect(existsSync(join(cwd, ".git-vibe"))).toBe(false);
   });
@@ -667,12 +667,12 @@ describe("installation rollback", () => {
 describe("workflow ref pinning", () => {
   it("preserves dollar sequences in the release tag", () => {
     const pinned = pinWorkflowReleaseRefs(
-      "uses: markhuangai/git-vibe/.github/workflows/develop.yml@v1\n",
+      "uses: markhuangai/git-vibe/.github/workflows/validate.yml@v1\n",
       "release-$1-${tag}",
     );
 
     expect(pinned).toContain(
-      "uses: markhuangai/git-vibe/.github/workflows/develop.yml@release-$1-${tag}",
+      "uses: markhuangai/git-vibe/.github/workflows/validate.yml@release-$1-${tag}",
     );
   });
 });

@@ -69,10 +69,10 @@ describe("role group stage planning", () => {
     ).toThrow("ai.stages.validate.profiles is no longer supported");
     expect(() =>
       stageExecutionPlan(
-        { ...config, ai: { ...config.ai, stages: { implement: { role_group: "review_gate" } } } },
-        "implement",
+        { ...config, ai: { ...config.ai, stages: { materialize: { role_group: "review_gate" } } } },
+        "materialize",
       ),
-    ).toThrow("ai.stages.implement.role_group is only supported for read-only stages");
+    ).toThrow("ai.stages.materialize.role_group is only supported for read-only stages");
   });
 
   it("labels workflow members from roles and profiles", () => {

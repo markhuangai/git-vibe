@@ -73,8 +73,6 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 60),
       token,
-      validationRepairAttempts: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_ATTEMPTS", 3),
-      validationRepairMaxTurns: numberEnv(env, "GITVIBE_VALIDATION_REPAIR_MAX_TURNS", 45),
       workflowRunAttempt: envValue(env, "GITHUB_RUN_ATTEMPT") || undefined,
       workflowRunUrl: workflowRunUrl(env),
     });
@@ -129,9 +127,6 @@ function readTargetInputs(
   const issueNumber = envValue(env, "GITVIBE_ISSUE_NUMBER");
   const prNumber = envValue(env, "GITVIBE_PR_NUMBER");
 
-  if (stage === "address-pr-feedback" && !prNumber) {
-    throw new Error(`GITVIBE_PR_NUMBER is required for ${stage}.`);
-  }
   if (stage === "investigate" && !issueNumber && !prNumber) {
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for investigate.");
   }
@@ -145,9 +140,7 @@ function readTargetInputs(
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for review-matrix.");
   }
   if (
-    !["address-pr-feedback", "investigate", "review-matrix", "materialize", "validate"].includes(
-      stage,
-    ) &&
+    !["investigate", "review-matrix", "materialize", "validate"].includes(stage) &&
     !issueNumber
   ) {
     throw new Error("GITVIBE_ISSUE_NUMBER is required for this stage.");
@@ -245,12 +238,6 @@ function writeOutputs(
       isInvestigationReady(result.parsedOutput) ? "true" : "false",
       appendFile,
     );
-  }
-  if (result.schemaId === "create-pr.v1") {
-    const prNumber = stringOutput(result.parsedOutput.pr_number);
-    const prUrl = stringOutput(result.parsedOutput.pr_url);
-    if (prNumber) writeOutput(env.GITHUB_OUTPUT, "pr-number", prNumber, appendFile);
-    if (prUrl) writeOutput(env.GITHUB_OUTPUT, "pr-url", prUrl, appendFile);
   }
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);

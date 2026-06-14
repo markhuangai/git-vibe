@@ -314,7 +314,7 @@ describe("server action pull request labels", () => {
 });
 
 describe("server action formatting helpers", () => {
-  it("encodes source comment and review metadata", () => {
+  it("encodes source comment metadata", () => {
     expect(
       actions.commandInputs(
         actionContext({ payload: { comment: { id: 1, node_id: "node", url: "comment-url" } } }),
@@ -325,12 +325,6 @@ describe("server action formatting helpers", () => {
       "issue-number": "12",
       "source-comment": expect.stringContaining("issue-comment"),
     });
-    expect(actions.sourceReviewInput(actionContext())).toBe("");
-    expect(
-      actions.sourceReviewInput(
-        actionContext({ payload: { review: { id: 2, node_id: "review-node" } } }),
-      ),
-    ).toContain("pull-request-review");
   });
 
   it("formats label and command decisions", () => {

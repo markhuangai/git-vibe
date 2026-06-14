@@ -22,33 +22,12 @@ export const stageDefinitions: Record<Stage, StageDefinition> = {
     target: "discussion",
     tools: ["read", "grep", "glob"],
   },
-  implement: {
-    promptDir: "implement",
-    schemaFile: "implement.v1.schema.json",
-    schemaId: "implement.v1",
-    target: "issue",
-    tools: ["read", "grep", "glob", "edit", "write", "multi-edit", "bash", "diff"],
-  },
   "review-matrix": {
     promptDir: "review-matrix",
     schemaFile: "review-matrix.v1.schema.json",
     schemaId: "review-matrix.v1",
     target: "issue",
     tools: ["read", "grep", "glob", "diff", "agent"],
-  },
-  "create-pr": {
-    promptDir: "create-pr",
-    schemaFile: "create-pr.v1.schema.json",
-    schemaId: "create-pr.v1",
-    target: "issue",
-    tools: ["read", "grep", "glob", "diff"],
-  },
-  "address-pr-feedback": {
-    promptDir: "address-pr-feedback",
-    schemaFile: "address-pr-feedback.v1.schema.json",
-    schemaId: "address-pr-feedback.v1",
-    target: "pull-request",
-    tools: ["read", "grep", "glob", "edit", "write", "multi-edit", "bash", "diff"],
   },
 };
 

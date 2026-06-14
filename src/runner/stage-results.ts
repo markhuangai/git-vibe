@@ -23,7 +23,7 @@ export async function stageRunResult({
   const schema = loadStageSchema(definition.schemaFile);
   const parsedOutput = await validateOutput({ content, schema, schemaId: definition.schemaId });
   logger.event("output.validation.done", {
-    status: String(parsedOutput.status || "completed"),
+    status: String(parsedOutput.status),
   });
   const result: StageRunResult = {
     commentBody: renderStageResultComment({
@@ -34,8 +34,8 @@ export async function stageRunResult({
     }),
     parsedOutput,
     schemaId: definition.schemaId,
-    status: String(parsedOutput.status || "completed"),
-    summary: String(parsedOutput.summary || `${options.stage} completed`),
+    status: String(parsedOutput.status),
+    summary: String(parsedOutput.summary),
     validationErrors: [],
   };
   const contextDir = process.env.RUNNER_TEMP || options.cwd;
