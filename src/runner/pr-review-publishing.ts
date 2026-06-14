@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { GitHubClient, splitRepository } from "../shared/github.js";
+import { GitHubClient, isGitHubGraphQLForbiddenError, splitRepository } from "../shared/github.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { ContextPacket, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
@@ -438,17 +438,18 @@ async function resolveReviewThread(options: {
   reviewThreadId: string;
   token: string;
 }): Promise<void> {
-  options.logger.event("github.pr.review_thread.resolve.start", {
-    thread: options.reviewThreadId,
-  });
-  await options.client.graphql(
-    resolveReviewThreadMutation,
-    { threadId: options.reviewThreadId },
-    options.token,
-  );
-  options.logger.event("github.pr.review_thread.resolve.done", {
-    thread: options.reviewThreadId,
-  });
+  const thread = options.reviewThreadId;
+  options.logger.event("github.pr.review_thread.resolve.start", { thread });
+  try {
+    await options.client.graphql(resolveReviewThreadMutation, { threadId: thread }, options.token);
+  } catch (error) {
+    if (isGitHubGraphQLForbiddenError(error, "resolveReviewThread")) {
+      options.logger.event("github.pr.review_thread.resolve.skip", { reason: "forbidden", thread });
+      return;
+    }
+    throw error;
+  }
+  options.logger.event("github.pr.review_thread.resolve.done", { thread });
 }
 
 function reviewFindingComments(value: unknown): ReviewFindingComment[] {

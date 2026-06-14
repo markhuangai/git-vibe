@@ -72,6 +72,50 @@ describe("pull request review publishing thread reconciliation", () => {
   });
 });
 
+describe("pull request review publishing thread resolution failures", () => {
+  it("keeps publishing when resolving an outdated GitVibe thread is forbidden", async () => {
+    const client = createClient({
+      graphqlError: new Error(
+        'GitHub GraphQL failed: [{"type":"FORBIDDEN","path":["resolveReviewThread"],"message":"Resource not accessible by integration"}]',
+      ),
+    });
+    const logger = createLogger();
+
+    await publishStageResultComment({
+      client,
+      context: context([priorReviewFinding()]),
+      logger,
+      parsedOutput: { ...output(), next_state: "review-passed", stage: "review-matrix" },
+      runner: runner(),
+    });
+
+    expect(requestCalls(client).map((request) => request.path)).toContain(
+      "/repos/example/repo/pulls/12/comments/123/replies",
+    );
+    expect(reviewRequest(client).body.body).toContain("**Status:** `completed`");
+    expect(logger.event).toHaveBeenCalledWith("github.pr.review_thread.resolve.skip", {
+      reason: "forbidden",
+      thread: "thread-1",
+    });
+  });
+
+  it("fails publishing when resolving an outdated GitVibe thread fails unexpectedly", async () => {
+    const client = createClient({
+      graphqlError: new Error("GitHub GraphQL failed: unexpected"),
+    });
+
+    await expect(
+      publishStageResultComment({
+        client,
+        context: context([priorReviewFinding()]),
+        logger: createLogger(),
+        parsedOutput: { ...output(), next_state: "review-passed", stage: "review-matrix" },
+        runner: runner(),
+      }),
+    ).rejects.toThrow("GitHub GraphQL failed: unexpected");
+  });
+});
+
 describe("pull request review publishing thread ownership", () => {
   it("does not reconcile review threads authored by someone else", async () => {
     const client = createClient();
@@ -310,7 +354,10 @@ function runner() {
 function createClient(options = {}) {
   return {
     apiBaseUrl: "https://api.github.test",
-    graphql: vi.fn(async () => ({})),
+    graphql: vi.fn(async () => {
+      if (options.graphqlError) throw options.graphqlError;
+      return {};
+    }),
     request: vi.fn(async (request) => {
       if (request.path !== "/user") return {};
       if (options.userLookupError) throw new Error("Resource not accessible by integration");

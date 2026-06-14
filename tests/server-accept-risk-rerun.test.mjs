@@ -43,7 +43,34 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
     });
   });
 
-  it("dispatches review when the blocked result came from a different workflow", async () => {
+  it("reruns blocked automatic pull request review wrapper workflows", async () => {
+    const client = createClient({
+      permission: { role_name: "maintain" },
+      pullRequestHeadSha: "head-sha",
+      pullRequestReviews: [stageResultReview({ run: "88" })],
+      workflowRun: {
+        head_branch: "dev",
+        head_sha: "head-sha",
+        html_url: "https://github.com/example/repo/actions/runs/88",
+        path: ".github/workflows/automatic-pr-review.yml@refs/heads/dev",
+        run_attempt: 1,
+        url: "https://api.github.com/repos/example/repo/actions/runs/88",
+      },
+    });
+
+    await createApp({ client }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
+
+    expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
+    expectMetadataUpdateBeforeRerun(client);
+    expect(workflowDispatches(client)).toEqual([]);
+    const updatedResult = requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body;
+    expect(updatedResult).toContain("run=88");
+    expect(updatedResult).toContain("run-attempt=2");
+  });
+});
+
+describe("GitVibe app server accept-risk pull request rerun unavailable", () => {
+  it("removes accept-risk when the blocked result came from a different workflow", async () => {
     const log = vi.fn();
     const client = createClient({
       permission: { role_name: "maintain" },
@@ -60,15 +87,20 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
     await createApp({ client, log }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
 
     expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({ inputs: { "pr-number": "12" } }),
-    ]);
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "could not safely rerun",
+    );
     expect(log).toHaveBeenCalledWith(
       "accepted-risk rerun skipped: workflow run 88 does not match review.yml",
     );
   });
 
-  it("dispatches review when the prior workflow run is unavailable", async () => {
+  it("removes accept-risk when the prior workflow run is unavailable", async () => {
     const log = vi.fn();
     const client = createClient({
       permission: { role_name: "maintain" },
@@ -80,15 +112,20 @@ describe("GitVibe app server accept-risk pull request reruns", () => {
     await createApp({ client, log }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
 
     expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({ inputs: { "pr-number": "12" } }),
-    ]);
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "could not safely rerun",
+    );
     expect(log).toHaveBeenCalledWith("accepted-risk rerun skipped: workflow run 88 is unavailable");
   });
 });
 
 describe("GitVibe app server accept-risk pull request rerun SHA checks", () => {
-  it("dispatches review when the prior workflow run head SHA differs", async () => {
+  it("removes accept-risk when the prior workflow run head SHA differs", async () => {
     const log = vi.fn();
     const client = createClient({
       permission: { role_name: "maintain" },
@@ -106,9 +143,14 @@ describe("GitVibe app server accept-risk pull request rerun SHA checks", () => {
     await createApp({ client, log }).handleWebhook("pull_request", acceptRiskPullRequestPayload());
 
     expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({ inputs: { "pr-number": "12" } }),
-    ]);
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200")).toEqual([]);
+    expect(requestPaths(client, "DELETE")).toContain(
+      "/repos/example/repo/issues/12/labels/git-vibe%3Aaccept-risk",
+    );
+    expect(requestBodies(client, "POST", "/issues/12/comments").at(-1).body).toContain(
+      "could not safely rerun",
+    );
     expect(log).toHaveBeenCalledWith(
       "accepted-risk rerun skipped: workflow run 88 head SHA does not match",
     );

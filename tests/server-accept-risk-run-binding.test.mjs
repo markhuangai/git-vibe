@@ -15,6 +15,13 @@ describe("GitVibe app server accept-risk run-bound metadata sources", () => {
     const client = createClient({
       comments: [stageResultComment({ stage: "validate" })],
       permission: { role_name: "maintain" },
+      workflowRun: {
+        head_branch: "main",
+        html_url: "https://github.com/example/repo/actions/runs/88",
+        path: ".github/workflows/validate.yml@main",
+        run_attempt: 1,
+        url: "https://api.github.com/repos/example/repo/actions/runs/88",
+      },
     });
 
     await createApp({ client }).handleWebhook("issues", {
@@ -25,15 +32,14 @@ describe("GitVibe app server accept-risk run-bound metadata sources", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(requestPaths(client, "POST")).toContain(
-      "/repos/example/repo/actions/workflows/validate.yml/dispatches",
-    );
-    expect(workflowDispatches(client)[0].inputs).toEqual({ "issue-number": "9" });
+    expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
+    expect(workflowDispatches(client)).toEqual([]);
   });
 
   it("uses pull request payload title and body when binding accepted risk", async () => {
     const client = createClient({
       permission: { role_name: "maintain" },
+      pullRequestHeadSha: "payload-sha",
       pullRequestReviews: [stageResultReview()],
     });
 
@@ -60,6 +66,13 @@ describe("GitVibe app server accept-risk run-bound metadata sources", () => {
     const client = createClient({
       discussionComments: [discussionStageResultComment()],
       permission: { role_name: "maintain" },
+      workflowRun: {
+        head_branch: "main",
+        html_url: "https://github.com/example/repo/actions/runs/88",
+        path: ".github/workflows/validate.yml@main",
+        run_attempt: 1,
+        url: "https://api.github.com/repos/example/repo/actions/runs/88",
+      },
     });
 
     await createApp({ client }).handleWebhook("discussion", {
@@ -75,7 +88,8 @@ describe("GitVibe app server accept-risk run-bound metadata sources", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(workflowDispatches(client)[0].inputs).toEqual({ "discussion-number": "5" });
+    expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
+    expect(workflowDispatches(client)).toEqual([]);
     expect(discussionUpdateBodies(client).at(-1)).toContain("Accepted stages: `validate`");
   });
 });
@@ -86,6 +100,13 @@ describe("GitVibe app server accept-risk run-bound metadata failures", () => {
       comments: [stageResultComment()],
       issuePatchError: new Error("patch unavailable"),
       permission: { role_name: "maintain" },
+      workflowRun: {
+        head_branch: "main",
+        html_url: "https://github.com/example/repo/actions/runs/88",
+        path: ".github/workflows/develop.yml@main",
+        run_attempt: 1,
+        url: "https://api.github.com/repos/example/repo/actions/runs/88",
+      },
     });
     const log = vi.fn();
 
@@ -97,9 +118,8 @@ describe("GitVibe app server accept-risk run-bound metadata failures", () => {
       sender: { login: "maintainer" },
     });
 
-    expect(workflowDispatches(client)).toEqual([
-      expect.objectContaining({ inputs: { "issue-number": "9" } }),
-    ]);
+    expect(workflowDispatches(client)).toEqual([]);
+    expect(requestPaths(client, "POST")).not.toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(requestPaths(client, "DELETE")).toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
     );
@@ -143,7 +163,7 @@ function discussionStageResultComment() {
 
 function stageResultBody({ artifact, number, stage }) {
   return [
-    `<!-- git-vibe:stage-result stage=${stage} artifact=${artifact} number=${number} -->`,
+    `<!-- git-vibe:stage-result stage=${stage} artifact=${artifact} number=${number} run=88 -->`,
     "## GitVibe Result",
     "",
     "**Status:** `blocked`",
