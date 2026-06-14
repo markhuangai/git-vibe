@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
+/**
+ * @typedef {{ body?: Record<string, any>; method: string; url: string }} FetchRequest
+ * @typedef {{ mock: { calls: Array<[string | URL, { body?: string; method?: string }?]> } }} MockFetch
+ */
+
 const generateText = vi.fn();
 const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
@@ -281,6 +286,69 @@ describe("stage runner materialize fallbacks", () => {
   });
 });
 
+describe("stage runner review-matrix start labels", () => {
+  it("marks pull requests as reviewing at stage start without requiring a workflow run URL", async () => {
+    const cwd = await workspace();
+    generateText.mockResolvedValueOnce(reviewMatrixAiResult());
+    const fetch = fetchMock([
+      issueResponse("PR body"),
+      commentsResponse([]),
+      pullRequestResponse("feature/review"),
+      reviewThreadsResponse(),
+      pullRequestReviewsResponse([]),
+      pullRequestFilesResponse([]),
+      response(200, {}),
+    ]);
+    globalThis.fetch = fetch;
+
+    const result = await runStage({
+      cwd,
+      dryRun: false,
+      issueNumber: "",
+      maxTurns: 2,
+      prNumber: "12",
+      repository: "example/repo",
+      stage: "review-matrix",
+      stageTimeoutMinutes: 1,
+      token: "token",
+    });
+
+    expect(result).toMatchObject({
+      parsedOutput: { next_state: "review-passed" },
+      status: "completed",
+    });
+    const requests = fetchRequests(fetch);
+    const reviewingLabelIndex = requests.findIndex(
+      (request) =>
+        request.method === "POST" &&
+        request.url.endsWith("/repos/example/repo/issues/12/labels") &&
+        request.body?.labels?.includes("gvi:reviewing"),
+    );
+    const reviewPostIndex = requests.findIndex(
+      (request) =>
+        request.method === "POST" && request.url.endsWith("/repos/example/repo/pulls/12/reviews"),
+    );
+    expect(reviewingLabelIndex).toBeGreaterThan(-1);
+    expect(reviewPostIndex).toBeGreaterThan(-1);
+    expect(reviewingLabelIndex).toBeLessThan(reviewPostIndex);
+    expect(requests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "DELETE",
+          url: expect.stringContaining(
+            "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
+          ),
+        }),
+        expect.objectContaining({
+          body: { labels: ["gvi:reviewing"] },
+          method: "POST",
+          url: expect.stringContaining("/repos/example/repo/issues/12/labels"),
+        }),
+      ]),
+    );
+  });
+});
+
 /**
  * @param {string} [config]
  * @returns {Promise<string>}
@@ -377,6 +445,52 @@ function discussionWithoutIdResponse() {
       },
     },
   });
+}
+
+/**
+ * @param {string} branch
+ * @param {string} [sha]
+ */
+function pullRequestResponse(branch, sha = "current-sha") {
+  return response(200, { head: { ref: branch, repo: { full_name: "example/repo" }, sha } });
+}
+
+function reviewThreadsResponse() {
+  return graphqlResponse({ repository: { pullRequest: { reviewThreads: { nodes: [] } } } });
+}
+
+/** @param {unknown[]} reviews */
+const pullRequestReviewsResponse = (reviews) => response(200, reviews);
+/** @param {unknown[]} files */
+const pullRequestFilesResponse = (files) => response(200, files);
+
+function reviewMatrixAiResult() {
+  const content = JSON.stringify({
+    assumptions: [],
+    comment_body: "Reviewed.",
+    findings: [],
+    next_state: "review-passed",
+    references: [],
+    stage: "review-matrix",
+    status: "completed",
+    summary: "Reviewed.",
+  });
+  return {
+    steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
+    text: content,
+  };
+}
+
+/**
+ * @param {MockFetch} fetch
+ * @returns {FetchRequest[]}
+ */
+function fetchRequests(fetch) {
+  return fetch.mock.calls.map(([url, init = {}]) => ({
+    body: init.body ? JSON.parse(init.body) : undefined,
+    method: String(init.method || "GET").toUpperCase(),
+    url: String(url),
+  }));
 }
 
 /** @param {Record<string, unknown>} data */
