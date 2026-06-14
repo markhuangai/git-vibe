@@ -83,40 +83,16 @@ export async function publishPullRequestReviewResult(options: {
     comments: comments.length,
     pull_request: options.context.artifact.number,
   });
-  let publishedComments = comments.length;
-  try {
-    await createPullRequestReview({
-      body,
-      client: options.client,
-      comments,
-      pullNumber: options.context.artifact.number,
-      repository: options.runner.repository,
-      token: options.runner.token,
-    });
-  } catch (error) {
-    if (!isUnresolvedReviewLineError(error) || comments.length === 0) throw error;
-    options.logger.event("github.pr.review.inline_comments.retry", {
-      comments: comments.length,
-      pull_request: options.context.artifact.number,
-      reason: "line-unresolved",
-    });
-    await createPullRequestReview({
-      body: pullRequestReviewBody({
-        comments: [],
-        output: options.parsedOutput,
-        stageResultBody: options.stageResultBody,
-        workflowRunUrl: options.runner.workflowRunUrl,
-      }),
-      client: options.client,
-      comments: [],
-      pullNumber: options.context.artifact.number,
-      repository: options.runner.repository,
-      token: options.runner.token,
-    });
-    publishedComments = 0;
-  }
+  await createPullRequestReview({
+    body,
+    client: options.client,
+    comments,
+    pullNumber: options.context.artifact.number,
+    repository: options.runner.repository,
+    token: options.runner.token,
+  });
   options.logger.event("github.pr.review.done", {
-    comments: publishedComments,
+    comments: comments.length,
     pull_request: options.context.artifact.number,
   });
   return true;
@@ -205,11 +181,6 @@ function markerMatchesRun(marker: { run?: string }, body: string, run: string): 
 function reviewInlineCommentCount(body: string): number {
   const match = body.match(/\*\*Inline comments:\*\*\s+(\d+)/);
   return match ? Number(match[1]) : 0;
-}
-
-function isUnresolvedReviewLineError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /\b422\b/.test(message) && /Line could not be resolved/i.test(message);
 }
 
 function reviewDatabaseId(value: number | string | undefined): string | undefined {

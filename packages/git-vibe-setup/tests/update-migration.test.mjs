@@ -153,12 +153,46 @@ describe("git-vibe-setup obsolete workflow cleanup", () => {
     expect(exitCode).toBe(0);
     expect(readFileSync(staleWorkflow, "utf8")).toBe(localWorkflow);
   });
+
+  it("preserves customized obsolete GitVibe wrappers without an ownership marker", async () => {
+    const cwd = workspace();
+    const workflows = join(cwd, ".github", "workflows");
+    const staleWorkflow = join(workflows, "stale-writer.yml");
+    /** @type {string[]} */
+    const logs = [];
+    const customizedWorkflow = [
+      "name: Custom stale writer",
+      "jobs:",
+      "  stale-writer:",
+      "    uses: markhuangai/git-vibe/.github/workflows/stale-writer.yml@v3.3.0",
+      "    with:",
+      "      runner: self-hosted",
+      "",
+    ].join("\n");
+
+    mkdirSync(workflows, { recursive: true });
+    writeFileSync(join(cwd, ".github", "git-vibe.yml"), "version: 1\n");
+    writeFileSync(staleWorkflow, customizedWorkflow);
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchGitHubOk([release({ tag_name: "v1.2.3" })]),
+      log: (message) => logs.push(message),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(readFileSync(staleWorkflow, "utf8")).toBe(customizedWorkflow);
+    expect(logs.join("\n")).toContain("Obsolete workflow files were left in place");
+    expect(logs.join("\n")).toContain(".github/workflows/stale-writer.yml");
+  });
 });
 
 /** @param {string} workflowPath */
 function obsoleteManagedWorkflow(workflowPath) {
   const workflowName = workflowPath.split(/[\\/]/).at(-1) || "stale.yml";
   return [
+    "# GitVibe managed workflow wrapper",
     `name: GitVibe ${workflowName}`,
     "jobs:",
     "  git-vibe:",

@@ -1,3 +1,4 @@
+# GitVibe managed workflow wrapper
 name: GitVibe investigate
 run-name: "[git-vibe][investigate]: Issue #${{ inputs.issue-number }}"
 

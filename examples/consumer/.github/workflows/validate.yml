@@ -1,3 +1,4 @@
+# GitVibe managed workflow wrapper
 name: GitVibe validate
 run-name: "[git-vibe][validate]: ${{ inputs.discussion-number != '' && format('Discussion #{0}', inputs.discussion-number) || inputs.issue-number != '' && format('Issue #{0}', inputs.issue-number) || 'Artifact' }}"
 

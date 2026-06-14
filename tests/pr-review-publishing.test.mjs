@@ -82,50 +82,39 @@ describe("pull request review publishing", () => {
   });
 });
 
-describe("pull request review publishing inline anchor fallback", () => {
-  it("retries as a top-level review when GitHub rejects generated inline anchors", async () => {
+describe("pull request review publishing inline anchor errors", () => {
+  it("surfaces GitHub validation errors when inline anchors are rejected", async () => {
     const client = createClient({ unresolvedReviewLineError: true });
     const logger = createLogger();
 
-    await publishStageResultComment({
-      client,
-      context: context("pull-request"),
-      logger,
-      parsedOutput: {
-        ...output(),
-        findings: ["src/app.ts:42 is not anchorable in the current pull request diff."],
-        inline_comments: [
-          {
-            body: "This generated inline anchor cannot be resolved by GitHub.",
-            line: 42,
-            path: "src/app.ts",
-          },
-        ],
-        next_state: "changes-required",
-        stage: "review-matrix",
-      },
-      runner: runner({ stage: "review-matrix" }),
-    });
+    await expect(
+      publishStageResultComment({
+        client,
+        context: context("pull-request"),
+        logger,
+        parsedOutput: {
+          ...output(),
+          findings: ["src/app.ts:42 is not anchorable in the current pull request diff."],
+          inline_comments: [
+            {
+              body: "This generated inline anchor cannot be resolved by GitHub.",
+              line: 42,
+              path: "src/app.ts",
+            },
+          ],
+          next_state: "changes-required",
+          stage: "review-matrix",
+        },
+        runner: runner({ stage: "review-matrix" }),
+      }),
+    ).rejects.toThrow("Line could not be resolved");
 
     const reviews = requestCalls(client).filter((request) =>
       request.path.endsWith("/pulls/12/reviews"),
     );
-    expect(reviews).toHaveLength(2);
+    expect(reviews).toHaveLength(1);
     expect(reviews[0].body.comments).toHaveLength(1);
-    expect(reviews[1].body).toMatchObject({
-      body: expect.stringContaining("src/app.ts:42 is not anchorable"),
-      comments: undefined,
-      event: "COMMENT",
-    });
-    expect(logger.event).toHaveBeenCalledWith("github.pr.review.inline_comments.retry", {
-      comments: 1,
-      pull_request: "12",
-      reason: "line-unresolved",
-    });
-    expect(logger.event).toHaveBeenCalledWith("github.pr.review.done", {
-      comments: 0,
-      pull_request: "12",
-    });
+    expect(logger.event).not.toHaveBeenCalledWith("github.pr.review.done", expect.anything());
   });
 });
 

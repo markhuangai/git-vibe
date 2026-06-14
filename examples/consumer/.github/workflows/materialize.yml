@@ -1,3 +1,4 @@
+# GitVibe managed workflow wrapper
 name: GitVibe materialize
 run-name: "[git-vibe][materialize]: Discussion #${{ inputs.discussion-number }}"
 

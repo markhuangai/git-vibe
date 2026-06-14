@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { fetchConsumerStarterFiles } from "./consumer-starter.js";
@@ -12,6 +12,7 @@ import {
   buildUpdateFiles,
   existingFilesError,
   installFiles,
+  obsoleteWorkflowCleanupPaths,
   unmanagedWorkflowUpdateError,
   unmanagedWorkflowUpdatePaths,
   updateFiles,
@@ -73,13 +74,12 @@ export async function runUpdate(runtime: SetupCliRuntime = {}): Promise<void> {
   const sourceFiles = await fetchConsumerStarterFiles({ fetchImpl, githubToken, releaseTag });
   const files = buildUpdateFiles({ cwd, releaseTag, sourceFiles });
   const unmanagedPaths = unmanagedWorkflowUpdatePaths(files);
+  const cleanupPaths = obsoleteWorkflowCleanupPaths(files);
 
   if (unmanagedPaths.length > 0) throw unmanagedWorkflowUpdateError(unmanagedPaths, cwd);
 
   updateFiles(files);
-  (runtime.log || console.log)(
-    `GitVibe config and workflow files updated with reusable workflows pinned to ${releaseTag}.`,
-  );
+  (runtime.log || console.log)(updateSuccessMessage({ cleanupPaths, cwd, releaseTag }));
 }
 
 export async function setupCli(runtime: SetupCliRuntime = {}): Promise<number> {
@@ -202,6 +202,20 @@ function validateReleaseTag(releaseTag: string): string {
   throw new Error(
     `Invalid release tag: ${releaseTag}. Release tags must look like v3.0.4 or v3.0.4-rc.1.`,
   );
+}
+
+function updateSuccessMessage(options: {
+  cleanupPaths: string[];
+  cwd: string;
+  releaseTag: string;
+}): string {
+  const message = `GitVibe config and workflow files updated with reusable workflows pinned to ${options.releaseTag}.`;
+  if (options.cleanupPaths.length === 0) return message;
+
+  const listed = options.cleanupPaths
+    .map((path) => `- ${relative(options.cwd, path) || path}`)
+    .join("\n");
+  return `${message}\nObsolete workflow files were left in place for manual review:\n${listed}`;
 }
 
 /* c8 ignore start */

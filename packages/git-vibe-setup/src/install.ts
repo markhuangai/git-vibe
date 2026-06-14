@@ -27,6 +27,7 @@ const requiredInstallSourcePaths = [
 
 const requiredWorkflowSourcePaths = requiredInstallSourcePaths.filter(isWorkflowSourcePath);
 const requiredUpdateSourcePaths = [".github/git-vibe.yml", ...requiredWorkflowSourcePaths];
+const managedWorkflowMarker = "# GitVibe managed workflow wrapper";
 
 export function buildInstallFiles(options: {
   cwd: string;
@@ -62,6 +63,13 @@ export function unmanagedWorkflowUpdatePaths(files: InstallFile[]): string[] {
     .filter(isWorkflowInstallFile)
     .filter((file) => existsSync(file.targetPath) && !isManagedWorkflowTarget(file))
     .map((file) => file.targetPath)
+    .sort();
+}
+
+export function obsoleteWorkflowCleanupPaths(files: InstallFile[]): string[] {
+  return obsoleteWorkflowPaths(files)
+    .filter((targetPath) => !isMarkedManagedWorkflowFile(targetPath, basename(targetPath)))
+    .filter((targetPath) => isManagedWorkflowFile(targetPath, basename(targetPath)))
     .sort();
 }
 
@@ -140,16 +148,33 @@ function isManagedWorkflowFile(targetPath: string, workflowName: string): boolea
 }
 
 function obsoleteManagedWorkflowPaths(files: InstallFile[]): string[] {
+  return obsoleteWorkflowPaths(files)
+    .filter((targetPath) => isMarkedManagedWorkflowFile(targetPath, basename(targetPath)))
+    .sort();
+}
+
+function obsoleteWorkflowPaths(files: InstallFile[]): string[] {
   const workflowDirectory = dirname(files.find(isWorkflowInstallFile)?.targetPath || "");
   if (!workflowDirectory || workflowDirectory === ".") return [];
+  if (!existsSync(workflowDirectory)) return [];
   const currentWorkflowNames = new Set(
     files.filter(isWorkflowInstallFile).map((file) => basename(file.targetPath)),
   );
   return readdirSync(workflowDirectory, { withFileTypes: true })
     .filter((entry) => entry.isFile() && !currentWorkflowNames.has(entry.name))
-    .map((entry) => join(workflowDirectory, entry.name))
-    .filter((targetPath) => isManagedWorkflowFile(targetPath, basename(targetPath)))
-    .sort();
+    .map((entry) => join(workflowDirectory, entry.name));
+}
+
+function isMarkedManagedWorkflowFile(targetPath: string, workflowName: string): boolean {
+  try {
+    const content = readFileSync(targetPath, "utf8");
+    return (
+      content.startsWith(`${managedWorkflowMarker}\n`) &&
+      managedWorkflowPattern(workflowName).test(content)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function managedWorkflowPattern(workflowName: string): RegExp {
