@@ -46,6 +46,7 @@ export async function securityReview(runtime: SecurityReviewRuntime = {}): Promi
       stage,
       stageTimeoutMinutes: numberEnv(env, "GITVIBE_STAGE_TIMEOUT_MINUTES", 10),
       token,
+      workflowRunAttempt: envValue(env, "GITHUB_RUN_ATTEMPT") || undefined,
       workflowRunUrl: workflowRunUrl(env),
     });
 

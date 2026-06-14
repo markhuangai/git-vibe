@@ -21,10 +21,8 @@ import {
   addIssueLabel,
   createDiscussionComment,
   createIssueComment,
-  dispatchWorkflow,
   issueComments,
   postQueuedWorkflowComment,
-  repositoryWorkflowBudgetInputs,
   removeDiscussionLabelFromPayload,
   removeIssueLabelIfPresent,
   type WebhookActionContext,
@@ -80,7 +78,6 @@ interface StageResultSource {
 
 interface ResumePlan {
   artifact: "discussion" | "issue" | "pull-request";
-  inputName: "discussion-number" | "issue-number" | "pr-number";
   number: string;
   riskStages: Stage[];
   workflow: string;
@@ -89,8 +86,19 @@ interface ResumePlan {
 interface AcceptedRiskWorkflowDispatch extends Record<string, unknown> {
   html_url?: string;
   ref: string;
+  runAttempt?: string;
   run_url?: string;
+  startAfterMetadata?: () => Promise<void>;
   workflow_run_id?: number | string;
+}
+
+interface WorkflowRunResponse extends Record<string, unknown> {
+  head_branch?: string;
+  head_sha?: string;
+  html_url?: string;
+  path?: string;
+  run_attempt?: number | string;
+  url?: string;
 }
 
 export async function handleAcceptRiskLabel(
@@ -118,23 +126,24 @@ export async function handleAcceptRiskLabel(
   }
 
   const acceptance = await acceptedRiskMetadata(options, plan, result.marker.stage);
-  const dispatch = await dispatchAcceptedRiskWorkflow(options, label, plan);
-  if (!dispatch) return;
+  const workflowRun = await startAcceptedRiskWorkflow(options, label, plan, result, acceptance);
+  if (!workflowRun) return;
 
-  const run = workflowRunIdFromDispatch(dispatch);
+  const run = workflowRunIdFromDispatch(workflowRun);
   if (!run) {
     await removeAcceptRiskLabel(options, label);
     await postAcceptRiskNoopComment(
       options,
-      `GitVibe removed \`${label}\` because GitHub did not return a workflow run id for the accepted-risk rerun. Apply the label again after GitHub workflow dispatch run details are available.`,
+      `GitVibe removed \`${label}\` because GitHub did not return a workflow run id for the accepted-risk rerun.`,
     );
     return;
   }
 
-  const boundAcceptance = { ...acceptance, run };
+  const boundAcceptance = { ...acceptance, run, runAttempt: workflowRun.runAttempt };
   const stored = await storeRunBoundAcceptedRisk(options, label, result, plan, boundAcceptance);
   if (!stored) return;
 
+  await workflowRun.startAfterMetadata?.();
   await markAcceptedRiskWorkflowRunning(options, plan);
   await removeAcceptRiskLabel(options, label);
   await postQueuedWorkflowComment(options, {
@@ -142,30 +151,82 @@ export async function handleAcceptRiskLabel(
     number: plan.number,
     reason: `accepted prompt-injection risk for \`${result.marker.stage}\` from \`${label}\` label`,
     workflow: plan.workflow,
-    ref: dispatch.ref,
-    workflowRunUrl: dispatch.html_url,
+    ref: workflowRun.ref,
+    workflowRunUrl: workflowRun.html_url,
   });
 }
 
-async function dispatchAcceptedRiskWorkflow(
+async function startAcceptedRiskWorkflow(
   options: WebhookActionContext,
   label: string,
   plan: ResumePlan,
+  result: StageResult,
+  acceptance: AcceptedRiskMetadata,
 ): Promise<AcceptedRiskWorkflowDispatch | undefined> {
-  try {
-    return await dispatchWorkflow(options, plan.workflow, {
-      ...(await repositoryWorkflowBudgetInputs(options, plan.workflow)),
-      [plan.inputName]: plan.number,
-    });
-  } catch (error) {
-    await removeAcceptRiskLabel(options, label);
-    options.log(`accepted-risk workflow dispatch failed: ${errorSummary(error)}`);
-    await postAcceptRiskNoopComment(
-      options,
-      `GitVibe removed \`${label}\` because it could not queue a run-bound accepted-risk workflow.`,
-    );
+  const rerun = await rerunAcceptedRiskWorkflow(options, plan, result, acceptance);
+  if (rerun) return rerun;
+  await removeAcceptRiskLabel(options, label);
+  await postAcceptRiskNoopComment(
+    options,
+    `GitVibe removed \`${label}\` because it could not safely rerun the blocked \`${result.marker.stage}\` workflow run for accepted-risk. Re-run the stage manually after checking the blocked result still points to a matching workflow run.`,
+  );
+  return undefined;
+}
+
+async function rerunAcceptedRiskWorkflow(
+  options: WebhookActionContext,
+  plan: ResumePlan,
+  result: StageResult,
+  acceptance: AcceptedRiskMetadata,
+): Promise<AcceptedRiskWorkflowDispatch | undefined> {
+  const run = result.marker.run;
+  if (!run) {
+    options.log("accepted-risk rerun skipped: blocked stage result has no workflow run id");
     return undefined;
   }
+
+  const details = await options.client
+    .request<WorkflowRunResponse>({
+      method: "GET",
+      path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}`,
+      token: options.token,
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Error && /\bfailed: 404\b/.test(error.message)) return undefined;
+      throw error;
+    });
+  if (!details) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} is unavailable`);
+    return undefined;
+  }
+  if (!workflowRunMatchesPlan(details, plan)) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} does not match ${plan.workflow}`);
+    return undefined;
+  }
+  const runHeadSha = stringField(details.head_sha);
+  if (plan.artifact === "pull-request" && (!runHeadSha || runHeadSha !== acceptance.artifactSha)) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} head SHA does not match`);
+    return undefined;
+  }
+  const runAttempt = nextWorkflowRunAttempt(details.run_attempt);
+  if (!runAttempt) {
+    options.log(`accepted-risk rerun skipped: workflow run ${run} has no run_attempt`);
+    return undefined;
+  }
+  return {
+    html_url: details.html_url,
+    ref: stringField(details.head_branch) || `run-${run}`,
+    runAttempt,
+    run_url: details.url,
+    startAfterMetadata: async () => {
+      await options.client.request({
+        method: "POST",
+        path: `/repos/${options.owner}/${options.repo}/actions/runs/${run}/rerun`,
+        token: options.token,
+      });
+    },
+    workflow_run_id: run,
+  };
 }
 
 async function storeRunBoundAcceptedRisk(
@@ -209,6 +270,25 @@ function workflowRunIdFromDispatch(dispatch: AcceptedRiskWorkflowDispatch): stri
     workflowRunIdFromUrl(dispatch.run_url) ||
     ""
   );
+}
+
+function workflowRunMatchesPlan(details: WorkflowRunResponse, plan: ResumePlan): boolean {
+  const workflowPath = stringField(details.path).split("@")[0] || "";
+  return workflowPathsForPlan(plan).some(
+    (candidate) => workflowPath === candidate || workflowPath.endsWith(`/${candidate}`),
+  );
+}
+
+function workflowPathsForPlan(plan: ResumePlan): string[] {
+  if (plan.artifact === "pull-request" && plan.workflow === "review.yml") {
+    return [plan.workflow, ".github/workflows/automatic-pr-review.yml"];
+  }
+  return [plan.workflow];
+}
+
+function nextWorkflowRunAttempt(value: unknown): string {
+  const attempt = Number(stringValue(value) || "");
+  return Number.isInteger(attempt) && attempt >= 1 ? String(attempt + 1) : "";
 }
 
 async function latestTrustedStageResult(
@@ -312,7 +392,6 @@ function resumePlanFor(
     if (marker.stage === "validate") {
       return {
         artifact: "discussion",
-        inputName: "discussion-number",
         number,
         riskStages: [marker.stage],
         workflow: "validate.yml",
@@ -321,7 +400,6 @@ function resumePlanFor(
     if (marker.stage === "materialize") {
       return {
         artifact: "discussion",
-        inputName: "discussion-number",
         number,
         riskStages: [marker.stage],
         workflow: "materialize.yml",
@@ -338,7 +416,6 @@ function issueResumePlan(marker: StageResultMarker): ResumePlan | undefined {
   if (marker.stage === "investigate") {
     return {
       artifact: "issue",
-      inputName: "issue-number",
       number,
       riskStages: [marker.stage],
       workflow: "investigate.yml",
@@ -347,7 +424,6 @@ function issueResumePlan(marker: StageResultMarker): ResumePlan | undefined {
   if (marker.stage === "validate") {
     return {
       artifact: "issue",
-      inputName: "issue-number",
       number,
       riskStages: [marker.stage],
       workflow: "validate.yml",
@@ -356,7 +432,6 @@ function issueResumePlan(marker: StageResultMarker): ResumePlan | undefined {
   if (marker.stage === "implement" || marker.stage === "create-pr") {
     return {
       artifact: "issue",
-      inputName: "issue-number",
       number,
       riskStages: ["implement", "create-pr"],
       workflow: "develop.yml",
@@ -370,7 +445,6 @@ function pullRequestResumePlan(marker: StageResultMarker): ResumePlan | undefine
   if (marker.stage === "review-matrix") {
     return {
       artifact: "pull-request",
-      inputName: "pr-number",
       number,
       riskStages: [marker.stage],
       workflow: "review.yml",
@@ -379,7 +453,6 @@ function pullRequestResumePlan(marker: StageResultMarker): ResumePlan | undefine
   if (marker.stage === "investigate" || marker.stage === "address-pr-feedback") {
     return {
       artifact: "pull-request",
-      inputName: "pr-number",
       number,
       riskStages: ["investigate", "address-pr-feedback"],
       workflow: "address-feedback.yml",

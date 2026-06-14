@@ -15,6 +15,7 @@ export interface AcceptedRiskMetadata {
   cutoff: string;
   number: string;
   run?: string;
+  runAttempt?: string;
   stage: Stage;
   stages: Stage[];
 }
@@ -62,6 +63,7 @@ export function acceptedRiskMetadataBlock(metadata: AcceptedRiskMetadata): strin
     `${inlineCode(metadata.actor || "<unknown>")} accepted this prompt-injection input risk for one rerun.`,
     `Accepted at: ${inlineCode(metadata.cutoff)}`,
     metadata.run ? `Accepted workflow run: ${inlineCode(metadata.run)}` : "",
+    metadata.runAttempt ? `Accepted workflow attempt: ${inlineCode(metadata.runAttempt)}` : "",
     `Accepted stages: ${metadata.stages.map(inlineCode).join(", ")}`,
     `Artifact title/body SHA: ${inlineCode(metadata.artifactContentSha)}`,
     metadata.artifactSha ? `Pull request head SHA: ${inlineCode(metadata.artifactSha)}` : "",
@@ -94,6 +96,7 @@ export function parseAcceptedRiskMetadata(
       cutoff,
       number,
       run: stringField(attributes.run),
+      runAttempt: stringField(attributes["run-attempt"]),
       stage,
       stages: stagesField(attributes.stages, stage),
     };
@@ -121,6 +124,7 @@ function acceptedRiskMetadataMarker(metadata: AcceptedRiskMetadata): string {
     attribute("cutoff", metadata.cutoff),
     attribute("actor", metadata.actor || ""),
     attribute("run", metadata.run || ""),
+    attribute("run-attempt", metadata.runAttempt || ""),
     attribute("artifact-content-sha", metadata.artifactContentSha),
     attribute("artifact-sha", metadata.artifactSha || ""),
   ]

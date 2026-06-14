@@ -101,6 +101,7 @@ const suspiciousLinkedFilePattern =
   /\.(?:7z|apk|app|bat|bash|cmd|deb|dmg|exe|jar|msi|pkg|ps1|rar|rpm|sh|tar|tgz|war|xz|zip)(?:[?#]|$)/iu;
 const riskyLinkActionPattern =
   /\b(?:curl|download|execute|fetch|install|open|read|run|source|wget)\b/iu;
+const maxSafetyMatchExcerptLength = 160;
 
 export function safetyGateForStage(options: {
   config: GitVibeConfig;
@@ -275,9 +276,13 @@ function patternMatches(
   patterns: Array<{ finding: string; regex: RegExp }>,
   severity: Exclude<SafetySeverity, "none">,
 ): PatternMatch[] {
-  return patterns.flatMap((pattern) =>
-    pattern.regex.test(text) ? [{ finding: `${label}: ${pattern.finding}`, severity }] : [],
-  );
+  return patterns.flatMap((pattern) => {
+    pattern.regex.lastIndex = 0;
+    const match = pattern.regex.exec(text);
+    pattern.regex.lastIndex = 0;
+    if (!match?.[0]) return [];
+    return [{ finding: findingWithMatchedExcerpt(label, pattern.finding, text, match), severity }];
+  });
 }
 
 function base64Matches(source: SafetySource): PatternMatch[] {
@@ -401,6 +406,35 @@ function safetySourceUnit(source: SafetySource, id: string): ContentUnit {
 
 function normalizedText(value: string): string {
   return value.normalize("NFKC").replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069]/gu, "");
+}
+
+function findingWithMatchedExcerpt(
+  label: string,
+  finding: string,
+  source: string,
+  match: RegExpExecArray,
+): string {
+  const excerpt = safetyMatchExcerpt(source, match.index, match[0].length);
+  const suffix = excerpt ? ` (matched excerpt: ${inlineCode(excerpt)})` : "";
+  return `${label}: ${finding}${suffix}`;
+}
+
+function safetyMatchExcerpt(value: string, start: number, length: number): string {
+  const windowStart = Math.max(0, start - 48);
+  const windowEnd = Math.min(value.length, start + length + 48);
+  const prefix = windowStart > 0 ? "..." : "";
+  const suffix = windowEnd < value.length ? "..." : "";
+  const text = `${prefix}${normalizedText(value.slice(windowStart, windowEnd))
+    .replace(/\s+/gu, " ")
+    .trim()}${suffix}`;
+  if (!text) return "";
+  const chars = [...text];
+  if (chars.length <= maxSafetyMatchExcerptLength) return text;
+  return `${chars.slice(0, maxSafetyMatchExcerptLength - 3).join("")}...`;
+}
+
+function inlineCode(value: string): string {
+  return `\`${value.replaceAll("`", "'")}\``;
 }
 
 function validBase64Candidate(value: string): boolean {

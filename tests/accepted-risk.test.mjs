@@ -299,10 +299,12 @@ describe("accepted-risk audit publishing", () => {
           cutoff: "2026-01-04T00:00:00Z",
           stages: ["investigate"],
         },
+        workflowRunAttempt: "3",
       }),
     });
 
     const comment = client.request.mock.calls.find(([request]) => request.method === "POST")?.[0];
+    expect(comment.body.body).toContain("run-attempt=3");
     expect(comment.body.body).toContain("`bad'actor` accepted prompt-injection input risk");
     expect(comment.body.body).toContain("The high-risk findings remain visible");
     expect(client.request.mock.calls.at(-1)[0]).toMatchObject({ method: "DELETE" });

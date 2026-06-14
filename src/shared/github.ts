@@ -85,6 +85,16 @@ export class GitHubClient {
   }
 }
 
+export function isGitHubGraphQLForbiddenError(error: unknown, path: string): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message.startsWith("GitHub GraphQL failed: ") &&
+    message.includes('"type":"FORBIDDEN"') &&
+    message.includes(`"path":["${path}"]`) &&
+    message.includes("Resource not accessible by integration")
+  );
+}
+
 export async function paginatedGitHubRequest<T = unknown>(
   client: Pick<GitHubClient, "request">,
   request: GitHubRequest,

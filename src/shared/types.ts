@@ -29,6 +29,7 @@ export interface RunnerOptions {
     artifactSha?: string;
     cutoff: string;
     run?: string;
+    runAttempt?: string;
     stages: Stage[];
   };
   cwd: string;
@@ -50,6 +51,7 @@ export interface RunnerOptions {
   token: string;
   validationRepairAttempts?: number;
   validationRepairMaxTurns?: number;
+  workflowRunAttempt?: string;
   workflowRunUrl?: string;
 }
 

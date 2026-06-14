@@ -113,6 +113,23 @@ function requestResponseFor(request, options) {
     }
     throw new Error("GitHub API GET actions variable failed: 404");
   }
+  if (request.method === "GET" && /\/actions\/runs\/\d+$/.test(request.path)) {
+    if (options.workflowRunError) throw options.workflowRunError;
+    return (
+      options.workflowRun || {
+        head_branch: "main",
+        head_sha: options.workflowRunHeadSha || options.pullRequestHeadSha || "head-sha",
+        html_url: "https://github.com/example/repo/actions/runs/88",
+        path: ".github/workflows/review.yml@main",
+        run_attempt: 1,
+        url: "https://api.github.com/repos/example/repo/actions/runs/88",
+      }
+    );
+  }
+  if (request.method === "POST" && /\/actions\/runs\/\d+\/rerun$/.test(request.path)) {
+    if (options.workflowRerunError) throw options.workflowRerunError;
+    return options.workflowRerunResponse || {};
+  }
   if (request.method === "GET" && request.path === "/repos/example/repo") {
     return { default_branch: options.defaultBranch || "main" };
   }
