@@ -42,13 +42,13 @@ describe("stage publishing helpers", () => {
       client,
       context: context("pull-request"),
       logger: createLogger(),
-      parsedOutput: output(),
+      parsedOutput: prInvestigationOutput(),
       runner: runner({
         sourceComment: {
           kind: "pull-request-review-comment",
           url: "https://github.com/example/repo/pull/12#discussion_r88",
         },
-        stage: "address-pr-feedback",
+        stage: "investigate",
       }),
     });
 
@@ -256,7 +256,7 @@ describe("stage publishing stale status cleanup", () => {
               artifact: "issue",
               number: "12",
               run: "98",
-              stage: "implement",
+              stage: "validate",
             }),
             author: "git-vibe",
             createdAt: oldCreatedAt,
@@ -269,7 +269,7 @@ describe("stage publishing stale status cleanup", () => {
               artifact: "issue",
               number: "12",
               run: "99",
-              stage: "implement",
+              stage: "validate",
             }),
             author: "git-vibe",
             createdAt: recentCreatedAt,
@@ -282,7 +282,7 @@ describe("stage publishing stale status cleanup", () => {
               artifact: "issue",
               number: "13",
               run: "98",
-              stage: "implement",
+              stage: "validate",
             }),
             author: "git-vibe",
             createdAt: oldCreatedAt,
@@ -420,7 +420,7 @@ describe("stage publishing review status cleanup", () => {
               artifact: "pull-request",
               number: "12",
               run: "99",
-              stage: "address-pr-feedback",
+              stage: "review-matrix",
             }),
             author: "git-vibe",
             createdAt: "2026-01-01T00:00:00Z",
@@ -435,28 +435,22 @@ describe("stage publishing review status cleanup", () => {
       parsedOutput: output(),
       runner: runner({
         sourceComment: { id: "88", kind: "pull-request-review-comment" },
-        stage: "address-pr-feedback",
+        stage: "review-matrix",
         workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
       }),
     });
 
     expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
       ["DELETE", "/repos/example/repo/pulls/comments/77"],
-      ["POST", "/repos/example/repo/pulls/12/comments/88/replies"],
+      ["POST", "/repos/example/repo/pulls/12/reviews"],
     ]);
   });
 });
 
 describe("stage start label publishing helpers", () => {
-  it("marks issue implementation in progress when implement starts", async () => {
+  it("does not mark issue labels for read-only stage starts", async () => {
     const client = createClient();
 
-    await applyStageStartLabelTransition({
-      client,
-      context: context("discussion"),
-      logger: createLogger(),
-      runner: runner({ stage: "implement" }),
-    });
     await applyStageStartLabelTransition({
       client,
       context: context("issue"),
@@ -467,14 +461,10 @@ describe("stage start label publishing helpers", () => {
       client,
       context: context("issue"),
       logger: createLogger(),
-      runner: runner({ stage: "implement" }),
+      runner: runner({ stage: "materialize" }),
     });
 
-    expect(requestCalls(client).map((request) => [request.method, request.path])).toEqual([
-      ["DELETE", "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating"],
-      ["POST", "/repos/example/repo/issues/12/labels"],
-    ]);
-    expect(requestCalls(client).at(-1).body.labels).toEqual(["gvi:in-progress"]);
+    expect(requestCalls(client)).toEqual([]);
   });
 });
 
@@ -517,43 +507,16 @@ describe("stage label publishing helpers", () => {
       parsedOutput: readyInvestigationOutput(),
       runner: runner({ stage: "investigate" }),
     });
-    await applyStageLabelTransition({
-      client,
-      context: context("issue"),
-      logger: createLogger(),
-      parsedOutput: output(),
-      runner: runner({ stage: "implement" }),
-    });
-    await applyStageLabelTransition({
-      client,
-      context: context("issue"),
-      logger: createLogger(),
-      parsedOutput: output(),
-      runner: runner({ stage: "create-pr" }),
-    });
-
     expect(
       requestCalls(client)
         .filter((request) => request.method === "POST")
         .map((request) => request.body.labels[0]),
-    ).toEqual([
-      "gvi:blocked",
-      "gvi:ready-for-approval",
-      "gvi:investigated",
-      "gvi:in-progress",
-      "gvi:pr-opened",
-    ]);
+    ).toEqual(["gvi:blocked", "gvi:ready-for-approval", "gvi:investigated"]);
     expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/gvi%3Ainvestigating",
     );
     expect(requestCalls(client).map((request) => request.path)).toContain(
       "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
-    );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
-      "/repos/example/repo/issues/12/labels/gvi%3Ain-progress",
-    );
-    expect(requestCalls(client).map((request) => request.path)).toContain(
-      "/repos/example/repo/issues/12/labels/gvi%3Ainvestigated",
     );
   });
 });
@@ -596,6 +559,15 @@ function readyInvestigationOutput() {
     blocking_questions: [],
     implementation_plan: ["Implement the accepted behavior."],
     next_state: "ready-for-implementation",
+    stage: "investigate",
+  };
+}
+
+function prInvestigationOutput() {
+  return {
+    ...output(),
+    feedback_items: [],
+    next_state: "no-fixes-needed",
     stage: "investigate",
   };
 }

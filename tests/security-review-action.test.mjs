@@ -133,7 +133,7 @@ describe("GitVibe security review action outputs", () => {
         env: {
           ...baseEnv,
           GITHUB_OUTPUT: "/tmp/output",
-          GITVIBE_STAGE: "implement",
+          GITVIBE_STAGE: "validate",
         },
         runStageSecurityReview,
       }),
@@ -171,11 +171,6 @@ describe("GitVibe security review action validation", () => {
   it("validates required target inputs", async () => {
     const cases = [
       {
-        argv: ["address-pr-feedback"],
-        env: baseEnv,
-        error: "GITVIBE_PR_NUMBER is required for address-pr-feedback.",
-      },
-      {
         argv: ["investigate"],
         env: { ...baseEnv, GITVIBE_ISSUE_NUMBER: "" },
         error: "GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for investigate.",
@@ -196,12 +191,7 @@ describe("GitVibe security review action validation", () => {
         error: "GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for review-matrix.",
       },
       {
-        argv: ["create-pr"],
-        env: { ...baseEnv, GITVIBE_ISSUE_NUMBER: "" },
-        error: "GITVIBE_ISSUE_NUMBER is required for this stage.",
-      },
-      {
-        argv: ["implement"],
+        argv: ["validate"],
         env: { ...baseEnv, GITVIBE_STAGE_TIMEOUT_MINUTES: "0" },
         error: "GITVIBE_STAGE_TIMEOUT_MINUTES must be a positive number.",
       },
@@ -211,12 +201,12 @@ describe("GitVibe security review action validation", () => {
         error: "Unknown GitVibe action stage: missing-stage",
       },
       {
-        argv: ["implement"],
+        argv: ["validate"],
         env: { GITVIBE_GITHUB_APP_TOKEN: "token", GITVIBE_ISSUE_NUMBER: "1" },
         error: "GITHUB_REPOSITORY is required.",
       },
       {
-        argv: ["implement"],
+        argv: ["validate"],
         env: { GITHUB_REPOSITORY: "example/repo", GITVIBE_ISSUE_NUMBER: "1" },
         error:
           "ACTIONS_ID_TOKEN_REQUEST_URL is required. Add permissions: id-token: write to this job.",

@@ -6,18 +6,6 @@ describe("GitVibe matrix workflow labels", () => {
   it("names member jobs with role-profile labels", () => {
     const cases = [
       [
-        ".github/workflows/address-feedback.yml",
-        "investigate-feedback-members",
-        "plan-investigate-feedback",
-        "git-vibe-investigate-feedback-member-${{ matrix.index }} / ",
-      ],
-      [
-        ".github/workflows/develop.yml",
-        "review-matrix-members",
-        "plan-review-matrix",
-        "git-vibe-review-member-${{ matrix.index }} / ",
-      ],
-      [
         ".github/workflows/review.yml",
         "review-matrix-members",
         "plan-review-matrix",

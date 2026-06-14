@@ -15,9 +15,6 @@ export interface StageResultCommentOptions {
 }
 
 const stageTitles: Record<Stage, string> = {
-  "address-pr-feedback": "PR Feedback Update",
-  "create-pr": "Pull Request Update",
-  implement: "Implementation Update",
   investigate: "Investigation",
   materialize: "Implementation Issues",
   "review-matrix": "Review Matrix",

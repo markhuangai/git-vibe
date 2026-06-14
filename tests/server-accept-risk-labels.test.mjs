@@ -19,12 +19,12 @@ describe("GitVibe app server accept-risk labels", () => {
         stageResultComment({
           artifact: "issue",
           number: 9,
-          stage: "implement",
+          stage: "validate",
           submittedAt: "2026-01-02T00:00:00Z",
         }),
       ],
       permission: { role_name: "maintain" },
-      workflowRun: workflowRun(".github/workflows/develop.yml@main"),
+      workflowRun: workflowRun(".github/workflows/validate.yml@main"),
     });
 
     await createApp({ client }).handleWebhook("issues", {
@@ -43,7 +43,7 @@ describe("GitVibe app server accept-risk labels", () => {
     expect(updatedResult).toContain("run=88");
     expect(updatedResult).toContain("run-attempt=2");
     expect(updatedResult).toContain("Accepted workflow run: `88`");
-    expect(updatedResult).toContain("Accepted stages: `implement`, `create-pr`");
+    expect(updatedResult).toContain("Accepted stages: `validate`");
     expect(updatedResult).toContain("Artifact title/body SHA");
     expect(requestPaths(client, "DELETE")).toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
@@ -60,7 +60,7 @@ describe("GitVibe app server accept-risk labels", () => {
           artifact: "issue",
           number: 9,
           run: "",
-          stage: "implement",
+          stage: "validate",
           submittedAt: "2026-01-02T00:00:00Z",
         }),
       ],
@@ -89,9 +89,9 @@ describe("GitVibe app server accept-risk labels", () => {
 describe("GitVibe app server accept-risk run id binding", () => {
   it("binds accepted risk to the trusted blocked run and next attempt", async () => {
     const client = createClient({
-      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "validate" })],
       permission: { role_name: "maintain" },
-      workflowRun: workflowRun(".github/workflows/develop.yml@main", { run_attempt: 4 }),
+      workflowRun: workflowRun(".github/workflows/validate.yml@main", { run_attempt: 4 }),
     });
 
     await createApp({ client }).handleWebhook("issues", {
@@ -111,9 +111,9 @@ describe("GitVibe app server accept-risk run id binding", () => {
 
   it("posts the rerun workflow URL from the blocked run details", async () => {
     const client = createClient({
-      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "validate" })],
       permission: { role_name: "maintain" },
-      workflowRun: workflowRun(".github/workflows/develop.yml@main"),
+      workflowRun: workflowRun(".github/workflows/validate.yml@main"),
     });
 
     await createApp({ client }).handleWebhook("issues", {
@@ -133,7 +133,7 @@ describe("GitVibe app server accept-risk run id binding", () => {
 describe("GitVibe app server accept-risk rerun-unavailable cleanup", () => {
   it("removes accept-risk without writing metadata when the blocked run cannot be fetched", async () => {
     const client = createClient({
-      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "implement" })],
+      comments: [stageResultComment({ artifact: "issue", number: 9, stage: "validate" })],
       permission: { role_name: "maintain" },
       workflowRunError: new Error("GitHub API GET /actions/runs/88 failed: 404 {}"),
     });
@@ -200,7 +200,6 @@ describe("GitVibe app server accept-risk pull request reviews", () => {
         "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
         "/repos/example/repo/issues/12/labels/gvi%3Ablocked",
         "/repos/example/repo/issues/12/labels/gvi%3Areviewing",
-        "/repos/example/repo/issues/12/labels/gvi%3Areview-fix",
         "/repos/example/repo/issues/12/labels/git-vibe%3Aaccept-risk",
       ]),
     );
@@ -229,12 +228,12 @@ describe("GitVibe app server accept-risk pull request review pagination", () => 
           stageResultReview({
             artifact: "pull-request",
             number: 12,
-            stage: "address-pr-feedback",
+            stage: "review-matrix",
             submittedAt: "2026-01-02T00:00:00Z",
           }),
         ],
       ],
-      workflowRun: workflowRun(".github/workflows/address-feedback.yml@dev", {
+      workflowRun: workflowRun(".github/workflows/review.yml@dev", {
         head_branch: "dev",
         head_sha: "head-sha",
       }),
@@ -251,7 +250,7 @@ describe("GitVibe app server accept-risk pull request review pagination", () => 
     expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(workflowDispatches(client)).toEqual([]);
     expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
-      "Accepted stages: `investigate`, `address-pr-feedback`",
+      "Accepted stages: `review-matrix`",
     );
     expect(requestPaths(client, "GET")).toEqual(
       expect.arrayContaining([
@@ -269,13 +268,13 @@ describe("GitVibe app server accept-risk label result selection", () => {
         stageResultComment({
           artifact: "issue",
           number: 99,
-          stage: "implement",
+          stage: "validate",
           submittedAt: "2026-01-05T00:00:00Z",
         }),
         stageResultComment({
           artifact: "issue",
           number: 99,
-          stage: "implement",
+          stage: "validate",
           status: "completed",
           submittedAt: "2026-01-06T00:00:00Z",
         }),
@@ -298,12 +297,12 @@ describe("GitVibe app server accept-risk label result selection", () => {
         stageResultComment({
           artifact: "issue",
           number: 9,
-          stage: "implement",
+          stage: "validate",
           submittedAt: "2026-01-03T00:00:00Z",
         }),
       ],
       permission: { role_name: "maintain" },
-      workflowRun: workflowRun(".github/workflows/develop.yml@main"),
+      workflowRun: workflowRun(".github/workflows/validate.yml@main"),
     });
 
     await createApp({ client }).handleWebhook("issues", {
@@ -317,7 +316,7 @@ describe("GitVibe app server accept-risk label result selection", () => {
     expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(workflowDispatches(client)).toEqual([]);
     expect(requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body).toContain(
-      "Accepted stages: `implement`, `create-pr`",
+      "Accepted stages: `validate`",
     );
   });
 
@@ -358,7 +357,7 @@ describe("GitVibe app server accept-risk stage result ordering", () => {
         stageResultComment({
           artifact: "issue",
           number: 9,
-          stage: "implement",
+          stage: "validate",
           status: "completed",
           submittedAt: "2026-01-03T00:00:00Z",
         }),
@@ -465,12 +464,12 @@ describe("GitVibe app server accept-risk pull request labels", () => {
         stageResultComment({
           artifact: "pull-request",
           number: 12,
-          stage: "address-pr-feedback",
+          stage: "review-matrix",
         }),
       ],
       permission: { role_name: "maintain" },
       pullRequestHeadSha: "lookup-sha",
-      workflowRun: workflowRun(".github/workflows/address-feedback.yml@dev", {
+      workflowRun: workflowRun(".github/workflows/review.yml@dev", {
         head_branch: "dev",
         head_sha: "lookup-sha",
       }),
@@ -558,7 +557,7 @@ describe("GitVibe app server accept-risk label no-op cleanup", () => {
     const client = createClient({
       comments: [
         {
-          ...stageResultComment({ artifact: "issue", number: 9, stage: "implement" }),
+          ...stageResultComment({ artifact: "issue", number: 9, stage: "validate" }),
           author_association: "NONE",
           user: { login: "external-git-vibe-helper" },
         },
@@ -587,7 +586,7 @@ describe("GitVibe app server accept-risk label no-op cleanup", () => {
     const client = createClient({
       comments: [
         {
-          ...stageResultComment({ artifact: "issue", number: 9, stage: "implement" }),
+          ...stageResultComment({ artifact: "issue", number: 9, stage: "validate" }),
           author_association: "NONE",
         },
       ],

@@ -10,8 +10,6 @@ import { parse } from "yaml";
 
 /** @type {Array<[string, string, string]>} */
 const specs = [
-  [".github/workflows/address-feedback.yml", "plan-investigate-feedback", "investigate"],
-  [".github/workflows/develop.yml", "implement", "implement"],
   [".github/workflows/investigate.yml", "plan-investigate", "investigate"],
   [".github/workflows/materialize.yml", "materialize", "materialize"],
   [".github/workflows/review.yml", "plan-review-matrix", "review-matrix"],

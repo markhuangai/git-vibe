@@ -3,30 +3,30 @@ import { parseGitVibeConfig, stageEnabled } from "../src/shared/config.ts";
 
 describe("GitVibe stage config gates", () => {
   it("treats missing stage enabled config as enabled", () => {
-    expect(stageEnabled({}, "implement")).toBe(true);
-    expect(stageEnabled({ ai: {} }, "implement")).toBe(true);
-    expect(stageEnabled({ ai: { stages: {} } }, "implement")).toBe(true);
+    expect(stageEnabled({}, "validate")).toBe(true);
+    expect(stageEnabled({ ai: {} }, "validate")).toBe(true);
+    expect(stageEnabled({ ai: { stages: {} } }, "validate")).toBe(true);
   });
 
   it("reads explicit stage enabled flags", () => {
-    expect(stageEnabled({ ai: { stages: { implement: { enabled: true } } } }, "implement")).toBe(
+    expect(stageEnabled({ ai: { stages: { validate: { enabled: true } } } }, "validate")).toBe(
       true,
     );
-    expect(stageEnabled({ ai: { stages: { implement: { enabled: false } } } }, "implement")).toBe(
+    expect(stageEnabled({ ai: { stages: { validate: { enabled: false } } } }, "validate")).toBe(
       false,
     );
   });
 
   it("rejects malformed stage enabled config", () => {
-    expect(() => stageEnabled({ ai: { stages: [] } }, "implement")).toThrow(
+    expect(() => stageEnabled({ ai: { stages: [] } }, "validate")).toThrow(
       "ai.stages must be an object",
     );
-    expect(() => stageEnabled({ ai: { stages: { implement: false } } }, "implement")).toThrow(
-      "ai.stages.implement must be an object",
+    expect(() => stageEnabled({ ai: { stages: { validate: false } } }, "validate")).toThrow(
+      "ai.stages.validate must be an object",
     );
     expect(() =>
-      stageEnabled({ ai: { stages: { implement: { enabled: "false" } } } }, "implement"),
-    ).toThrow("ai.stages.implement.enabled must be a boolean");
+      stageEnabled({ ai: { stages: { validate: { enabled: "false" } } } }, "validate"),
+    ).toThrow("ai.stages.validate.enabled must be a boolean");
   });
 
   it("parses empty GitVibe config as defaults", () => {

@@ -28,7 +28,7 @@ describe("git-vibe-setup update migrations", () => {
         "  token_secret: GITVIBE_GITHUB_TOKEN",
         "ai:",
         "  stages:",
-        "    implement:",
+        "    validate:",
         "      enabled: false",
         "",
       ].join("\n"),

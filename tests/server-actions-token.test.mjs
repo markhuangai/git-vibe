@@ -5,18 +5,18 @@ import { createApp, createAppAuth, requestJson, withHttpServer } from "./support
 
 const trustedClaims = {
   checkRunId: "123456",
-  jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/develop.yml@v3",
+  jobWorkflowRef: "markhuangai/git-vibe/.github/workflows/validate.yml@v3",
   repository: "example/repo",
   repositoryId: "123",
   repositoryOwner: "example",
   sha: "abc123",
-  workflowRef: "example/repo/.github/workflows/develop.yml@refs/heads/main",
+  workflowRef: "example/repo/.github/workflows/validate.yml@refs/heads/main",
 };
 
 describe("GitVibe app actions token endpoint", () => {
   it("exchanges GitHub Actions OIDC tokens over HTTP", async () => {
     const appAuth = createAppAuth();
-    const client = clientForHostedAuth({ head_sha: "abc123", name: "develop / security-review" });
+    const client = clientForHostedAuth({ head_sha: "abc123", name: "validate / security-review" });
     const actionsOidcVerifier = {
       verify: vi.fn(async () => trustedClaims),
     };
@@ -63,7 +63,7 @@ describe("GitVibe app actions token endpoint", () => {
 describe("GitVibe app actions Codex auth endpoint", () => {
   it("updates the AI env bundle secret for authorized AI jobs", async () => {
     const appAuth = createAppAuth();
-    const client = clientForHostedAuth({ head_sha: "abc123", name: "develop / implement" });
+    const client = clientForHostedAuth({ head_sha: "abc123", name: "validate / validate" });
     const app = createApp({
       actionsOidcVerifier: { verify: vi.fn(async () => trustedClaims) },
       appAuth,
@@ -104,7 +104,7 @@ describe("GitVibe app actions Codex auth endpoint", () => {
   it("rejects non-AI jobs and malformed bundle values", async () => {
     const app = createApp({
       actionsOidcVerifier: { verify: vi.fn(async () => trustedClaims) },
-      client: clientForHostedAuth({ head_sha: "abc123", name: "develop / security-review" }),
+      client: clientForHostedAuth({ head_sha: "abc123", name: "validate / security-review" }),
     });
 
     await withHttpServer(
@@ -202,7 +202,7 @@ function clientForHostedAuth(checkRun) {
  */
 function codexWriteback({ body }) {
   const client = /** @type {any} */ (
-    clientForHostedAuth({ head_sha: "abc123", name: "develop / implement" })
+    clientForHostedAuth({ head_sha: "abc123", name: "validate / validate" })
   );
   return writeBackActionsCodexAuth({
     audience: "audience",

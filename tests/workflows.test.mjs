@@ -29,8 +29,6 @@ const legacyAiEnvNames = [
 ];
 
 const reusableWorkflows = [
-  ".github/workflows/address-feedback.yml",
-  ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
   ".github/workflows/review.yml",
@@ -38,8 +36,6 @@ const reusableWorkflows = [
 ];
 
 const consumerWorkflows = [
-  "examples/consumer/.github/workflows/address-feedback.yml",
-  "examples/consumer/.github/workflows/develop.yml",
   "examples/consumer/.github/workflows/investigate.yml",
   "examples/consumer/.github/workflows/materialize.yml",
   "examples/consumer/.github/workflows/review.yml",
@@ -49,7 +45,7 @@ const consumerWorkflows = [
 const consumerWorkflowBudgetConfig = {
   ai: {
     budgets: Object.fromEntries(
-      "create_pr_timeout_minutes default_max_turns default_timeout_minutes feedback_max_turns feedback_timeout_minutes implementation_max_turns implementation_timeout_minutes review_timeout_minutes validation_repair_attempts validation_repair_max_turns"
+      "default_max_turns default_timeout_minutes review_timeout_minutes"
         .split(" ")
         .map((key) => [key, 1]),
     ),
@@ -57,9 +53,6 @@ const consumerWorkflowBudgetConfig = {
 };
 
 const actionFiles = [
-  "address-pr-feedback/action.yml",
-  "create-pr/action.yml",
-  "implement/action.yml",
   "investigate/action.yml",
   "mark-blocked/action.yml",
   "materialize/action.yml",
@@ -74,14 +67,12 @@ const workflowRunNameSpecs = [
   { file: ".github/workflows/validate.yml", stage: "validate", multiArtifact: true },
   { file: ".github/workflows/materialize.yml", stage: "materialize", artifact: "Discussion" },
   { file: ".github/workflows/investigate.yml", stage: "investigate", artifact: "Issue" },
-  { file: ".github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
   { file: ".github/workflows/review.yml", stage: "review", artifact: "PR" },
   {
     file: ".github/workflows/automatic-pr-review.yml",
     stage: "automatic-pr-review",
     artifact: "PR",
   },
-  { file: ".github/workflows/address-feedback.yml", stage: "address-feedback", artifact: "PR" },
   {
     file: "examples/consumer/.github/workflows/validate.yml",
     stage: "validate",
@@ -97,13 +88,7 @@ const workflowRunNameSpecs = [
     stage: "investigate",
     artifact: "Issue",
   },
-  { file: "examples/consumer/.github/workflows/develop.yml", stage: "develop", artifact: "Issue" },
   { file: "examples/consumer/.github/workflows/review.yml", stage: "review", artifact: "PR" },
-  {
-    file: "examples/consumer/.github/workflows/address-feedback.yml",
-    stage: "address-feedback",
-    artifact: "PR",
-  },
 ];
 
 const workflowStaticNames = {
@@ -111,16 +96,12 @@ const workflowStaticNames = {
   ".github/workflows/validate.yml": "GitVibe validate",
   ".github/workflows/materialize.yml": "GitVibe materialize",
   ".github/workflows/investigate.yml": "GitVibe investigate",
-  ".github/workflows/develop.yml": "GitVibe develop",
   ".github/workflows/review.yml": "GitVibe review",
   ".github/workflows/automatic-pr-review.yml": "GitVibe automatic PR review",
-  ".github/workflows/address-feedback.yml": "GitVibe address feedback",
   "examples/consumer/.github/workflows/validate.yml": "GitVibe validate",
   "examples/consumer/.github/workflows/materialize.yml": "GitVibe materialize",
   "examples/consumer/.github/workflows/investigate.yml": "GitVibe investigate",
-  "examples/consumer/.github/workflows/develop.yml": "GitVibe develop",
   "examples/consumer/.github/workflows/review.yml": "GitVibe review",
-  "examples/consumer/.github/workflows/address-feedback.yml": "GitVibe address feedback",
 };
 
 describe("GitVibe workflow run names", () => {
@@ -298,16 +279,6 @@ describe("GitVibe hosted auth workflow contract", () => {
 
   it("uses stable matrix member job prefixes for hosted auth authorization", () => {
     const memberJobs = [
-      {
-        file: ".github/workflows/address-feedback.yml",
-        job: "investigate-feedback-members",
-        prefix: "git-vibe-investigate-feedback-member-${{ matrix.index }} / ",
-      },
-      {
-        file: ".github/workflows/develop.yml",
-        job: "review-matrix-members",
-        prefix: "git-vibe-review-member-${{ matrix.index }} / ",
-      },
       {
         file: ".github/workflows/investigate.yml",
         job: "investigate-members",
@@ -513,13 +484,6 @@ describe("GitVibe workflow numeric inputs", () => {
       for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
         const timeout = job["timeout-minutes"];
         if (String(job.uses || "").startsWith("./.github/workflows/")) continue;
-        if (
-          file === ".github/workflows/develop.yml" &&
-          jobName === "implementation-blocked-cleanup"
-        ) {
-          expect(timeout).toBe(10);
-          continue;
-        }
         if (jobName === "security-review" || jobName.startsWith("plan-")) {
           expect(timeout).toBe(10);
           continue;
@@ -530,21 +494,6 @@ describe("GitVibe workflow numeric inputs", () => {
       }
     }
   });
-
-  it("keeps implementation validation repair defaults aligned", () => {
-    const workflow = readWorkflow(".github/workflows/develop.yml");
-    const action = readWorkflow("implement/action.yml");
-
-    expect(workflow.on?.workflow_dispatch?.inputs?.validation_repair_attempts?.default).toBe(3);
-    expect(workflow.on?.workflow_dispatch?.inputs?.validation_repair_max_turns?.default).toBe(45);
-    expect(workflow.on?.workflow_dispatch?.inputs?.implementation_max_turns?.default).toBe(200);
-    expect(workflow.on?.workflow_call?.inputs?.validation_repair_attempts?.default).toBe(3);
-    expect(workflow.on?.workflow_call?.inputs?.validation_repair_max_turns?.default).toBe(45);
-    expect(workflow.on?.workflow_call?.inputs?.implementation_max_turns?.default).toBe(200);
-    expect(action.inputs?.["validation-repair-attempts"]?.default).toBe("3");
-    expect(action.inputs?.["validation-repair-max-turns"]?.default).toBe("45");
-    expect(action.inputs?.["max-turns"]?.default).toBe("200");
-  });
 });
 
 describe("GitVibe workflow write permissions", () => {
@@ -553,11 +502,6 @@ describe("GitVibe workflow write permissions", () => {
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.permissions,
     ).toMatchObject({
       discussions: "write",
-      issues: "write",
-    });
-    expect(
-      readWorkflow(".github/workflows/develop.yml").jobs?.implement?.permissions,
-    ).toMatchObject({
       issues: "write",
     });
   });
@@ -572,16 +516,6 @@ describe("GitVibe workflow write permissions", () => {
       readWorkflow(".github/workflows/validate.yml").jobs?.validate?.steps?.find(
         (step) => step.name === "Upload validation result",
       ),
-    ).toBeUndefined();
-    expect(
-      readWorkflow(".github/workflows/develop.yml").jobs?.["review-matrix"]?.steps?.find(
-        (step) => step.name === "Upload review handoff",
-      ),
-    ).toBeUndefined();
-    expect(
-      readWorkflow(".github/workflows/address-feedback.yml").jobs?.[
-        "address-feedback"
-      ]?.steps?.find((step) => step.name === "Upload feedback remediation result"),
     ).toBeUndefined();
   });
 });

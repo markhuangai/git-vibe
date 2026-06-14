@@ -180,12 +180,12 @@ describe("Claude Code CLI adapter defaults", () => {
   it("uses configured model without permission mode or tool restrictions", async () => {
     mockClaudeOutput({
       is_error: false,
-      structured_output: { stage: "implement", status: "completed" },
+      structured_output: { stage: "validate", status: "completed" },
       type: "result",
     });
 
-    await expect(runAiStage(implementStageOptions(claudeEnvModelConfig()))).resolves.toBe(
-      '{"stage":"implement","status":"completed"}',
+    await expect(runAiStage(validateStageOptions(claudeEnvModelConfig()))).resolves.toBe(
+      '{"stage":"validate","status":"completed"}',
     );
 
     const args = spawn.mock.calls[0][1];
@@ -494,20 +494,6 @@ function validateStageOptions(config) {
   };
 }
 
-function implementStageOptions(config) {
-  return {
-    config,
-    cwd: process.cwd(),
-    maxTurns: 1,
-    prompt: "Prompt",
-    schema: {},
-    schemaId: "schema",
-    stage: "implement",
-    stageDefinition: stageDefinitions.implement,
-    system: "System",
-  };
-}
-
 function claudeCodeConfig() {
   return {
     ai: {
@@ -545,7 +531,7 @@ function claudeEnvModelConfig() {
         },
       },
       stages: {
-        implement: {
+        validate: {
           profile: "claude_code",
         },
       },

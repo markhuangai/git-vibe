@@ -91,9 +91,6 @@ function readTargetInputs(
   const issueNumber = envValue(env, "GITVIBE_ISSUE_NUMBER");
   const prNumber = envValue(env, "GITVIBE_PR_NUMBER");
 
-  if (stage === "address-pr-feedback" && !prNumber) {
-    throw new Error(`GITVIBE_PR_NUMBER is required for ${stage}.`);
-  }
   if (stage === "investigate" && !issueNumber && !prNumber) {
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for investigate.");
   }
@@ -107,9 +104,7 @@ function readTargetInputs(
     throw new Error("GITVIBE_ISSUE_NUMBER or GITVIBE_PR_NUMBER is required for review-matrix.");
   }
   if (
-    !["address-pr-feedback", "investigate", "review-matrix", "materialize", "validate"].includes(
-      stage,
-    ) &&
+    !["investigate", "review-matrix", "materialize", "validate"].includes(stage) &&
     !issueNumber
   ) {
     throw new Error("GITVIBE_ISSUE_NUMBER is required for this stage.");

@@ -3,9 +3,9 @@ import { parseCommand } from "../src/app/commands.ts";
 
 describe("parseCommand", () => {
   it("parses slash commands", () => {
-    expect(parseCommand("/git-vibe address-feedback")).toMatchObject({
+    expect(parseCommand("/git-vibe investigate")).toMatchObject({
       args: [],
-      command: "address-feedback",
+      command: "investigate",
       trigger: "/git-vibe",
     });
   });

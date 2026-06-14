@@ -10,12 +10,7 @@ import { createStageLogger } from "./logging.js";
 import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
 import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
-import { type IssueBranchState, prepareIssueBranch } from "./review-fix.js";
-import {
-  promptSafetySources,
-  runStageResultForMode,
-  validationRepairRunner,
-} from "./stage-ai-results.js";
+import { promptSafetySources, runStageResultForMode } from "./stage-ai-results.js";
 import { stageRunResult } from "./stage-results.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
@@ -31,23 +26,13 @@ import {
 } from "./accepted-risk.js";
 import {
   applyStageLabelTransition,
-  applyStageStartLabelTransition,
   type PublishedArtifactComment,
   publishStageResultComment,
   publishStageStartComment,
 } from "./stage-publishing.js";
-import {
-  blockedPullRequestHeadOutput,
-  issueBranchForStage,
-  pullRequestHeadBlockReason,
-  runnerBaseBranch,
-} from "./stage-branches.js";
 import { stageContract } from "./stage-dry-run.js";
 import { repositoryContext } from "./stage-git.js";
-import {
-  applyDeterministicWrites,
-  markPullRequestFeedbackInvestigationStarted,
-} from "./stage-writes.js";
+import { applyDeterministicWrites } from "./stage-writes.js";
 import { stageDefinitions } from "../shared/stages.js";
 import type {
   ContextPacket,
@@ -58,7 +43,6 @@ import type {
 } from "../shared/types.js";
 
 type RunnerStageDefinition = (typeof stageDefinitions)[RunnerOptions["stage"]];
-type PreparedBranch = Awaited<ReturnType<typeof prepareBranchForStage>>;
 type StageSafetyOptions = Omit<
   Parameters<typeof blockUnsafePromptInjection>[0],
   "extraSources" | "phase" | "result"
@@ -86,16 +70,6 @@ export async function runStageSecurityReview(
   const context = await loadRunnerContext({ client, definition, logger, options });
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
   const transientComments: PublishedArtifactComment[] = [];
-  const blockedHeadResult = await blockUnsafePullRequestHead({
-    client,
-    context,
-    definition,
-    logger,
-    options: runner,
-    transientComments,
-  });
-  if (blockedHeadResult) return blockedSecurityReview(blockedHeadResult);
-
   const safetyOptions = stageSafetyOptions({
     client,
     config,
@@ -132,8 +106,6 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
   const transientComments = await publishStageStart({ client, context, logger, options: runner });
   const stageContext = { client, context, definition, logger, options: runner, transientComments };
-  const blockedResult = await blockUnsafePullRequestHead(stageContext);
-  if (blockedResult) return blockedResult;
 
   const safetyOptions = stageSafetyOptions({ ...stageContext, config });
   const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
@@ -146,10 +118,8 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const mcpContext = await resolveMcpContext({ ...stageContext, config });
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
 
-  const branchState = await prepareBranchForStage({ client, context, logger, options });
   const schema = loadStageSchema(definition.schemaFile);
   const prompts = buildRenderedPrompts({
-    branchState: branchState.branchState,
     context: acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context,
     definition,
     options,
@@ -186,7 +156,6 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     ...stageContext,
     acceptedRisk,
     aiRunOptions,
-    branchState,
     config,
     executionMode,
     safetyOptions,
@@ -248,7 +217,6 @@ const mcpPromptSafetySources = (promptAddition: string): SafetySource[] =>
 async function runCheckedStageResult(options: {
   acceptedRisk: boolean;
   aiRunOptions: RunAiStageOptions;
-  branchState: PreparedBranch;
   client: GitHubClient;
   config: GitVibeConfig;
   context: ContextPacket;
@@ -276,13 +244,10 @@ async function runCheckedStageResult(options: {
 
   return applyDeterministicWrites({
     client: options.client,
-    config: options.config,
     context: options.context,
     logger: options.logger,
     options: options.options,
-    repair: validationRepairRunner(options),
     result,
-    runnerBaseBranch: options.branchState.baseBranch,
     transientComments: options.transientComments,
   });
 }
@@ -453,21 +418,6 @@ async function publishStageStart(options: {
     });
     if (comment) transientComments.push(comment);
   }
-  if (!options.options.dryRun) {
-    await applyStageStartLabelTransition({
-      client: options.client,
-      context: options.context,
-      logger: options.logger,
-      runner: options.options,
-    });
-  }
-  if (
-    !options.options.dryRun &&
-    options.options.stage === "investigate" &&
-    options.context.artifact.type === "pull-request"
-  ) {
-    await markPullRequestFeedbackInvestigationStarted(options);
-  }
   return transientComments;
 }
 
@@ -477,7 +427,6 @@ function roleDefinitionFor(options: RunnerOptions): string | undefined {
 }
 
 function buildRenderedPrompts(options: {
-  branchState?: IssueBranchState;
   context: ContextPacket;
   definition: RunnerStageDefinition;
   options: RunnerOptions;
@@ -488,7 +437,7 @@ function buildRenderedPrompts(options: {
     cwd: options.options.cwd,
     outputSchema: options.schema,
     promptDir: options.definition.promptDir,
-    repositoryContext: repositoryContext(options.options.cwd, options.branchState),
+    repositoryContext: repositoryContext(options.options.cwd),
     roleDefinition: roleDefinitionFor(options.options),
     stageContract: stageContract(options.options.stage, options.context),
   });
@@ -528,54 +477,6 @@ function stageSafetyOptions(options: {
   };
 }
 
-async function blockUnsafePullRequestHead(options: {
-  client: GitHubClient;
-  context: ContextPacket;
-  definition: (typeof stageDefinitions)[RunnerOptions["stage"]];
-  logger: StageLogger;
-  options: RunnerOptions;
-  transientComments: PublishedArtifactComment[];
-}): Promise<StageRunResult | undefined> {
-  const reason = pullRequestHeadBlockReason(options.options, options.context);
-  if (!reason || options.options.dryRun) return undefined;
-  const result = await stageRunResult({
-    content: JSON.stringify(blockedPullRequestHeadOutput(options.options.stage, reason)),
-    context: options.context,
-    definition: options.definition,
-    logger: options.logger,
-    options: options.options,
-  });
-  if (options.options.executionMode === "member") return result;
-  await publishBlockedPullRequestHead({ ...options, result });
-  options.logger.event("stage.done", { status: result.status });
-  return result;
-}
-async function publishBlockedPullRequestHead(options: {
-  client: GitHubClient;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-  result: StageRunResult;
-  transientComments: PublishedArtifactComment[];
-}): Promise<void> {
-  await publishStageResultComment({
-    client: options.client,
-    context: options.context,
-    logger: options.logger,
-    parsedOutput: options.result.parsedOutput,
-    runner: options.options,
-    transientComments: options.transientComments,
-  });
-  await applyStageLabelTransition({
-    client: options.client,
-    context: options.context,
-    logger: options.logger,
-    parsedOutput: options.result.parsedOutput,
-    runner: options.options,
-    transientComments: options.transientComments,
-  });
-}
-
 async function publishPreAiBlockedResult(options: {
   client: GitHubClient;
   context: ContextPacket;
@@ -610,38 +511,6 @@ async function publishPreAiBlockedResult(options: {
     transientComments: options.transientComments,
   });
   return result;
-}
-
-async function prepareBranchForStage(options: {
-  client: GitHubClient;
-  context: ContextPacket;
-  logger: StageLogger;
-  options: RunnerOptions;
-}): Promise<{
-  baseBranch?: Awaited<ReturnType<typeof runnerBaseBranch>>;
-  branchState?: IssueBranchState;
-}> {
-  const branch = issueBranchForStage(options.options.stage, options.context);
-  const baseBranch =
-    branch && !options.options.dryRun && options.context.artifact.type === "issue"
-      ? await runnerBaseBranch({
-          client: options.client,
-          logger: options.logger,
-          options: options.options,
-          requireDefault: options.options.stage === "create-pr",
-        })
-      : undefined;
-  const branchState =
-    branch && !options.options.dryRun
-      ? await prepareIssueBranch({
-          baseBranch: baseBranch?.base,
-          branch,
-          cwd: options.options.cwd,
-          logger: options.logger,
-          token: options.options.token,
-        })
-      : undefined;
-  return { baseBranch, branchState };
 }
 
 async function contextFor({

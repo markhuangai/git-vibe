@@ -17,13 +17,7 @@ function testAiConfigYaml(extraAi = "") {
       profile: test
     materialize:
       profile: test
-    implement:
-      profile: test
     review-matrix:
-      profile: test
-    create-pr:
-      profile: test
-    address-pr-feedback:
       profile: test
 ${extra ? `${extra}\n` : ""}`;
 }

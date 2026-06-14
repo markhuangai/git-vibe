@@ -79,13 +79,8 @@ describe("GitHub App token action resolver", () => {
     expect(runnerPermissionProfileForStage("validate", "member")).toBe("runner-read");
     expect(runnerPermissionProfileForStage("investigate", "standard")).toBe("runner-status-write");
     expect(runnerPermissionProfileForStage("materialize", "standard")).toBe("runner-status-write");
-    expect(runnerPermissionProfileForStage("create-pr", "standard")).toBe("runner-status-write");
     expect(runnerPermissionProfileForStage("review-matrix", "standard")).toBe(
       "runner-workflow-write",
-    );
-    expect(runnerPermissionProfileForStage("implement", "standard")).toBe("runner-content-write");
-    expect(runnerPermissionProfileForStage("address-pr-feedback", "standard")).toBe(
-      "runner-content-write",
     );
   });
 });

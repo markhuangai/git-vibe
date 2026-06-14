@@ -7,7 +7,7 @@ export interface GitVibeLabelDefinition {
 export const gitVibeLabels = {
   approved: {
     color: "0E8A16",
-    description: "Trusted actor approved GitVibe implementation automation.",
+    description: "Trusted actor approved GitVibe materialization automation.",
     name: "git-vibe:approved",
   },
   acceptRisk: {
@@ -22,7 +22,7 @@ export const gitVibeLabels = {
   },
   inProgress: {
     color: "FBCA04",
-    description: "GitVibe implementation is in progress.",
+    description: "GitVibe deterministic write work is in progress.",
     name: "gvi:in-progress",
   },
   investigate: {
@@ -32,7 +32,7 @@ export const gitVibeLabels = {
   },
   investigated: {
     color: "0E8A16",
-    description: "GitVibe investigation completed and implementation approval is allowed.",
+    description: "GitVibe investigation completed and validation can proceed.",
     name: "gvi:investigated",
   },
   investigating: {
@@ -42,12 +42,12 @@ export const gitVibeLabels = {
   },
   needsDiscussion: {
     color: "5319E7",
-    description: "Feature request should be discussed before implementation.",
+    description: "Feature request should be discussed before issue materialization.",
     name: "gvi:needs-discussion",
   },
   prOpened: {
     color: "0E8A16",
-    description: "GitVibe opened or updated a pull request.",
+    description: "GitVibe opened or updated a pull request before automation was disabled.",
     name: "gvi:pr-opened",
   },
   prApproved: {
@@ -62,7 +62,7 @@ export const gitVibeLabels = {
   },
   readyForApproval: {
     color: "FBCA04",
-    description: "GitVibe believes the issue is ready for approval.",
+    description: "GitVibe believes the issue or pull request is ready for approval.",
     name: "gvi:ready-for-approval",
   },
   review: {
@@ -97,17 +97,8 @@ export const gitVibeLabels = {
   },
 } as const satisfies Record<string, GitVibeLabelDefinition>;
 
-export const gitVibeInternalLabels = {
-  reviewFix: {
-    color: "6F42C1",
-    description: "Internal GitVibe review-fix continuation marker.",
-    name: "gvi:review-fix",
-  },
-} as const satisfies Record<string, GitVibeLabelDefinition>;
-
 const gitVibeManagedLabelList = Object.values(gitVibeLabels);
-const gitVibeInternalLabelList = Object.values(gitVibeInternalLabels);
-export const gitVibeLabelList = [...gitVibeManagedLabelList, ...gitVibeInternalLabelList];
+export const gitVibeLabelList = [...gitVibeManagedLabelList];
 
 const gitVibeLabelNames: Set<string> = new Set(gitVibeLabelList.map((label) => label.name));
 const gitVibeRuntimeLabelNames: Set<string> = new Set(

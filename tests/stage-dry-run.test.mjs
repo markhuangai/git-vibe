@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { dryRunContent, stageContract } from "../src/runner/stage-dry-run.ts";
 
 describe("stage dry-run contracts", () => {
-  it("includes deterministic branch guidance only when the stage prepares a branch", () => {
-    expect(stageContract("implement", context("issue"))).toContain(
-      "GitVibe has already prepared branch git-vibe/12",
+  it("renders the generic schema contract", () => {
+    expect(stageContract("validate", context("discussion"))).toBe(
+      "Stage validate is running. Return only JSON matching the schema.",
     );
-    expect(stageContract("validate", context("discussion"))).not.toContain("prepared branch");
   });
 
   it("renders pull-request investigation dry-run output", () => {
@@ -21,23 +20,19 @@ describe("stage dry-run contracts", () => {
     expect(log.event).toHaveBeenCalledTimes(1);
   });
 
-  it("renders specialized dry-run output for write and discussion stages", () => {
+  it("renders specialized dry-run output for active stages", () => {
     const log = logger();
-    const createPr = JSON.parse(dryRunContent("create-pr", context("issue"), log));
     const materialize = JSON.parse(dryRunContent("materialize", context("discussion"), log));
-    const implement = JSON.parse(dryRunContent("implement", context("issue"), log));
-    const feedback = JSON.parse(dryRunContent("address-pr-feedback", context("pull-request"), log));
     const investigateIssue = JSON.parse(dryRunContent("investigate", context("issue"), log));
+    const reviewMatrix = JSON.parse(dryRunContent("review-matrix", context("pull-request"), log));
 
-    expect(createPr).toMatchObject({ branch: "git-vibe/12" });
     expect(materialize.issues[0].title).toBe("GitVibe dry run: Discussion title");
     expect(materialize.issues[0].parallel_group).toBe("default");
-    expect(implement.tests).toEqual([]);
-    expect(feedback).toMatchObject({ skipped_feedback: [], tests: [] });
     expect(investigateIssue).toMatchObject({
       implementation_plan: [],
       next_state: "needs-info",
     });
+    expect(reviewMatrix.next_state).toBe("review-passed");
   });
 
   it("omits empty artifact URLs from dry-run references", () => {

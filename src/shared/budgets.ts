@@ -6,38 +6,14 @@ export function workflowBudgetInputsFor(
   config: GitVibeConfig,
   workflow: string,
 ): Record<string, string> {
-  if (workflow === "develop.yml") return developWorkflowBudgetInputs(config);
   if (workflow === "review.yml") return reviewWorkflowBudgetInputs(config);
-  if (workflow === "address-feedback.yml") return addressFeedbackWorkflowBudgetInputs(config);
   return defaultStageWorkflowBudgetInputs(config);
-}
-
-export function developWorkflowBudgetInputs(config: GitVibeConfig): Record<string, string> {
-  return workflowBudgetInputs(config, [
-    ["implementation_timeout_minutes", "implementation_timeout_minutes"],
-    ["review_timeout_minutes", "review_timeout_minutes"],
-    ["create_pr_timeout_minutes", "create_pr_timeout_minutes"],
-    ["default_max_turns", "max_turns"],
-    ["implementation_max_turns", "implementation_max_turns"],
-    ["validation_repair_attempts", "validation_repair_attempts"],
-    ["validation_repair_max_turns", "validation_repair_max_turns"],
-  ]);
 }
 
 export function reviewWorkflowBudgetInputs(config: GitVibeConfig): Record<string, string> {
   return {
     ...defaultStageWorkflowBudgetInputs(config),
     ...workflowBudgetInputs(config, [["review_timeout_minutes", "timeout_minutes"]]),
-  };
-}
-
-export function addressFeedbackWorkflowBudgetInputs(config: GitVibeConfig): Record<string, string> {
-  return {
-    ...defaultStageWorkflowBudgetInputs(config),
-    ...workflowBudgetInputs(config, [
-      ["feedback_timeout_minutes", "timeout_minutes"],
-      ["feedback_max_turns", "max_turns"],
-    ]),
   };
 }
 

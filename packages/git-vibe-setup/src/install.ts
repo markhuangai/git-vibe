@@ -16,8 +16,6 @@ interface FileSnapshot {
 
 const requiredInstallSourcePaths = [
   ".github/git-vibe.yml",
-  ".github/workflows/address-feedback.yml",
-  ".github/workflows/develop.yml",
   ".github/workflows/investigate.yml",
   ".github/workflows/materialize.yml",
   ".github/workflows/review.yml",

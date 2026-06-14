@@ -4,7 +4,6 @@ import {
   createRepositoryDiscussion,
 } from "../src/shared/discussions.ts";
 import {
-  gitVibeInternalLabels,
   gitVibeLabelList,
   gitVibeLabels,
   isGitVibeLabel,
@@ -115,7 +114,6 @@ describe("GitVibe labels", () => {
     expect(names).toContain("git-vibe:approved");
     expect(names).toContain("gvi:story");
     expect(names).toContain("git-vibe:validate");
-    expect(names).toContain(gitVibeInternalLabels.reviewFix.name);
     expect(isGitVibeLabel("git-vibe:custom")).toBe(true);
     expect(isGitVibeLabel("gvi:runtime")).toBe(true);
     expect(isGitVibeLabel("bug")).toBe(false);
