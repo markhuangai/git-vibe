@@ -46,9 +46,59 @@ describe("AI provider response limits", () => {
       "AI provider response exceeded maximum size of 3 bytes after 5 bytes.",
     );
   });
+
+  it("retries declared oversized retryable responses before applying the limit", async () => {
+    const logger = { event: vi.fn() };
+    const retryingFetch = createRetryingFetch({
+      config: config({
+        provider_response_max_bytes: 3,
+        request_retry_attempts: 1,
+        request_retry_delay_seconds: 0,
+      }),
+      logger,
+    });
+
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new globalThis.Response("large", {
+          headers: { "content-length": "4" },
+          status: 500,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new globalThis.Response("ok", {
+          headers: { "content-length": "2" },
+          status: 200,
+        }),
+      );
+
+    const response = await retryingFetch("https://api.test/v1/chat/completions");
+
+    await expect(response.text()).resolves.toBe("ok");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(logger.event).toHaveBeenCalledWith(
+      "ai.http.retry",
+      expect.objectContaining({ attempt: 1, status: 500 }),
+    );
+  });
+
+  it("rejects invalid explicit provider response limits", () => {
+    expect(() =>
+      createRetryingFetch({
+        config: config({ provider_response_max_bytes: "3" }),
+      }),
+    ).toThrow("ai.budgets.provider_response_max_bytes must be a positive integer.");
+
+    expect(() =>
+      createRetryingFetch({
+        config: config({ provider_response_max_bytes: 0 }),
+      }),
+    ).toThrow("ai.budgets.provider_response_max_bytes must be a positive integer.");
+  });
 });
 
-/** @param {Record<string, number>} budgets */
+/** @param {Record<string, unknown>} budgets */
 function config(budgets) {
   return { ai: { budgets } };
 }

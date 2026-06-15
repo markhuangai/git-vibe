@@ -1,6 +1,7 @@
 import { stringField } from "./ai-tool-logging.js";
 import type { StageLogger } from "./logging.js";
 import { summarizeError } from "./logging.js";
+import { positiveBudgetInteger } from "../shared/budgets.js";
 import type { GitVibeConfig } from "../shared/types.js";
 
 const DEFAULT_PROVIDER_RESPONSE_MAX_BYTES = 64 * 1024 * 1024;
@@ -15,11 +16,10 @@ export function createRetryingFetch(options: {
   return async (input, init) => {
     for (let attempt = 0; ; attempt += 1) {
       try {
-        const response = responseWithProviderResponseLimit(
-          await fetch(cloneFetchInput(input), init),
-          maxResponseBytes,
-        );
-        if (!isRetryableHttpStatus(response.status) || attempt >= maxRetries) return response;
+        const response = await fetch(cloneFetchInput(input), init);
+        if (!isRetryableHttpStatus(response.status) || attempt >= maxRetries) {
+          return responseWithProviderResponseLimit(response, maxResponseBytes);
+        }
 
         const delayMs = retryDelayMsForHeaders(response.headers, baseDelayMs);
         options.logger?.event("ai.http.retry", {
@@ -75,8 +75,9 @@ function aiRequestRetryDelayMsFor(config: GitVibeConfig): number {
 }
 
 function aiProviderResponseMaxBytesFor(config: GitVibeConfig): number {
-  return positiveInteger(
-    configNumber(config.ai?.budgets, "provider_response_max_bytes"),
+  return positiveBudgetInteger(
+    config,
+    "provider_response_max_bytes",
     DEFAULT_PROVIDER_RESPONSE_MAX_BYTES,
   );
 }
@@ -182,9 +183,4 @@ function configNumber(value: unknown, key: string): number | undefined {
 function nonNegativeInteger(value: number | undefined, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.max(0, Math.floor(value as number));
-}
-
-function positiveInteger(value: number | undefined, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.floor(value as number));
 }
