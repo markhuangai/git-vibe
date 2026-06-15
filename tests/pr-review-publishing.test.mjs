@@ -635,7 +635,7 @@ function runner(overrides = {}) {
 }
 
 /**
- * @param {{ login?: string; unresolvedReviewLineError?: boolean; userLookupError?: boolean }} [options]
+ * @param {{ files?: unknown[]; login?: string; unresolvedReviewLineError?: boolean; userLookupError?: boolean }} [options]
  * @returns {MockGitHubClient}
  */
 function createClient(options = {}) {
@@ -644,6 +644,17 @@ function createClient(options = {}) {
     apiBaseUrl: "https://api.github.test",
     graphql: vi.fn(async () => ({})),
     request: vi.fn(async (request) => {
+      if (request.path.startsWith("/repos/example/repo/pulls/12/files")) {
+        return (
+          options.files || [
+            {
+              filename: "src/app.ts",
+              patch:
+                "@@ -40,12 +40,12 @@\n line 40\n line 41\n line 42\n line 43\n line 44\n line 45\n line 46\n line 47\n line 48\n line 49\n line 50\n line 51",
+            },
+          ]
+        );
+      }
       if (
         options.unresolvedReviewLineError &&
         !rejectedInlineReview &&

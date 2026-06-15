@@ -3,6 +3,7 @@ import { GitHubClient, isGitHubGraphQLForbiddenError, splitRepository } from "..
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import type { ContextPacket, JsonObject, RunnerOptions } from "../shared/types.js";
 import type { StageLogger } from "./logging.js";
+import { validateReviewFindingAnchors, type UnanchoredReviewFinding } from "./pr-review-anchors.js";
 import {
   createPullRequestReview,
   type PullRequestReviewComment,
@@ -49,11 +50,20 @@ export async function publishPullRequestReviewResult(options: {
   const newFindings = shouldReconcileReviewFindings(options.parsedOutput)
     ? (await reconcileReviewFindings({ ...options, findings })).newFindings
     : findings;
-  const comments = newFindings.map((finding) => finding.reviewComment);
+  const validated = await validateReviewFindingAnchors({
+    client: options.client,
+    findings: newFindings,
+    logger: options.logger,
+    pullNumber: options.context.artifact.number,
+    repository: options.runner.repository,
+    token: options.runner.token,
+  });
+  const comments = validated.comments;
   const body = pullRequestReviewBody({
     comments,
     output: options.parsedOutput,
     stageResultBody: options.stageResultBody,
+    unanchoredFindings: validated.unanchoredFindings,
     workflowRunUrl: options.runner.workflowRunUrl,
   });
   const existingReview = await editableReviewForStageResult({ ...options, comments });
@@ -571,12 +581,17 @@ function pullRequestReviewBody(options: {
   comments: PullRequestReviewComment[];
   output: JsonObject;
   stageResultBody: string;
+  unanchoredFindings: UnanchoredReviewFinding[];
   workflowRunUrl?: string;
 }): string {
   const findings = stringItems(options.output.findings);
   return cleanLines([
     ...options.stageResultBody.split(/\r?\n/),
-    ...reviewDetailsSection({ comments: options.comments, findings }),
+    ...reviewDetailsSection({
+      comments: options.comments,
+      findings,
+      unanchoredFindings: options.unanchoredFindings,
+    }),
     ...fallbackWorkflowRunSection(options.stageResultBody, options.workflowRunUrl),
   ]).join("\n");
 }
@@ -584,12 +599,16 @@ function pullRequestReviewBody(options: {
 function reviewDetailsSection(options: {
   comments: PullRequestReviewComment[];
   findings: string[];
+  unanchoredFindings: UnanchoredReviewFinding[];
 }): string[] {
-  if (!options.comments.length && !options.findings.length) return [];
+  if (!options.comments.length && !options.findings.length && !options.unanchoredFindings.length) {
+    return [];
+  }
   return [
     "",
     `**Inline comments:** ${options.comments.length}`,
     ...findingsSection(options.findings),
+    ...unanchoredFindingsSection(options.unanchoredFindings),
   ];
 }
 
@@ -600,6 +619,22 @@ function findingsSection(findings: string[]): string[] {
     "### Required Fixes",
     ...findings.map((finding, index) => `${index + 1}. ${finding}`),
   ];
+}
+
+function unanchoredFindingsSection(findings: UnanchoredReviewFinding[]): string[] {
+  if (!findings.length) return [];
+  return [
+    "",
+    "### Unanchored Inline Findings",
+    ...findings.flatMap((finding, index) => [
+      `${index + 1}. \`${finding.path}:${lineRange(finding)}\` (${finding.reason})`,
+      ...finding.body.split(/\r?\n/).map((line) => `   ${line}`),
+    ]),
+  ];
+}
+
+function lineRange(finding: UnanchoredReviewFinding): string {
+  return finding.startLine ? `${finding.startLine}-${finding.line}` : String(finding.line);
 }
 
 function fallbackWorkflowRunSection(body: string, url: string | undefined): string[] {
