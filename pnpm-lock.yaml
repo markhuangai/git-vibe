@@ -12,23 +12,23 @@ importers:
   .:
     dependencies:
       "@ai-sdk/anthropic":
-        specifier: ^3.0.74
-        version: 3.0.74(zod@4.4.3)
+        specifier: ^3.0.84
+        version: 3.0.84(zod@4.4.3)
       "@ai-sdk/mcp":
-        specifier: ^1.0.46
-        version: 1.0.46(zod@4.4.3)
+        specifier: ^1.0.50
+        version: 1.0.50(zod@4.4.3)
       "@ai-sdk/openai":
-        specifier: ^3.0.60
-        version: 3.0.60(zod@4.4.3)
+        specifier: ^3.0.71
+        version: 3.0.71(zod@4.4.3)
       "@modelcontextprotocol/sdk":
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       agentool:
         specifier: ^1.5.2
-        version: 1.5.2(ai@6.0.175(zod@4.4.3))(zod@4.4.3)
+        version: 1.5.2(ai@6.0.205(zod@4.4.3))(zod@4.4.3)
       ai:
-        specifier: ^6.0.175
-        version: 6.0.175(zod@4.4.3)
+        specifier: ^6.0.205
+        version: 6.0.205(zod@4.4.3)
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -80,7 +80,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.5
-        version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
+        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
 
   packages/git-vibe-setup:
     devDependencies:
@@ -92,58 +92,49 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.5
-        version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
+        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
 
 packages:
-  "@ai-sdk/anthropic@3.0.74":
+  "@ai-sdk/anthropic@3.0.84":
     resolution:
       {
-        integrity: sha512-Xew9rfz9WWhDSyF8rNhjT/XWOWelNfJrMlmG0Ahw210hStisRpQZ1s+7VeI9JTJOZ5y5tXqBi5kfPwYnCfyRTA==,
+        integrity: sha512-BIDaHmCHs6Sr5VUsEkTbbVlAN4GWjg97X9x/IfXyviLtzsXvffui9XIcZugkAi1Ri6FnvI5T5qDGh5YLnSuzRg==,
       }
     engines: { node: ">=18" }
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  "@ai-sdk/gateway@3.0.110":
+  "@ai-sdk/gateway@3.0.131":
     resolution:
       {
-        integrity: sha512-sbv8+1L9/BRKydn8dMNwoMQKupA4iLJ9N+yvxgW6wMQ/94UepDf3FeYWMj/dLdzolAHZ6izRUP4s5WqQkmJ2Zg==,
+        integrity: sha512-CnjOZdywQaUnCyZ0N5wVNm7Sm63+NeHDVZQJKFX2IDq+t03SLwiiuoi3ILTLPlM+YSOhkQ/pvIDoR4qa98Zp5A==,
       }
     engines: { node: ">=18" }
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  "@ai-sdk/mcp@1.0.46":
+  "@ai-sdk/mcp@1.0.50":
     resolution:
       {
-        integrity: sha512-owU0wAP87KzsTzr+2JE9sT9lpsCWKg8ZwHhce/KQmD9D/kbhe69sUZ+lsFF5MoGvV/ZzMujrhAvC1MgmufwMeQ==,
+        integrity: sha512-iLqDZ62ezEjBhTJgiAQ4D2tHG1q7INVhPx0uOPnxJTxxqVUzN4KqeWAd6j5hYNhsPqC7TPGRQHQqAa1Z/lu2jg==,
       }
     engines: { node: ">=18" }
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  "@ai-sdk/openai@3.0.60":
+  "@ai-sdk/openai@3.0.71":
     resolution:
       {
-        integrity: sha512-vZKqbDSCF1T65gDMG2ILJ2NAEpG45U2VtvEve1Fv/WRLu2i5TPUqxjlGKm+5a7Dd57Yr6CGePxrJhsQJC8LJ3A==,
+        integrity: sha512-j6eBAa5oHFZ4U5CxpIV3T4zXNM/BviodNCZCL1qHkA4aqkwK9iQ18TWYz2DZcXpw4BO5pikKzqpXORxb1EnZGA==,
       }
     engines: { node: ">=18" }
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  "@ai-sdk/provider-utils@4.0.26":
+  "@ai-sdk/provider-utils@4.0.29":
     resolution:
       {
-        integrity: sha512-CsKNLKsOpvPujRlIYvoz+Ybw+kGn7J4/fIZa/58+R7iWLLfwn6ifE2G6Yq8K9XvH/I/3bzaDAJ3NhRwEMsLBKQ==,
-      }
-    engines: { node: ">=18" }
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  "@ai-sdk/provider-utils@4.0.27":
-    resolution:
-      {
-        integrity: sha512-ubkAJ+xODouwtmN1tYlvTPphH1hPOBfZaEQe8U7skGvFAnIRs9PPpsq57bC2+Ky/MB4yzhd6YOsxTAx9sGpazw==,
+        integrity: sha512-uhukHaCBvqkwBHkT8C2PrnqKTCoLn3pdHXqtcR9I8ErH+flbzgW4o7VHSNIup9LRu+WBvZIZDQLsx6rwl2tiOA==,
       }
     engines: { node: ">=18" }
     peerDependencies:
@@ -584,19 +575,19 @@ packages:
       "@cfworker/json-schema":
         optional: true
 
-  "@napi-rs/wasm-runtime@1.1.4":
+  "@napi-rs/wasm-runtime@1.1.5":
     resolution:
       {
-        integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==,
+        integrity: sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q==,
       }
     peerDependencies:
       "@emnapi/core": ^1.7.1
       "@emnapi/runtime": ^1.7.1
 
-  "@opentelemetry/api@1.9.0":
+  "@opentelemetry/api@1.9.1":
     resolution:
       {
-        integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==,
+        integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==,
       }
     engines: { node: ">=8.0.0" }
 
@@ -998,10 +989,10 @@ packages:
       ai: ">=5.0.17"
       zod: ">=3.23.0"
 
-  ai@6.0.175:
+  ai@6.0.205:
     resolution:
       {
-        integrity: sha512-6fFFHzbh6FIZnYc31V6osOxq25ABJYCShfG0O6ajHiA4FB/DgnPi1mP8cO5aAU3HNSbQHiMazdlh9bIsp97mVA==,
+        integrity: sha512-F4akEGF41UdgJO3L4v+D5noVD1/czhJy6x0k9R/i1EXfxqrkBh/PdYSgRSLPiGFvrw76dzI8h4w3NYmLrTb8dw==,
       }
     engines: { node: ">=18" }
     peerDependencies:
@@ -1423,6 +1414,13 @@ packages:
     resolution:
       {
         integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==,
+      }
+    engines: { node: ">=18.0.0" }
+
+  eventsource-parser@3.1.0:
+    resolution:
+      {
+        integrity: sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==,
       }
     engines: { node: ">=18.0.0" }
 
@@ -2183,10 +2181,10 @@ packages:
       }
     engines: { node: ">=16.20.0" }
 
-  postcss@8.5.14:
+  postcss@8.5.15:
     resolution:
       {
-        integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==,
+        integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==,
       }
     engines: { node: ^10 || ^12 || >=14 }
 
@@ -2466,6 +2464,13 @@ packages:
       }
     engines: { node: ">=12.0.0" }
 
+  tinyglobby@0.2.17:
+    resolution:
+      {
+        integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==,
+      }
+    engines: { node: ">=12.0.0" }
+
   tinyrainbow@3.1.0:
     resolution:
       {
@@ -2713,44 +2718,37 @@ packages:
       }
 
 snapshots:
-  "@ai-sdk/anthropic@3.0.74(zod@4.4.3)":
+  "@ai-sdk/anthropic@3.0.84(zod@4.4.3)":
     dependencies:
       "@ai-sdk/provider": 3.0.10
-      "@ai-sdk/provider-utils": 4.0.26(zod@4.4.3)
+      "@ai-sdk/provider-utils": 4.0.29(zod@4.4.3)
       zod: 4.4.3
 
-  "@ai-sdk/gateway@3.0.110(zod@4.4.3)":
+  "@ai-sdk/gateway@3.0.131(zod@4.4.3)":
     dependencies:
       "@ai-sdk/provider": 3.0.10
-      "@ai-sdk/provider-utils": 4.0.26(zod@4.4.3)
+      "@ai-sdk/provider-utils": 4.0.29(zod@4.4.3)
       "@vercel/oidc": 3.2.0
       zod: 4.4.3
 
-  "@ai-sdk/mcp@1.0.46(zod@4.4.3)":
+  "@ai-sdk/mcp@1.0.50(zod@4.4.3)":
     dependencies:
       "@ai-sdk/provider": 3.0.10
-      "@ai-sdk/provider-utils": 4.0.27(zod@4.4.3)
+      "@ai-sdk/provider-utils": 4.0.29(zod@4.4.3)
       pkce-challenge: 5.0.1
       zod: 4.4.3
 
-  "@ai-sdk/openai@3.0.60(zod@4.4.3)":
+  "@ai-sdk/openai@3.0.71(zod@4.4.3)":
     dependencies:
       "@ai-sdk/provider": 3.0.10
-      "@ai-sdk/provider-utils": 4.0.26(zod@4.4.3)
+      "@ai-sdk/provider-utils": 4.0.29(zod@4.4.3)
       zod: 4.4.3
 
-  "@ai-sdk/provider-utils@4.0.26(zod@4.4.3)":
+  "@ai-sdk/provider-utils@4.0.29(zod@4.4.3)":
     dependencies:
       "@ai-sdk/provider": 3.0.10
       "@standard-schema/spec": 1.1.0
-      eventsource-parser: 3.0.8
-      zod: 4.4.3
-
-  "@ai-sdk/provider-utils@4.0.27(zod@4.4.3)":
-    dependencies:
-      "@ai-sdk/provider": 3.0.10
-      "@standard-schema/spec": 1.1.0
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.0
       zod: 4.4.3
 
   "@ai-sdk/provider@3.0.10":
@@ -2953,14 +2951,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  "@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)":
+  "@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)":
     dependencies:
       "@emnapi/core": 1.10.0
       "@emnapi/runtime": 1.10.0
       "@tybys/wasm-util": 0.10.2
     optional: true
 
-  "@opentelemetry/api@1.9.0": {}
+  "@opentelemetry/api@1.9.1": {}
 
   "@oxc-project/types@0.127.0": {}
 
@@ -3004,7 +3002,7 @@ snapshots:
     dependencies:
       "@emnapi/core": 1.10.0
       "@emnapi/runtime": 1.10.0
-      "@napi-rs/wasm-runtime": 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      "@napi-rs/wasm-runtime": 1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
   "@rolldown/binding-win32-arm64-msvc@1.0.0-rc.17":
@@ -3144,7 +3142,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
+      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
 
   "@vitest/expect@4.1.5":
     dependencies:
@@ -3200,20 +3198,20 @@ snapshots:
 
   adm-zip@0.5.17: {}
 
-  agentool@1.5.2(ai@6.0.175(zod@4.4.3))(zod@4.4.3):
+  agentool@1.5.2(ai@6.0.205(zod@4.4.3))(zod@4.4.3):
     dependencies:
-      ai: 6.0.175(zod@4.4.3)
+      ai: 6.0.205(zod@4.4.3)
       ajv: 8.20.0
       diff: 9.0.0
       turndown: 7.2.4
       zod: 4.4.3
 
-  ai@6.0.175(zod@4.4.3):
+  ai@6.0.205(zod@4.4.3):
     dependencies:
-      "@ai-sdk/gateway": 3.0.110(zod@4.4.3)
+      "@ai-sdk/gateway": 3.0.131(zod@4.4.3)
       "@ai-sdk/provider": 3.0.10
-      "@ai-sdk/provider-utils": 4.0.26(zod@4.4.3)
-      "@opentelemetry/api": 1.9.0
+      "@ai-sdk/provider-utils": 4.0.29(zod@4.4.3)
+      "@opentelemetry/api": 1.9.1
       zod: 4.4.3
 
   ajv-formats@3.0.1(ajv@8.20.0):
@@ -3468,6 +3466,8 @@ snapshots:
   eventemitter3@5.0.4: {}
 
   eventsource-parser@3.0.8: {}
+
+  eventsource-parser@3.1.0: {}
 
   eventsource@3.0.7:
     dependencies:
@@ -3864,7 +3864,7 @@ snapshots:
 
   pkce-challenge@5.0.1: {}
 
-  postcss@8.5.14:
+  postcss@8.5.15:
     dependencies:
       nanoid: 3.3.12
       picocolors: 1.1.1
@@ -4059,6 +4059,11 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
+  tinyglobby@0.2.17:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+
   tinyrainbow@3.1.0: {}
 
   toidentifier@1.0.1: {}
@@ -4100,16 +4105,16 @@ snapshots:
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.14
+      postcss: 8.5.15
       rolldown: 1.0.0-rc.17
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
     optionalDependencies:
       "@types/node": 25.6.0
       esbuild: 0.28.0
       fsevents: 2.3.3
       yaml: 2.8.4
 
-  vitest@4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4)):
+  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4)):
     dependencies:
       "@vitest/expect": 4.1.5
       "@vitest/mocker": 4.1.5(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
@@ -4132,7 +4137,7 @@ snapshots:
       vite: 8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      "@opentelemetry/api": 1.9.0
+      "@opentelemetry/api": 1.9.1
       "@types/node": 25.6.0
       "@vitest/coverage-v8": 4.1.5(vitest@4.1.5)
     transitivePeerDependencies:

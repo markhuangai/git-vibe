@@ -422,6 +422,9 @@ Profiles may opt into shared repository guidance with
 `ai.profiles.<name>.context.files`. Listed files are appended to the rendered
 system prompt for that profile across `ai-sdk-agentool`, `cli-codex`, and
 `cli-claude-code`; GitVibe never auto-loads `AGENTS.md` or `CLAUDE.md`.
+AI SDK provider HTTP responses are capped at 64 MiB by default. Set
+`ai.budgets.provider_response_max_bytes` to a larger positive integer only when
+a trusted provider needs larger JSON responses.
 
 Stages may also opt into MCP servers through `ai.stages.<stage>.mcp`. Each
 server can expose a flat `tools` list to the model. For advanced deterministic

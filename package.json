@@ -1,6 +1,6 @@
 {
   "name": "@git-vibe/app",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "private": false,
   "type": "module",
   "packageManager": "pnpm@10.33.3",
@@ -35,12 +35,12 @@
     "*.{js,mjs,ts}": "eslint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.74",
-    "@ai-sdk/mcp": "^1.0.46",
-    "@ai-sdk/openai": "^3.0.60",
+    "@ai-sdk/anthropic": "^3.0.84",
+    "@ai-sdk/mcp": "^1.0.50",
+    "@ai-sdk/openai": "^3.0.71",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agentool": "^1.5.2",
-    "ai": "^6.0.175",
+    "ai": "^6.0.205",
     "jose": "^6.2.3",
     "libsodium-wrappers": "^0.8.4",
     "yaml": "^2.8.4",

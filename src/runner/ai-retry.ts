@@ -1,7 +1,10 @@
 import { stringField } from "./ai-tool-logging.js";
 import type { StageLogger } from "./logging.js";
 import { summarizeError } from "./logging.js";
+import { positiveBudgetInteger } from "../shared/budgets.js";
 import type { GitVibeConfig } from "../shared/types.js";
+
+const DEFAULT_PROVIDER_RESPONSE_MAX_BYTES = 64 * 1024 * 1024;
 
 export function createRetryingFetch(options: {
   config: GitVibeConfig;
@@ -9,11 +12,14 @@ export function createRetryingFetch(options: {
 }): typeof fetch {
   const maxRetries = aiRequestRetryAttemptsFor(options.config);
   const baseDelayMs = aiRequestRetryDelayMsFor(options.config);
+  const maxResponseBytes = aiProviderResponseMaxBytesFor(options.config);
   return async (input, init) => {
     for (let attempt = 0; ; attempt += 1) {
       try {
         const response = await fetch(cloneFetchInput(input), init);
-        if (!isRetryableHttpStatus(response.status) || attempt >= maxRetries) return response;
+        if (!isRetryableHttpStatus(response.status) || attempt >= maxRetries) {
+          return responseWithProviderResponseLimit(response, maxResponseBytes);
+        }
 
         const delayMs = retryDelayMsForHeaders(response.headers, baseDelayMs);
         options.logger?.event("ai.http.retry", {
@@ -68,6 +74,14 @@ function aiRequestRetryDelayMsFor(config: GitVibeConfig): number {
   );
 }
 
+function aiProviderResponseMaxBytesFor(config: GitVibeConfig): number {
+  return positiveBudgetInteger(
+    config,
+    "provider_response_max_bytes",
+    DEFAULT_PROVIDER_RESPONSE_MAX_BYTES,
+  );
+}
+
 function isRetryableHttpStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
 }
@@ -97,6 +111,55 @@ function headerValue(headers: Headers | undefined, name: string): string | undef
 
 function cloneFetchInput(input: Parameters<typeof fetch>[0]): Parameters<typeof fetch>[0] {
   return input instanceof Request ? input.clone() : input;
+}
+
+function responseWithProviderResponseLimit(response: Response, maxBytes: number): Response {
+  const contentLength = contentLengthBytes(response.headers);
+  if (contentLength !== undefined && contentLength > maxBytes) {
+    void discardResponse(response);
+    throw providerResponseTooLargeError(maxBytes, contentLength);
+  }
+  if (!response.body) return response;
+
+  // The AI SDK JSON handlers call response.text(); cap the stream before it can buffer without bound.
+  return new Response(response.body.pipeThrough(providerResponseLimitStream(maxBytes)), {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+function providerResponseLimitStream(maxBytes: number): TransformStream<Uint8Array, Uint8Array> {
+  let receivedBytes = 0;
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      receivedBytes += chunk.byteLength;
+      if (receivedBytes > maxBytes) {
+        controller.error(providerResponseTooLargeError(maxBytes, receivedBytes));
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  });
+}
+
+function contentLengthBytes(headers: Headers): number | undefined {
+  const value = headers.get("content-length");
+  if (!value) return undefined;
+  const bytes = Number.parseInt(value, 10);
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : undefined;
+}
+
+function providerResponseTooLargeError(
+  maxBytes: number,
+  receivedBytes: number,
+): Error & { isRetryable: false } {
+  return Object.assign(
+    new Error(
+      `AI provider response exceeded maximum size of ${maxBytes} bytes after ${receivedBytes} bytes.`,
+    ),
+    { isRetryable: false as const },
+  );
 }
 
 async function discardResponse(response: Response): Promise<void> {
