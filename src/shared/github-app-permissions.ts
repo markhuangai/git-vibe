@@ -99,7 +99,7 @@ export function permissionsForProfile(
     case "runner-workflow-write":
       return {
         actions: "write",
-        contents: "read",
+        contents: "write",
         discussions: "write",
         issues: "write",
         pull_requests: "write",

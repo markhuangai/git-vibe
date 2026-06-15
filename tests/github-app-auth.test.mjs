@@ -46,7 +46,7 @@ describe("GitHub App installation token provider", () => {
       body: {
         permissions: {
           actions: "write",
-          contents: "read",
+          contents: "write",
           discussions: "write",
           issues: "write",
           pull_requests: "write",
@@ -244,7 +244,7 @@ describe("GitHub App permission profiles", () => {
     });
     expect(permissionsForProfile("runner-workflow-write")).toEqual({
       actions: "write",
-      contents: "read",
+      contents: "write",
       discussions: "write",
       issues: "write",
       pull_requests: "write",
