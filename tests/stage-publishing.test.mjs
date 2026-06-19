@@ -407,6 +407,50 @@ describe("stage publishing status cleanup failures", () => {
 });
 
 describe("stage publishing review status cleanup", () => {
+  it("rejects malformed review-matrix inline comments before deleting running comments", async () => {
+    const client = createClient();
+
+    await expect(
+      publishStageResultComment({
+        client,
+        context: {
+          ...context("pull-request"),
+          timeline: [
+            timelineItem({
+              body: stageStartMarker({
+                artifact: "pull-request",
+                number: "12",
+                run: "99",
+                stage: "review-matrix",
+              }),
+              databaseId: 77,
+              id: "PRRC_node",
+              kind: "pull-request-review-comment",
+            }),
+          ],
+        },
+        logger: createLogger(),
+        parsedOutput: {
+          ...output(),
+          findings: ["Malformed inline comment."],
+          inline_comments: [
+            { body: "First anchor.", finding_id: "review-1", line: 4, path: "src/app.ts" },
+            { body: "Second anchor.", finding_id: "review-1", line: 5, path: "src/app.ts" },
+          ],
+          next_state: "changes-required",
+          stage: "review-matrix",
+        },
+        runner: runner({
+          sourceComment: { id: "88", kind: "pull-request-review-comment" },
+          stage: "review-matrix",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
+      }),
+    ).rejects.toThrow("finding_id must be unique: review-1");
+
+    expect(requestCalls(client)).toEqual([]);
+  });
+
   it("deletes pull request review running replies before posting review results", async () => {
     const client = createClient();
 

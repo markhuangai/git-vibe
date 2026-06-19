@@ -18,7 +18,8 @@ Review the proposed pull request or merge-preparation change. Report only valida
 - Do not report preferences, speculative improvements, over-engineering requests, or broad refactors as blockers.
 - If required fixes exist, keep `status` as `completed`, set `next_state` to `changes-required`, and put only actionable required fixes in `findings`.
 - For each required fix that can be anchored to an exact changed pull request diff line, add a matching `inline_comments` item with `path`, right-side `line`, and a concise `body` that explains the failure and required fix. Use `start_line` only for a contiguous range on the same side. Do not invent anchors; keep unanchored blockers in `findings` and `comment_body`.
-- If an existing GitVibe inline review comment contains a hidden `git-vibe:review-finding id=...` marker and the same issue still applies, set the new `inline_comments` item `finding_id` to that id. Do not copy hidden markers into `body`.
+- Each `inline_comments` item must have a unique `finding_id` within the output. Use one ranged comment for one finding when possible, or assign distinct IDs when multiple anchors are necessary.
+- If an existing GitVibe inline review comment contains a hidden `git-vibe:review-finding id=...` marker and the same issue still applies, set the new `inline_comments` item `finding_id` to that id. Do not copy hidden markers into `body`, and do not reuse that ID for any other inline comment in the same output.
 - If no required fix exists, say so in `summary`, keep `findings` empty, and set `next_state` to `review-passed`.
 - Use `blocked` only when the review itself cannot be completed or a maintainer decision is required before code can continue.
   </finding_standard>

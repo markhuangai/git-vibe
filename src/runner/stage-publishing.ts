@@ -13,7 +13,10 @@ import {
 } from "./stage-discussion-labels.js";
 import { discussionReplyToId } from "./discussion-replies.js";
 import type { StageLogger } from "./logging.js";
-import { publishPullRequestReviewResult } from "./pr-review-publishing.js";
+import {
+  assertPullRequestReviewResultPublishable,
+  publishPullRequestReviewResult,
+} from "./pr-review-publishing.js";
 import {
   renderStageResultComment,
   renderStageStartComment,
@@ -43,6 +46,7 @@ export interface PublishedArtifactComment {
 const staleTransientStatusCommentAgeMs = 30 * 60 * 1000;
 
 export async function publishStageResultComment(options: StagePublishingOptions): Promise<void> {
+  assertPullRequestReviewResultPublishable(options);
   await cleanupStageStatusComments(options);
   const body = renderStageResultComment({
     context: options.context,

@@ -36,6 +36,15 @@ type ReviewFindingUpdateStatus = "outdated" | "still-present";
 
 const gitVibeAppReviewAuthors = ["gitvibe-for-github", "gitvibe-for-github[bot]"];
 
+export function assertPullRequestReviewResultPublishable(options: {
+  context: ContextPacket;
+  parsedOutput: JsonObject;
+  runner: RunnerOptions;
+}): void {
+  if (!shouldPublishPullRequestReview(options)) return;
+  reviewFindingComments(options.parsedOutput.inline_comments);
+}
+
 export async function publishPullRequestReviewResult(options: {
   client: GitHubClient;
   context: ContextPacket;
