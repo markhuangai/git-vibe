@@ -10,8 +10,7 @@ const codexStartThread = vi.fn((options = {}) => ({
   run: (input, turnOptions = {}) => codexRun(input, turnOptions, options),
 }));
 const codexRun = vi.fn(async (_input, turnOptions = {}) => {
-  const queuedResult = codexResultQueues.shift();
-  if (queuedResult) return queuedResult;
+  if (codexResultQueues.length > 0) return codexResultQueues.shift();
 
   const output = nextOutput("codex", turnOptions.outputSchema);
   return {
@@ -53,8 +52,8 @@ beforeEach(() => {
 });
 
 async function* claudeMessages(params) {
-  const queuedMessages = claudeMessageQueues.shift();
-  if (queuedMessages) {
+  if (claudeMessageQueues.length > 0) {
+    const queuedMessages = claudeMessageQueues.shift();
     for (const message of queuedMessages) yield message;
     return;
   }
@@ -104,7 +103,8 @@ function queueMessages(adapter, messages) {
 }
 
 function nextOutput(adapter, schema) {
-  return outputQueues[adapter].shift() || defaultOutputForSchema(schema);
+  if (outputQueues[adapter].length > 0) return outputQueues[adapter].shift();
+  return defaultOutputForSchema(schema);
 }
 
 function resetSdkMocks() {
@@ -127,10 +127,11 @@ const claudeMessageQueues = [];
 
 function defaultOutputForSchema(schema) {
   const schemaId = schema && typeof schema === "object" ? schema.$id : undefined;
+  if (schemaId === "investigate.v1") return investigateOutput();
   if (schemaId === "materialize.v2") return materializeOutput();
   if (schemaId === "review-matrix.v1") return reviewMatrixOutput();
   if (schemaId === "validate.v1") return validateOutput();
-  return investigateOutput();
+  throw new Error(`No default SDK mock output configured for schema id: ${String(schemaId)}`);
 }
 
 function investigateOutput() {

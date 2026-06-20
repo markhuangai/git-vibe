@@ -36,14 +36,15 @@ describe("Codex auth environment", () => {
   });
 
   it("isolates CODEX_HOME when the profile has no auth_json source", () => {
+    const contextDir = tempDir();
     const prepared = prepareCodexEnv({
-      contextDir: tempDir(),
+      contextDir,
       profile: { model: "gpt-5.5" },
       profileName: "codex_sdk",
     });
 
     expect(prepared.auth).toBeUndefined();
-    expect(prepared.env.CODEX_HOME).toContain("git-vibe-codex-test-");
+    expect(prepared.env.CODEX_HOME).toBe(join(contextDir, "codex-home"));
   });
 
   it("rejects auth_json bundle sources that resolve to empty strings", () => {

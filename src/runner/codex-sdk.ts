@@ -119,7 +119,7 @@ function stringEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 function logCodexItem(item: ThreadItem, logger: RunAiStageOptions["logger"]): void {
   if (item.type === "command_execution") {
     logger?.event("ai.codex.command", {
-      command: compactText(item.command),
+      command: summarizeError(item.command),
       exit_code: item.exit_code,
       status: item.status,
     });
@@ -135,7 +135,7 @@ function logCodexItem(item: ThreadItem, logger: RunAiStageOptions["logger"]): vo
     return;
   }
   if (item.type === "agent_message") {
-    logger?.event("ai.codex.message", { text: compactText(item.text) });
+    logger?.event("ai.codex.message", { text: summarizeError(item.text) });
     return;
   }
   if (item.type === "reasoning") {
@@ -156,10 +156,4 @@ function logCodexItem(item: ThreadItem, logger: RunAiStageOptions["logger"]): vo
   if (isRecord(item) && typeof item.type === "string") {
     logger?.event("ai.codex.item", { type: item.type });
   }
-}
-
-function compactText(text: string): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= 160) return compact;
-  return `${compact.slice(0, 159)}...`;
 }

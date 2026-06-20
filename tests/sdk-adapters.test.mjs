@@ -84,12 +84,14 @@ describe("Codex SDK adapter logging", () => {
   it("logs Codex SDK item variants and supports reasoning summaries without effort", async () => {
     const cwd = workspace();
     const logger = { event: vi.fn() };
+    const secret = "codex-secret-that-crosses-the-old-truncation-boundary";
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_SECRET: secret });
     const output = validValidateOutput({ summary: "Logged." });
     globalThis.__gitVibeSdkMocks.queueCodexResult({
       finalResponse: JSON.stringify(output),
       items: [
         {
-          command: `echo ${"x".repeat(180)}`,
+          command: `echo ${"x".repeat(150)}${secret}`,
           exit_code: 0,
           status: "completed",
           type: "command_execution",
@@ -107,7 +109,7 @@ describe("Codex SDK adapter logging", () => {
           tool: "search_memory",
           type: "mcp_tool_call",
         },
-        { text: "Agent replied.", type: "agent_message" },
+        { text: `Agent replied with ${secret}.`, type: "agent_message" },
         { text: "Reasoning trace.", type: "reasoning" },
         { changes: [{ path: "README.md" }], status: "done", type: "file_change" },
         { message: "tool failed with token", type: "error" },
@@ -143,6 +145,12 @@ describe("Codex SDK adapter logging", () => {
         "ai.codex.item",
       ]),
     );
+    const commandFields = logger.event.mock.calls.find(([name]) => name === "ai.codex.command")[1];
+    const messageFields = logger.event.mock.calls.find(([name]) => name === "ai.codex.message")[1];
+    expect(commandFields.command).not.toContain(secret.slice(0, 12));
+    expect(commandFields.command).toContain("<redacted:");
+    expect(messageFields.text).not.toContain(secret);
+    expect(messageFields.text).toContain("<redacted:GITVIBE_AI_ENV_JSON.CODEX_SECRET>");
   });
 });
 
