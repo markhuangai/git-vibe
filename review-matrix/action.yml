@@ -90,6 +90,12 @@ runs:
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
         ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: bash "$GITHUB_ACTION_PATH/../scripts/prepare-claude-code.sh"
+    - name: Prepare Codex executable
+      shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      run: bash "$GITHUB_ACTION_PATH/../scripts/prepare-codex.sh"
     - id: run
       shell: bash
       env:

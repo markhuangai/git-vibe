@@ -1,10 +1,11 @@
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import type { ContextPacket, JsonObject } from "../shared/types.js";
-import { packedContextForPrompt } from "./content-units.js";
+import { packedContextForPrompt, type PackedPromptContextFiles } from "./content-units.js";
 
 export interface RenderPromptOptions {
   context: ContextPacket;
+  contextFiles?: PackedPromptContextFiles;
   cwd?: string;
   outputSchema: JsonObject;
   promptDir: string;
@@ -38,7 +39,9 @@ ${options.roleDefinition}
 
   const system = systemParts.join("\n\n");
   const userTemplate = userParts.join("\n\n");
-  const githubContext = packedContextForPrompt(options.context);
+  const githubContext = packedContextForPrompt(options.context, {
+    fileContext: options.contextFiles,
+  });
   const prompt = userTemplate
     .replace("{{github_context}}", xmlJson("github_context", githubContext))
     .replace("{{repository_context}}", xmlText("repository_context", options.repositoryContext))

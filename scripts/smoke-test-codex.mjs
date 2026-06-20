@@ -63,7 +63,10 @@ export async function main({
 export async function runCodexSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
   const config = readCodexSmokeConfig({ cwd, env });
   try {
-    const codex = new dependencies.Codex({ env: stringEnv(config.env) });
+    const codex = new dependencies.Codex({
+      ...(env.GITVIBE_CODEX_PATH ? { codexPathOverride: env.GITVIBE_CODEX_PATH } : {}),
+      env: stringEnv(config.env),
+    });
     const thread = codex.startThread({
       approvalPolicy: "never",
       model: config.model,

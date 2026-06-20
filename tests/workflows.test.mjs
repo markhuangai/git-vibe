@@ -67,6 +67,7 @@ const claudeActionFiles = [
   "review-matrix/action.yml",
   "validate/action.yml",
 ];
+const codexActionFiles = claudeActionFiles;
 
 const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
@@ -343,6 +344,7 @@ describe("GitVibe AI smoke workflow", () => {
       (step) => step.uses === "actions/setup-node@v4",
     );
     const codexRun = workflowStep(workflow, "codex", "Run Codex SDK smoke test")?.run || "";
+    const codexPrepare = workflowStep(workflow, "codex", "Prepare Codex executable")?.run || "";
     const claudeRun =
       workflowStep(workflow, "claude-code", "Run Claude Code SDK smoke test")?.run || "";
     const claudePrepare =
@@ -354,6 +356,7 @@ describe("GitVibe AI smoke workflow", () => {
     expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
     expect(claudeInstall).toBe(true);
     expect(claudePrepare).toContain("bash scripts/prepare-claude-code.sh");
+    expect(codexPrepare).toContain("bash scripts/prepare-codex.sh");
     expect(codexRun).toContain("node scripts/smoke-test-codex.mjs");
     expect(codexRun).not.toContain("codex exec");
     expect(codexRun).not.toContain("codex --version");
@@ -475,6 +478,38 @@ describe("GitVibe Claude Code action setup", () => {
         `${file} should prepare Claude Code after building runtime`,
       ).toBeGreaterThan(buildStep);
       expect(prepareStep, `${file} should prepare Claude Code before running stage`).toBeLessThan(
+        runEntrypoint,
+      );
+    }
+  });
+});
+
+describe("GitVibe Codex action setup", () => {
+  it("documents Linux and macOS runner support without Windows runner setup", () => {
+    const prepareScript = readFileSync("scripts/prepare-codex.sh", "utf8");
+    const resolveScript = readFileSync("scripts/resolve-codex-path.mjs", "utf8");
+
+    expect(prepareScript).toContain("Darwin|Linux");
+    expect(prepareScript).toContain("supports Linux and macOS runners only");
+    expect(resolveScript).not.toContain("win32");
+    expect(resolveScript).not.toContain("codex.exe");
+  });
+
+  it("prepares a Codex executable before Codex-capable stage actions run", () => {
+    for (const file of codexActionFiles) {
+      const content = readFileSync(file, "utf8");
+      const buildStep = content.indexOf("Build GitVibe action runtime");
+      const prepareStep = content.indexOf("Prepare Codex executable");
+      const runEntrypoint = content.indexOf("dist/actions/run-action.js");
+
+      expect(prepareStep, `${file} should prepare Codex for codex-sdk`).toBeGreaterThan(-1);
+      expect(content, `${file} should use the shared Codex setup script`).toContain(
+        "scripts/prepare-codex.sh",
+      );
+      expect(prepareStep, `${file} should prepare Codex after building runtime`).toBeGreaterThan(
+        buildStep,
+      );
+      expect(prepareStep, `${file} should prepare Codex before running stage`).toBeLessThan(
         runEntrypoint,
       );
     }

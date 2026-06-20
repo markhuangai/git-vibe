@@ -33,6 +33,8 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Codex executable
+        run: bash scripts/prepare-codex.sh
       - name: Run Codex SDK smoke test
         env:
           GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

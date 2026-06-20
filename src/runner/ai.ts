@@ -17,6 +17,7 @@ export { extractValidatedOutput };
 
 export interface RunAiStageOptions {
   config: GitVibeConfig;
+  contextFilesRoot?: string;
   cwd: string;
   maxTurns: number;
   prompt: string;

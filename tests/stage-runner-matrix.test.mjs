@@ -121,6 +121,7 @@ describe("stage runner matrix member profile context", () => {
     writeFileSync(join(cwd, "PROFILE.md"), "Member profile guidance.");
     globalThis.__gitVibeSdkMocks.queueCodexOutput(synthesizedOutput("validate"));
     globalThis.fetch = fetchMock([issueResponse(), commentsResponse([])]);
+    delete process.env.RUNNER_TEMP;
 
     const result = await runStage({
       cwd,
@@ -143,6 +144,17 @@ describe("stage runner matrix member profile context", () => {
     expect(prompt).toContain("Member profile guidance.");
     expect(prompt).toContain("<git_vibe_role_definition>");
     expect(prompt).toContain("Focus on token boundaries.");
+    expect(prompt).toContain('"context_files"');
+    expect(prompt).toContain('"delivery": "file-backed"');
+    expect(prompt).not.toContain('"included_context_chunks"');
+    const manifestPath = prompt.match(
+      /"manifest": \{\n\s+"chars": \d+,\n\s+"path": "([^"]+)"/,
+    )?.[1];
+    expect(manifestPath).toBeTruthy();
+    expect(manifestPath).toContain(cwd);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const bodyUnit = manifest.units.find((unit) => unit.id === "artifact-body");
+    expect(readFileSync(bodyUnit.path, "utf8")).toContain("Issue body");
   });
 });
 

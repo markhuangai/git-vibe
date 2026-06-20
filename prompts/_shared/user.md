@@ -15,13 +15,14 @@
 <required_process>
 
 1. Identify the GitHub artifact, requested outcome, and any labels or comments that affect authorization.
-2. Read the `github_context.context_manifest` first. `included_context_chunks` contains the chunk text supplied within the prompt budget; `pending_chunks` are listed by id and are not yet semantically processed.
-3. If `github_context.context_manifest.pending_chunks` is greater than zero, do not return `blocked` solely for that static prompt-budget gap. Use tools when missing chunks are material to the decision; otherwise state the context limit in assumptions or findings.
-4. Read or inspect only the context needed for this stage. Use tools when the supplied context chunks are not enough to support the conclusion.
-5. Separate facts, assumptions, questions, and risks. Do not merge them into vague prose.
-6. Decide whether the stage is `completed` or `blocked`. If blocked, explain the blocking condition and do not trigger downstream work through a completed status.
-7. Build the final JSON object with every required field from the schema. Include optional fields only when they are useful and schema-valid.
-8. Return only the final JSON object.
+2. Read the `github_context.context_manifest` first. If `github_context.context_files` exists, the exact artifact body, timeline bodies, handoffs, and pull request patches are in the referenced files; use read or grep tools against those paths when evidence is material to the decision.
+3. If `github_context.context_files` is absent, `included_context_chunks` contains the chunk text supplied within the prompt budget and `pending_chunks` are listed by id but not semantically processed.
+4. Do not return `blocked` solely for omitted inline chunks or file-backed context references. Use tools when missing content is material to the decision; otherwise state the context limit in assumptions or findings.
+5. Read or inspect only the context needed for this stage. Use tools when the supplied context metadata is not enough to support the conclusion.
+6. Separate facts, assumptions, questions, and risks. Do not merge them into vague prose.
+7. Decide whether the stage is `completed` or `blocked`. If blocked, explain the blocking condition and do not trigger downstream work through a completed status.
+8. Build the final JSON object with every required field from the schema. Include optional fields only when they are useful and schema-valid.
+9. Return only the final JSON object.
    </required_process>
 
 <status_rules>

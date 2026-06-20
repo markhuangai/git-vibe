@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   Codex,
   type CodexOptions,
@@ -14,6 +15,25 @@ import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
 import { summarizeError } from "./logging.js";
 import { prepareSdkMcpConfig } from "./mcp-sdk-config.js";
 import { validatedSdkOutput } from "./sdk-output.js";
+
+const codexNativePackages: Record<string, { packageName: string; targetTriple: string }> = {
+  "darwin:arm64": {
+    packageName: "@openai/codex-darwin-arm64",
+    targetTriple: "aarch64-apple-darwin",
+  },
+  "darwin:x64": {
+    packageName: "@openai/codex-darwin-x64",
+    targetTriple: "x86_64-apple-darwin",
+  },
+  "linux:arm64": {
+    packageName: "@openai/codex-linux-arm64",
+    targetTriple: "aarch64-unknown-linux-musl",
+  },
+  "linux:x64": {
+    packageName: "@openai/codex-linux-x64",
+    targetTriple: "x86_64-unknown-linux-musl",
+  },
+};
 
 export async function runCodexSdkStage({
   options,
@@ -30,6 +50,7 @@ export async function runCodexSdkStage({
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
     const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });
     const sdk = new Codex({
+      codexPathOverride: codexExecutablePath(),
       config: codexConfig(profile, mcpConfig.codexConfig),
       env: stringEnv(codexEnv.env),
     });
@@ -48,6 +69,7 @@ export async function runCodexSdkStage({
     });
 
     const thread = sdk.startThread({
+      ...(options.contextFilesRoot ? { additionalDirectories: [options.contextFilesRoot] } : {}),
       approvalPolicy: "never",
       model,
       modelReasoningEffort: codexReasoningEffort(profile),
@@ -104,6 +126,48 @@ function codexReasoningEffort(profile: Record<string, unknown>): ModelReasoningE
 
 function isCodexReasoningEffort(value: string): value is ModelReasoningEffort {
   return ["minimal", "low", "medium", "high", "xhigh"].includes(value);
+}
+
+function codexExecutablePath(): string {
+  const configured = stringValue(process.env.GITVIBE_CODEX_PATH);
+  if (configured) {
+    if (!existsSync(configured)) {
+      throw new Error(`GITVIBE_CODEX_PATH does not exist: ${configured}`);
+    }
+    if (!isExecutable(configured)) {
+      throw new Error(`GITVIBE_CODEX_PATH is not executable: ${configured}`);
+    }
+    return configured;
+  }
+
+  const native = codexNativePackage();
+  if (!native) {
+    throw new Error(
+      `codex-sdk executable resolution is not supported on ${process.platform}/${process.arch}. GitVibe actions support Linux and macOS runners.`,
+    );
+  }
+
+  const sdkEntry = import.meta.resolve("@openai/codex-sdk");
+  const sdkRequire = createRequire(sdkEntry);
+  const codexPackageJson = sdkRequire.resolve("@openai/codex/package.json");
+  const codexRequire = createRequire(codexPackageJson);
+  const packageJson = codexRequire.resolve(`${native.packageName}/package.json`);
+  const executable = join(dirname(packageJson), "vendor", native.targetTriple, "bin", "codex");
+  accessSync(executable, constants.X_OK);
+  return executable;
+}
+
+function isExecutable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function codexNativePackage(): { packageName: string; targetTriple: string } | undefined {
+  return codexNativePackages[`${process.platform}:${process.arch}`];
 }
 
 function codexPrompt(options: RunAiStageOptions): string {

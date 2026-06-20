@@ -90,7 +90,9 @@ source-backed composite actions. Each composite action then reads
 GitVibe workflows and composite actions support Linux and macOS GitHub Actions
 runners. Windows runners are not supported by this repository. The Claude Code
 SDK path resolves a Linux/macOS native executable or installs Claude Code through
-Anthropic's shell installer when no executable is available.
+Anthropic's shell installer when no executable is available. The Codex SDK path
+resolves the native `@openai/codex` executable and exports it to the SDK through
+`GITVIBE_CODEX_PATH`.
 
 `review.yml` runs the same PR-scoped review matrix for an existing pull request.
 Trusted maintainers trigger it with the `git-vibe:review` label on a PR. GitVibe
@@ -431,6 +433,10 @@ SDK adapters use the Codex SDK and Claude Code SDK directly; profiles choose
 adapter, model, auth, env, and reasoning settings. They use native structured
 output schema support and do not receive `output_validator` tool-call
 instructions.
+GitHub context bodies, handoffs, and PR patches are persisted as runner-local
+context files. The initial prompt carries manifests and file references so SDK
+agents can read exact evidence with normal repository tools instead of receiving
+large inline prompt payloads.
 Profiles may opt into shared repository guidance with
 `ai.profiles.<name>.context.files`. Listed files are appended to the rendered
 system prompt for that profile; GitVibe never auto-loads `AGENTS.md` or

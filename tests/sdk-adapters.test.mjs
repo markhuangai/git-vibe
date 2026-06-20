@@ -25,8 +25,13 @@ afterEach(() => {
 describe("Codex and Claude SDK adapter routing", () => {
   it("runs codex-sdk profiles and validates structured output", async () => {
     const cwd = workspace();
+    const codexPath = join(cwd, "codex");
+    writeFileSync(codexPath, "");
+    chmodSync(codexPath, 0o755);
     process.env.CODEX_HOME = join(cwd, "ambient-codex-home");
-    const output = await runAiStage(stageOptions({ cwd, config: codexConfig() }));
+    process.env.GITVIBE_CODEX_PATH = codexPath;
+    const contextFilesRoot = join(cwd, "git-vibe-context-files");
+    const output = await runAiStage(stageOptions({ cwd, config: codexConfig(), contextFilesRoot }));
 
     expect(JSON.parse(output)).toMatchObject({
       next_state: "ready-for-implementation",
@@ -35,6 +40,7 @@ describe("Codex and Claude SDK adapter routing", () => {
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
     expect(globalThis.__gitVibeSdkMocks.codexConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
+        codexPathOverride: codexPath,
         config: {},
         env: expect.any(Object),
       }),
@@ -44,6 +50,7 @@ describe("Codex and Claude SDK adapter routing", () => {
     expect(existsSync(constructorOptions.env.CODEX_HOME)).toBe(false);
     expect(globalThis.__gitVibeSdkMocks.codexStartThread).toHaveBeenCalledWith(
       expect.objectContaining({
+        additionalDirectories: [contextFilesRoot],
         approvalPolicy: "never",
         model: "gpt-5-test",
         modelReasoningEffort: "high",
@@ -237,7 +244,7 @@ describe("Claude SDK adapter logging", () => {
 });
 
 describe("Codex and Claude SDK adapter validation", () => {
-  it("fails fast for unsupported SDK reasoning efforts and failed Claude results", async () => {
+  it("fails fast for unsupported SDK reasoning efforts", async () => {
     const cwd = workspace();
     await expect(
       runAiStage(
@@ -256,7 +263,12 @@ describe("Codex and Claude SDK adapter validation", () => {
         }),
       ),
     ).rejects.toThrow("reasoning.effort is not supported by claude-code-sdk: turbo");
+  });
+});
 
+describe("SDK executable path validation", () => {
+  it("validates configured SDK executable paths", async () => {
+    const cwd = workspace();
     process.env.GITVIBE_CLAUDE_CODE_PATH = join(cwd, "missing-claude");
     await expect(
       runAiStage(
@@ -281,6 +293,35 @@ describe("Codex and Claude SDK adapter validation", () => {
     ).rejects.toThrow("GITVIBE_CLAUDE_CODE_PATH is not executable:");
     delete process.env.GITVIBE_CLAUDE_CODE_PATH;
 
+    process.env.GITVIBE_CODEX_PATH = join(cwd, "missing-codex");
+    await expect(
+      runAiStage(
+        stageOptions({
+          config: codexConfig(),
+          cwd,
+        }),
+      ),
+    ).rejects.toThrow("GITVIBE_CODEX_PATH does not exist:");
+    delete process.env.GITVIBE_CODEX_PATH;
+
+    const nonExecutableCodexPath = join(cwd, "non-executable-codex");
+    writeFileSync(nonExecutableCodexPath, "");
+    process.env.GITVIBE_CODEX_PATH = nonExecutableCodexPath;
+    await expect(
+      runAiStage(
+        stageOptions({
+          config: codexConfig(),
+          cwd,
+        }),
+      ),
+    ).rejects.toThrow("GITVIBE_CODEX_PATH is not executable:");
+    delete process.env.GITVIBE_CODEX_PATH;
+  });
+});
+
+describe("Claude SDK result validation", () => {
+  it("surfaces failed Claude SDK result details", async () => {
+    const cwd = workspace();
     globalThis.__gitVibeSdkMocks.queueClaudeMessages([
       { errors: ["boom"], subtype: "error_during_execution", type: "result" },
     ]);
@@ -457,9 +498,10 @@ describe("SDK MCP config warnings", () => {
   });
 });
 
-function stageOptions({ config, cwd, logger }) {
+function stageOptions({ config, contextFilesRoot, cwd, logger }) {
   return {
     config,
+    contextFilesRoot,
     cwd,
     logger,
     maxTurns: 3,

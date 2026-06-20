@@ -82,6 +82,7 @@ ai:
       dependencies: { Codex },
       env: {
         CODEX_HOME: "/runner/codex-home",
+        GITVIBE_CODEX_PATH: "/runner/codex",
         GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
       },
     });
@@ -90,6 +91,9 @@ ai:
     expect(codexHome).toContain("git-vibe-codex-smoke-");
     expect(codexHome).not.toBe("/runner/codex-home");
     expect(existsSync(codexHome)).toBe(false);
+    expect(Codex).toHaveBeenCalledWith(
+      expect.objectContaining({ codexPathOverride: "/runner/codex" }),
+    );
     expect(startThread).toHaveBeenCalledWith(
       expect.objectContaining({
         approvalPolicy: "never",

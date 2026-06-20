@@ -9,7 +9,12 @@ import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
-import { contextPromptCoverageForContext, type ContextPromptCoverage } from "./content-units.js";
+import {
+  contextPromptCoverageForContext,
+  type ContextPromptCoverage,
+  type PackedPromptContextFiles,
+} from "./content-units.js";
+import { writePromptContextFiles } from "./context-files.js";
 import { promptSafetySources, runStageResultForMode } from "./stage-ai-results.js";
 import { stageRunResult } from "./stage-results.js";
 import { readRoleDefinition } from "./role-groups.js";
@@ -120,8 +125,13 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
 
   const schema = loadStageSchema(definition.schemaFile);
+  const promptContext = acceptedRisk
+    ? contextWithoutAcceptedRiskMetadataSource(context, runner)
+    : context;
+  const contextFiles = persistContext({ context: promptContext, logger, options });
   const prompts = buildRenderedPrompts({
-    context: acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context,
+    context: promptContext,
+    contextFiles,
     definition,
     options,
     schema,
@@ -134,11 +144,10 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     tools: definition.tools.join(","),
   });
 
-  persistContext({ context, logger, options });
-
   const aiRunOptions = buildAiRunOptions({
     client,
     config,
+    contextFiles,
     definition,
     logger,
     options,
@@ -230,7 +239,9 @@ async function runCheckedStageResult(options: {
 }): Promise<StageRunResult> {
   const result = await runStageResultForMode(options);
   recordContextCoverage({
-    coverage: contextPromptCoverageForContext(options.context),
+    coverage: contextPromptCoverageForContext(options.context, {
+      budgetChars: Number.MAX_SAFE_INTEGER,
+    }),
     logger: options.logger,
   });
   if (options.executionMode === "member") return result;
@@ -314,12 +325,7 @@ function recordContextCoverage(options: {
 }): void {
   options.logger.event("context.coverage.checked", {
     complete: options.coverage.complete,
-    included_chunks: options.coverage.includedChunkIds.length,
-    pending_chunks: options.coverage.pendingChunkIds.length,
-    total_chunks: options.coverage.totalChunks,
-  });
-  if (options.coverage.complete) return;
-  options.logger.event("context.coverage.incomplete", {
+    file_backed: true,
     included_chunks: options.coverage.includedChunkIds.length,
     pending_chunks: options.coverage.pendingChunkIds.length,
     total_chunks: options.coverage.totalChunks,
@@ -330,21 +336,30 @@ function persistContext(options: {
   context: ContextPacket;
   logger: StageLogger;
   options: RunnerOptions;
-}): void {
+}): PackedPromptContextFiles {
   const contextDir = process.env.RUNNER_TEMP || options.options.cwd;
   mkdirSync(contextDir, { recursive: true });
   writeFileSync(
     join(contextDir, `git-vibe-${options.options.stage}-context.json`),
     JSON.stringify(options.context, null, 2),
   );
+  const contextFiles = writePromptContextFiles({
+    context: options.context,
+    rootDir: contextDir,
+    stage: options.options.stage,
+  });
   options.logger.event("context.persisted", {
     file: `git-vibe-${options.options.stage}-context.json`,
+    manifest: contextFiles.manifest.path,
+    units: contextFiles.units.length,
   });
+  return contextFiles;
 }
 
 function buildAiRunOptions(options: {
   client: GitHubClient;
   config: GitVibeConfig;
+  contextFiles: PackedPromptContextFiles;
   definition: RunnerStageDefinition;
   logger: StageLogger;
   options: RunnerOptions;
@@ -353,6 +368,7 @@ function buildAiRunOptions(options: {
 }): RunAiStageOptions {
   return {
     config: options.config,
+    contextFilesRoot: options.contextFiles.root_dir,
     cwd: options.options.cwd,
     github: {
       authWriteback: options.options.githubAuthWriteback,
@@ -437,12 +453,14 @@ function roleDefinitionFor(options: RunnerOptions): string | undefined {
 
 function buildRenderedPrompts(options: {
   context: ContextPacket;
+  contextFiles: PackedPromptContextFiles;
   definition: RunnerStageDefinition;
   options: RunnerOptions;
   schema: JsonObject;
 }): { prompt: string; system: string } {
   return renderPrompts({
     context: options.context,
+    contextFiles: options.contextFiles,
     cwd: options.options.cwd,
     outputSchema: options.schema,
     promptDir: options.definition.promptDir,
