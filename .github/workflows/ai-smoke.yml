@@ -56,6 +56,8 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Claude Code executable
+        run: bash scripts/prepare-claude-code.sh
       - name: Run Claude Code SDK smoke test
         env:
           GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { query, type EffortLevel, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { RunAiStageOptions } from "./ai.js";
 import { logSdkWebPolicyNotice } from "./ai-web-policy.js";
@@ -14,6 +15,8 @@ import {
 import type { StageLogger } from "./logging.js";
 import { prepareSdkMcpConfig } from "./mcp-sdk-config.js";
 import { structuredOutputText, validatedSdkOutput } from "./sdk-output.js";
+
+const require = createRequire(import.meta.url);
 
 export async function runClaudeCodeSdkStage({
   options,
@@ -30,6 +33,7 @@ export async function runClaudeCodeSdkStage({
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
     const env = sdkProfileEnv(profile, `ai.profiles.${profileName}`);
     env.CLAUDE_AGENT_SDK_CLIENT_APP ??= "git-vibe";
+    const executable = claudeCodeExecutablePath();
 
     options.logger?.event("ai.request.start", {
       adapter: "claude-code-sdk",
@@ -63,6 +67,7 @@ export async function runClaudeCodeSdkStage({
           schema: strictOutputSchema(options.schema),
           type: "json_schema",
         },
+        ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
         permissionMode: "bypassPermissions",
         persistSession: false,
         settingSources: [],
@@ -115,6 +120,66 @@ function claudeEffort(profile: Record<string, unknown>): EffortLevel | undefined
 
 function isClaudeEffort(value: string): value is EffortLevel {
   return ["low", "medium", "high", "xhigh", "max"].includes(value);
+}
+
+function claudeCodeExecutablePath(): string | undefined {
+  const configured = stringValue(process.env.GITVIBE_CLAUDE_CODE_PATH);
+  if (configured) {
+    if (!existsSync(configured)) {
+      throw new Error(`GITVIBE_CLAUDE_CODE_PATH does not exist: ${configured}`);
+    }
+    if (!isExecutable(configured)) {
+      throw new Error(`GITVIBE_CLAUDE_CODE_PATH is not executable: ${configured}`);
+    }
+    return configured;
+  }
+
+  const packageName = claudeCodeNativePackageName();
+  if (!packageName) return undefined;
+
+  try {
+    const sdkEntry = require.resolve("@anthropic-ai/claude-agent-sdk");
+    const sdkRequire = createRequire(sdkEntry);
+    const packageJson = sdkRequire.resolve(`${packageName}/package.json`);
+    const executable = join(dirname(packageJson), "claude");
+    return isExecutable(executable) ? executable : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isExecutable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function claudeCodeNativePackageName(): string | undefined {
+  const os = claudeCodeNativeOs();
+  const arch = claudeCodeNativeArch();
+  if (!os || !arch) return undefined;
+  const libc = os === "linux" && isMuslLinux() ? "-musl" : "";
+  return `@anthropic-ai/claude-agent-sdk-${os}-${arch}${libc}`;
+}
+
+function claudeCodeNativeOs(): "darwin" | "linux" | undefined {
+  if (process.platform === "darwin" || process.platform === "linux") return process.platform;
+  return undefined;
+}
+
+function claudeCodeNativeArch(): "arm64" | "x64" | undefined {
+  if (process.arch === "arm64" || process.arch === "x64") return process.arch;
+  return undefined;
+}
+
+function isMuslLinux(): boolean {
+  const report = process.report?.getReport?.() as
+    | { header?: { glibcVersionRuntime?: string } }
+    | undefined;
+  return process.platform === "linux" && !report?.header?.glibcVersionRuntime;
 }
 
 function logClaudeSdkMessage(message: SDKMessage, logger: StageLogger | undefined): void {

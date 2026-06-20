@@ -68,6 +68,12 @@ runs:
         echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
         "${pnpm_cmd[@]}" install --frozen-lockfile
         "${pnpm_cmd[@]}" build
+    - name: Prepare Claude Code executable
+      shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+        ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      run: bash "$GITHUB_ACTION_PATH/../scripts/prepare-claude-code.sh"
     - id: run
       shell: bash
       env:

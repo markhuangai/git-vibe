@@ -61,6 +61,12 @@ const actionFiles = [
   "security-review/action.yml",
   "validate/action.yml",
 ];
+const claudeActionFiles = [
+  "investigate/action.yml",
+  "materialize/action.yml",
+  "review-matrix/action.yml",
+  "validate/action.yml",
+];
 
 const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
@@ -331,7 +337,7 @@ describe("GitVibe workflow budget wiring", () => {
 });
 
 describe("GitVibe AI smoke workflow", () => {
-  it("validates Codex and Claude Code SDK responses without installing CLIs", () => {
+  it("validates Codex and Claude Code SDK responses through SDK smoke tests", () => {
     const workflow = readWorkflow(".github/workflows/ai-smoke.yml");
     const claudeSetupNode = workflow.jobs?.["claude-code"]?.steps?.find(
       (step) => step.uses === "actions/setup-node@v4",
@@ -339,12 +345,15 @@ describe("GitVibe AI smoke workflow", () => {
     const codexRun = workflowStep(workflow, "codex", "Run Codex SDK smoke test")?.run || "";
     const claudeRun =
       workflowStep(workflow, "claude-code", "Run Claude Code SDK smoke test")?.run || "";
+    const claudePrepare =
+      workflowStep(workflow, "claude-code", "Prepare Claude Code executable")?.run || "";
     const claudeInstall = workflow.jobs?.["claude-code"]?.steps?.some(
       (step) => step.run === "pnpm install --frozen-lockfile",
     );
 
     expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
     expect(claudeInstall).toBe(true);
+    expect(claudePrepare).toContain("bash scripts/prepare-claude-code.sh");
     expect(codexRun).toContain("node scripts/smoke-test-codex.mjs");
     expect(codexRun).not.toContain("codex exec");
     expect(codexRun).not.toContain("codex --version");
@@ -435,7 +444,44 @@ describe("GitVibe action runtime setup", () => {
       );
     }
   });
+});
 
+describe("GitVibe Claude Code action setup", () => {
+  it("documents Linux and macOS runner support without Windows runner setup", () => {
+    const prepareScript = readFileSync("scripts/prepare-claude-code.sh", "utf8");
+    const resolveScript = readFileSync("scripts/resolve-claude-code-path.mjs", "utf8");
+
+    expect(prepareScript).toContain("Darwin|Linux");
+    expect(prepareScript).toContain("supports Linux and macOS runners only");
+    expect(resolveScript).not.toContain("win32");
+    expect(resolveScript).not.toContain("claude.exe");
+  });
+
+  it("prepares a Claude Code executable before Claude-capable stage actions run", () => {
+    for (const file of claudeActionFiles) {
+      const content = readFileSync(file, "utf8");
+      const buildStep = content.indexOf("Build GitVibe action runtime");
+      const prepareStep = content.indexOf("Prepare Claude Code executable");
+      const runEntrypoint = content.indexOf("dist/actions/run-action.js");
+
+      expect(prepareStep, `${file} should prepare Claude Code for claude-code-sdk`).toBeGreaterThan(
+        -1,
+      );
+      expect(content, `${file} should use the shared Claude Code setup script`).toContain(
+        "scripts/prepare-claude-code.sh",
+      );
+      expect(
+        prepareStep,
+        `${file} should prepare Claude Code after building runtime`,
+      ).toBeGreaterThan(buildStep);
+      expect(prepareStep, `${file} should prepare Claude Code before running stage`).toBeLessThan(
+        runEntrypoint,
+      );
+    }
+  });
+});
+
+describe("GitVibe workflow local action setup", () => {
   it("sets up Node and pnpm before local GitVibe actions run", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);

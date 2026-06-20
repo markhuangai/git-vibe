@@ -1,5 +1,12 @@
 // @ts-nocheck
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +55,10 @@ describe("Codex and Claude SDK adapter routing", () => {
 
   it("runs claude-code-sdk profiles with env bundle values and custom system prompt", async () => {
     const cwd = workspace();
+    const claudePath = join(cwd, "claude");
+    writeFileSync(claudePath, "");
+    chmodSync(claudePath, 0o755);
+    process.env.GITVIBE_CLAUDE_CODE_PATH = claudePath;
     process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
       ANTHROPIC_BASE_URL: "https://anthropic.example",
       GITVIBE_AI_API_KEY: "test-key",
@@ -69,6 +80,7 @@ describe("Codex and Claude SDK adapter routing", () => {
             ANTHROPIC_BASE_URL: "https://anthropic.example",
           }),
           model: "opus",
+          pathToClaudeCodeExecutable: claudePath,
           permissionMode: "bypassPermissions",
           persistSession: false,
           settingSources: [],
@@ -244,6 +256,30 @@ describe("Codex and Claude SDK adapter validation", () => {
         }),
       ),
     ).rejects.toThrow("reasoning.effort is not supported by claude-code-sdk: turbo");
+
+    process.env.GITVIBE_CLAUDE_CODE_PATH = join(cwd, "missing-claude");
+    await expect(
+      runAiStage(
+        stageOptions({
+          config: claudeConfig({ env: undefined, reasoning: undefined }),
+          cwd,
+        }),
+      ),
+    ).rejects.toThrow("GITVIBE_CLAUDE_CODE_PATH does not exist:");
+    delete process.env.GITVIBE_CLAUDE_CODE_PATH;
+
+    const nonExecutableClaudePath = join(cwd, "non-executable-claude");
+    writeFileSync(nonExecutableClaudePath, "");
+    process.env.GITVIBE_CLAUDE_CODE_PATH = nonExecutableClaudePath;
+    await expect(
+      runAiStage(
+        stageOptions({
+          config: claudeConfig({ env: undefined, reasoning: undefined }),
+          cwd,
+        }),
+      ),
+    ).rejects.toThrow("GITVIBE_CLAUDE_CODE_PATH is not executable:");
+    delete process.env.GITVIBE_CLAUDE_CODE_PATH;
 
     globalThis.__gitVibeSdkMocks.queueClaudeMessages([
       { errors: ["boom"], subtype: "error_during_execution", type: "result" },

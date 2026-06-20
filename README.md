@@ -87,6 +87,11 @@ source-backed composite actions. Each composite action then reads
 `.github/git-vibe.yml` for its stage and runs the selected `codex-sdk` or
 `claude-code-sdk` profile directly through its SDK adapter.
 
+GitVibe workflows and composite actions support Linux and macOS GitHub Actions
+runners. Windows runners are not supported by this repository. The Claude Code
+SDK path resolves a Linux/macOS native executable or installs Claude Code through
+Anthropic's shell installer when no executable is available.
+
 `review.yml` runs the same PR-scoped review matrix for an existing pull request.
 Trusted maintainers trigger it with the `git-vibe:review` label on a PR. GitVibe
 removes stale ready/blocked state, adds `gvi:reviewing`, and then marks the PR
