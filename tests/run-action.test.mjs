@@ -160,16 +160,16 @@ function roleGroupWorkspace() {
     [
       "ai:",
       "  profiles:",
-      "    local_proxy: {}",
-      "    codex_cli: {}",
+      "    claude_code: {}",
+      "    codex_sdk: {}",
       "  role_groups:",
       "    review_gate:",
-      "      synthesizer: local_proxy",
+      "      synthesizer: claude_code",
       "      roles:",
       "        - role: security.md",
-      "          profile: local_proxy",
+      "          profile: claude_code",
       "        - role: maintainability.md",
-      "          profile: codex_cli",
+      "          profile: codex_sdk",
       "  stages:",
       "    validate:",
       "      role_group: review_gate",
@@ -376,7 +376,7 @@ describe("GitVibe action launcher member routing", () => {
     expect(runStage).toHaveBeenCalledWith(
       expect.objectContaining({
         executionMode: "member",
-        profileName: "codex_cli",
+        profileName: "codex_sdk",
         roleName: "maintainability.md",
       }),
     );

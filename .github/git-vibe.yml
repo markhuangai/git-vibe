@@ -25,32 +25,9 @@ ai:
     default_timeout_minutes: 60
     review_timeout_minutes: 60
     default_max_turns: 200
-    request_retry_attempts: 3
-    request_retry_delay_seconds: 60
   profiles:
-    local_proxy:
-      adapter: ai-sdk-agentool
-      context_window_tokens: 200000
-      context:
-        files:
-          - AGENTS.md
-      provider:
-        type: openai-compatible
-        model: kimi-k2.5
-        base_url:
-          from_bundle: GITVIBE_AI_BASE_URL
-        api_key:
-          from_bundle: GITVIBE_AI_API_KEY
-      reasoning:
-        effort: high
-      provider_options:
-        openai:
-          reasoningEffort: high
-          reasoningSummary: concise
-        anthropic:
-          effort: high
     codex_5.5_xhigh:
-      adapter: cli-codex
+      adapter: codex-sdk
       auth_json:
         from_bundle: CODEX_AUTH_JSON
       model: gpt-5.5
@@ -58,7 +35,10 @@ ai:
         effort: xhigh
         summary: concise
     claude_code:
-      adapter: cli-claude-code
+      adapter: claude-code-sdk
+      context:
+        files:
+          - AGENTS.md
       env:
         ANTHROPIC_API_KEY:
           from_bundle: GITVIBE_AI_API_KEY
@@ -89,11 +69,11 @@ ai:
       parallel: 3
       roles:
         - role: correctness.md
-          profile: local_proxy
+          profile: claude_code
         - role: security.md
-          profile: local_proxy
+          profile: claude_code
         - role: maintainability.md
-          profile: local_proxy
+          profile: claude_code
   stages:
     investigate:
       role_group: swarm

@@ -179,7 +179,7 @@ describe("GitVibe workflow wiring", () => {
     }
   });
 
-  it("removes standalone CLI secret wiring from reusable workflows", () => {
+  it("removes standalone adapter secret wiring from reusable workflows", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
       const workflowCall = workflow.on?.workflow_call;
@@ -331,24 +331,22 @@ describe("GitVibe workflow budget wiring", () => {
 });
 
 describe("GitVibe AI smoke workflow", () => {
-  it("validates Codex and Claude Code responses instead of treating CLI presence as success", () => {
+  it("validates Codex and Claude Code SDK responses without installing CLIs", () => {
     const workflow = readWorkflow(".github/workflows/ai-smoke.yml");
     const claudeSetupNode = workflow.jobs?.["claude-code"]?.steps?.find(
       (step) => step.uses === "actions/setup-node@v4",
     );
-    const codexRun = workflowStep(workflow, "codex", "Run Codex smoke test")?.run || "";
+    const codexRun = workflowStep(workflow, "codex", "Run Codex SDK smoke test")?.run || "";
     const claudeRun =
-      workflowStep(workflow, "claude-code", "Run Claude Code smoke test")?.run || "";
+      workflowStep(workflow, "claude-code", "Run Claude Code SDK smoke test")?.run || "";
     const claudeInstall = workflow.jobs?.["claude-code"]?.steps?.some(
       (step) => step.run === "pnpm install --frozen-lockfile",
     );
 
     expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
     expect(claudeInstall).toBe(true);
-    expect(codexRun).toContain("codex exec");
-    expect(codexRun).toContain("--output-last-message");
-    expect(codexRun).toContain("validateSmokeResponse(response, process.argv[3])");
-    expect(codexRun).toContain('"source": { "enum": ["codex"] }');
+    expect(codexRun).toContain("node scripts/smoke-test-codex.mjs");
+    expect(codexRun).not.toContain("codex exec");
     expect(codexRun).not.toContain("codex --version");
 
     expect(claudeRun).toContain("node scripts/smoke-test-claude-code.mjs");
@@ -407,7 +405,6 @@ describe("GitVibe action runtime setup", () => {
     for (const file of actionFiles) {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
-      const setupStep = content.indexOf("dist/actions/setup-ai-cli.js");
       const runEntrypoint =
         file === "mark-blocked/action.yml"
           ? "dist/actions/mark-blocked.js"
@@ -417,16 +414,9 @@ describe("GitVibe action runtime setup", () => {
               ? "dist/actions/security-review.js"
               : "dist/actions/run-action.js";
       const runStep = content.indexOf(runEntrypoint);
-      const needsAiSetup = ![
-        "mark-blocked/action.yml",
-        "plan-stage/action.yml",
-        "security-review/action.yml",
-      ].includes(file);
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
-      if (needsAiSetup) {
-        expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
-      }
+      expect(content, `${file} should not set up removed AI tooling`).not.toContain("setup-ai-cli");
       expect(content, `${file} should prefer Corepack when available`).toContain(
         "command -v corepack",
       );
@@ -443,12 +433,6 @@ describe("GitVibe action runtime setup", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
-      if (needsAiSetup) {
-        expect(setupStep, `${file} should set up CLIs before stage execution`).toBeLessThan(
-          runStep,
-        );
-        expect(buildStep, `${file} should build before setting up CLIs`).toBeLessThan(setupStep);
-      }
     }
   });
 

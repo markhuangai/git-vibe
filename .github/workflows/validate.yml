@@ -78,7 +78,7 @@ on:
         default: ""
     secrets:
       GITVIBE_AI_ENV_JSON:
-        description: JSON env bundle for AI provider config and CLI profiles.
+        description: JSON env bundle for SDK adapter auth and provider variables.
         required: true
       GITVIBE_MCP_ENV_JSON:
         description: Optional JSON env bundle for MCP server credentials.

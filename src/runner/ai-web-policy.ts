@@ -43,13 +43,13 @@ export function filterToolsForWebPolicy(options: FilterToolOptions): string[] {
   return options.tools;
 }
 
-export function logCliWebPolicyNotice(options: {
+export function logSdkWebPolicyNotice(options: {
   adapter: string;
   config: GitVibeConfig;
   logger?: StageLogger;
 }): void {
   webPolicyFor(options.config);
-  options.logger?.event("ai.web_policy.cli_notice", {
+  options.logger?.event("ai.web_policy.sdk_notice", {
     adapter: options.adapter,
     enforcement: "system-prompt",
     hard_network_boundary: "runner-required",
@@ -61,12 +61,14 @@ export function logCliWebPolicyNotice(options: {
       "",
       `- Adapter: \`${options.adapter}\``,
       "- Website access is governed by GitVibe system-prompt rules.",
-      "- Native CLI web-search/web-fetch tools are prompt-guided where the CLI exposes them.",
+      "- Native SDK agent web-search/web-fetch tools are prompt-guided where the agent exposes them.",
       "- Shell or process network egress is not a hard boundary unless the runner blocks it.",
       "",
     ].join("\n"),
   );
 }
+
+export const logCliWebPolicyNotice = logSdkWebPolicyNotice;
 
 function validateLegacyWebConfig(config: GitVibeConfig): void {
   const web = webConfig(config);

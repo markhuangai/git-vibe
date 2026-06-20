@@ -193,7 +193,7 @@ describe("MCP gateway startup validation", () => {
     }
   });
 
-  it("detects direct CLI execution", () => {
+  it("detects direct gateway execution", () => {
     expect(isDirectRun("", "/tmp/mcp-gateway.js")).toBe(true);
     expect(isDirectRun("file:///tmp/mcp-gateway.js", "/tmp/mcp-gateway.js")).toBe(true);
     expect(isDirectRun("file:///tmp/other.js", "/tmp/mcp-gateway.js")).toBe(false);

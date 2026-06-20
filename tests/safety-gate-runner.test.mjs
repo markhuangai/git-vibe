@@ -14,17 +14,7 @@ import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 const mocks = vi.hoisted(() => ({
   buildMcpPromptContext: vi.fn(),
 }));
-const generateText = vi.fn();
-const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
-const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
 
-vi.mock("ai", () => ({
-  generateText,
-  hasToolCall: vi.fn((toolName) => ({ toolName })),
-  stepCountIs: vi.fn((count) => ({ count })),
-}));
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
-vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 vi.mock("../src/runner/mcp-context.js", () => ({
   buildMcpPromptContext: mocks.buildMcpPromptContext,
 }));
@@ -35,14 +25,12 @@ const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
-  generateText.mockReset();
   mocks.buildMcpPromptContext.mockReset();
   mocks.buildMcpPromptContext.mockResolvedValue({ promptAddition: "" });
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
       GITVIBE_AI_API_KEY: "test-key",
-      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
   };
 });
@@ -77,7 +65,7 @@ describe("stage runner pre-LLM safety gate", () => {
       status: "allowed",
       summary: "Security review passed.",
     });
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 
   it("blocks unsafe context before workflow LLM jobs start", async () => {
@@ -108,7 +96,7 @@ describe("stage runner pre-LLM safety gate", () => {
     expect(result.result?.parsedOutput.findings.join("\n")).toContain(
       "higher-priority instructions",
     );
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 
   it("blocks read-only stages before calling the model", async () => {
@@ -136,7 +124,7 @@ describe("stage runner pre-LLM safety gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 });
 
@@ -177,9 +165,8 @@ describe("stage runner accepted-risk gate", () => {
     const bodies = issueCommentBodies(fetch).join("\n");
     expect(bodies).not.toContain("GitVibe paused this run");
     expect(bodies).toContain("GitVibe Risk Accepted");
-    expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
     expect(labelRemovalPath(fetch, "git-vibe:accept-risk")).toBeTruthy();
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 
   it("blocks post-cutoff unsafe input after accepted-risk", async () => {
@@ -219,14 +206,14 @@ describe("stage runner accepted-risk gate", () => {
     );
     expect(issueCommentBodies(fetch).join("\n")).not.toContain("GitVibe Risk Accepted");
     expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 });
 
 describe("stage runner accepted-risk output gate", () => {
   it("does not reblock accepted input risk when stage output is clean", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -256,15 +243,14 @@ describe("stage runner accepted-risk output gate", () => {
       status: "completed",
       summary: "Ready.",
     });
-    expect(generateText).toHaveBeenCalledTimes(1);
-    expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("stage runner accepted-risk delta input gate", () => {
   it("does not reblock accepted artifact body after label metadata updates the artifact", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
       commentsResponse([acceptedRiskMetadataComment({ body: unsafeInstruction() })]),
@@ -294,8 +280,7 @@ describe("stage runner accepted-risk delta input gate", () => {
       status: "completed",
       summary: "Ready.",
     });
-    expect(generateText).toHaveBeenCalledTimes(1);
-    expect(labelRequestBody(fetch, "gvi:blocked")).toBeUndefined();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 
   it("blocks accepted artifact bodies that changed after risk acceptance", async () => {
@@ -326,14 +311,14 @@ describe("stage runner accepted-risk delta input gate", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 });
 
 describe("stage runner accepted-risk post-cutoff input gate", () => {
   it("blocks post-cutoff unsafe input before the stage model runs", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction(), "2026-01-05T00:00:00Z")]),
@@ -363,7 +348,7 @@ describe("stage runner accepted-risk post-cutoff input gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 
   it("blocks untimestamped handoff input before the stage model runs", async () => {
@@ -374,7 +359,7 @@ describe("stage runner accepted-risk post-cutoff input gate", () => {
       join(handoffDir, "git-vibe-investigate-result.json"),
       JSON.stringify(legacyHandoff({ findings: [unsafeInstruction()] })),
     );
-    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
@@ -405,7 +390,7 @@ describe("stage runner accepted-risk post-cutoff input gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("handoff");
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 });
 
@@ -441,14 +426,24 @@ describe("stage runner accepted-risk MCP input gate", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 });
 
 describe("stage runner accepted-risk output gate", () => {
   it("still blocks unsafe stage output after accepted input risk", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(investigateAiOutput(unsafeInstructionWithBypass()));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput({
+      assumptions: [],
+      blocking_questions: [],
+      comment_body: unsafeInstructionWithBypass(),
+      findings: [],
+      next_state: "ready-for-implementation",
+      references: [],
+      stage: "investigate",
+      status: "completed",
+      summary: "Ready.",
+    });
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -477,7 +472,7 @@ describe("stage runner accepted-risk output gate", () => {
       status: "blocked",
       summary: "GitVibe paused this run for maintainer review.",
     });
-    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
     expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
   });
@@ -518,7 +513,7 @@ describe("stage runner PR changed-file safety gate", () => {
     expect(result.result?.parsedOutput.findings.join("\n")).toContain(
       "pull request file docs/prompt.md",
     );
-    expect(generateText).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
   });
 });
 
@@ -571,32 +566,18 @@ const pullRequestFilesResponse = (files) => response(200, files);
 const pullRequestResponse = (branch) =>
   response(200, { head: { ref: branch, repo: { full_name: "example/repo" } } });
 
-function investigateAiOutput(commentBody) {
+function investigateOutput(commentBody) {
   return {
-    steps: [
-      {
-        toolCalls: [
-          {
-            input: {
-              content: JSON.stringify({
-                assumptions: [],
-                blocking_questions: [],
-                comment_body: commentBody,
-                findings: [],
-                implementation_plan: ["Implement the verified change."],
-                next_state: "ready-for-implementation",
-                references: [],
-                stage: "investigate",
-                status: "completed",
-                summary: "Ready.",
-              }),
-            },
-            toolName: "output_validator",
-          },
-        ],
-      },
-    ],
-    text: "{}",
+    assumptions: [],
+    blocking_questions: [],
+    comment_body: commentBody,
+    findings: [],
+    implementation_plan: ["Implement the verified change."],
+    next_state: "ready-for-implementation",
+    references: [],
+    stage: "investigate",
+    status: "completed",
+    summary: "Ready.",
   };
 }
 

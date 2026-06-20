@@ -3,13 +3,10 @@ function testAiConfigYaml(extraAi = "") {
   return `ai:
   profiles:
     test:
-      provider:
-        type: openai-compatible
-        model: glm-5
-        base_url:
-          from_bundle: GITVIBE_AI_BASE_URL
-        api_key:
-          from_bundle: GITVIBE_AI_API_KEY
+      adapter: codex-sdk
+      model: gpt-5-test
+      reasoning:
+        effort: high
   stages:
     investigate:
       profile: test

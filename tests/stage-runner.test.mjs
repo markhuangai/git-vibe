@@ -11,31 +11,16 @@ import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
  * @typedef {{ mock: { calls: Array<[string | URL, { body?: string; method?: string }?]> } }} MockFetch
  */
 
-const generateText = vi.fn();
-const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
-const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
-
-vi.mock("ai", () => ({
-  generateText,
-  hasToolCall: vi.fn((toolName) => ({ toolName })),
-  stepCountIs: vi.fn((count) => ({ count })),
-}));
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
-vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 const { runStage } = await import("../src/runner/stage-runner.ts");
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
-  generateText.mockReset();
-  createOpenAI.mockClear();
-  createAnthropic.mockClear();
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
       GITVIBE_AI_API_KEY: "test-key",
-      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
   };
 });
@@ -150,42 +135,7 @@ describe("stage runner materialize writes", () => {
   it("materializes implementation issues and comments back to the source discussion", async () => {
     const cwd = await workspace();
     process.env.GITVIBE_DISCUSSION_NUMBER = "5";
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  comment_body: "Created issue.",
-                  findings: [],
-                  issues: [
-                    {
-                      acceptance_criteria: ["Issue is created."],
-                      background: "Implementation body.",
-                      backpressure_commands: ["corepack pnpm test"],
-                      blocked_by: [],
-                      parallel_group: "default",
-                      requirements: ["Implement feature."],
-                      review_guidelines: ["Verify behavior."],
-                      title: "Implement feature",
-                    },
-                  ],
-                  next_state: "implementation-issues-ready",
-                  references: [],
-                  stage: "materialize",
-                  status: "completed",
-                  summary: "Materialized.",
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
-    });
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(materializeOutput());
     const fetch = fetchMock([
       discussionResponse(),
       response(200, { html_url: "https://github.com/example/repo/issues/13", number: 13 }),
@@ -228,42 +178,7 @@ describe("stage runner materialize fallbacks", () => {
   it("materializes with fallback issue fields and skips discussion comments without a target", async () => {
     const cwd = await workspace();
     process.env.GITVIBE_DISCUSSION_NUMBER = "5";
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  comment_body: "Created issue.",
-                  findings: [],
-                  issues: [
-                    {
-                      acceptance_criteria: ["Issue is created."],
-                      background: "Implementation body.",
-                      backpressure_commands: [],
-                      blocked_by: [],
-                      parallel_group: "default",
-                      requirements: ["Implement feature."],
-                      review_guidelines: ["Verify behavior."],
-                      title: "Implement feature",
-                    },
-                  ],
-                  next_state: "implementation-issues-ready",
-                  references: [],
-                  stage: "materialize",
-                  status: "completed",
-                  summary: "Materialized.",
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
-    });
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(materializeOutput({ backpressure_commands: [] }));
     const fetch = fetchMock([discussionWithoutIdResponse(), response(200, { number: 13 })]);
     globalThis.fetch = fetch;
 
@@ -289,7 +204,7 @@ describe("stage runner materialize fallbacks", () => {
 describe("stage runner review-matrix start labels", () => {
   it("marks pull requests as reviewing at stage start without requiring a workflow run URL", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(reviewMatrixAiResult());
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(reviewMatrixOutput());
     const fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
@@ -464,8 +379,34 @@ const pullRequestReviewsResponse = (reviews) => response(200, reviews);
 /** @param {unknown[]} files */
 const pullRequestFilesResponse = (files) => response(200, files);
 
-function reviewMatrixAiResult() {
-  const content = JSON.stringify({
+function materializeOutput(issueOverrides = {}) {
+  return {
+    assumptions: [],
+    comment_body: "Created issue.",
+    findings: [],
+    issues: [
+      {
+        acceptance_criteria: ["Issue is created."],
+        background: "Implementation body.",
+        backpressure_commands: ["corepack pnpm test"],
+        blocked_by: [],
+        parallel_group: "default",
+        requirements: ["Implement feature."],
+        review_guidelines: ["Verify behavior."],
+        title: "Implement feature",
+        ...issueOverrides,
+      },
+    ],
+    next_state: "implementation-issues-ready",
+    references: [],
+    stage: "materialize",
+    status: "completed",
+    summary: "Materialized.",
+  };
+}
+
+function reviewMatrixOutput() {
+  return {
     assumptions: [],
     comment_body: "Reviewed.",
     findings: [],
@@ -474,10 +415,6 @@ function reviewMatrixAiResult() {
     stage: "review-matrix",
     status: "completed",
     summary: "Reviewed.",
-  });
-  return {
-    steps: [{ toolCalls: [{ input: { content }, toolName: "output_validator" }] }],
-    text: content,
   };
 }
 
