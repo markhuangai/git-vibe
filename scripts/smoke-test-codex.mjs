@@ -112,6 +112,7 @@ export function readCodexSmokeConfig({ cwd, env }) {
   const model = stringValue(profile.model);
   if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
   const effort = stringValue(recordValueOrEmpty(profile.reasoning).effort);
+  const reasoningEffort = codexReasoningEffort(effort);
   if (authJson !== undefined) {
     if (!authJson.trim()) {
       throw new Error(`ai.profiles.${profileName}.auth_json must resolve to a non-empty string.`);
@@ -129,7 +130,7 @@ export function readCodexSmokeConfig({ cwd, env }) {
     env: childEnv,
     model,
     profileName,
-    reasoningEffort: codexReasoningEffort(effort),
+    reasoningEffort,
     secrets: Object.values(bundle),
   };
 }

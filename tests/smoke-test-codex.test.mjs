@@ -1,5 +1,12 @@
 // @ts-nocheck
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -230,6 +237,31 @@ ai:
       }),
     ).toThrow("reasoning.effort is not supported by codex-sdk: max");
   });
+
+  it("validates reasoning before creating a smoke CODEX_HOME", () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
+      model: gpt-5-test
+      reasoning:
+        effort: max
+`);
+    const before = codexSmokeTempDirNames();
+
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd,
+        env: {
+          GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
+        },
+      }),
+    ).toThrow("reasoning.effort is not supported by codex-sdk: max");
+    expect(codexSmokeTempDirNames()).toEqual(before);
+  });
 });
 
 describe("Codex SDK smoke env failures", () => {
@@ -346,4 +378,10 @@ function codexDependency(finalResponse) {
       })),
     };
   });
+}
+
+function codexSmokeTempDirNames() {
+  return readdirSync(tmpdir())
+    .filter((name) => name.startsWith("git-vibe-codex-smoke-"))
+    .sort();
 }
