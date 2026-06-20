@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Codex } from "@openai/codex-sdk";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,7 +10,7 @@ import { parse } from "yaml";
 /**
  * @typedef {Record<string, string | undefined>} Env
  * @typedef {{ error(message: string): void, log(message: string): void }} Logger
- * @typedef {{ authJson?: string, env: NodeJS.ProcessEnv, model: string, profileName: string, reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh", secrets: string[] }} CodexSmokeConfig
+ * @typedef {{ authJson?: string, codexHome: string, env: NodeJS.ProcessEnv, model: string, profileName: string, reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh", secrets: string[] }} CodexSmokeConfig
  * @typedef {{ ok: boolean, source: "codex" }} CodexSmokeOutput
  * @typedef {{ Codex: typeof Codex }} CodexSmokeDependencies
  */
@@ -62,26 +62,30 @@ export async function main({
  */
 export async function runCodexSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
   const config = readCodexSmokeConfig({ cwd, env });
-  const codex = new dependencies.Codex({ env: stringEnv(config.env) });
-  const thread = codex.startThread({
-    approvalPolicy: "never",
-    model: config.model,
-    modelReasoningEffort: config.reasoningEffort,
-    sandboxMode: "danger-full-access",
-    skipGitRepoCheck: true,
-    workingDirectory: cwd,
-  });
-  const result = await thread.run(
-    'Return exactly this JSON object: {"ok": true, "source": "codex"}. Do not modify files.',
-    { outputSchema },
-  );
-  const output = codexOutput(result.finalResponse, config.secrets);
-  if (output.ok !== true || output.source !== "codex") {
-    throw new Error(
-      `unexpected Codex SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
+  try {
+    const codex = new dependencies.Codex({ env: stringEnv(config.env) });
+    const thread = codex.startThread({
+      approvalPolicy: "never",
+      model: config.model,
+      modelReasoningEffort: config.reasoningEffort,
+      sandboxMode: "danger-full-access",
+      skipGitRepoCheck: true,
+      workingDirectory: cwd,
+    });
+    const result = await thread.run(
+      'Return exactly this JSON object: {"ok": true, "source": "codex"}. Do not modify files.',
+      { outputSchema },
     );
+    const output = codexOutput(result.finalResponse, config.secrets);
+    if (output.ok !== true || output.source !== "codex") {
+      throw new Error(
+        `unexpected Codex SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
+      );
+    }
+    return { model: config.model, profileName: config.profileName };
+  } finally {
+    rmSync(config.codexHome, { force: true, recursive: true });
   }
-  return { model: config.model, profileName: config.profileName };
 }
 
 /**
@@ -105,18 +109,23 @@ export function readCodexSmokeConfig({ cwd, env }) {
     bundle,
     `ai.profiles.${profileName}.auth_json`,
   );
+  const model = stringValue(profile.model);
+  if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
+  const effort = stringValue(recordValueOrEmpty(profile.reasoning).effort);
   if (authJson !== undefined) {
     if (!authJson.trim()) {
       throw new Error(`ai.profiles.${profileName}.auth_json must resolve to a non-empty string.`);
     }
+  }
+  const codexHome = mkdtempSync(join(tmpdir(), "git-vibe-codex-smoke-"));
+  childEnv.CODEX_HOME = codexHome;
+  if (authJson !== undefined) {
     writeCodexAuth(childEnv, authJson);
   }
 
-  const model = stringValue(profile.model);
-  if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
-  const effort = stringValue(recordValueOrEmpty(profile.reasoning).effort);
   return {
     authJson,
+    codexHome,
     env: childEnv,
     model,
     profileName,
@@ -142,7 +151,7 @@ function codexReasoningEffort(effort) {
  * @param {string} authJson
  */
 function writeCodexAuth(env, authJson) {
-  const codexHome = env.CODEX_HOME || join(tmpdir(), `git-vibe-codex-smoke-${process.pid}`);
+  const codexHome = /** @type {string} */ (env.CODEX_HOME);
   env.CODEX_HOME = codexHome;
   mkdirSync(codexHome, { recursive: true });
   writeFileSync(join(codexHome, "auth.json"), authJson, { mode: 0o600 });

@@ -53,25 +53,36 @@ ai:
     codex:
       enabled: true
       adapter: codex-sdk
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
       model: gpt-5-test
       reasoning:
         effort: high
 `);
+    let codexHome;
     const run = vi.fn(async () => ({
       finalResponse: JSON.stringify({ ok: true, source: "codex" }),
     }));
     const startThread = vi.fn(() => ({ run }));
-    const Codex = vi.fn(function Codex() {
+    const Codex = vi.fn(function Codex(options) {
+      codexHome = options.env.CODEX_HOME;
+      expect(readFileSync(join(codexHome, "auth.json"), "utf8")).toBe('{"auth_mode":"chatgpt"}');
       return { startThread };
     });
 
     const report = await runCodexSmokeTest({
       cwd,
       dependencies: { Codex },
-      env: {},
+      env: {
+        CODEX_HOME: "/runner/codex-home",
+        GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
+      },
     });
 
     expect(report).toEqual({ model: "gpt-5-test", profileName: "codex" });
+    expect(codexHome).toContain("git-vibe-codex-smoke-");
+    expect(codexHome).not.toBe("/runner/codex-home");
+    expect(existsSync(codexHome)).toBe(false);
     expect(startThread).toHaveBeenCalledWith(
       expect.objectContaining({
         approvalPolicy: "never",
@@ -117,7 +128,9 @@ ai:
       }),
     });
   });
+});
 
+describe("Codex SDK smoke main", () => {
   it("returns zero from main on successful smoke runs", async () => {
     const cwd = writeConfig(`
 ai:

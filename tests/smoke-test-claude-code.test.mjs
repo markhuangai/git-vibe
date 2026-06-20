@@ -93,6 +93,7 @@ ai:
           model: "opus",
           outputFormat: expect.objectContaining({ type: "json_schema" }),
           permissionMode: "bypassPermissions",
+          persistSession: false,
           settingSources: [],
         }),
       }),

@@ -76,6 +76,7 @@ export async function runClaudeCodeSmokeTest({ cwd, dependencies = defaultDepend
         type: "json_schema",
       },
       permissionMode: "bypassPermissions",
+      persistSession: false,
       settingSources: [],
       systemPrompt: "You are running a GitVibe smoke test. Do not modify files.",
     },
