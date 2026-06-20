@@ -37,6 +37,8 @@ export function prepareCodexEnv(options: {
 }): PreparedCodexEnv {
   const profilePath = `ai.profiles.${options.profileName}`;
   const env = sdkProfileEnv(options.profile, profilePath);
+  env.CODEX_HOME = join(options.contextDir, "codex-home");
+  mkdirSync(env.CODEX_HOME, { recursive: true });
   const auth = prepareCodexAuth({
     contextDir: options.contextDir,
     env,
@@ -120,7 +122,7 @@ function prepareCodexAuth(options: {
 
   const authJson = bundleValueFromSource(options.profile.auth_json, sourcePath);
   if (!authJson) throw new Error(`${sourcePath}.from_bundle resolved to an empty value.`);
-  const codexHome = options.env.CODEX_HOME || join(options.contextDir, "codex-home");
+  const codexHome = options.env.CODEX_HOME as string;
   options.env.CODEX_HOME = codexHome;
   mkdirSync(codexHome, { recursive: true });
   const authPath = join(codexHome, "auth.json");

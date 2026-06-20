@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -26,57 +26,61 @@ export async function runCodexSdkStage({
 }): Promise<string> {
   const model = sdkModelName(profile, "codex-sdk");
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-codex-"));
-  const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
-  const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });
-  const sdk = new Codex({
-    config: codexConfig(profile, mcpConfig.codexConfig),
-    env: stringEnv(codexEnv.env),
-  });
+  try {
+    const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
+    const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });
+    const sdk = new Codex({
+      config: codexConfig(profile, mcpConfig.codexConfig),
+      env: stringEnv(codexEnv.env),
+    });
 
-  options.logger?.event("ai.request.start", {
-    adapter: "codex-sdk",
-    max_turns: options.maxTurns,
-    model,
-    profile: profileName,
-    provider: "codex-sdk",
-  });
-  logSdkWebPolicyNotice({
-    adapter: "codex-sdk",
-    config: options.config,
-    logger: options.logger,
-  });
+    options.logger?.event("ai.request.start", {
+      adapter: "codex-sdk",
+      max_turns: options.maxTurns,
+      model,
+      profile: profileName,
+      provider: "codex-sdk",
+    });
+    logSdkWebPolicyNotice({
+      adapter: "codex-sdk",
+      config: options.config,
+      logger: options.logger,
+    });
 
-  const thread = sdk.startThread({
-    approvalPolicy: "never",
-    model,
-    modelReasoningEffort: codexReasoningEffort(profile),
-    sandboxMode: "danger-full-access",
-    skipGitRepoCheck: true,
-    workingDirectory: options.cwd,
-  });
-  const result = await thread.run(codexPrompt(options), {
-    outputSchema: codexOutputSchema(options.schema),
-  });
-  for (const item of result.items) logCodexItem(item, options.logger);
-  const validated = await validatedSdkOutput({
-    content: result.finalResponse,
-    schema: options.schema,
-    schemaId: options.schemaId,
-  });
-  options.logger?.event("ai.request.done", {
-    adapter: "codex-sdk",
-    input_tokens: result.usage?.input_tokens,
-    output_chars: validated.length,
-    output_tokens: result.usage?.output_tokens,
-    profile: profileName,
-  });
-  await writeBackCodexAuth({
-    auth: codexEnv.auth,
-    github: options.github,
-    invalidAuth: "skip",
-    logger: options.logger,
-  });
-  return validated;
+    const thread = sdk.startThread({
+      approvalPolicy: "never",
+      model,
+      modelReasoningEffort: codexReasoningEffort(profile),
+      sandboxMode: "danger-full-access",
+      skipGitRepoCheck: true,
+      workingDirectory: options.cwd,
+    });
+    const result = await thread.run(codexPrompt(options), {
+      outputSchema: codexOutputSchema(options.schema),
+    });
+    for (const item of result.items) logCodexItem(item, options.logger);
+    const validated = await validatedSdkOutput({
+      content: result.finalResponse,
+      schema: options.schema,
+      schemaId: options.schemaId,
+    });
+    options.logger?.event("ai.request.done", {
+      adapter: "codex-sdk",
+      input_tokens: result.usage?.input_tokens,
+      output_chars: validated.length,
+      output_tokens: result.usage?.output_tokens,
+      profile: profileName,
+    });
+    await writeBackCodexAuth({
+      auth: codexEnv.auth,
+      github: options.github,
+      invalidAuth: "skip",
+      logger: options.logger,
+    });
+    return validated;
+  } finally {
+    rmSync(contextDir, { force: true, recursive: true });
+  }
 }
 
 function codexConfig(

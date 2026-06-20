@@ -39,7 +39,7 @@ export function prepareSdkMcpConfig(options: {
       });
       return [];
     }
-    const path = join(gatewayDir, `${stageServer.server.name}.json`);
+    const path = join(gatewayDir, `${stageServer.name}.json`);
     writeFileSync(
       path,
       JSON.stringify(
@@ -57,7 +57,7 @@ export function prepareSdkMcpConfig(options: {
       {
         path,
         required: stageServer.required,
-        serverName: stageServer.server.name,
+        serverName: stageServer.name,
         tools: stageServer.allowModelTools,
       },
     ];

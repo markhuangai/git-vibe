@@ -264,6 +264,20 @@ ai:
         env: { GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: 12 }) },
       }),
     ).toThrow("GITVIBE_AI_ENV_JSON.CODEX_AUTH_JSON must be a string.");
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
+      model: gpt-5-test
+`),
+        env: { GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: "   " }) },
+      }),
+    ).toThrow("ai.profiles.codex.auth_json must resolve to a non-empty string.");
   });
 });
 

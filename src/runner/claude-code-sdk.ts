@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { query, type EffortLevel, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -26,73 +26,84 @@ export async function runClaudeCodeSdkStage({
 }): Promise<string> {
   const model = sdkModelName(profile, "claude-code-sdk");
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-claude-"));
-  const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
-  const env = sdkProfileEnv(profile, `ai.profiles.${profileName}`);
-  env.CLAUDE_AGENT_SDK_CLIENT_APP ??= "git-vibe";
+  try {
+    const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
+    const env = sdkProfileEnv(profile, `ai.profiles.${profileName}`);
+    env.CLAUDE_AGENT_SDK_CLIENT_APP ??= "git-vibe";
 
-  options.logger?.event("ai.request.start", {
-    adapter: "claude-code-sdk",
-    max_turns: options.maxTurns,
-    model,
-    profile: profileName,
-    provider: "claude-code-sdk",
-  });
-  logSdkPromptPreview(options.logger, options.stage, "system", options.system);
-  logSdkPromptPreview(options.logger, options.stage, "user", options.prompt);
-  logSdkWebPolicyNotice({
-    adapter: "claude-code-sdk",
-    config: options.config,
-    logger: options.logger,
-  });
-
-  let result = "";
-  let structuredOutput: unknown;
-  let messageCount = 0;
-  for await (const message of query({
-    options: {
-      allowDangerouslySkipPermissions: true,
-      allowedTools: mcpConfig.claudeAllowedTools,
-      cwd: options.cwd,
-      effort: claudeEffort(profile),
-      env,
-      maxTurns: options.maxTurns,
-      mcpServers: mcpConfig.claudeMcpServers,
+    options.logger?.event("ai.request.start", {
+      adapter: "claude-code-sdk",
+      max_turns: options.maxTurns,
       model,
-      outputFormat: {
-        schema: strictOutputSchema(options.schema),
-        type: "json_schema",
-      },
-      permissionMode: "bypassPermissions",
-      settingSources: [],
-      strictMcpConfig: Object.keys(mcpConfig.claudeMcpServers).length > 0,
-      systemPrompt: options.system,
-    },
-    prompt: options.prompt,
-  })) {
-    messageCount += 1;
-    logClaudeSdkMessage(message, options.logger);
-    if (message.type === "result") {
-      if (message.subtype !== "success") {
-        throw new Error(`Claude Code SDK failed: ${message.errors.join("; ")}`);
-      }
-      result = message.result;
-      structuredOutput = message.structured_output;
-    }
-  }
+      profile: profileName,
+      provider: "claude-code-sdk",
+    });
+    logSdkPromptPreview(options.logger, options.stage, "system", options.system);
+    logSdkPromptPreview(options.logger, options.stage, "user", options.prompt);
+    logSdkWebPolicyNotice({
+      adapter: "claude-code-sdk",
+      config: options.config,
+      logger: options.logger,
+    });
 
-  const content = structuredOutputText(structuredOutput) || result;
-  const validated = await validatedSdkOutput({
-    content,
-    schema: options.schema,
-    schemaId: options.schemaId,
-  });
-  options.logger?.event("ai.request.done", {
-    adapter: "claude-code-sdk",
-    output_chars: validated.length,
-    profile: profileName,
-    sdk_messages: messageCount,
-  });
-  return validated;
+    let result = "";
+    let structuredOutput: unknown;
+    let messageCount = 0;
+    for await (const message of query({
+      options: {
+        allowDangerouslySkipPermissions: true,
+        allowedTools: mcpConfig.claudeAllowedTools,
+        cwd: options.cwd,
+        effort: claudeEffort(profile),
+        env,
+        maxTurns: options.maxTurns,
+        mcpServers: mcpConfig.claudeMcpServers,
+        model,
+        outputFormat: {
+          schema: strictOutputSchema(options.schema),
+          type: "json_schema",
+        },
+        permissionMode: "bypassPermissions",
+        persistSession: false,
+        settingSources: [],
+        strictMcpConfig: Object.keys(mcpConfig.claudeMcpServers).length > 0,
+        systemPrompt: options.system,
+      },
+      prompt: options.prompt,
+    })) {
+      messageCount += 1;
+      logClaudeSdkMessage(message, options.logger);
+      if (message.type === "result") {
+        if (message.subtype !== "success") {
+          throw new Error(`Claude Code SDK failed: ${claudeResultErrorDetail(message)}`);
+        }
+        result = message.result;
+        structuredOutput = message.structured_output;
+      }
+    }
+
+    const content = structuredOutputText(structuredOutput) || result;
+    const validated = await validatedSdkOutput({
+      content,
+      schema: options.schema,
+      schemaId: options.schemaId,
+    });
+    options.logger?.event("ai.request.done", {
+      adapter: "claude-code-sdk",
+      output_chars: validated.length,
+      profile: profileName,
+      sdk_messages: messageCount,
+    });
+    return validated;
+  } finally {
+    rmSync(contextDir, { force: true, recursive: true });
+  }
+}
+
+function claudeResultErrorDetail(message: Extract<SDKMessage, { type: "result" }>): string {
+  const rawErrors = (message as { errors?: unknown }).errors;
+  const errors = Array.isArray(rawErrors) ? rawErrors.filter(Boolean).map(String) : [];
+  return errors.length > 0 ? errors.join("; ") : message.subtype;
 }
 
 function claudeEffort(profile: Record<string, unknown>): EffortLevel | undefined {

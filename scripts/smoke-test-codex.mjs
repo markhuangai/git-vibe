@@ -105,7 +105,12 @@ export function readCodexSmokeConfig({ cwd, env }) {
     bundle,
     `ai.profiles.${profileName}.auth_json`,
   );
-  if (authJson) writeCodexAuth(childEnv, authJson);
+  if (authJson !== undefined) {
+    if (!authJson.trim()) {
+      throw new Error(`ai.profiles.${profileName}.auth_json must resolve to a non-empty string.`);
+    }
+    writeCodexAuth(childEnv, authJson);
+  }
 
   const model = stringValue(profile.model);
   if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);

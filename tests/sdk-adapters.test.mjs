@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,18 +18,23 @@ afterEach(() => {
 describe("Codex and Claude SDK adapter routing", () => {
   it("runs codex-sdk profiles and validates structured output", async () => {
     const cwd = workspace();
+    process.env.CODEX_HOME = join(cwd, "ambient-codex-home");
     const output = await runAiStage(stageOptions({ cwd, config: codexConfig() }));
 
     expect(JSON.parse(output)).toMatchObject({
       next_state: "ready-for-implementation",
       stage: "validate",
     });
+    const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
     expect(globalThis.__gitVibeSdkMocks.codexConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         config: {},
         env: expect.any(Object),
       }),
     );
+    expect(constructorOptions.env.CODEX_HOME).toContain("git-vibe-codex-");
+    expect(constructorOptions.env.CODEX_HOME).not.toBe(process.env.CODEX_HOME);
+    expect(existsSync(constructorOptions.env.CODEX_HOME)).toBe(false);
     expect(globalThis.__gitVibeSdkMocks.codexStartThread).toHaveBeenCalledWith(
       expect.objectContaining({
         approvalPolicy: "never",
@@ -65,6 +70,7 @@ describe("Codex and Claude SDK adapter routing", () => {
           }),
           model: "opus",
           permissionMode: "bypassPermissions",
+          persistSession: false,
           settingSources: [],
           systemPrompt: expect.stringContaining("System"),
         }),
@@ -242,8 +248,34 @@ describe("Codex and Claude SDK adapter validation", () => {
         }),
       ),
     ).rejects.toThrow("Claude Code SDK failed: boom");
-  });
 
+    globalThis.__gitVibeSdkMocks.queueClaudeMessages([
+      { errors: [], subtype: "error_during_execution", type: "result" },
+    ]);
+    await expect(
+      runAiStage(
+        stageOptions({
+          config: claudeConfig({ env: undefined, reasoning: undefined }),
+          cwd,
+        }),
+      ),
+    ).rejects.toThrow("Claude Code SDK failed: error_during_execution");
+
+    globalThis.__gitVibeSdkMocks.queueClaudeMessages([
+      { subtype: "error_during_execution", type: "result" },
+    ]);
+    await expect(
+      runAiStage(
+        stageOptions({
+          config: claudeConfig({ env: undefined, reasoning: undefined }),
+          cwd,
+        }),
+      ),
+    ).rejects.toThrow("Claude Code SDK failed: error_during_execution");
+  });
+});
+
+describe("SDK adapter removed config validation", () => {
   it("fails fast for removed adapter names", async () => {
     const cwd = workspace();
     await expect(
@@ -293,6 +325,18 @@ describe("SDK MCP config", () => {
     const cwd = workspace();
     process.env.GITHUB_ACTION_PATH = join(cwd, "action");
     process.env.GITVIBE_MCP_ENV_JSON = JSON.stringify({ DENSE_TOKEN: "secret-token" });
+    let gatewayContent;
+    globalThis.__gitVibeSdkMocks.codexRun.mockImplementationOnce(async () => {
+      const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+      const gatewayPath =
+        constructorOptions.config.mcp_servers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
+      gatewayContent = JSON.parse(readFileSync(gatewayPath, "utf8"));
+      return {
+        finalResponse: JSON.stringify(validValidateOutput()),
+        items: [],
+        usage: {},
+      };
+    });
     await runAiStage(stageOptions({ cwd, config: codexConfigWithMcp() }));
 
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
@@ -306,7 +350,7 @@ describe("SDK MCP config", () => {
     });
     const gatewayPath =
       constructorOptions.config.mcp_servers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
-    expect(JSON.parse(readFileSync(gatewayPath, "utf8"))).toMatchObject({
+    expect(gatewayContent).toMatchObject({
       allowTools: ["search_memory"],
       required: true,
       server: {
@@ -316,6 +360,7 @@ describe("SDK MCP config", () => {
         transport: "stdio",
       },
     });
+    expect(existsSync(gatewayPath)).toBe(false);
   });
 
   it("passes stage MCP gateway config to Claude SDK", async () => {
@@ -325,6 +370,21 @@ describe("SDK MCP config", () => {
       GITVIBE_AI_API_KEY: "test-key",
     });
     process.env.GITVIBE_MCP_ENV_JSON = JSON.stringify({ DENSE_TOKEN: "secret-token" });
+    let gatewayContent;
+    globalThis.__gitVibeSdkMocks.claudeQuery.mockImplementationOnce(async function* (params) {
+      const gatewayPath = params.options.mcpServers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
+      gatewayContent = JSON.parse(readFileSync(gatewayPath, "utf8"));
+      yield {
+        duration_ms: 1,
+        is_error: false,
+        num_turns: 1,
+        result: JSON.stringify(validValidateOutput()),
+        stop_reason: "stop",
+        structured_output: validValidateOutput(),
+        subtype: "success",
+        type: "result",
+      };
+    });
     await runAiStage(stageOptions({ cwd, config: claudeConfigWithMcp() }));
 
     const queryOptions = globalThis.__gitVibeSdkMocks.claudeQuery.mock.calls[0][0].options;
@@ -336,12 +396,15 @@ describe("SDK MCP config", () => {
       type: "stdio",
     });
     const gatewayPath = queryOptions.mcpServers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
-    expect(JSON.parse(readFileSync(gatewayPath, "utf8"))).toMatchObject({
+    expect(gatewayContent).toMatchObject({
       allowTools: ["search_memory"],
       required: true,
     });
+    expect(existsSync(gatewayPath)).toBe(false);
   });
+});
 
+describe("SDK MCP config warnings", () => {
   it("warns and leaves SDK MCP config empty for optional unresolved model servers", async () => {
     const cwd = workspace();
     const logger = { event: vi.fn() };
