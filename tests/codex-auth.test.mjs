@@ -39,7 +39,7 @@ describe("Codex auth environment", () => {
     const prepared = prepareCodexEnv({
       contextDir: tempDir(),
       profile: { model: "gpt-5.5" },
-      profileName: "codex_cli",
+      profileName: "codex_sdk",
     });
 
     expect(prepared.auth).toBeUndefined();
@@ -307,7 +307,7 @@ function prepare() {
       auth_json: { from_bundle: "CODEX_AUTH_JSON" },
       model: "gpt-5.5",
     },
-    profileName: "codex_cli",
+    profileName: "codex_sdk",
   });
 }
 

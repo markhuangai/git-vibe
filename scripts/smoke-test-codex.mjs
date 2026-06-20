@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-import { query } from "@anthropic-ai/claude-agent-sdk";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { delimiter, join, resolve } from "node:path";
+import { Codex } from "@openai/codex-sdk";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
 
 /**
  * @typedef {Record<string, string | undefined>} Env
  * @typedef {{ error(message: string): void, log(message: string): void }} Logger
- * @typedef {{ effort?: import("@anthropic-ai/claude-agent-sdk").EffortLevel, env: NodeJS.ProcessEnv, model: string, profileName: string, secrets: string[] }} ClaudeSmokeConfig
- * @typedef {{ ok: boolean, source: "claude-code" }} ClaudeSmokeOutput
- * @typedef {{ query: typeof query }} ClaudeSmokeDependencies
+ * @typedef {{ authJson?: string, env: NodeJS.ProcessEnv, model: string, profileName: string, reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh", secrets: string[] }} CodexSmokeConfig
+ * @typedef {{ ok: boolean, source: "codex" }} CodexSmokeOutput
+ * @typedef {{ Codex: typeof Codex }} CodexSmokeDependencies
  */
 
 const outputSchema = {
@@ -21,12 +21,12 @@ const outputSchema = {
   required: ["ok", "source"],
   properties: {
     ok: { type: "boolean" },
-    source: { enum: ["claude-code"] },
+    source: { enum: ["codex"] },
   },
 };
 
-/** @type {ClaudeSmokeDependencies} */
-const defaultDependencies = { query };
+/** @type {CodexSmokeDependencies} */
+const defaultDependencies = { Codex };
 
 if (isDirectRun(import.meta.url, process.argv[1])) {
   main().then((code) => {
@@ -35,7 +35,7 @@ if (isDirectRun(import.meta.url, process.argv[1])) {
 }
 
 /**
- * @param {{ cwd?: string, dependencies?: ClaudeSmokeDependencies, env?: Env, logger?: Logger }} [options]
+ * @param {{ cwd?: string, dependencies?: CodexSmokeDependencies, env?: Env, logger?: Logger }} [options]
  * @returns {Promise<number>}
  */
 export async function main({
@@ -45,9 +45,9 @@ export async function main({
   logger = console,
 } = {}) {
   try {
-    const report = await runClaudeCodeSmokeTest({ cwd, dependencies, env });
+    const report = await runCodexSmokeTest({ cwd, dependencies, env });
     logger.log(
-      `[git-vibe] claude-code-sdk smoke passed with profile=${report.profileName} model=${report.model}`,
+      `[git-vibe] codex-sdk smoke passed with profile=${report.profileName} model=${report.model}`,
     );
     return 0;
   } catch (error) {
@@ -57,82 +57,90 @@ export async function main({
 }
 
 /**
- * @param {{ cwd: string, dependencies?: ClaudeSmokeDependencies, env: Env }} options
- * @returns {Promise<Pick<ClaudeSmokeConfig, "model" | "profileName">>}
+ * @param {{ cwd: string, dependencies?: CodexSmokeDependencies, env: Env }} options
+ * @returns {Promise<Pick<CodexSmokeConfig, "model" | "profileName">>}
  */
-export async function runClaudeCodeSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
-  const config = readClaudeSmokeConfig({ cwd, env });
-  let output;
-  for await (const message of dependencies.query({
-    options: {
-      allowDangerouslySkipPermissions: true,
-      cwd,
-      effort: config.effort,
-      env: config.env,
-      maxTurns: 3,
-      model: config.model,
-      outputFormat: {
-        schema: outputSchema,
-        type: "json_schema",
-      },
-      permissionMode: "bypassPermissions",
-      settingSources: [],
-      systemPrompt: "You are running a GitVibe smoke test. Do not modify files.",
-    },
-    prompt:
-      'Return exactly this JSON object: {"ok": true, "source": "claude-code"}. Do not modify files.',
-  })) {
-    if (message.type !== "result") continue;
-    if (message.subtype !== "success") {
-      throw new Error(
-        `Claude Code SDK smoke failed: ${redact(message.errors.join("; "), config.secrets)}`,
-      );
-    }
-    output = claudeOutput(message.structured_output ?? message.result, config.secrets);
-  }
-
-  if (!output) throw new Error("Claude Code SDK smoke did not return a result message.");
-  if (output.ok !== true || output.source !== "claude-code") {
+export async function runCodexSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
+  const config = readCodexSmokeConfig({ cwd, env });
+  const codex = new dependencies.Codex({ env: stringEnv(config.env) });
+  const thread = codex.startThread({
+    approvalPolicy: "never",
+    model: config.model,
+    modelReasoningEffort: config.reasoningEffort,
+    sandboxMode: "danger-full-access",
+    skipGitRepoCheck: true,
+    workingDirectory: cwd,
+  });
+  const result = await thread.run(
+    'Return exactly this JSON object: {"ok": true, "source": "codex"}. Do not modify files.',
+    { outputSchema },
+  );
+  const output = codexOutput(result.finalResponse, config.secrets);
+  if (output.ok !== true || output.source !== "codex") {
     throw new Error(
-      `unexpected Claude Code SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
+      `unexpected Codex SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
     );
   }
-
   return { model: config.model, profileName: config.profileName };
 }
 
 /**
  * @param {{ cwd: string, env: Env }} options
- * @returns {ClaudeSmokeConfig}
+ * @returns {CodexSmokeConfig}
  */
-export function readClaudeSmokeConfig({ cwd, env }) {
+export function readCodexSmokeConfig({ cwd, env }) {
   const config = readGitVibeConfig(cwd);
-  const { profile, profileName } = claudeProfile(config, env.GITVIBE_AI_SMOKE_CLAUDE_PROFILE);
+  const { profile, profileName } = codexProfile(config, env.GITVIBE_AI_SMOKE_CODEX_PROFILE);
   const bundle = aiEnvBundle(env);
-  const { childEnv, secrets } = profileEnv(profile, bundle, env, `ai.profiles.${profileName}`);
-  const model = stringValue(profile.model);
-  const reasoning = recordValueOrEmpty(profile.reasoning);
-  if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
+  const childEnv = sanitizedChildEnv(env);
+  const profileEnvConfig =
+    profile.env === undefined ? {} : recordValue(profile.env, `ai.profiles.${profileName}.env`);
+  for (const [target, source] of Object.entries(profileEnvConfig)) {
+    if (!target.trim())
+      throw new Error(`ai.profiles.${profileName}.env keys must be non-empty strings.`);
+    childEnv[target] = envValue(source, bundle, `ai.profiles.${profileName}.env.${target}`);
+  }
+  const authJson = optionalBundleValue(
+    profile.auth_json,
+    bundle,
+    `ai.profiles.${profileName}.auth_json`,
+  );
+  if (authJson) writeCodexAuth(childEnv, authJson);
 
+  const model = stringValue(profile.model);
+  if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
+  const effort = stringValue(recordValueOrEmpty(profile.reasoning).effort);
   return {
-    effort: claudeEffort(stringValue(reasoning.effort)),
+    authJson,
     env: childEnv,
     model,
     profileName,
-    secrets,
+    reasoningEffort: codexReasoningEffort(effort),
+    secrets: Object.values(bundle),
   };
 }
 
 /**
  * @param {string | undefined} effort
- * @returns {ClaudeSmokeConfig["effort"]}
+ * @returns {CodexSmokeConfig["reasoningEffort"]}
  */
-function claudeEffort(effort) {
+function codexReasoningEffort(effort) {
   if (!effort) return undefined;
-  if (["low", "medium", "high", "xhigh", "max"].includes(effort)) {
-    return /** @type {ClaudeSmokeConfig["effort"]} */ (effort);
+  if (["minimal", "low", "medium", "high", "xhigh"].includes(effort)) {
+    return /** @type {CodexSmokeConfig["reasoningEffort"]} */ (effort);
   }
-  throw new Error(`AI profile reasoning.effort is not supported by claude-code-sdk: ${effort}.`);
+  throw new Error(`AI profile reasoning.effort is not supported by codex-sdk: ${effort}.`);
+}
+
+/**
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} authJson
+ */
+function writeCodexAuth(env, authJson) {
+  const codexHome = env.CODEX_HOME || join(tmpdir(), `git-vibe-codex-smoke-${process.pid}`);
+  env.CODEX_HOME = codexHome;
+  mkdirSync(codexHome, { recursive: true });
+  writeFileSync(join(codexHome, "auth.json"), authJson, { mode: 0o600 });
 }
 
 /**
@@ -141,9 +149,7 @@ function claudeEffort(effort) {
  */
 function readGitVibeConfig(cwd) {
   const path = resolve(cwd, ".github/git-vibe.yml");
-  if (!existsSync(path)) {
-    throw new Error(".github/git-vibe.yml is required for Claude Code SDK smoke.");
-  }
+  if (!existsSync(path)) throw new Error(".github/git-vibe.yml is required for Codex SDK smoke.");
   const parsed = parse(readFileSync(path, "utf8"));
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(".github/git-vibe.yml must contain a YAML object.");
@@ -156,22 +162,14 @@ function readGitVibeConfig(cwd) {
  * @param {string | undefined} requestedProfile
  * @returns {{ profile: Record<string, unknown>, profileName: string }}
  */
-function claudeProfile(config, requestedProfile) {
+function codexProfile(config, requestedProfile) {
   const profiles = recordValue(recordValue(config.ai, "ai").profiles, "ai.profiles");
   const requested = stringValue(requestedProfile);
-  if (requested) return namedClaudeProfile(profiles, requested);
-  if (isClaudeProfile(profiles.claude_code)) {
-    return {
-      profile: /** @type {Record<string, unknown>} */ (profiles.claude_code),
-      profileName: "claude_code",
-    };
-  }
-
+  if (requested) return namedCodexProfile(profiles, requested);
   for (const [profileName, profile] of Object.entries(profiles)) {
-    if (isClaudeProfile(profile)) return { profile, profileName };
+    if (isCodexProfile(profile)) return { profile, profileName };
   }
-
-  throw new Error(".github/git-vibe.yml does not define an enabled claude-code-sdk profile.");
+  throw new Error(".github/git-vibe.yml does not define an enabled codex-sdk profile.");
 }
 
 /**
@@ -179,10 +177,10 @@ function claudeProfile(config, requestedProfile) {
  * @param {string} profileName
  * @returns {{ profile: Record<string, unknown>, profileName: string }}
  */
-function namedClaudeProfile(profiles, profileName) {
+function namedCodexProfile(profiles, profileName) {
   const profile = profiles[profileName];
-  if (!isClaudeProfile(profile)) {
-    throw new Error(`AI profile ${profileName} must be an enabled claude-code-sdk profile.`);
+  if (!isCodexProfile(profile)) {
+    throw new Error(`AI profile ${profileName} must be an enabled codex-sdk profile.`);
   }
   return { profile, profileName };
 }
@@ -191,10 +189,10 @@ function namedClaudeProfile(profiles, profileName) {
  * @param {unknown} profile
  * @returns {profile is Record<string, unknown>}
  */
-function isClaudeProfile(profile) {
+function isCodexProfile(profile) {
   if (!profile || typeof profile !== "object" || Array.isArray(profile)) return false;
   const record = /** @type {Record<string, unknown>} */ (profile);
-  return Boolean(record.adapter === "claude-code-sdk" && record.enabled !== false);
+  return Boolean(record.adapter === "codex-sdk" && record.enabled !== false);
 }
 
 /**
@@ -220,27 +218,14 @@ function recordValueOrEmpty(value) {
 }
 
 /**
- * @param {Record<string, unknown>} profile
+ * @param {unknown} source
  * @param {Record<string, string>} bundle
- * @param {Env} env
- * @param {string} profilePath
- * @returns {{ childEnv: NodeJS.ProcessEnv, secrets: string[] }}
+ * @param {string} path
+ * @returns {string | undefined}
  */
-function profileEnv(profile, bundle, env, profilePath) {
-  const childEnv = sanitizedChildEnv(env);
-  childEnv.PATH = [join(env.HOME || homedir(), ".local", "bin"), env.PATH]
-    .filter(Boolean)
-    .join(delimiter);
-  const secrets = Object.values(bundle);
-
-  if (profile.env === undefined) return { childEnv, secrets };
-  const profileEnvConfig = recordValue(profile.env, `${profilePath}.env`);
-  for (const [target, source] of Object.entries(profileEnvConfig)) {
-    if (!target.trim()) throw new Error(`${profilePath}.env keys must be non-empty strings.`);
-    childEnv[target] = envValue(source, bundle, `${profilePath}.env.${target}`);
-  }
-
-  return { childEnv, secrets };
+function optionalBundleValue(source, bundle, path) {
+  if (source === undefined) return undefined;
+  return envValue(source, bundle, path);
 }
 
 /**
@@ -298,16 +283,12 @@ function sensitiveEnvName(name) {
 }
 
 /**
- * @param {unknown} value
+ * @param {string} text
  * @param {string[]} secrets
- * @returns {ClaudeSmokeOutput}
+ * @returns {CodexSmokeOutput}
  */
-function claudeOutput(value, secrets) {
-  const response =
-    value && typeof value === "object" && !Array.isArray(value)
-      ? value
-      : JSON.parse(extractJsonObject(String(value || ""), secrets));
-  return /** @type {ClaudeSmokeOutput} */ (response);
+function codexOutput(text, secrets) {
+  return /** @type {CodexSmokeOutput} */ (JSON.parse(extractJsonObject(text, secrets)));
 }
 
 /**
@@ -326,7 +307,7 @@ function extractJsonObject(text, secrets) {
   const end = trimmed.lastIndexOf("}");
   if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
 
-  throw new Error(`Claude Code SDK result did not contain JSON: ${excerpt(redact(text, secrets))}`);
+  throw new Error(`Codex SDK result did not contain JSON: ${excerpt(redact(text, secrets))}`);
 }
 
 /**
@@ -335,6 +316,19 @@ function extractJsonObject(text, secrets) {
  */
 function stringValue(value) {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+/**
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {Record<string, string>}
+ */
+function stringEnv(env) {
+  /** @type {Record<string, string>} */
+  const result = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === "string") result[key] = value;
+  }
+  return result;
 }
 
 /**

@@ -13,7 +13,7 @@ describe("profile context system additions", () => {
       systemWithProfileContext({
         cwd: process.cwd(),
         profile: {},
-        profileName: "local_proxy",
+        profileName: "test_profile",
         system: "System",
       }),
     ).toBe("System");
@@ -29,13 +29,13 @@ describe("profile context system additions", () => {
       const addition = profileContextSystemAddition({
         cwd,
         profile: { context: { files: ["AGENTS.md", 'docs/repo "guide".md'] } },
-        profileName: "codex&cli",
+        profileName: "codex&sdk",
       });
       expect(addition).not.toBeNull();
       const rendered = /** @type {string} */ (addition);
 
       expect(rendered).toContain(
-        '<git_vibe_profile_context profile="codex&amp;cli" path="AGENTS.md">',
+        '<git_vibe_profile_context profile="codex&amp;sdk" path="AGENTS.md">',
       );
       expect(rendered).toContain("Follow repository rules.");
       expect(rendered).toContain('path="docs/repo &quot;guide&quot;.md"');
@@ -55,23 +55,23 @@ describe("profile context config validation", () => {
       profileContextSystemAddition({
         cwd: process.cwd(),
         profile: { context: [] },
-        profileName: "local_proxy",
+        profileName: "test_profile",
       }),
-    ).toThrow("ai.profiles.local_proxy.context must be an object.");
+    ).toThrow("ai.profiles.test_profile.context must be an object.");
     expect(() =>
       profileContextSystemAddition({
         cwd: process.cwd(),
         profile: { context: { files: [] } },
-        profileName: "local_proxy",
+        profileName: "test_profile",
       }),
-    ).toThrow("ai.profiles.local_proxy.context.files must be a non-empty string array.");
+    ).toThrow("ai.profiles.test_profile.context.files must be a non-empty string array.");
     expect(() =>
       profileContextSystemAddition({
         cwd: process.cwd(),
         profile: { context: { files: [""] } },
-        profileName: "local_proxy",
+        profileName: "test_profile",
       }),
-    ).toThrow("ai.profiles.local_proxy.context.files[0] must be a non-empty string.");
+    ).toThrow("ai.profiles.test_profile.context.files[0] must be a non-empty string.");
   });
 
   it("rejects unsafe profile context paths before reading files", () => {
@@ -83,7 +83,7 @@ describe("profile context config validation", () => {
           profileContextSystemAddition({
             cwd,
             profile: { context: { files: [path] } },
-            profileName: "local_proxy",
+            profileName: "test_profile",
           }),
         ).toThrow("must be a relative path inside the workspace");
       }
@@ -100,14 +100,14 @@ describe("profile context config validation", () => {
         profileContextSystemAddition({
           cwd,
           profile: { context: { files: ["MISSING.md"] } },
-          profileName: "local_proxy",
+          profileName: "test_profile",
         }),
       ).toThrow("Profile context file does not exist");
       expect(() =>
         profileContextSystemAddition({
           cwd,
           profile: { context: { files: ["EMPTY.md"] } },
-          profileName: "local_proxy",
+          profileName: "test_profile",
         }),
       ).toThrow("Profile context file must not be empty");
     } finally {
@@ -127,14 +127,14 @@ describe("profile context config validation", () => {
         profileContextSystemAddition({
           cwd,
           profile: { context: { files: ["linked-file.md"] } },
-          profileName: "local_proxy",
+          profileName: "test_profile",
         }),
       ).toThrow("Profile context file must be a regular file");
       expect(() =>
         profileContextSystemAddition({
           cwd,
           profile: { context: { files: ["linked-dir/context.md"] } },
-          profileName: "local_proxy",
+          profileName: "test_profile",
         }),
       ).toThrow("Profile context file must stay inside the workspace");
     } finally {

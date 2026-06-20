@@ -10,7 +10,7 @@ import {
   isRecord,
   sanitizedChildEnv,
   stringValue,
-} from "./cli-adapter-utils.js";
+} from "./sdk-adapter-utils.js";
 
 export type McpTransportType = "http" | "sse" | "stdio";
 

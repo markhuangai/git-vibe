@@ -13,16 +13,7 @@ import { gitVibeLabels } from "../src/shared/labels.ts";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
 const mocks = vi.hoisted(() => ({ buildMcpPromptContext: vi.fn() }));
-const generateText = vi.fn();
-const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
 
-vi.mock("ai", () => ({
-  generateText,
-  hasToolCall: vi.fn((toolName) => ({ toolName })),
-  stepCountIs: vi.fn((count) => ({ count })),
-}));
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
-vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic: vi.fn() }));
 vi.mock("../src/runner/mcp-context.js", () => ({
   buildMcpPromptContext: mocks.buildMcpPromptContext,
 }));
@@ -32,14 +23,12 @@ const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
-  generateText.mockReset();
   mocks.buildMcpPromptContext.mockReset();
   mocks.buildMcpPromptContext.mockResolvedValue({ promptAddition: "" });
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
       GITVIBE_AI_API_KEY: "test-key",
-      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
   };
 });
@@ -52,7 +41,7 @@ afterEach(() => {
 describe("direct accepted-risk stage runs", () => {
   it("removes the accept-risk label without a duplicate audit comment for run-bound metadata", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(investigateAiOutput("Ready to implement."));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse("Issue body", [gitVibeLabels.acceptRisk.name]),
       commentsResponse([acceptedRiskMetadataComment({ body: "Issue body" })]),
@@ -83,7 +72,7 @@ describe("direct accepted-risk stage runs", () => {
     });
     expect(issueCommentBodies(fetch).join("\n")).not.toContain("GitVibe Risk Accepted");
     expect(labelRemovalPath(fetch, gitVibeLabels.acceptRisk.name)).toBeTruthy();
-    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -127,32 +116,18 @@ function issueResponse(body, labels = []) {
 
 const commentsResponse = (comments) => response(200, comments);
 
-function investigateAiOutput(commentBody) {
+function investigateOutput(commentBody) {
   return {
-    steps: [
-      {
-        toolCalls: [
-          {
-            input: {
-              content: JSON.stringify({
-                assumptions: [],
-                blocking_questions: [],
-                comment_body: commentBody,
-                findings: [],
-                implementation_plan: ["Implement the verified change."],
-                next_state: "ready-for-implementation",
-                references: [],
-                stage: "investigate",
-                status: "completed",
-                summary: "Ready.",
-              }),
-            },
-            toolName: "output_validator",
-          },
-        ],
-      },
-    ],
-    text: "{}",
+    assumptions: [],
+    blocking_questions: [],
+    comment_body: commentBody,
+    findings: [],
+    implementation_plan: ["Implement the verified change."],
+    next_state: "ready-for-implementation",
+    references: [],
+    stage: "investigate",
+    status: "completed",
+    summary: "Ready.",
   };
 }
 

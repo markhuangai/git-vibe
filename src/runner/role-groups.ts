@@ -95,8 +95,6 @@ export function profileNamesForConfiguredStage(
   const plan = stageExecutionPlan(config, stage, cwd);
   const names = plan.matrix.include.map((row) => row.profile);
   if (plan.synthesizerProfile) names.push(plan.synthesizerProfile);
-  const fallback = stringValue(stageConfigFor(config, stage).fallback_profile);
-  if (plan.mode === "profile" && fallback) names.push(fallback);
   return [...new Set(names)];
 }
 
@@ -152,8 +150,7 @@ export function singleProfileNamesForStage(config: GitVibeConfig, stage: Stage):
   }
   const profile = stringValue(stageConfig.profile);
   if (!profile) throw new Error(`ai.stages.${stage} must define profile or role_group.`);
-  const fallback = stringValue(stageConfig.fallback_profile);
-  return fallback && fallback !== profile ? [profile, fallback] : [profile];
+  return [profile];
 }
 
 export function readRoleDefinition(cwd: string, role: string): string {
@@ -296,6 +293,11 @@ function rejectProfiles(stageConfig: Record<string, unknown>, stage: Stage): voi
   if (stageConfig.profiles !== undefined) {
     throw new Error(
       `ai.stages.${stage}.profiles is no longer supported; use profile or role_group.`,
+    );
+  }
+  if (stageConfig.fallback_profile !== undefined) {
+    throw new Error(
+      `ai.stages.${stage}.fallback_profile is no longer supported; use profile or role_group.`,
     );
   }
 }

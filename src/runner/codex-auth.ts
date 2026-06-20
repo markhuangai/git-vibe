@@ -7,10 +7,10 @@ import {
   aiEnvBundleVariable,
   bundleKeyFromSource,
   bundleValueFromSource,
-  cliProfileEnv,
   isRecord,
   parseRequiredAiEnvBundle,
-} from "./cli-adapter-utils.js";
+  sdkProfileEnv,
+} from "./sdk-adapter-utils.js";
 
 export interface PreparedCodexAuth {
   authPath: string;
@@ -36,7 +36,7 @@ export function prepareCodexEnv(options: {
   profileName: string;
 }): PreparedCodexEnv {
   const profilePath = `ai.profiles.${options.profileName}`;
-  const env = cliProfileEnv(options.profile, profilePath);
+  const env = sdkProfileEnv(options.profile, profilePath);
   const auth = prepareCodexAuth({
     contextDir: options.contextDir,
     env,

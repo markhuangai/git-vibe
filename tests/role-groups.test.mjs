@@ -69,12 +69,25 @@ describe("role group stage planning", () => {
     ).toThrow("ai.stages.validate.profiles is no longer supported");
     expect(() =>
       stageExecutionPlan(
+        {
+          ai: {
+            profiles: { fallback: {}, primary: {} },
+            stages: { validate: { fallback_profile: "fallback", profile: "primary" } },
+          },
+        },
+        "validate",
+      ),
+    ).toThrow("ai.stages.validate.fallback_profile is no longer supported");
+    expect(() =>
+      stageExecutionPlan(
         { ...config, ai: { ...config.ai, stages: { materialize: { role_group: "review_gate" } } } },
         "materialize",
       ),
     ).toThrow("ai.stages.materialize.role_group is only supported for read-only stages");
   });
+});
 
+describe("role group workflow labels", () => {
   it("labels workflow members from roles and profiles", () => {
     const cwd = roleWorkspace({
       "correctness.md": "Review correctness.",
@@ -85,7 +98,7 @@ describe("role group stage planning", () => {
       {
         ai: {
           profiles: {
-            fallback_profile: {},
+            secondary_profile: {},
             provider_no_model: { provider: {} },
             provider_profile: { provider: { model: "provider-model" } },
             synth: {},
@@ -94,7 +107,7 @@ describe("role group stage planning", () => {
             review_gate: {
               roles: [
                 { profile: "provider_profile", role: "security.md" },
-                { profile: "fallback_profile", role: "maintainability.md" },
+                { profile: "secondary_profile", role: "maintainability.md" },
                 { profile: "provider_no_model", role: "correctness.md" },
               ],
               synthesizer: "synth",
@@ -109,7 +122,7 @@ describe("role group stage planning", () => {
 
     expect(stageWorkflowLabels(plan)).toEqual({
       0: "security - provider_profile",
-      1: "maintainability - fallback_profile",
+      1: "maintainability - secondary_profile",
       2: "correctness - provider_no_model",
     });
 
@@ -121,9 +134,9 @@ describe("profile stage planning", () => {
   it("plans profile stages and exposes configured profile names", () => {
     const config = {
       ai: {
-        profiles: { fallback: {}, primary: {}, synth: {} },
+        profiles: { primary: {}, synth: {} },
         stages: {
-          validate: { fallback_profile: "fallback", profile: "primary" },
+          validate: { profile: "primary" },
         },
       },
     };
@@ -132,8 +145,8 @@ describe("profile stage planning", () => {
       matrix: { include: [{ profile: "primary", role: "" }] },
       mode: "profile",
     });
-    expect(profileNamesForConfiguredStage(config, "validate")).toEqual(["primary", "fallback"]);
-    expect(singleProfileNamesForStage(config, "validate")).toEqual(["primary", "fallback"]);
+    expect(profileNamesForConfiguredStage(config, "validate")).toEqual(["primary"]);
+    expect(singleProfileNamesForStage(config, "validate")).toEqual(["primary"]);
     expect(
       singleProfileNamesForStage(
         { ai: { profiles: { primary: {} }, stages: { validate: { profile: "primary" } } } },
