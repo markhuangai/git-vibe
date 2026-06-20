@@ -13,7 +13,12 @@ console.log(executable);
 
 function resolveClaudeCodeExecutable() {
   const configured = process.env.GITVIBE_CLAUDE_CODE_PATH;
-  if (configured) return isExecutable(configured) ? configured : undefined;
+  if (configured) {
+    if (!isExecutable(configured)) {
+      throw new Error(`GITVIBE_CLAUDE_CODE_PATH is not executable: ${configured}`);
+    }
+    return configured;
+  }
 
   const packageName = nativePackageName();
   if (!packageName) return undefined;
@@ -23,9 +28,12 @@ function resolveClaudeCodeExecutable() {
     const sdkRequire = createRequire(sdkEntry);
     const packageJson = sdkRequire.resolve(`${packageName}/package.json`);
     const binary = join(dirname(packageJson), "claude");
-    return isExecutable(binary) ? binary : undefined;
-  } catch {
-    return undefined;
+    if (!isExecutable(binary)) {
+      throw new Error(`resolved Claude Code executable is not executable: ${binary}`);
+    }
+    return binary;
+  } catch (error) {
+    throw new Error(`Failed to resolve Claude Code executable from ${packageName}: ${error}`);
   }
 }
 

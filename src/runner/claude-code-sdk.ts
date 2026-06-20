@@ -12,7 +12,7 @@ import {
   strictOutputSchema,
   stringValue,
 } from "./sdk-adapter-utils.js";
-import type { StageLogger } from "./logging.js";
+import { summarizeError, type StageLogger } from "./logging.js";
 import { prepareSdkMcpConfig } from "./mcp-sdk-config.js";
 import { structuredOutputText, validatedSdkOutput } from "./sdk-output.js";
 
@@ -67,7 +67,7 @@ export async function runClaudeCodeSdkStage({
           schema: strictOutputSchema(options.schema),
           type: "json_schema",
         },
-        ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
+        pathToClaudeCodeExecutable: executable,
         permissionMode: "bypassPermissions",
         persistSession: false,
         settingSources: [],
@@ -122,7 +122,7 @@ function isClaudeEffort(value: string): value is EffortLevel {
   return ["low", "medium", "high", "xhigh", "max"].includes(value);
 }
 
-function claudeCodeExecutablePath(): string | undefined {
+function claudeCodeExecutablePath(): string {
   const configured = stringValue(process.env.GITVIBE_CLAUDE_CODE_PATH);
   if (configured) {
     if (!existsSync(configured)) {
@@ -135,17 +135,20 @@ function claudeCodeExecutablePath(): string | undefined {
   }
 
   const packageName = claudeCodeNativePackageName();
-  if (!packageName) return undefined;
-
-  try {
-    const sdkEntry = require.resolve("@anthropic-ai/claude-agent-sdk");
-    const sdkRequire = createRequire(sdkEntry);
-    const packageJson = sdkRequire.resolve(`${packageName}/package.json`);
-    const executable = join(dirname(packageJson), "claude");
-    return isExecutable(executable) ? executable : undefined;
-  } catch {
-    return undefined;
+  if (!packageName) {
+    throw new Error(
+      `claude-code-sdk executable resolution is not supported on ${process.platform}/${process.arch}. GitVibe actions support Linux and macOS runners.`,
+    );
   }
+
+  const sdkEntry = require.resolve("@anthropic-ai/claude-agent-sdk");
+  const sdkRequire = createRequire(sdkEntry);
+  const packageJson = sdkRequire.resolve(`${packageName}/package.json`);
+  const executable = join(dirname(packageJson), "claude");
+  if (!isExecutable(executable)) {
+    throw new Error(`Resolved Claude Code executable is not executable: ${executable}`);
+  }
+  return executable;
 }
 
 function isExecutable(file: string): boolean {
@@ -222,7 +225,7 @@ function logClaudeAssistantMessage(message: unknown, logger: StageLogger | undef
   for (const item of content) {
     const type = stringValue(item.type);
     if (type === "text") {
-      logger?.event("ai.claude.message", { text: compactText(stringValue(item.text) || "") });
+      logger?.event("ai.claude.message", { text: summarizeError(stringValue(item.text) || "") });
       emitted = true;
     }
     if (type === "thinking") {
@@ -247,7 +250,7 @@ function summarizeToolInput(input: unknown): string {
   const filePath = stringValue(input.file_path);
   if (filePath) return `file_path=${filePath}`;
   const command = stringValue(input.command);
-  if (command) return `command=${compactText(command)}`;
+  if (command) return `command=${summarizeError(command)}`;
   const keys = Object.keys(input);
   return keys.length > 0 ? `keys=${keys.slice(0, 5).join(",")}` : "";
 }
@@ -260,14 +263,8 @@ function logSdkPromptPreview(
 ): void {
   logger?.event("ai.prompt", {
     chars: text.length,
-    preview: compactText(text),
+    preview: summarizeError(text),
     prompt: label,
     stage,
   });
-}
-
-function compactText(text: string): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= 160) return compact;
-  return `${compact.slice(0, 159)}...`;
 }

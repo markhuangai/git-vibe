@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -61,13 +62,12 @@ const actionFiles = [
   "security-review/action.yml",
   "validate/action.yml",
 ];
-const claudeActionFiles = [
+const sdkStageActionFiles = [
   "investigate/action.yml",
   "materialize/action.yml",
   "review-matrix/action.yml",
   "validate/action.yml",
 ];
-const codexActionFiles = claudeActionFiles;
 
 const workflowRunNameSpecs = [
   { file: ".github/workflows/release.yml", stage: "release" },
@@ -460,27 +460,19 @@ describe("GitVibe Claude Code action setup", () => {
     expect(resolveScript).not.toContain("claude.exe");
   });
 
-  it("prepares a Claude Code executable before Claude-capable stage actions run", () => {
-    for (const file of claudeActionFiles) {
-      const content = readFileSync(file, "utf8");
-      const buildStep = content.indexOf("Build GitVibe action runtime");
-      const prepareStep = content.indexOf("Prepare Claude Code executable");
-      const runEntrypoint = content.indexOf("dist/actions/run-action.js");
+  it("fails fast when a configured Claude Code executable path is invalid", () => {
+    const result = spawnSync(process.execPath, ["scripts/resolve-claude-code-path.mjs"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITVIBE_CLAUDE_CODE_PATH: "/tmp/git-vibe-missing-claude",
+      },
+    });
 
-      expect(prepareStep, `${file} should prepare Claude Code for claude-code-sdk`).toBeGreaterThan(
-        -1,
-      );
-      expect(content, `${file} should use the shared Claude Code setup script`).toContain(
-        "scripts/prepare-claude-code.sh",
-      );
-      expect(
-        prepareStep,
-        `${file} should prepare Claude Code after building runtime`,
-      ).toBeGreaterThan(buildStep);
-      expect(prepareStep, `${file} should prepare Claude Code before running stage`).toBeLessThan(
-        runEntrypoint,
-      );
-    }
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "GITVIBE_CLAUDE_CODE_PATH is not executable: /tmp/git-vibe-missing-claude",
+    );
   });
 });
 
@@ -495,21 +487,27 @@ describe("GitVibe Codex action setup", () => {
     expect(resolveScript).not.toContain("codex.exe");
   });
 
-  it("prepares a Codex executable before Codex-capable stage actions run", () => {
-    for (const file of codexActionFiles) {
+  it("leaves SDK executable resolution to the selected adapter in stage actions", () => {
+    for (const file of sdkStageActionFiles) {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
-      const prepareStep = content.indexOf("Prepare Codex executable");
       const runEntrypoint = content.indexOf("dist/actions/run-action.js");
 
-      expect(prepareStep, `${file} should prepare Codex for codex-sdk`).toBeGreaterThan(-1);
-      expect(content, `${file} should use the shared Codex setup script`).toContain(
-        "scripts/prepare-codex.sh",
+      expect(content, `${file} should not prepare Claude before profile selection`).not.toContain(
+        "Prepare Claude Code executable",
       );
-      expect(prepareStep, `${file} should prepare Codex after building runtime`).toBeGreaterThan(
-        buildStep,
+      expect(
+        content,
+        `${file} should not invoke Claude setup before profile selection`,
+      ).not.toContain("scripts/prepare-claude-code.sh");
+      expect(content, `${file} should not prepare Codex before profile selection`).not.toContain(
+        "Prepare Codex executable",
       );
-      expect(prepareStep, `${file} should prepare Codex before running stage`).toBeLessThan(
+      expect(
+        content,
+        `${file} should not invoke Codex setup before profile selection`,
+      ).not.toContain("scripts/prepare-codex.sh");
+      expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runEntrypoint,
       );
     }

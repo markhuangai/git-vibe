@@ -88,11 +88,11 @@ source-backed composite actions. Each composite action then reads
 `claude-code-sdk` profile directly through its SDK adapter.
 
 GitVibe workflows and composite actions support Linux and macOS GitHub Actions
-runners. Windows runners are not supported by this repository. The Claude Code
-SDK path resolves a Linux/macOS native executable or installs Claude Code through
-Anthropic's shell installer when no executable is available. The Codex SDK path
-resolves the native `@openai/codex` executable and exports it to the SDK through
-`GITVIBE_CODEX_PATH`.
+runners. Windows runners are not supported by this repository. Stage actions do
+not prepare every SDK executable up front; the selected SDK adapter resolves its
+native executable after GitVibe selects the configured profile. The AI smoke
+workflow still runs the executable preparation scripts directly so runner images
+can be validated.
 
 `review.yml` runs the same PR-scoped review matrix for an existing pull request.
 Trusted maintainers trigger it with the `git-vibe:review` label on a PR. GitVibe

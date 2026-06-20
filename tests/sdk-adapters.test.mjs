@@ -177,6 +177,8 @@ describe("Claude SDK adapter logging", () => {
   it("logs Claude SDK message variants and validates result text fallback", async () => {
     const cwd = workspace();
     const logger = { event: vi.fn() };
+    const secret = "claude-secret-that-crosses-the-old-truncation-boundary";
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CLAUDE_SECRET: secret });
     globalThis.__gitVibeSdkMocks.queueClaudeMessages([
       {
         claude_code_version: "test",
@@ -197,10 +199,14 @@ describe("Claude SDK adapter logging", () => {
       {
         message: {
           content: [
-            { text: "y".repeat(200), type: "text" },
+            { text: `Claude replied with ${"y".repeat(140)}${secret}`, type: "text" },
             { thinking: "plan", type: "thinking" },
             { input: { file_path: "README.md" }, name: "Read", type: "tool_use" },
-            { input: { command: `echo ${"z".repeat(180)}` }, name: "Bash", type: "tool_use" },
+            {
+              input: { command: `echo ${"z".repeat(140)}${secret}` },
+              name: "Bash",
+              type: "tool_use",
+            },
             { input: { a: 1, b: 2, c: 3 }, name: "Inspect", type: "tool_use" },
             { input: undefined, name: undefined, type: "tool_use" },
           ],
@@ -240,6 +246,14 @@ describe("Claude SDK adapter logging", () => {
         "ai.claude.result",
       ]),
     );
+    const messageFields = logger.event.mock.calls.find(([name]) => name === "ai.claude.message")[1];
+    const commandFields = logger.event.mock.calls.find(
+      ([name, fields]) => name === "ai.claude.tool" && fields?.tool === "Bash",
+    )[1];
+    expect(messageFields.text).not.toContain(secret.slice(0, 12));
+    expect(messageFields.text).toContain("<redacted:");
+    expect(commandFields.input).not.toContain(secret.slice(0, 12));
+    expect(commandFields.input).toContain("<redacted:");
   });
 });
 
