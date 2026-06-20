@@ -71,20 +71,6 @@ async function runAiStageWithProfile(
     });
   }
 
-  if (adapter === "ai-sdk-agentool") {
-    throw new Error(
-      `AI profile ${profileName} uses removed adapter ai-sdk-agentool; use claude-code-sdk or codex-sdk.`,
-    );
-  }
-  if (adapter === "cli-codex") {
-    throw new Error(`AI profile ${profileName} uses removed adapter cli-codex; use codex-sdk.`);
-  }
-  if (adapter === "cli-claude-code") {
-    throw new Error(
-      `AI profile ${profileName} uses removed adapter cli-claude-code; use claude-code-sdk.`,
-    );
-  }
-
   throw new Error(`AI profile ${profileName} uses unsupported adapter ${adapter}.`);
 }
 

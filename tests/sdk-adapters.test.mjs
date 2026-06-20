@@ -275,20 +275,7 @@ describe("Codex and Claude SDK adapter validation", () => {
   });
 });
 
-describe("SDK adapter removed config validation", () => {
-  it("fails fast for removed adapter names", async () => {
-    const cwd = workspace();
-    await expect(
-      runAiStage(stageOptions({ cwd, config: legacyConfig("ai-sdk-agentool") })),
-    ).rejects.toThrow("uses removed adapter ai-sdk-agentool");
-    await expect(
-      runAiStage(stageOptions({ cwd, config: legacyConfig("cli-codex") })),
-    ).rejects.toThrow("uses removed adapter cli-codex");
-    await expect(
-      runAiStage(stageOptions({ cwd, config: legacyConfig("cli-claude-code") })),
-    ).rejects.toThrow("uses removed adapter cli-claude-code");
-  });
-
+describe("SDK adapter config validation", () => {
   it("requires explicit profile adapters", async () => {
     const cwd = workspace();
     await expect(

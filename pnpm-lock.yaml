@@ -81,6 +81,10 @@ importers:
         version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(yaml@2.8.4))
 
   packages/git-vibe-setup:
+    dependencies:
+      yaml:
+        specifier: ^2.8.4
+        version: 2.8.4
     devDependencies:
       "@types/node":
         specifier: ^25.6.0

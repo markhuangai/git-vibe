@@ -20,10 +20,11 @@ npx git-vibe-setup update
 ```
 
 The `update` command fetches `examples/consumer` from the latest stable
-`markhuangai/git-vibe` release, rewrites only `.github/workflows/*.yml` GitVibe
-wrapper files, and pins them to that release. It does not update
-`.github/git-vibe.yml`, `.git-vibe`, secrets, or variables, and it refuses to
-overwrite workflow files that do not look like GitVibe wrappers.
+`markhuangai/git-vibe` release, migrates supported `.github/git-vibe.yml`
+settings in place, rewrites `.github/workflows/*.yml` GitVibe wrapper files,
+and pins workflow refs to that release. It does not update `.git-vibe`,
+secrets, or variables, and it refuses to overwrite workflow files that do not
+look like GitVibe wrappers.
 
 To test a specific release or prerelease from a consumer repository, pass the
 release tag explicitly:

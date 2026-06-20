@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
+import { isMap, isScalar, parseDocument, YAMLMap } from "yaml";
 import type { ConsumerStarterFile } from "./consumer-starter.js";
 
 export interface InstallFile {
@@ -132,7 +133,8 @@ export function pinWorkflowReleaseRefs(content: string, releaseTag: string): str
 
 export function migrateGitVibeConfigContent(content: string): string {
   const migratedComments = migrateLegacyEventDeliveryComments(content);
-  return ensureTrailingNewline(migrateGithubAuthConfig(migratedComments));
+  const migratedAuth = migrateGithubAuthConfig(migratedComments);
+  return ensureTrailingNewline(migrateLegacyAiProfiles(migratedAuth));
 }
 
 function isManagedWorkflowTarget(file: InstallFile): boolean {
@@ -344,6 +346,154 @@ function migrateGithubAuthConfig(content: string): string {
     return content.replace(/^github_auth:\n(?:[ \t]+.*(?:\n|$))*/m, githubAppAuth);
   }
   return `${content.trimEnd()}\n\n${githubAppAuth}`;
+}
+
+function migrateLegacyAiProfiles(content: string): string {
+  const document = parseDocument(content);
+  if (document.errors.length > 0) {
+    throw new Error(
+      `git-vibe-setup could not migrate .github/git-vibe.yml because it is not valid YAML: ${document.errors[0]?.message}`,
+    );
+  }
+
+  const root = document.contents;
+  if (!isMap(root)) return content;
+  const ai = root.get("ai", true);
+  if (!isMap(ai)) return content;
+  const profiles = ai.get("profiles", true);
+  if (!isMap(profiles)) return content;
+
+  let changed = false;
+  for (const pair of profiles.items) {
+    if (isMap(pair.value)) changed = migrateLegacyAiProfile(pair.value) || changed;
+  }
+  return changed ? document.toString() : content;
+}
+
+function migrateLegacyAiProfile(profile: YAMLMap<unknown, unknown>): boolean {
+  const adapter = stringNodeValue(profile.get("adapter"));
+  if (adapter === "ai-sdk-agentool") {
+    migrateAgentoolProfile(profile);
+    return true;
+  }
+  if (adapter === "cli-claude-code") {
+    profile.set("adapter", "claude-code-sdk");
+    ensureClaudeModel(profile);
+    orderProfileKeys(profile);
+    return true;
+  }
+  if (adapter === "cli-codex") {
+    profile.set("adapter", "codex-sdk");
+    return true;
+  }
+  return false;
+}
+
+function migrateAgentoolProfile(profile: YAMLMap<unknown, unknown>): void {
+  const provider = profile.get("provider", true);
+  profile.set("adapter", "claude-code-sdk");
+  syncClaudeEnvFromProvider(profile, provider);
+  syncReasoningEffort(profile);
+  trimProviderOptions(profile);
+  ensureClaudeModel(profile);
+  profile.delete("context_window_tokens");
+  profile.delete("provider");
+  orderProfileKeys(profile);
+}
+
+function syncClaudeEnvFromProvider(profile: YAMLMap<unknown, unknown>, provider: unknown): void {
+  const env = ensureMap(profile, "env");
+  if (isMap(provider)) {
+    copyMapValue(provider, "api_key", env, "ANTHROPIC_API_KEY");
+    copyMapValue(provider, "base_url", env, "ANTHROPIC_BASE_URL");
+    const providerModel = stringNodeValue(provider.get("model"));
+    if (providerModel) {
+      setIfMissing(env, "ANTHROPIC_DEFAULT_OPUS_MODEL", providerModel);
+      setIfMissing(env, "ANTHROPIC_DEFAULT_SONNET_MODEL", providerModel);
+      setIfMissing(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL", providerModel);
+    }
+  }
+  setIfMissing(env, "ANTHROPIC_MODEL", "opus");
+  setIfMissing(env, "CLAUDE_CODE_SUBAGENT_MODEL", "opus");
+}
+
+function syncReasoningEffort(profile: YAMLMap<unknown, unknown>): void {
+  const effort =
+    nodeAt(profile, ["reasoning", "effort"]) ||
+    nodeAt(profile, ["provider_options", "anthropic", "effort"]);
+  if (!effort) return;
+  const reasoning = ensureMap(profile, "reasoning");
+  if (!reasoning.has("effort")) reasoning.set("effort", effort);
+}
+
+function trimProviderOptions(profile: YAMLMap<unknown, unknown>): void {
+  const providerOptions = profile.get("provider_options", true);
+  if (!isMap(providerOptions)) return;
+  providerOptions.delete("openai");
+  if (providerOptions.items.length === 0) profile.delete("provider_options");
+}
+
+function ensureClaudeModel(profile: YAMLMap<unknown, unknown>): void {
+  setIfMissing(profile, "model", "opus");
+}
+
+function ensureMap(parent: YAMLMap<unknown, unknown>, key: string): YAMLMap<unknown, unknown> {
+  const value = parent.get(key, true);
+  if (isMap(value)) return value;
+  const map = new YAMLMap();
+  parent.set(key, map);
+  return map;
+}
+
+function copyMapValue(
+  source: YAMLMap<unknown, unknown>,
+  sourceKey: string,
+  target: YAMLMap<unknown, unknown>,
+  targetKey: string,
+): void {
+  if (target.has(targetKey)) return;
+  const value = source.get(sourceKey, true);
+  if (value !== undefined) target.set(targetKey, value);
+}
+
+function setIfMissing(map: YAMLMap<unknown, unknown>, key: string, value: unknown): void {
+  if (!map.has(key)) map.set(key, value);
+}
+
+function nodeAt(map: YAMLMap<unknown, unknown>, path: string[]): unknown {
+  let current: unknown = map;
+  for (const segment of path) {
+    if (!isMap(current)) return undefined;
+    current = current.get(segment, true);
+  }
+  return current;
+}
+
+function stringNodeValue(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (isScalar(value) && typeof value.value === "string") return value.value;
+  return undefined;
+}
+
+function orderProfileKeys(profile: YAMLMap<unknown, unknown>): void {
+  const priorities = new Map([
+    ["adapter", 0],
+    ["env", 1],
+    ["model", 2],
+    ["reasoning", 3],
+    ["provider_options", 4],
+  ]);
+  profile.items.sort((left, right) => {
+    return profileKeyPriority(left, priorities) - profileKeyPriority(right, priorities);
+  });
+}
+
+function profileKeyPriority(pair: { key: unknown }, priorities: Map<string, number>): number {
+  return priorities.get(pairKey(pair)) ?? 100;
+}
+
+function pairKey(pair: { key: unknown }): string {
+  return stringNodeValue(pair.key) || "";
 }
 
 function ensureTrailingNewline(content: string): string {
