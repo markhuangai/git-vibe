@@ -549,13 +549,13 @@ describe("GitVibe workflow local action setup", () => {
         if (localActionIndex === -1) continue;
 
         const setupSteps = steps.slice(0, localActionIndex);
-        const pnpmStep = setupSteps.find((step) => step.uses === "pnpm/action-setup@v6");
-        const nodeStep = setupSteps.find((step) => step.uses === "actions/setup-node@v6");
-
-        expect(pnpmStep, `${file} ${jobName} installs pnpm before GitVibe action`).toMatchObject({
+        const nodeIndex = setupSteps.findIndex((step) => step.uses === "actions/setup-node@v6");
+        const pnpmIndex = setupSteps.findIndex((step) => step.uses === "pnpm/action-setup@v6");
+        expect(nodeIndex, `${file} ${jobName} installs Node before pnpm`).toBeLessThan(pnpmIndex);
+        expect(setupSteps[pnpmIndex], `${file} ${jobName} installs pnpm`).toMatchObject({
           with: { run_install: false, version: "10.33.3" },
         });
-        expect(nodeStep, `${file} ${jobName} installs Node before GitVibe action`).toMatchObject({
+        expect(setupSteps[nodeIndex], `${file} ${jobName} installs Node`).toMatchObject({
           with: { "node-version": 22, "package-manager-cache": false },
         });
       }

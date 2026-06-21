@@ -90,14 +90,14 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.3
+          run_install: false
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
@@ -130,14 +130,14 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.3
+          run_install: false
       - uses: ./.git-vibe/actions/materialize
         with:
           discussion-number: ${{ inputs.discussion-number }}
