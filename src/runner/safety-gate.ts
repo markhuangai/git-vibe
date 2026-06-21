@@ -28,7 +28,7 @@ interface PatternMatch {
 
 const writeStages = new Set<Stage>(["materialize"]);
 const encodedPayloadInstructionPattern =
-  /(?:\b(?:base64|encoded payload)\b.{0,120}\b(?:execute|obey|run)\b|\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow\s+(?:the|its)\s+instructions?)\b|\bdecode\b.{0,80}\b(?:execute|obey|run|follow\s+(?:the|its)\s+instructions?)\b.{0,80}\b(?:base64|encoded payload|payload)\b)/isu;
+  /(?:\b(?:base64|encoded payload)\b.{0,120}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b.{0,80}\b(?:base64|encoded payload|payload)\b)/isu;
 
 const highRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
   {
