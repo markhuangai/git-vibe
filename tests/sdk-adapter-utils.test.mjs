@@ -4,12 +4,11 @@ import {
   bundleKeyFromSource,
   bundleValueFromMcpSource,
   bundleValueFromSource,
-  cliProfileEnv,
   optionalAiEnvBundleSecretValues,
   optionalMcpEnvBundleSecretValues,
-  runStreamingCommand,
   sanitizedChildEnv,
-} from "../src/runner/cli-adapter-utils.ts";
+  sdkProfileEnv,
+} from "../src/runner/sdk-adapter-utils.ts";
 
 const originalEnv = { ...process.env };
 
@@ -18,9 +17,9 @@ afterEach(() => {
   process.env = { ...originalEnv };
 });
 
-describe("CLI profile environment bundle", () => {
+describe("SDK profile environment bundle", () => {
   it("resolves selected profile env keys from GITVIBE_AI_ENV_JSON", () => {
-    const env = cliProfileEnv(
+    const env = sdkProfileEnv(
       {
         env: {
           ANTHROPIC_API_KEY: { from_bundle: "MINIMAX_API_KEY" },
@@ -60,7 +59,7 @@ describe("CLI profile environment bundle", () => {
   });
 
   it("removes bundled and legacy secrets when a profile has no env mapping", () => {
-    const env = cliProfileEnv({ model: "gpt-5" }, "ai.profiles.no_env", {
+    const env = sdkProfileEnv({ model: "gpt-5" }, "ai.profiles.no_env", {
       CLAUDE_CODE_OAUTH_TOKEN: "old-claude-token",
       CODEX_AUTH_JSON: "old-codex-auth",
       GITVIBE_AI_API_KEY: "old-ai-key",
@@ -96,7 +95,7 @@ describe("CLI profile environment bundle", () => {
   });
 });
 
-describe("CLI profile environment bundle values", () => {
+describe("SDK profile environment bundle values", () => {
   it("resolves Codex auth JSON from the bundle", () => {
     expect(
       bundleValueFromSource({ from_bundle: "CODEX_AUTH_JSON" }, "ai.profiles.codex.auth_json", {
@@ -107,7 +106,7 @@ describe("CLI profile environment bundle values", () => {
   });
 
   it("allows literal-only profile env without an AI env bundle", () => {
-    const env = cliProfileEnv(
+    const env = sdkProfileEnv(
       {
         env: {
           ANTHROPIC_MODEL: "glm-5",
@@ -167,32 +166,32 @@ describe("CLI profile environment bundle values", () => {
   });
 });
 
-describe("CLI profile environment bundle validation", () => {
+describe("SDK profile environment bundle validation", () => {
   it("rejects invalid bundle shapes and missing keys", () => {
     expect(() =>
-      cliProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {}),
+      sdkProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {}),
     ).toThrow("GITVIBE_AI_ENV_JSON is required by ai.profiles.bad.env.");
 
     expect(() =>
-      cliProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
+      sdkProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: "{",
       }),
     ).toThrow("GITVIBE_AI_ENV_JSON must be valid JSON");
 
     expect(() =>
-      cliProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
+      sdkProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: "[]",
       }),
     ).toThrow("GITVIBE_AI_ENV_JSON must be a JSON object.");
 
     expect(() =>
-      cliProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
+      sdkProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ MINIMAX_API_KEY: 123 }),
       }),
     ).toThrow("GITVIBE_AI_ENV_JSON.MINIMAX_API_KEY must be a string.");
 
     expect(() =>
-      cliProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
+      sdkProfileEnv(profileEnv("ANTHROPIC_API_KEY", "MINIMAX_API_KEY"), "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ OTHER_KEY: "value" }),
       }),
     ).toThrow(
@@ -202,19 +201,19 @@ describe("CLI profile environment bundle validation", () => {
 
   it("rejects invalid profile env sources", () => {
     expect(() =>
-      cliProfileEnv({ env: [] }, "ai.profiles.bad", {
+      sdkProfileEnv({ env: [] }, "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
       }),
     ).toThrow("ai.profiles.bad.env must be an object.");
 
     expect(() =>
-      cliProfileEnv({ env: { TARGET: {} } }, "ai.profiles.bad", {
+      sdkProfileEnv({ env: { TARGET: {} } }, "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
       }),
     ).toThrow("ai.profiles.bad.env.TARGET.from_bundle must be a non-empty string.");
 
     expect(() =>
-      cliProfileEnv({ env: { TARGET: [] } }, "ai.profiles.bad", {
+      sdkProfileEnv({ env: { TARGET: [] } }, "ai.profiles.bad", {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
       }),
     ).toThrow("ai.profiles.bad.env.TARGET must be an object with from_bundle.");
@@ -246,50 +245,6 @@ describe("AI env bundle redaction helpers", () => {
       }),
     ).toEqual(["dense-secret"]);
     expect(optionalMcpEnvBundleSecretValues({ GITVIBE_MCP_ENV_JSON: "[]" })).toEqual([]);
-  });
-});
-
-describe("CLI command logging", () => {
-  it("redacts streamed child process output and failure messages", async () => {
-    process.env.GITVIBE_TEST_SECRET = "super-secret-value";
-    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-
-    await expect(
-      runStreamingCommand({
-        args: [
-          "-e",
-          "process.stdout.write('super-secret-value'); process.stderr.write('super-secret-value')",
-        ],
-        command: process.execPath,
-        cwd: process.cwd(),
-        env: { PATH: process.env.PATH },
-        input: "",
-      }),
-    ).resolves.toMatchObject({
-      stderr: "super-secret-value",
-      stdout: "super-secret-value",
-    });
-
-    expect(stdout).toHaveBeenCalledWith("<redacted:GITVIBE_TEST_SECRET>");
-    expect(stderr).toHaveBeenCalledWith("<redacted:GITVIBE_TEST_SECRET>");
-
-    let caught;
-    try {
-      await runStreamingCommand({
-        args: ["-e", "process.stderr.write('super-secret-value'); process.exit(1)"],
-        command: process.execPath,
-        cwd: process.cwd(),
-        env: { PATH: process.env.PATH },
-        input: "",
-      });
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(caught).toBeInstanceOf(Error);
-    expect(caught.message).toContain("<redacted:GITVIBE_TEST_SECRET>");
-    expect(caught.message).not.toContain("super-secret-value");
   });
 });
 

@@ -1,5 +1,3 @@
-import type { ModelMessage } from "ai";
-
 export interface AiToolCall {
   input?: unknown;
   toolName?: string;
@@ -11,7 +9,7 @@ export interface AiStep {
 
 export interface AiResult {
   response?: {
-    messages?: ModelMessage[];
+    messages?: unknown[];
   };
   steps?: AiStep[];
   text: string;

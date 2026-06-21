@@ -15,8 +15,10 @@ export function activeProfileByName(
   return profile;
 }
 
-export function adapterName(profile: Record<string, unknown>): string {
-  return String(profile.adapter || "ai-sdk-agentool");
+export function adapterName(profile: Record<string, unknown>, profilePath = "ai profile"): string {
+  const adapter = stringValue(profile.adapter);
+  if (!adapter) throw new Error(`${profilePath}.adapter must be configured.`);
+  return adapter;
 }
 
 export function profileNamesForStage(config: GitVibeConfig, stage: Stage): string[] {
@@ -26,6 +28,11 @@ export function profileNamesForStage(config: GitVibeConfig, stage: Stage): strin
       `ai.stages.${stage}.profiles is no longer supported; use profile or role_group.`,
     );
   }
+  if (stageConfig.fallback_profile !== undefined) {
+    throw new Error(
+      `ai.stages.${stage}.fallback_profile is no longer supported; use profile or role_group.`,
+    );
+  }
   if (stageConfig.role_group !== undefined) {
     throw new Error(`ai.stages.${stage}.role_group requires matrix workflow execution.`);
   }
@@ -33,12 +40,6 @@ export function profileNamesForStage(config: GitVibeConfig, stage: Stage): strin
   if (!profile) {
     throw new Error(`ai.stages.${stage} must define profile or role_group.`);
   }
-  const fallback = stringValue(stageConfig.fallback_profile);
-
-  if (fallback && fallback !== profile) {
-    return [profile, fallback];
-  }
-
   return [profile];
 }
 

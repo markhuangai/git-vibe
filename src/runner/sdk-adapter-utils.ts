@@ -1,28 +1,9 @@
-import { spawn } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
 import type { JsonObject } from "../shared/types.js";
-import { redactLogText } from "./logging.js";
-
-interface CliCommandOptions {
-  args: string[];
-  command: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  input: string;
-  stdoutFile?: string;
-  stdoutFlush?: () => void;
-  stdoutLog?: (text: string) => void;
-}
-
-interface CliCommandResult {
-  stderr: string;
-  stdout: string;
-}
 
 export const aiEnvBundleVariable = "GITVIBE_AI_ENV_JSON";
 export const mcpEnvBundleVariable = "GITVIBE_MCP_ENV_JSON";
 
-export function cliModelName(profile: Record<string, unknown>, adapter: string): string {
+export function sdkModelName(profile: Record<string, unknown>, adapter: string): string {
   const model = stringValue(profile.model);
   if (!model) throw new Error(`AI profile model must be configured for ${adapter} profile.`);
   return model;
@@ -44,7 +25,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function cliProfileEnv(
+export function sdkProfileEnv(
   profile: Record<string, unknown>,
   profilePath: string,
   baseEnv: NodeJS.ProcessEnv = process.env,
@@ -128,54 +109,6 @@ function optionalEnvBundleSecretValues(
   }
 }
 
-export async function runStreamingCommand(options: CliCommandOptions): Promise<CliCommandResult> {
-  if (options.stdoutFile) writeFileSync(options.stdoutFile, "");
-
-  const child = spawn(options.command, options.args, {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  const stdoutChunks: Buffer[] = [];
-  const stderrChunks: Buffer[] = [];
-
-  child.stdout?.on("data", (chunk: Buffer | string) => {
-    const buffer = chunkBuffer(chunk);
-    stdoutChunks.push(buffer);
-    if (options.stdoutFile) appendFileSync(options.stdoutFile, buffer);
-    const text = buffer.toString("utf8");
-    if (options.stdoutLog) options.stdoutLog(text);
-    else process.stdout.write(redactLogText(text));
-  });
-  child.stderr?.on("data", (chunk: Buffer | string) => {
-    const buffer = chunkBuffer(chunk);
-    stderrChunks.push(buffer);
-    process.stderr.write(redactLogText(buffer.toString("utf8")));
-  });
-  child.stdin?.end(options.input);
-
-  const { code, signal } = await new Promise<{
-    code: number | null;
-    signal: NodeJS.Signals | null;
-  }>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("close", (exitCode, exitSignal) => {
-      resolve({ code: exitCode, signal: exitSignal });
-    });
-  });
-  options.stdoutFlush?.();
-  const stdout = Buffer.concat(stdoutChunks).toString("utf8");
-  const stderr = Buffer.concat(stderrChunks).toString("utf8");
-
-  if (code !== 0) {
-    throw new Error(
-      `${options.command} failed with ${exitStatus(code, signal)}${errorSuffix(stderr)}`,
-    );
-  }
-
-  return { stderr, stdout };
-}
-
 function normalizeSchemaValue(value: unknown, options: { omitKeys?: Set<string> } = {}): unknown {
   if (Array.isArray(value)) return value.map((item) => normalizeSchemaValue(item, options));
   if (!isRecord(value)) return value;
@@ -190,20 +123,6 @@ function normalizeSchemaValue(value: unknown, options: { omitKeys?: Set<string> 
     normalized.additionalProperties ??= false;
   }
   return normalized;
-}
-
-function chunkBuffer(chunk: Buffer | string): Buffer {
-  return Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-}
-
-function errorSuffix(stderr: string): string {
-  const message = redactLogText(stderr.trim());
-  return message ? `: ${message}` : "";
-}
-
-function exitStatus(code: number | null, signal: NodeJS.Signals | null): string {
-  if (code !== null) return `exit code ${code}`;
-  return signal ? `signal ${signal}` : "unknown exit status";
 }
 
 export function parseRequiredAiEnvBundle(
@@ -254,6 +173,7 @@ function parseRequiredEnvBundle(
   return parsed as Record<string, string>;
 }
 
+// Strip retired local-proxy bundle keys if older workflows still export them.
 const legacyAiEnvNames = new Set(["GITVIBE_AI_BASE_URL"]);
 
 function bundleValue(source: unknown, sourcePath: string, bundle: Record<string, string>): string {

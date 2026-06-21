@@ -6,29 +6,16 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
-const generateText = vi.fn();
-const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
-const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
-
-vi.mock("ai", () => ({
-  generateText,
-  hasToolCall: vi.fn((toolName) => ({ toolName })),
-  stepCountIs: vi.fn((count) => ({ count })),
-}));
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
-vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
 const { runStage } = await import("../src/runner/stage-runner.ts");
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
-  generateText.mockReset();
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
       GITVIBE_AI_API_KEY: "test-key",
-      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
   };
 });
@@ -42,29 +29,15 @@ afterEach(() => {
 describe("stage runner context coverage", () => {
   it("allows completed results when context chunks remain pending", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  comment_body: "Ready.",
-                  findings: [],
-                  next_state: "ready-for-implementation",
-                  references: [],
-                  stage: "validate",
-                  status: "completed",
-                  summary: "Ready.",
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
+    globalThis.__gitVibeSdkMocks.queueCodexOutput({
+      assumptions: [],
+      comment_body: "Ready.",
+      findings: [],
+      next_state: "ready-for-implementation",
+      references: [],
+      stage: "validate",
+      status: "completed",
+      summary: "Ready.",
     });
     const fetch = fetchMock([
       issueResponse("x".repeat(120_000)),
@@ -104,30 +77,16 @@ describe("stage runner context coverage", () => {
 describe("stage runner blocked publishing", () => {
   it("publishes blocked deterministic results", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce({
-      steps: [
-        {
-          toolCalls: [
-            {
-              input: {
-                content: JSON.stringify({
-                  assumptions: [],
-                  comment_body: "Blocked.",
-                  findings: [],
-                  next_state: "blocked",
-                  questions: [],
-                  references: [],
-                  stage: "validate",
-                  status: "blocked",
-                  summary: "Blocked.",
-                }),
-              },
-              toolName: "output_validator",
-            },
-          ],
-        },
-      ],
-      text: "{}",
+    globalThis.__gitVibeSdkMocks.queueCodexOutput({
+      assumptions: [],
+      comment_body: "Blocked.",
+      findings: [],
+      next_state: "blocked",
+      questions: [],
+      references: [],
+      stage: "validate",
+      status: "blocked",
+      summary: "Blocked.",
     });
     const fetch = fetchMock([
       issueResponse("Issue body"),

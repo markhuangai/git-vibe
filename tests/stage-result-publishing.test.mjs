@@ -6,30 +6,16 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
 
-const generateText = vi.fn();
-const createOpenAI = vi.fn(() => ({ chat: vi.fn(() => "openai-model") }));
-const createAnthropic = vi.fn(() => ({ languageModel: vi.fn(() => "anthropic-model") }));
-
-vi.mock("ai", () => ({
-  generateText,
-  hasToolCall: vi.fn((toolName) => ({ toolName })),
-  stepCountIs: vi.fn((count) => ({ count })),
-}));
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI }));
-vi.mock("@ai-sdk/anthropic", () => ({ createAnthropic }));
-
 const { runStage } = await import("../src/runner/stage-runner.ts");
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
-  generateText.mockReset();
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
       GITVIBE_AI_API_KEY: "test-key",
-      GITVIBE_AI_BASE_URL: "https://proxy.test/v1",
     }),
   };
 });
@@ -42,7 +28,7 @@ afterEach(() => {
 describe("stage result publishing", () => {
   it("publishes validate results to issues and marks ready issues for approval", async () => {
     const cwd = await workspace();
-    generateText.mockResolvedValueOnce(aiResult(validateOutput()));
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(validateOutput());
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
@@ -89,18 +75,6 @@ async function workspace(config = "") {
   writeFileSync(join(cwd, ".github", "git-vibe.yml"), workspaceConfigWithTestAi(config));
   execFileSync("git", ["init"], { cwd, stdio: "ignore" });
   return cwd;
-}
-
-/**
- * @param {Record<string, unknown>} output
- */
-function aiResult(output) {
-  return {
-    steps: [
-      { toolCalls: [{ input: { content: JSON.stringify(output) }, toolName: "output_validator" }] },
-    ],
-    text: "{}",
-  };
 }
 
 function validateOutput() {

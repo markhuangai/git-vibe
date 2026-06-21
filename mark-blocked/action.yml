@@ -5,11 +5,6 @@ inputs:
   issue-number:
     description: Issue number to mark blocked.
     required: true
-  dry-run:
-    description: Describe work without mutating GitHub.
-    required: false
-    default: "false"
-
 runs:
   using: composite
   steps:
@@ -34,6 +29,5 @@ runs:
     - name: Mark issue blocked
       shell: bash
       env:
-        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_ISSUE_NUMBER: ${{ inputs.issue-number }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/mark-blocked.js"

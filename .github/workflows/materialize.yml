@@ -23,11 +23,6 @@ on:
         required: false
         type: number
         default: 90
-      dry-run:
-        description: Validate and describe actions without writing to GitHub.
-        required: false
-        type: boolean
-        default: false
       source-comment:
         description: JSON source comment metadata for replying to command comments.
         required: false
@@ -54,11 +49,6 @@ on:
         required: false
         type: number
         default: 90
-      dry-run:
-        description: Validate and describe actions without writing to GitHub.
-        required: false
-        type: boolean
-        default: false
       source-comment:
         description: JSON source comment metadata for replying to command comments.
         required: false
@@ -66,7 +56,7 @@ on:
         default: ""
     secrets:
       GITVIBE_AI_ENV_JSON:
-        description: JSON env bundle for AI provider config and CLI profiles.
+        description: JSON env bundle for SDK adapter auth and provider variables.
         required: true
       GITVIBE_MCP_ENV_JSON:
         description: Optional JSON env bundle for MCP server credentials.
@@ -90,30 +80,30 @@ jobs:
       discussions: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Checkout GitVibe action source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.3
           run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
           stage: materialize
           discussion-number: ${{ inputs.discussion-number }}
           stage-timeout-minutes: 10
-          dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
 
   materialize:
@@ -130,27 +120,27 @@ jobs:
       discussions: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Checkout GitVibe action source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .git-vibe/actions
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.3
           run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - uses: ./.git-vibe/actions/materialize
         with:
           discussion-number: ${{ inputs.discussion-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
-          dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}

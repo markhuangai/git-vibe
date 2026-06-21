@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -9,6 +10,7 @@ import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
  * @typedef {{ env?: Record<string, string>, environment?: unknown, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} SimulatedStep
+ * @typedef {{ inputs?: Record<string, WorkflowInput>, runs?: { steps?: WorkflowStep[] } }} ActionDefinition
  */
 
 const aiEnv = {
@@ -59,6 +61,12 @@ const actionFiles = [
   "plan-stage/action.yml",
   "review-matrix/action.yml",
   "security-review/action.yml",
+  "validate/action.yml",
+];
+const sdkStageActionFiles = [
+  "investigate/action.yml",
+  "materialize/action.yml",
+  "review-matrix/action.yml",
   "validate/action.yml",
 ];
 
@@ -179,7 +187,7 @@ describe("GitVibe workflow wiring", () => {
     }
   });
 
-  it("removes standalone CLI secret wiring from reusable workflows", () => {
+  it("removes standalone adapter secret wiring from reusable workflows", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
       const workflowCall = workflow.on?.workflow_call;
@@ -212,7 +220,7 @@ describe("GitVibe workflow call wiring", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
       const workflowCall = workflow.on?.workflow_call;
-      const checkoutSteps = gitVibeActionSteps(workflow, (uses) => uses === "actions/checkout@v4");
+      const checkoutSteps = gitVibeActionSteps(workflow, (uses) => uses === "actions/checkout@v7");
       const actionSourceSteps = checkoutSteps.filter(
         ({ name }) => name === "Checkout GitVibe action source",
       );
@@ -220,8 +228,10 @@ describe("GitVibe workflow call wiring", () => {
       expect(workflow.on?.workflow_dispatch, `${file} declares workflow_dispatch`).toBeTruthy();
       expect(workflow.on?.workflow_dispatch?.inputs?.["action-repository"]).toBeUndefined();
       expect(workflow.on?.workflow_dispatch?.inputs?.["action-ref"]).toBeUndefined();
+      expect(workflow.on?.workflow_dispatch?.inputs?.["dry-run"]).toBeUndefined();
       expect(workflowCall?.inputs?.["action-repository"]).toBeUndefined();
       expect(workflowCall?.inputs?.["action-ref"]).toBeUndefined();
+      expect(workflowCall?.inputs?.["dry-run"]).toBeUndefined();
       expect(workflowCall?.secrets?.GITVIBE_AI_ENV_JSON).toMatchObject({ required: true });
       expect(workflowCall?.secrets?.GITVIBE_MCP_ENV_JSON).toMatchObject({ required: false });
       expect(workflowCall?.secrets?.GITVIBE_GITHUB_TOKEN).toBeUndefined();
@@ -263,6 +273,24 @@ describe("GitVibe workflow call wiring", () => {
       expect(reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
       expect(reusableJob?.with?.["action-repository"]).toBeUndefined();
       expect(reusableJob?.with?.["action-ref"]).toBeUndefined();
+      expect(reusableJob?.with?.["dry-run"]).toBeUndefined();
+      expect(workflow.on?.workflow_dispatch?.inputs?.["dry-run"]).toBeUndefined();
+    }
+  });
+});
+
+describe("GitVibe removed public inputs", () => {
+  it("does not expose removed action inputs", () => {
+    for (const file of actionFiles) {
+      const action = readAction(file);
+      const content = readFileSync(file, "utf8");
+      expect(action.inputs?.["dry-run"], file).toBeUndefined();
+      expect(content, file).not.toContain("GITVIBE_DRY_RUN: ${{ inputs.");
+      if (!sdkStageActionFiles.includes(file)) continue;
+      expect(action.inputs?.profile, file).toBeUndefined();
+      expect(action.inputs?.role, file).toBeUndefined();
+      expect(content, file).not.toContain("GITVIBE_PROFILE_NAME");
+      expect(content, file).not.toContain("GITVIBE_ROLE_NAME");
     }
   });
 });
@@ -331,24 +359,29 @@ describe("GitVibe workflow budget wiring", () => {
 });
 
 describe("GitVibe AI smoke workflow", () => {
-  it("validates Codex and Claude Code responses instead of treating CLI presence as success", () => {
+  it("validates Codex and Claude Code SDK responses through SDK smoke tests", () => {
     const workflow = readWorkflow(".github/workflows/ai-smoke.yml");
     const claudeSetupNode = workflow.jobs?.["claude-code"]?.steps?.find(
-      (step) => step.uses === "actions/setup-node@v4",
+      (step) => step.uses === "actions/setup-node@v6",
     );
-    const codexRun = workflowStep(workflow, "codex", "Run Codex smoke test")?.run || "";
+    const codexRun = workflowStep(workflow, "codex", "Run Codex SDK smoke test")?.run || "";
+    const codexPrepare = workflowStep(workflow, "codex", "Prepare Codex executable")?.run || "";
     const claudeRun =
-      workflowStep(workflow, "claude-code", "Run Claude Code smoke test")?.run || "";
+      workflowStep(workflow, "claude-code", "Run Claude Code SDK smoke test")?.run || "";
+    const claudePrepare =
+      workflowStep(workflow, "claude-code", "Prepare Claude Code executable")?.run || "";
     const claudeInstall = workflow.jobs?.["claude-code"]?.steps?.some(
       (step) => step.run === "pnpm install --frozen-lockfile",
     );
 
-    expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
+    expect(claudeSetupNode).toMatchObject({
+      with: { "node-version": 22, "package-manager-cache": false },
+    });
     expect(claudeInstall).toBe(true);
-    expect(codexRun).toContain("codex exec");
-    expect(codexRun).toContain("--output-last-message");
-    expect(codexRun).toContain("validateSmokeResponse(response, process.argv[3])");
-    expect(codexRun).toContain('"source": { "enum": ["codex"] }');
+    expect(claudePrepare).toContain("bash scripts/prepare-claude-code.sh");
+    expect(codexPrepare).toContain("bash scripts/prepare-codex.sh");
+    expect(codexRun).toContain("node scripts/smoke-test-codex.mjs");
+    expect(codexRun).not.toContain("codex exec");
     expect(codexRun).not.toContain("codex --version");
 
     expect(claudeRun).toContain("node scripts/smoke-test-claude-code.mjs");
@@ -407,7 +440,6 @@ describe("GitVibe action runtime setup", () => {
     for (const file of actionFiles) {
       const content = readFileSync(file, "utf8");
       const buildStep = content.indexOf("Build GitVibe action runtime");
-      const setupStep = content.indexOf("dist/actions/setup-ai-cli.js");
       const runEntrypoint =
         file === "mark-blocked/action.yml"
           ? "dist/actions/mark-blocked.js"
@@ -417,16 +449,9 @@ describe("GitVibe action runtime setup", () => {
               ? "dist/actions/security-review.js"
               : "dist/actions/run-action.js";
       const runStep = content.indexOf(runEntrypoint);
-      const needsAiSetup = ![
-        "mark-blocked/action.yml",
-        "plan-stage/action.yml",
-        "security-review/action.yml",
-      ].includes(file);
 
       expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
-      if (needsAiSetup) {
-        expect(setupStep, `${file} should set up configured AI CLIs`).toBeGreaterThan(-1);
-      }
+      expect(content, `${file} should not set up removed AI tooling`).not.toContain("setup-ai-cli");
       expect(content, `${file} should prefer Corepack when available`).toContain(
         "command -v corepack",
       );
@@ -443,15 +468,76 @@ describe("GitVibe action runtime setup", () => {
       expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
         runStep,
       );
-      if (needsAiSetup) {
-        expect(setupStep, `${file} should set up CLIs before stage execution`).toBeLessThan(
-          runStep,
-        );
-        expect(buildStep, `${file} should build before setting up CLIs`).toBeLessThan(setupStep);
-      }
     }
   });
+});
 
+describe("GitVibe Claude Code action setup", () => {
+  it("documents Linux and macOS runner support without Windows runner setup", () => {
+    const prepareScript = readFileSync("scripts/prepare-claude-code.sh", "utf8");
+    const resolveScript = readFileSync("scripts/resolve-claude-code-path.mjs", "utf8");
+
+    expect(prepareScript).toContain("Darwin|Linux");
+    expect(prepareScript).toContain("supports Linux and macOS runners only");
+    expect(resolveScript).not.toContain("win32");
+    expect(resolveScript).not.toContain("claude.exe");
+  });
+
+  it("fails fast when a configured Claude Code executable path is invalid", () => {
+    const result = spawnSync(process.execPath, ["scripts/resolve-claude-code-path.mjs"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITVIBE_CLAUDE_CODE_PATH: "/tmp/git-vibe-missing-claude",
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "GITVIBE_CLAUDE_CODE_PATH is not executable: /tmp/git-vibe-missing-claude",
+    );
+  });
+});
+
+describe("GitVibe Codex action setup", () => {
+  it("documents Linux and macOS runner support without Windows runner setup", () => {
+    const prepareScript = readFileSync("scripts/prepare-codex.sh", "utf8");
+    const resolveScript = readFileSync("scripts/resolve-codex-path.mjs", "utf8");
+
+    expect(prepareScript).toContain("Darwin|Linux");
+    expect(prepareScript).toContain("supports Linux and macOS runners only");
+    expect(resolveScript).not.toContain("win32");
+    expect(resolveScript).not.toContain("codex.exe");
+  });
+
+  it("leaves SDK executable resolution to the selected adapter in stage actions", () => {
+    for (const file of sdkStageActionFiles) {
+      const content = readFileSync(file, "utf8");
+      const buildStep = content.indexOf("Build GitVibe action runtime");
+      const runEntrypoint = content.indexOf("dist/actions/run-action.js");
+
+      expect(content, `${file} should not prepare Claude before profile selection`).not.toContain(
+        "Prepare Claude Code executable",
+      );
+      expect(
+        content,
+        `${file} should not invoke Claude setup before profile selection`,
+      ).not.toContain("scripts/prepare-claude-code.sh");
+      expect(content, `${file} should not prepare Codex before profile selection`).not.toContain(
+        "Prepare Codex executable",
+      );
+      expect(
+        content,
+        `${file} should not invoke Codex setup before profile selection`,
+      ).not.toContain("scripts/prepare-codex.sh");
+      expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
+        runEntrypoint,
+      );
+    }
+  });
+});
+
+describe("GitVibe workflow local action setup", () => {
   it("sets up Node and pnpm before local GitVibe actions run", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
@@ -463,14 +549,14 @@ describe("GitVibe action runtime setup", () => {
         if (localActionIndex === -1) continue;
 
         const setupSteps = steps.slice(0, localActionIndex);
-        const pnpmStep = setupSteps.find((step) => step.uses === "pnpm/action-setup@v4");
-        const nodeStep = setupSteps.find((step) => step.uses === "actions/setup-node@v4");
-
-        expect(pnpmStep, `${file} ${jobName} installs pnpm before GitVibe action`).toMatchObject({
+        const nodeIndex = setupSteps.findIndex((step) => step.uses === "actions/setup-node@v6");
+        const pnpmIndex = setupSteps.findIndex((step) => step.uses === "pnpm/action-setup@v6");
+        expect(nodeIndex, `${file} ${jobName} installs Node before pnpm`).toBeLessThan(pnpmIndex);
+        expect(setupSteps[pnpmIndex], `${file} ${jobName} installs pnpm`).toMatchObject({
           with: { run_install: false, version: "10.33.3" },
         });
-        expect(nodeStep, `${file} ${jobName} installs Node before GitVibe action`).toMatchObject({
-          with: { "node-version": 22 },
+        expect(setupSteps[nodeIndex], `${file} ${jobName} installs Node`).toMatchObject({
+          with: { "node-version": 22, "package-manager-cache": false },
         });
       }
     }
@@ -540,7 +626,6 @@ describe("GitVibe automatic PR review workflow", () => {
       },
       uses: "./.github/workflows/review.yml",
       with: {
-        "dry-run": false,
         max_turns: 200,
         "pr-number": "${{ format('{0}', github.event.pull_request.number) }}",
         runner: "docker-runner",
@@ -609,7 +694,7 @@ function readWorkflow(file) {
   return /** @type {Workflow} */ (parse(readFileSync(file, "utf8")));
 }
 
-/** @param {string} file @returns {{ runs?: { steps?: WorkflowStep[] } }} */
+/** @param {string} file @returns {ActionDefinition} */
 function readAction(file) {
-  return /** @type {{ runs?: { steps?: WorkflowStep[] } }} */ (parse(readFileSync(file, "utf8")));
+  return /** @type {ActionDefinition} */ (parse(readFileSync(file, "utf8")));
 }

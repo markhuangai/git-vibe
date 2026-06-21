@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/TypeScript-6.0+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6" />
   <img src="https://img.shields.io/badge/coverage-%3E%3D90%25-brightgreen?style=flat-square" alt="Coverage threshold" />
   <img src="https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker image on GHCR" />
-  <img src="https://img.shields.io/badge/AI_SDK-agentool-111827?style=flat-square" alt="AI SDK and agentool" />
+  <img src="https://img.shields.io/badge/Claude%20Code%20%2B%20Codex-SDKs-111827?style=flat-square" alt="Claude Code and Codex SDK adapters" />
   <img src="https://visitor-badge.laobi.icu/badge?page_id=markhuangai.git-vibe&style=flat-square" alt="Visitors" />
 </p>
 
@@ -80,12 +80,19 @@ implementation, review, and release decisions.
 | `validate.yml`    | Check whether maintainer context is coherent and actionable           | No              |
 | `materialize.yml` | Convert a validated Discussion into one or more implementation issues | No              |
 | `review.yml`      | Review an existing pull request with the configured review matrix     | No              |
-| `ai-smoke.yml`    | Verify AI provider or trusted CLI setup on a runner                   | No repo changes |
+| `ai-smoke.yml`    | Verify configured SDK adapters on a runner                            | No repo changes |
 
 The reusable workflows install Node `22` and pnpm `10.33.3` before building the
 source-backed composite actions. Each composite action then reads
-`.github/git-vibe.yml` for its stage and installs Codex CLI or Claude Code only
-when the selected profile uses `cli-codex` or `cli-claude-code`.
+`.github/git-vibe.yml` for its stage and runs the selected `codex-sdk` or
+`claude-code-sdk` profile directly through its SDK adapter.
+
+GitVibe workflows and composite actions support Linux and macOS GitHub Actions
+runners. Windows runners are not supported by this repository. Stage actions do
+not prepare every SDK executable up front; the selected SDK adapter resolves its
+native executable after GitVibe selects the configured profile. The AI smoke
+workflow still runs the executable preparation scripts directly so runner images
+can be validated.
 
 `review.yml` runs the same PR-scoped review matrix for an existing pull request.
 Trusted maintainers trigger it with the `git-vibe:review` label on a PR. GitVibe
@@ -171,10 +178,10 @@ Secrets belong in GitHub repository or organization secrets, not in
 `git-vibe-setup` prints this list after it writes files. It does not collect or
 store secret values.
 
-| Name                   | Required | Purpose                                                                  |
-| ---------------------- | -------- | ------------------------------------------------------------------------ |
-| `GITVIBE_AI_ENV_JSON`  | Yes      | JSON env bundle for AI provider config, CLI auth, and provider variables |
-| `GITVIBE_MCP_ENV_JSON` | No       | JSON env bundle for configured MCP server credentials                    |
+| Name                   | Required | Purpose                                               |
+| ---------------------- | -------- | ----------------------------------------------------- |
+| `GITVIBE_AI_ENV_JSON`  | Yes      | JSON env bundle for SDK auth and provider variables   |
+| `GITVIBE_MCP_ENV_JSON` | No       | JSON env bundle for configured MCP server credentials |
 
 Useful variables:
 
@@ -189,12 +196,9 @@ Store AI provider values in `GITVIBE_AI_ENV_JSON`:
 
 ```json
 {
-  "CLAUDE_OAUTH_TOKEN": "...",
+  "ANTHROPIC_BASE_URL": "https://api.provider.example/anthropic",
   "CODEX_AUTH_JSON": "{\"tokens\":[]}",
-  "GITVIBE_AI_API_KEY": "...",
-  "GITVIBE_AI_BASE_URL": "https://api.provider.example/v1",
-  "MINIMAX_API_KEY": "...",
-  "MINIMAX_ANTHROPIC_BASE_URL": "https://api.minimax.example/anthropic"
+  "GITVIBE_AI_API_KEY": "..."
 }
 ```
 
@@ -354,19 +358,30 @@ github_auth:
 
 ai:
   profiles:
-    local_proxy:
-      adapter: ai-sdk-agentool
-      provider:
-        type: openai-compatible
-        model: glm-5
-        base_url:
-          from_bundle: GITVIBE_AI_BASE_URL
-        api_key:
-          from_bundle: GITVIBE_AI_API_KEY
+    codex_sdk:
+      adapter: codex-sdk
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
+      model: gpt-5.5
       reasoning:
         effort: high
+    claude_code:
+      adapter: claude-code-sdk
+      env:
+        ANTHROPIC_API_KEY:
+          from_bundle: GITVIBE_AI_API_KEY
+        ANTHROPIC_BASE_URL:
+          from_bundle: ANTHROPIC_BASE_URL
+        ANTHROPIC_DEFAULT_OPUS_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: kimi-k2.5
+        ANTHROPIC_MODEL: opus
+        CLAUDE_CODE_SUBAGENT_MODEL: opus
+      model: opus
+      reasoning:
+        effort: max
       # Optional explicit repo context. GitVibe does not auto-load AGENTS.md,
-      # CLAUDE.md, or other native CLI files.
+      # CLAUDE.md, or other native agent files.
       # context:
       #   files:
       #     - AGENTS.md
@@ -383,20 +398,20 @@ ai:
   #           from_bundle: DENSE_MEM_API_KEY
   role_groups:
     review_gate:
-      synthesizer: local_proxy
+      synthesizer: codex_sdk
       parallel: 2
       roles:
         - role: correctness.md
-          profile: local_proxy
+          profile: claude_code
         - role: security.md
-          profile: local_proxy
+          profile: claude_code
   stages:
     investigate:
       role_group: review_gate
     validate:
       role_group: review_gate
     materialize:
-      profile: local_proxy
+      profile: codex_sdk
     review-matrix:
       role_group: review_gate
       # mcp:
@@ -414,25 +429,26 @@ external agent mentions, permissions, and label names are not configurable.
 Each AI stage must define `profile` or `role_group`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.
 Role definitions referenced by `role_group` live in `.git-vibe/role-group/*.md`.
-CLI adapters use fixed commands (`codex exec` and `claude -p`); profiles choose
-adapter, model, auth, env, and reasoning settings, not the executable command.
-They use native structured-output schema flags and do not receive
-`output_validator` tool-call instructions.
+SDK adapters use the Codex SDK and Claude Code SDK directly; profiles choose
+adapter, model, auth, env, and reasoning settings. They use native structured
+output schema support and do not receive `output_validator` tool-call
+instructions.
+GitHub context bodies, handoffs, and PR patches are persisted as runner-local
+context files. The initial prompt carries manifests and file references so SDK
+agents can read exact evidence with normal repository tools instead of receiving
+large inline prompt payloads.
 Profiles may opt into shared repository guidance with
 `ai.profiles.<name>.context.files`. Listed files are appended to the rendered
-system prompt for that profile across `ai-sdk-agentool`, `cli-codex`, and
-`cli-claude-code`; GitVibe never auto-loads `AGENTS.md` or `CLAUDE.md`.
-AI SDK provider HTTP responses are capped at 64 MiB by default. Set
-`ai.budgets.provider_response_max_bytes` to a larger positive integer only when
-a trusted provider needs larger JSON responses.
+system prompt for that profile; GitVibe never auto-loads `AGENTS.md` or
+`CLAUDE.md`.
 
 Stages may also opt into MCP servers through `ai.stages.<stage>.mcp`. Each
 server can expose a flat `tools` list to the model. For advanced deterministic
 pre-model context, use `allow_tools.context` with `context_calls`; those results
 are injected into the prompt before the model runs. Model tools are exposed to AI
-SDK, Codex CLI, and Claude Code through a GitVibe gateway that enforces the stage
-allowlist. `required` defaults to `true`; set it to `false` when missing MCP
-context should warn instead of blocking the stage.
+through Codex SDK and Claude Code SDK MCP configuration, backed by a GitVibe
+gateway that enforces the stage allowlist. `required` defaults to `true`; set it
+to `false` when missing MCP context should warn instead of blocking the stage.
 
 Set `tests.commands` to the consumer repository's own verification gate, such as
 its lint, typecheck, unit test, or integration test commands.
@@ -445,15 +461,14 @@ schema requirements, or GitHub write boundaries. See
 
 Current implementation status:
 
-| Area                                                                     | Status                      |
-| ------------------------------------------------------------------------ | --------------------------- |
-| Hosted GitHub App webhook mode                                           | Implemented                 |
-| `ai-sdk-agentool` with OpenAI, Anthropic, or OpenAI-compatible endpoints | Implemented first           |
-| Source-built composite actions and reusable workflows                    | Implemented                 |
-| JSON Schema stage contracts                                              | Implemented                 |
-| Relay, Actions-native receiver, and polling delivery modes               | Planned behind config shape |
-| Active `cli-codex` and `cli-claude-code` stage adapters                  | Implemented                 |
-| External GitHub mention partners                                         | Planned opt-in surface      |
+| Area                                                       | Status                      |
+| ---------------------------------------------------------- | --------------------------- |
+| Hosted GitHub App webhook mode                             | Implemented                 |
+| Codex SDK and Claude Code SDK stage adapters               | Implemented                 |
+| Source-built composite actions and reusable workflows      | Implemented                 |
+| JSON Schema stage contracts                                | Implemented                 |
+| Relay, Actions-native receiver, and polling delivery modes | Planned behind config shape |
+| External GitHub mention partners                           | Planned opt-in surface      |
 
 See the [GitVibe wiki](https://github.com/markhuangai/git-vibe/wiki) for the
 canonical long-form documentation.
@@ -498,13 +513,13 @@ Detailed docs:
 | [AI and Stage Contracts](https://github.com/markhuangai/git-vibe/wiki/AI-and-Stage-Contracts)     | Context assembly, AI contracts, provider strategy, tool policy, budgets   |
 | [Configuration](https://github.com/markhuangai/git-vibe/wiki/Configuration)                       | `.github/git-vibe.yml`, profiles, role groups, MCP, tests, budgets        |
 | [Development and Testing](https://github.com/markhuangai/git-vibe/wiki/Development-and-Testing)   | Repo shape, quality gates, smoke tests, assumptions                       |
-| [Security and Permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions) | GitHub App auth, trust boundaries, protected labels, CLI adapter risk     |
+| [Security and Permissions](https://github.com/markhuangai/git-vibe/wiki/Security-and-Permissions) | GitHub App auth, trust boundaries, protected labels, SDK adapter risk     |
 
 ## Example action usage
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v7
     with:
       persist-credentials: false
   - uses: markhuangai/git-vibe/investigate@v3

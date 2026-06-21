@@ -1,6 +1,6 @@
 {
   "name": "@git-vibe/app",
-  "version": "4.1.1",
+  "version": "5.0.0",
   "private": false,
   "type": "module",
   "packageManager": "pnpm@10.33.3",
@@ -35,12 +35,11 @@
     "*.{js,mjs,ts}": "eslint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.84",
-    "@ai-sdk/mcp": "^1.0.50",
-    "@ai-sdk/openai": "^3.0.71",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.183",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "agentool": "^1.5.2",
-    "ai": "^6.0.205",
+    "@openai/codex-sdk": "^0.141.0",
+    "ajv": "^8.20.0",
     "jose": "^6.2.3",
     "libsodium-wrappers": "^0.8.4",
     "yaml": "^2.8.4",
@@ -49,7 +48,8 @@
   "pnpm": {
     "overrides": {
       "diff": "9.0.0",
-      "fast-uri": "3.1.2"
+      "fast-uri": "3.1.2",
+      "hono": "4.12.25"
     }
   },
   "devDependencies": {

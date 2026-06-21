@@ -35,15 +35,24 @@ describe("Codex auth environment", () => {
     expect(prepared.env.CODEX_AUTH_JSON).toBeUndefined();
   });
 
-  it("does not configure Codex auth when the profile has no auth_json source", () => {
+  it("isolates CODEX_HOME when the profile has no auth_json source", () => {
+    const contextDir = tempDir();
     const prepared = prepareCodexEnv({
-      contextDir: tempDir(),
+      contextDir,
       profile: { model: "gpt-5.5" },
-      profileName: "codex_cli",
+      profileName: "codex_sdk",
     });
 
     expect(prepared.auth).toBeUndefined();
-    expect(prepared.env.CODEX_HOME).toBeUndefined();
+    expect(prepared.env.CODEX_HOME).toBe(join(contextDir, "codex-home"));
+  });
+
+  it("rejects auth_json bundle sources that resolve to empty strings", () => {
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: "" });
+
+    expect(() => prepare()).toThrow(
+      "ai.profiles.codex_sdk.auth_json.from_bundle resolved to an empty value.",
+    );
   });
 });
 
@@ -307,7 +316,7 @@ function prepare() {
       auth_json: { from_bundle: "CODEX_AUTH_JSON" },
       model: "gpt-5.5",
     },
-    profileName: "codex_cli",
+    profileName: "codex_sdk",
   });
 }
 

@@ -16,10 +16,6 @@ inputs:
     description: Maximum AI turns allocated to this stage.
     required: false
     default: "90"
-  dry-run:
-    description: Describe work without mutating GitHub.
-    required: false
-    default: "false"
   source-comment:
     description: JSON source comment metadata for replying to command comments.
     required: false
@@ -36,14 +32,6 @@ inputs:
     description: "Internal execution mode: standard, member, or finalizer."
     required: false
     default: "standard"
-  profile:
-    description: Explicit AI profile for member or finalizer execution.
-    required: false
-    default: ""
-  role:
-    description: Role markdown filename for matrix member execution.
-    required: false
-    default: ""
   member-index:
     description: Matrix member index used to resolve the configured role/profile pair.
     required: false
@@ -89,15 +77,6 @@ runs:
         echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
         "${pnpm_cmd[@]}" install --frozen-lockfile
         "${pnpm_cmd[@]}" build
-    - name: Set up configured AI CLI
-      shell: bash
-      env:
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-        ACTIONS_ID_TOKEN_REQUEST_URL: ""
-        GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
-        GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
-        GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
-      run: node "$GITHUB_ACTION_PATH/../dist/actions/setup-ai-cli.js" investigate
     - id: run
       shell: bash
       env:
@@ -105,12 +84,9 @@ runs:
         GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
-        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
         GITVIBE_FAIL_ON_NOT_READY: ${{ inputs.fail-on-not-ready }}
         GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
-        GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
-        GITVIBE_ROLE_NAME: ${{ inputs.role }}
         GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" investigate

@@ -31,30 +31,8 @@ ai:
       # - github.com
       # - "*.github.com"
   profiles:
-    local_proxy:
-      adapter: ai-sdk-agentool
-      # Optional: set to the selected model's context window.
-      # context_window_tokens: 128000
-      provider:
-        # openai, anthropic, or openai-compatible.
-        type: openai-compatible
-        # Model names are configuration, not credentials.
-        model: glm-5
-        # Keys inside GITVIBE_AI_ENV_JSON. Store provider credentials and endpoints there.
-        base_url:
-          from_bundle: GITVIBE_AI_BASE_URL
-        api_key:
-          from_bundle: GITVIBE_AI_API_KEY
-      reasoning:
-        effort: high
-      provider_options:
-        openai:
-          reasoningEffort: high
-          reasoningSummary: concise
-        anthropic:
-          effort: high
-    codex_cli:
-      adapter: cli-codex
+    codex_sdk:
+      adapter: codex-sdk
       # Key inside GITVIBE_AI_ENV_JSON. Stores escaped auth.json text from jq -Rs .
       # Requires the GitVibe GitHub App repository Secrets write permission for refresh write-back.
       auth_json:
@@ -64,11 +42,17 @@ ai:
         effort: high
         summary: concise
     claude_code:
-      adapter: cli-claude-code
-      # Key inside GITVIBE_AI_ENV_JSON. Stores the Claude Code OAuth access token.
+      adapter: claude-code-sdk
       env:
-        CLAUDE_CODE_OAUTH_TOKEN:
-          from_bundle: CLAUDE_OAUTH_TOKEN
+        ANTHROPIC_API_KEY:
+          from_bundle: GITVIBE_AI_API_KEY
+        ANTHROPIC_BASE_URL:
+          from_bundle: ANTHROPIC_BASE_URL
+        ANTHROPIC_DEFAULT_OPUS_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: kimi-k2.5
+        ANTHROPIC_MODEL: opus
+        CLAUDE_CODE_SUBAGENT_MODEL: opus
       model: opus
       reasoning:
         effort: xhigh
@@ -85,15 +69,15 @@ ai:
   #           from_bundle: DENSE_MEM_API_KEY
   role_groups:
     review_gate:
-      synthesizer: local_proxy
+      synthesizer: codex_sdk
       parallel: 2
       roles:
         - role: correctness.md
-          profile: local_proxy
+          profile: claude_code
         - role: security.md
-          profile: local_proxy
+          profile: claude_code
         - role: maintainability.md
-          profile: local_proxy
+          profile: claude_code
   budgets:
     default_timeout_minutes: 60
     review_timeout_minutes: 60
@@ -114,9 +98,9 @@ ai:
     validate:
       role_group: review_gate
     materialize:
-      profile: local_proxy
+      profile: codex_sdk
     implement:
-      profile: local_proxy
+      profile: codex_sdk
     review-matrix:
       role_group: review_gate
       # Optional stage-scoped MCP model-callable tools.
@@ -125,6 +109,6 @@ ai:
       #     required: false
       #     tools: ["search_memory"]
     create-pr:
-      profile: local_proxy
+      profile: codex_sdk
     address-pr-feedback:
-      profile: local_proxy
+      profile: codex_sdk

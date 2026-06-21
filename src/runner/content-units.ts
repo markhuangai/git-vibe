@@ -41,10 +41,35 @@ export interface ContextPromptCoverage {
   totalChunks: number;
 }
 
+export interface PromptContextFileReference {
+  chars: number;
+  path: string;
+  relative_path: string;
+  sha256: string;
+}
+
+export interface PromptContextUnitFile extends PromptContextFileReference {
+  id: string;
+  kind: string;
+  label: string;
+  metadata?: JsonObject;
+  path_in_repository?: string;
+  sourceUrl?: string;
+}
+
+export interface PackedPromptContextFiles {
+  full_context: PromptContextFileReference;
+  manifest: PromptContextFileReference;
+  root_dir: string;
+  units: PromptContextUnitFile[];
+  units_dir: string;
+}
+
 interface PackContextOptions {
   budgetChars?: number;
   chunkOverlapChars?: number;
   chunkSizeChars?: number;
+  fileContext?: PackedPromptContextFiles;
 }
 
 const defaultChunkSizeChars = 12_000;
@@ -164,6 +189,8 @@ export function packedContextForPrompt(
   context: ContextPacket,
   options: PackContextOptions = {},
 ): JsonObject {
+  if (options.fileContext) return packedFileBackedContextForPrompt(context, options.fileContext);
+
   const units = contentUnitsForContext(context);
   const chunks = chunkContentUnits(units, options);
   const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
@@ -184,6 +211,32 @@ export function packedContextForPrompt(
     generatedAt: context.generatedAt,
     handoffs: packedHandoffs(context),
     included_context_chunks: included.map(packedChunk),
+    pullRequestFiles: packedPullRequestFiles(context),
+    repository: context.repository,
+    source: packedSource(context),
+    timeline: context.timeline.map(packedTimelineItem),
+  };
+}
+
+function packedFileBackedContextForPrompt(
+  context: ContextPacket,
+  fileContext: PackedPromptContextFiles,
+): JsonObject {
+  return {
+    artifact: packedArtifact(context),
+    context_files: {
+      full_context: fileContext.full_context,
+      manifest: fileContext.manifest,
+      root_dir: fileContext.root_dir,
+      units_dir: fileContext.units_dir,
+    },
+    context_manifest: {
+      delivery: "file-backed",
+      total_units: fileContext.units.length,
+      units: fileContext.units.map(fileBackedUnitManifest),
+    },
+    generatedAt: context.generatedAt,
+    handoffs: packedHandoffs(context),
     pullRequestFiles: packedPullRequestFiles(context),
     repository: context.repository,
     source: packedSource(context),
@@ -432,6 +485,24 @@ function unitManifest(unitItem: ContentUnit, chunks: ContentChunk[], includedIds
     pending_chunks: unitChunks.filter((chunk) => !includedIds.has(chunk.id)).length,
     path: unitItem.path,
     sha256: sha256(unitItem.text),
+    sourceUrl: unitItem.sourceUrl,
+  };
+}
+
+function fileBackedUnitManifest(unitItem: PromptContextUnitFile): JsonObject {
+  return {
+    chars: unitItem.chars,
+    file: {
+      chars: unitItem.chars,
+      path: unitItem.path,
+      relative_path: unitItem.relative_path,
+      sha256: unitItem.sha256,
+    },
+    id: unitItem.id,
+    kind: unitItem.kind,
+    label: unitItem.label,
+    metadata: unitItem.metadata,
+    path: unitItem.path_in_repository,
     sourceUrl: unitItem.sourceUrl,
   };
 }

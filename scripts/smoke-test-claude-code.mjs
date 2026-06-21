@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
@@ -10,10 +10,9 @@ import { parse } from "yaml";
 /**
  * @typedef {Record<string, string | undefined>} Env
  * @typedef {{ error(message: string): void, log(message: string): void }} Logger
- * @typedef {{ bare: boolean, effort?: string, env: NodeJS.ProcessEnv, model: string, profileName: string, secrets: string[] }} ClaudeSmokeConfig
+ * @typedef {{ effort?: import("@anthropic-ai/claude-agent-sdk").EffortLevel, env: NodeJS.ProcessEnv, model: string, profileName: string, secrets: string[] }} ClaudeSmokeConfig
  * @typedef {{ ok: boolean, source: "claude-code" }} ClaudeSmokeOutput
- * @typedef {{ error?: Error, status: number | null, stderr?: string | Buffer, stdout?: string | Buffer }} SpawnResult
- * @typedef {{ spawnSync(command: string, args: string[], options: { encoding: "utf8", env: NodeJS.ProcessEnv }): SpawnResult }} ClaudeSmokeDependencies
+ * @typedef {{ query: typeof query }} ClaudeSmokeDependencies
  */
 
 const outputSchema = {
@@ -27,26 +26,28 @@ const outputSchema = {
 };
 
 /** @type {ClaudeSmokeDependencies} */
-const defaultDependencies = { spawnSync };
+const defaultDependencies = { query };
 
 if (isDirectRun(import.meta.url, process.argv[1])) {
-  process.exitCode = main();
+  main().then((code) => {
+    process.exitCode = code;
+  });
 }
 
 /**
  * @param {{ cwd?: string, dependencies?: ClaudeSmokeDependencies, env?: Env, logger?: Logger }} [options]
- * @returns {number}
+ * @returns {Promise<number>}
  */
-export function main({
+export async function main({
   cwd = process.cwd(),
   dependencies = defaultDependencies,
   env = process.env,
   logger = console,
 } = {}) {
   try {
-    const report = runClaudeCodeSmokeTest({ cwd, dependencies, env });
+    const report = await runClaudeCodeSmokeTest({ cwd, dependencies, env });
     logger.log(
-      `[git-vibe] claude-code smoke passed with profile=${report.profileName} model=${report.model}`,
+      `[git-vibe] claude-code-sdk smoke passed with profile=${report.profileName} model=${report.model}`,
     );
     return 0;
   } catch (error) {
@@ -57,33 +58,44 @@ export function main({
 
 /**
  * @param {{ cwd: string, dependencies?: ClaudeSmokeDependencies, env: Env }} options
- * @returns {Pick<ClaudeSmokeConfig, "model" | "profileName">}
+ * @returns {Promise<Pick<ClaudeSmokeConfig, "model" | "profileName">>}
  */
-export function runClaudeCodeSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
+export async function runClaudeCodeSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
   const config = readClaudeSmokeConfig({ cwd, env });
-  const result = dependencies.spawnSync("claude", claudeArgs(config), {
-    encoding: "utf8",
-    env: config.env,
-  });
-
-  if (result.error) throw result.error;
-
-  const stdout = String(result.stdout || "");
-  const stderr = String(result.stderr || "");
-  if (result.status !== 0) {
-    throw new Error(
-      `Claude Code smoke failed with exit code ${result.status}${failureDetail({
-        secrets: config.secrets,
-        stderr,
-        stdout,
-      })}`,
-    );
+  let output;
+  for await (const message of dependencies.query({
+    options: {
+      allowDangerouslySkipPermissions: true,
+      cwd,
+      effort: config.effort,
+      env: config.env,
+      maxTurns: 3,
+      model: config.model,
+      outputFormat: {
+        schema: outputSchema,
+        type: "json_schema",
+      },
+      permissionMode: "bypassPermissions",
+      persistSession: false,
+      settingSources: [],
+      systemPrompt: "You are running a GitVibe smoke test. Do not modify files.",
+    },
+    prompt:
+      'Return exactly this JSON object: {"ok": true, "source": "claude-code"}. Do not modify files.',
+  })) {
+    if (message.type !== "result") continue;
+    if (message.subtype !== "success") {
+      throw new Error(
+        `Claude Code SDK smoke failed: ${redact(message.errors.join("; "), config.secrets)}`,
+      );
+    }
+    output = claudeOutput(message.structured_output ?? message.result, config.secrets);
   }
 
-  const output = claudeOutput(stdout, config.secrets);
+  if (!output) throw new Error("Claude Code SDK smoke did not return a result message.");
   if (output.ok !== true || output.source !== "claude-code") {
     throw new Error(
-      `unexpected Claude Code smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
+      `unexpected Claude Code SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
     );
   }
 
@@ -104,8 +116,7 @@ export function readClaudeSmokeConfig({ cwd, env }) {
   if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
 
   return {
-    bare: profile.bare === true,
-    effort: stringValue(reasoning.effort),
+    effort: claudeEffort(stringValue(reasoning.effort)),
     env: childEnv,
     model,
     profileName,
@@ -114,24 +125,15 @@ export function readClaudeSmokeConfig({ cwd, env }) {
 }
 
 /**
- * @param {ClaudeSmokeConfig} config
- * @returns {string[]}
+ * @param {string | undefined} effort
+ * @returns {ClaudeSmokeConfig["effort"]}
  */
-export function claudeArgs(config) {
-  return [
-    "-p",
-    ...(config.bare ? ["--bare"] : []),
-    "--dangerously-skip-permissions",
-    "--model",
-    config.model,
-    "--output-format",
-    "json",
-    "--json-schema",
-    JSON.stringify(outputSchema),
-    "--no-session-persistence",
-    ...(config.effort ? ["--effort", config.effort] : []),
-    'Return exactly this JSON object: {"ok": true, "source": "claude-code"}. Do not modify files.',
-  ];
+function claudeEffort(effort) {
+  if (!effort) return undefined;
+  if (["low", "medium", "high", "xhigh", "max"].includes(effort)) {
+    return /** @type {ClaudeSmokeConfig["effort"]} */ (effort);
+  }
+  throw new Error(`AI profile reasoning.effort is not supported by claude-code-sdk: ${effort}.`);
 }
 
 /**
@@ -140,7 +142,9 @@ export function claudeArgs(config) {
  */
 function readGitVibeConfig(cwd) {
   const path = resolve(cwd, ".github/git-vibe.yml");
-  if (!existsSync(path)) throw new Error(".github/git-vibe.yml is required for Claude Code smoke.");
+  if (!existsSync(path)) {
+    throw new Error(".github/git-vibe.yml is required for Claude Code SDK smoke.");
+  }
   const parsed = parse(readFileSync(path, "utf8"));
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(".github/git-vibe.yml must contain a YAML object.");
@@ -168,7 +172,7 @@ function claudeProfile(config, requestedProfile) {
     if (isClaudeProfile(profile)) return { profile, profileName };
   }
 
-  throw new Error(".github/git-vibe.yml does not define an enabled cli-claude-code profile.");
+  throw new Error(".github/git-vibe.yml does not define an enabled claude-code-sdk profile.");
 }
 
 /**
@@ -179,7 +183,7 @@ function claudeProfile(config, requestedProfile) {
 function namedClaudeProfile(profiles, profileName) {
   const profile = profiles[profileName];
   if (!isClaudeProfile(profile)) {
-    throw new Error(`AI profile ${profileName} must be an enabled cli-claude-code profile.`);
+    throw new Error(`AI profile ${profileName} must be an enabled claude-code-sdk profile.`);
   }
   return { profile, profileName };
 }
@@ -191,7 +195,7 @@ function namedClaudeProfile(profiles, profileName) {
 function isClaudeProfile(profile) {
   if (!profile || typeof profile !== "object" || Array.isArray(profile)) return false;
   const record = /** @type {Record<string, unknown>} */ (profile);
-  return Boolean(record.adapter === "cli-claude-code" && record.enabled !== false);
+  return Boolean(record.adapter === "claude-code-sdk" && record.enabled !== false);
 }
 
 /**
@@ -251,8 +255,9 @@ function envValue(source, bundle, path) {
   const record = recordValue(source, path);
   const bundleKey = stringValue(record.from_bundle);
   if (!bundleKey) throw new Error(`${path}.from_bundle must be a non-empty string.`);
-  if (!(bundleKey in bundle))
+  if (!(bundleKey in bundle)) {
     throw new Error(`GITVIBE_AI_ENV_JSON.${bundleKey} is required by ${path}.from_bundle.`);
+  }
   return bundle[bundleKey];
 }
 
@@ -294,65 +299,16 @@ function sensitiveEnvName(name) {
 }
 
 /**
- * @param {string} stdout
+ * @param {unknown} value
  * @param {string[]} secrets
  * @returns {ClaudeSmokeOutput}
  */
-function claudeOutput(stdout, secrets) {
-  const parsed = JSON.parse(stdout);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Claude Code stdout must be a JSON object.");
-  }
-  if (parsed.is_error === true) {
-    throw new Error(`Claude Code smoke failed: ${redact(claudeError(parsed), secrets)}`);
-  }
-
+function claudeOutput(value, secrets) {
   const response =
-    parsed.structured_output && typeof parsed.structured_output === "object"
-      ? parsed.structured_output
-      : JSON.parse(extractJsonObject(String(parsed.result || ""), secrets));
+    value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : JSON.parse(extractJsonObject(String(value || ""), secrets));
   return /** @type {ClaudeSmokeOutput} */ (response);
-}
-
-/**
- * @param {Record<string, unknown>} result
- * @returns {string}
- */
-function claudeError(result) {
-  return Array.isArray(result.errors) && result.errors.length > 0
-    ? result.errors.join("; ")
-    : String(result.result || "unknown error");
-}
-
-/**
- * @param {{ secrets: string[], stderr: string, stdout: string }} output
- * @returns {string}
- */
-function failureDetail({ secrets, stderr, stdout }) {
-  const parsed = tryParseClaudeError(stdout, secrets);
-  if (parsed) return `: ${parsed}`;
-  const detail = [stderr, stdout]
-    .map((text) => excerpt(redact(text, secrets)))
-    .filter(Boolean)
-    .join(" ");
-  return detail ? `: ${detail}` : "";
-}
-
-/**
- * @param {string} stdout
- * @param {string[]} secrets
- * @returns {string | undefined}
- */
-function tryParseClaudeError(stdout, secrets) {
-  try {
-    const parsed = JSON.parse(stdout);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return redact(claudeError(/** @type {Record<string, unknown>} */ (parsed)), secrets);
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
 }
 
 /**
@@ -371,7 +327,7 @@ function extractJsonObject(text, secrets) {
   const end = trimmed.lastIndexOf("}");
   if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
 
-  throw new Error(`Claude Code result did not contain JSON: ${excerpt(redact(text, secrets))}`);
+  throw new Error(`Claude Code SDK result did not contain JSON: ${excerpt(redact(text, secrets))}`);
 }
 
 /**
