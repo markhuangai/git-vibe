@@ -220,7 +220,7 @@ describe("GitVibe workflow call wiring", () => {
     for (const file of reusableWorkflows) {
       const workflow = readWorkflow(file);
       const workflowCall = workflow.on?.workflow_call;
-      const checkoutSteps = gitVibeActionSteps(workflow, (uses) => uses === "actions/checkout@v4");
+      const checkoutSteps = gitVibeActionSteps(workflow, (uses) => uses === "actions/checkout@v7");
       const actionSourceSteps = checkoutSteps.filter(
         ({ name }) => name === "Checkout GitVibe action source",
       );
@@ -362,7 +362,7 @@ describe("GitVibe AI smoke workflow", () => {
   it("validates Codex and Claude Code SDK responses through SDK smoke tests", () => {
     const workflow = readWorkflow(".github/workflows/ai-smoke.yml");
     const claudeSetupNode = workflow.jobs?.["claude-code"]?.steps?.find(
-      (step) => step.uses === "actions/setup-node@v4",
+      (step) => step.uses === "actions/setup-node@v6",
     );
     const codexRun = workflowStep(workflow, "codex", "Run Codex SDK smoke test")?.run || "";
     const codexPrepare = workflowStep(workflow, "codex", "Prepare Codex executable")?.run || "";
@@ -374,7 +374,9 @@ describe("GitVibe AI smoke workflow", () => {
       (step) => step.run === "pnpm install --frozen-lockfile",
     );
 
-    expect(claudeSetupNode).toMatchObject({ with: { "node-version": 22 } });
+    expect(claudeSetupNode).toMatchObject({
+      with: { "node-version": 22, "package-manager-cache": false },
+    });
     expect(claudeInstall).toBe(true);
     expect(claudePrepare).toContain("bash scripts/prepare-claude-code.sh");
     expect(codexPrepare).toContain("bash scripts/prepare-codex.sh");
@@ -547,14 +549,14 @@ describe("GitVibe workflow local action setup", () => {
         if (localActionIndex === -1) continue;
 
         const setupSteps = steps.slice(0, localActionIndex);
-        const pnpmStep = setupSteps.find((step) => step.uses === "pnpm/action-setup@v4");
-        const nodeStep = setupSteps.find((step) => step.uses === "actions/setup-node@v4");
+        const pnpmStep = setupSteps.find((step) => step.uses === "pnpm/action-setup@v6");
+        const nodeStep = setupSteps.find((step) => step.uses === "actions/setup-node@v6");
 
         expect(pnpmStep, `${file} ${jobName} installs pnpm before GitVibe action`).toMatchObject({
           with: { run_install: false, version: "10.33.3" },
         });
         expect(nodeStep, `${file} ${jobName} installs Node before GitVibe action`).toMatchObject({
-          with: { "node-version": 22 },
+          with: { "node-version": 22, "package-manager-cache": false },
         });
       }
     }
