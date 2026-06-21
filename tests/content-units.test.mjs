@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -100,30 +100,34 @@ describe("file-backed context prompt packing", () => {
       patch: `@@ -0,0 +1 @@\n+${"B".repeat(220)}`,
     });
     const rootDir = mkdtempSync(join(tmpdir(), "git-vibe-context-files-"));
-    const fileContext = writePromptContextFiles({ context, rootDir, stage: "review-matrix" });
-    const packed = /** @type {any} */ (packedContextForPrompt(context, { fileContext }));
+    try {
+      const fileContext = writePromptContextFiles({ context, rootDir, stage: "review-matrix" });
+      const packed = /** @type {any} */ (packedContextForPrompt(context, { fileContext }));
 
-    expect(existsSync(fileContext.full_context.path)).toBe(true);
-    expect(existsSync(fileContext.manifest.path)).toBe(true);
-    expect(fileContext.units.some((unit) => unit.id === "artifact-body")).toBe(true);
-    expect(packed.context_files.manifest.path).toBe(fileContext.manifest.path);
-    expect(packed.context_manifest).toMatchObject({
-      delivery: "file-backed",
-      total_units: fileContext.units.length,
-    });
-    expect(packed.context_manifest.units).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          file: expect.objectContaining({ path: expect.any(String) }),
-          id: "artifact-body",
-        }),
-      ]),
-    );
-    expect(JSON.stringify(packed)).not.toContain("A".repeat(160));
-    expect(readFileSync(fileContext.manifest.path, "utf8")).toContain("artifact-body");
-    const bodyUnit = fileContext.units.find((unit) => unit.id === "artifact-body");
-    if (!bodyUnit) throw new Error("artifact-body unit file was not written.");
-    expect(readFileSync(bodyUnit.path, "utf8")).toContain("A".repeat(160));
+      expect(existsSync(fileContext.full_context.path)).toBe(true);
+      expect(existsSync(fileContext.manifest.path)).toBe(true);
+      expect(fileContext.units.some((unit) => unit.id === "artifact-body")).toBe(true);
+      expect(packed.context_files.manifest.path).toBe(fileContext.manifest.path);
+      expect(packed.context_manifest).toMatchObject({
+        delivery: "file-backed",
+        total_units: fileContext.units.length,
+      });
+      expect(packed.context_manifest.units).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            file: expect.objectContaining({ path: expect.any(String) }),
+            id: "artifact-body",
+          }),
+        ]),
+      );
+      expect(JSON.stringify(packed)).not.toContain("A".repeat(160));
+      expect(readFileSync(fileContext.manifest.path, "utf8")).toContain("artifact-body");
+      const bodyUnit = fileContext.units.find((unit) => unit.id === "artifact-body");
+      if (!bodyUnit) throw new Error("artifact-body unit file was not written.");
+      expect(readFileSync(bodyUnit.path, "utf8")).toContain("A".repeat(160));
+    } finally {
+      rmSync(rootDir, { force: true, recursive: true });
+    }
   });
 });
 

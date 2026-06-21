@@ -151,7 +151,8 @@ describe("stage runner matrix member profile context", () => {
       /"manifest": \{\n\s+"chars": \d+,\n\s+"path": "([^"]+)"/,
     )?.[1];
     expect(manifestPath).toBeTruthy();
-    expect(manifestPath).toContain(cwd);
+    expect(manifestPath).toContain(join(tmpdir(), "git-vibe-validate-"));
+    expect(manifestPath).not.toContain(cwd);
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const bodyUnit = manifest.units.find((unit) => unit.id === "artifact-body");
     expect(readFileSync(bodyUnit.path, "utf8")).toContain("Issue body");

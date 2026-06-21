@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunAiStageOptions } from "./ai.js";
 import { loadConfig } from "./config.js";
@@ -337,8 +338,8 @@ function persistContext(options: {
   logger: StageLogger;
   options: RunnerOptions;
 }): PackedPromptContextFiles {
-  const contextDir = process.env.RUNNER_TEMP || options.options.cwd;
-  mkdirSync(contextDir, { recursive: true });
+  const baseTempDir = process.env.RUNNER_TEMP || tmpdir();
+  const contextDir = mkdtempSync(join(baseTempDir, `git-vibe-${options.options.stage}-`));
   writeFileSync(
     join(contextDir, `git-vibe-${options.options.stage}-context.json`),
     JSON.stringify(options.context, null, 2),

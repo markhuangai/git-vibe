@@ -23,16 +23,6 @@ if [ -n "${GITVIBE_CODEX_PATH:-}" ]; then
   exit 0
 fi
 
-if resolved="$(node "$repo_dir/scripts/resolve-codex-path.mjs" 2>/dev/null)" && [ -n "$resolved" ]; then
-  export_path "$resolved"
-  exit 0
-fi
-
-if command -v codex >/dev/null 2>&1; then
-  export_path "$(command -v codex)"
-  exit 0
-fi
-
 case "$(uname -s)" in
   Darwin|Linux) ;;
   *)
@@ -40,6 +30,21 @@ case "$(uname -s)" in
     exit 1
     ;;
 esac
+
+if resolved="$(node "$repo_dir/scripts/resolve-codex-path.mjs")"; then
+  if [ -n "$resolved" ]; then
+    export_path "$resolved"
+    exit 0
+  fi
+else
+  echo "::error::Failed to resolve Codex executable path."
+  exit 1
+fi
+
+if command -v codex >/dev/null 2>&1; then
+  export_path "$(command -v codex)"
+  exit 0
+fi
 
 echo "::error::Codex is not available. Reinstall @openai/codex-sdk with optional dependencies, or set GITVIBE_CODEX_PATH."
 exit 1
