@@ -21,10 +21,6 @@ inputs:
     description: Maximum minutes allocated to this review.
     required: false
     default: "10"
-  dry-run:
-    description: Describe work without mutating GitHub.
-    required: false
-    default: "false"
   source-comment:
     description: JSON source comment metadata for replying to command comments.
     required: false
@@ -76,7 +72,6 @@ runs:
         GITVIBE_DISCUSSION_NUMBER: ${{ inputs.discussion-number }}
         GITVIBE_PR_NUMBER: ${{ inputs.pr-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
-        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/security-review.js" "${{ inputs.stage }}"

@@ -18,10 +18,6 @@ inputs:
     description: Maximum AI turns allocated to this stage.
     required: false
     default: "90"
-  dry-run:
-    description: Describe work without mutating GitHub.
-    required: false
-    default: "false"
   source-comment:
     description: JSON source comment metadata for replying to command comments.
     required: false
@@ -30,14 +26,6 @@ inputs:
     description: "Internal execution mode: standard, member, or finalizer."
     required: false
     default: "standard"
-  profile:
-    description: Explicit AI profile for member or finalizer execution.
-    required: false
-    default: ""
-  role:
-    description: Role markdown filename for matrix member execution.
-    required: false
-    default: ""
   member-index:
     description: Matrix member index used to resolve the configured role/profile pair.
     required: false
@@ -75,10 +63,7 @@ runs:
         GITVIBE_DISCUSSION_NUMBER: ${{ inputs.discussion-number }}
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
-        GITVIBE_DRY_RUN: ${{ inputs.dry-run }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
-        GITVIBE_PROFILE_NAME: ${{ inputs.profile }}
-        GITVIBE_ROLE_NAME: ${{ inputs.role }}
         GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" validate

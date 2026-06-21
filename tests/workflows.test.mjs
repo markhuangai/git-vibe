@@ -10,6 +10,7 @@ import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
  * @typedef {{ env?: Record<string, string>, environment?: unknown, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} SimulatedStep
+ * @typedef {{ inputs?: Record<string, WorkflowInput>, runs?: { steps?: WorkflowStep[] } }} ActionDefinition
  */
 
 const aiEnv = {
@@ -227,8 +228,10 @@ describe("GitVibe workflow call wiring", () => {
       expect(workflow.on?.workflow_dispatch, `${file} declares workflow_dispatch`).toBeTruthy();
       expect(workflow.on?.workflow_dispatch?.inputs?.["action-repository"]).toBeUndefined();
       expect(workflow.on?.workflow_dispatch?.inputs?.["action-ref"]).toBeUndefined();
+      expect(workflow.on?.workflow_dispatch?.inputs?.["dry-run"]).toBeUndefined();
       expect(workflowCall?.inputs?.["action-repository"]).toBeUndefined();
       expect(workflowCall?.inputs?.["action-ref"]).toBeUndefined();
+      expect(workflowCall?.inputs?.["dry-run"]).toBeUndefined();
       expect(workflowCall?.secrets?.GITVIBE_AI_ENV_JSON).toMatchObject({ required: true });
       expect(workflowCall?.secrets?.GITVIBE_MCP_ENV_JSON).toMatchObject({ required: false });
       expect(workflowCall?.secrets?.GITVIBE_GITHUB_TOKEN).toBeUndefined();
@@ -270,6 +273,24 @@ describe("GitVibe workflow call wiring", () => {
       expect(reusableJob?.secrets?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
       expect(reusableJob?.with?.["action-repository"]).toBeUndefined();
       expect(reusableJob?.with?.["action-ref"]).toBeUndefined();
+      expect(reusableJob?.with?.["dry-run"]).toBeUndefined();
+      expect(workflow.on?.workflow_dispatch?.inputs?.["dry-run"]).toBeUndefined();
+    }
+  });
+});
+
+describe("GitVibe removed public inputs", () => {
+  it("does not expose removed action inputs", () => {
+    for (const file of actionFiles) {
+      const action = readAction(file);
+      const content = readFileSync(file, "utf8");
+      expect(action.inputs?.["dry-run"], file).toBeUndefined();
+      expect(content, file).not.toContain("GITVIBE_DRY_RUN: ${{ inputs.");
+      if (!sdkStageActionFiles.includes(file)) continue;
+      expect(action.inputs?.profile, file).toBeUndefined();
+      expect(action.inputs?.role, file).toBeUndefined();
+      expect(content, file).not.toContain("GITVIBE_PROFILE_NAME");
+      expect(content, file).not.toContain("GITVIBE_ROLE_NAME");
     }
   });
 });
@@ -603,7 +624,6 @@ describe("GitVibe automatic PR review workflow", () => {
       },
       uses: "./.github/workflows/review.yml",
       with: {
-        "dry-run": false,
         max_turns: 200,
         "pr-number": "${{ format('{0}', github.event.pull_request.number) }}",
         runner: "docker-runner",
@@ -672,7 +692,7 @@ function readWorkflow(file) {
   return /** @type {Workflow} */ (parse(readFileSync(file, "utf8")));
 }
 
-/** @param {string} file @returns {{ runs?: { steps?: WorkflowStep[] } }} */
+/** @param {string} file @returns {ActionDefinition} */
 function readAction(file) {
-  return /** @type {{ runs?: { steps?: WorkflowStep[] } }} */ (parse(readFileSync(file, "utf8")));
+  return /** @type {ActionDefinition} */ (parse(readFileSync(file, "utf8")));
 }

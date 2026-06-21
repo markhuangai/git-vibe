@@ -23,11 +23,6 @@ on:
         required: false
         type: number
         default: 90
-      dry-run:
-        description: Validate and describe actions without writing to GitHub.
-        required: false
-        type: boolean
-        default: false
       source-comment:
         description: JSON source comment metadata for replying to command comments.
         required: false
@@ -54,11 +49,6 @@ on:
         required: false
         type: number
         default: 90
-      dry-run:
-        description: Validate and describe actions without writing to GitHub.
-        required: false
-        type: boolean
-        default: false
       source-comment:
         description: JSON source comment metadata for replying to command comments.
         required: false
@@ -117,7 +107,6 @@ jobs:
           stage: review-matrix
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: 10
-          dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
 
   plan-review-matrix:
@@ -201,7 +190,6 @@ jobs:
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
-          dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           execution-mode: member
           member-index: ${{ matrix.index }}
@@ -264,7 +252,6 @@ jobs:
           pr-number: ${{ inputs.pr-number }}
           stage-timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
           max-turns: ${{ inputs.max_turns }}
-          dry-run: ${{ inputs.dry-run }}
           source-comment: ${{ inputs.source-comment }}
           fail-on-blocked: "true"
           execution-mode: finalizer
