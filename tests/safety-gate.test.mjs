@@ -232,6 +232,34 @@ describe("prompt-injection safety gate PR files and links", () => {
     expect(payloadGate).toMatchObject({ allowed: false, severity: "high" });
     expect(payloadGate.findings.join("\n")).toContain("suspicious linked file type");
   });
+
+  it("ignores package lock archive URLs as dependency metadata", () => {
+    const contextPacket = {
+      ...context({ comment: "" }),
+      artifact: {
+        ...context({ comment: "" }).artifact,
+        type: "pull-request",
+      },
+      pullRequestFiles: [
+        {
+          additions: 1,
+          blobUrl: "https://github.com/example/repo/blob/main/.lint/package-lock.json",
+          changes: 1,
+          contentsUrl: "https://api.github.com/repos/example/repo/contents/.lint/package-lock.json",
+          deletions: 0,
+          filename: ".lint/package-lock.json",
+          patch:
+            '@@ -0,0 +1,4 @@\n+{\n+  "resolved": "https://registry.npmjs.org/example/-/example-1.0.0.tgz"\n+}',
+          rawUrl: "https://github.com/example/repo/raw/main/.lint/package-lock.json",
+          status: "added",
+        },
+      ],
+    };
+
+    const gate = safetyGateForStage({ config: {}, context: contextPacket, stage: "review-matrix" });
+
+    expect(gate).toMatchObject({ allowed: true, severity: "none" });
+  });
 });
 
 describe("prompt-injection safety gate extra sources", () => {
@@ -299,6 +327,19 @@ describe("prompt-injection safety gate direct categories", () => {
       context: context({
         comment:
           "The review explains how this change prevents a validation bypass and mentions bypass validation controls as the investigated risk.",
+      }),
+      stage: "review-matrix",
+    });
+
+    expect(gate).toMatchObject({ allowed: true, severity: "none" });
+  });
+
+  it("does not treat cursor decode review prose as encoded-payload instructions", () => {
+    const gate = safetyGateForStage({
+      config: {},
+      context: context({
+        comment:
+          "TestDreamServiceListSortsAndPaginates verifies SQL generation, first-page cursor output, cursor decode values, cursor-driven follow-up queries, and ErrInvalidDreamCursor on sort mismatch.",
       }),
       stage: "review-matrix",
     });

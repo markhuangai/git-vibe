@@ -32,6 +32,14 @@ export async function blockUnsafePromptInjection(options: {
 }): Promise<StageRunResult | undefined> {
   const result = await promptInjectionBlockedResult(options);
   if (!result) return undefined;
+  if (options.runner.executionMode === "member") {
+    options.logger.event("safety.gate.publish.skip", {
+      phase: options.phase,
+      reason: "matrix-member",
+    });
+    options.logger.event("stage.done", { status: result.status });
+    return result;
+  }
   await publishStageResultComment({
     client: options.client,
     context: options.context,

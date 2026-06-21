@@ -27,6 +27,8 @@ interface PatternMatch {
 }
 
 const writeStages = new Set<Stage>(["materialize"]);
+const encodedPayloadInstructionPattern =
+  /(?:\b(?:base64|encoded payload)\b.{0,120}\b(?:execute|obey|run)\b|\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow\s+(?:the|its)\s+instructions?)\b|\bdecode\b.{0,80}\b(?:execute|obey|run|follow\s+(?:the|its)\s+instructions?)\b.{0,80}\b(?:base64|encoded payload|payload)\b)/isu;
 
 const highRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
   {
@@ -50,7 +52,7 @@ const highRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
   },
   {
     finding: "asks the agent to decode and obey an encoded payload",
-    regex: /\b(?:base64|decode|encoded payload)\b.{0,120}\b(?:execute|follow|obey|run)\b/isu,
+    regex: encodedPayloadInstructionPattern,
   },
   {
     finding: "contains a destructive shell instruction",
@@ -93,6 +95,8 @@ const base64CandidatePattern = /(?:[A-Za-z0-9+/]{24,}={0,2})(?:\s+[A-Za-z0-9+/]{
 const urlPattern = /\bhttps?:\/\/[^\s<>)\]]+/giu;
 const suspiciousLinkedFilePattern =
   /\.(?:7z|apk|app|bat|bash|cmd|deb|dmg|exe|jar|msi|pkg|ps1|rar|rpm|sh|tar|tgz|war|xz|zip)(?:[?#]|$)/iu;
+const dependencyLockfileSourcePattern =
+  /(?:^|[/\s])(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.ya?ml|yarn\.lock|bun\.lockb?)(?::|$)/iu;
 const riskyLinkActionPattern =
   /\b(?:curl|download|execute|fetch|install|open|read|run|source|wget)\b/iu;
 const maxSafetyMatchExcerptLength = 160;
@@ -319,9 +323,11 @@ function linkMatches(source: SafetySource): PatternMatch[] {
     const url = trimmedUrl(String(match[0] || ""));
     if (!url) continue;
     if (suspiciousLinkedFilePattern.test(url)) {
+      const risky = nearbyRiskyLinkAction(source.text, match.index || 0);
+      if (dependencyLockfileSource(source.label) && !risky) continue;
       matches.push({
         finding: `${source.label}: references a suspicious linked file type`,
-        severity: nearbyRiskyLinkAction(source.text, match.index || 0) ? "high" : "medium",
+        severity: risky ? "high" : "medium",
       });
     }
     if (url.includes("github.com/user-attachments/assets/")) {
@@ -342,6 +348,10 @@ function nearbyRiskyLinkAction(text: string, index: number): boolean {
   const start = Math.max(0, index - 160);
   const end = Math.min(text.length, index + 240);
   return riskyLinkActionPattern.test(text.slice(start, end));
+}
+
+function dependencyLockfileSource(label: string): boolean {
+  return dependencyLockfileSourcePattern.test(label);
 }
 
 function sourcesFor(options: {
@@ -434,9 +444,7 @@ function mostlyPrintable(value: string): boolean {
 }
 
 function encodedPayloadInstruction(value: string): boolean {
-  return /\b(?:base64|decode|encoded payload)\b.{0,120}\b(?:execute|follow|obey|run)\b/isu.test(
-    value,
-  );
+  return encodedPayloadInstructionPattern.test(value);
 }
 
 function scriptFamilies(value: string): string[] {
