@@ -205,7 +205,7 @@ function readOnlyOutputAdvancesPrivilegedState(
   const privilegedStates: Partial<Record<Stage, string[]>> = {
     investigate: ["fixes-required", "no-fixes-needed", "ready-for-implementation"],
     materialize: ["implementation-issue-ready", "implementation-issues-ready"],
-    "review-matrix": ["changes-required", "review-passed"],
+    "review-matrix": ["review-passed"],
     validate: ["ready-for-implementation"],
   };
   return Boolean(privilegedStates[stage]?.includes(nextState));
