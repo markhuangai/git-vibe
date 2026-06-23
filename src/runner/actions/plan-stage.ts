@@ -5,7 +5,9 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "../config.js";
 import {
+  stageFinalizerAdapter,
   stageExecutionPlan,
+  stageWorkflowAdapters,
   stageWorkflowIndexes,
   stageWorkflowLabels,
   stageWorkflowMatrix,
@@ -30,9 +32,10 @@ export function planStage(runtime: PlanStageRuntime = {}): number {
   try {
     const stage = parseStage(argv[0]);
     const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
-    const plan = stageExecutionPlan(loadConfig(cwd), stage, cwd);
+    const config = loadConfig(cwd);
+    const plan = stageExecutionPlan(config, stage, cwd);
     log(`${stage} execution mode=${plan.mode} jobs=${plan.matrix.include.length}`);
-    writeOutputs(env, plan, runtime.appendFile || appendFileSync);
+    writeOutputs(env, config, plan, runtime.appendFile || appendFileSync);
     return 0;
   } catch (caught) {
     error(caught instanceof Error ? caught.message : String(caught));
@@ -48,6 +51,7 @@ export function isDirectRun(moduleUrl: string, entrypoint = process.argv[1]): bo
 
 function writeOutputs(
   env: NodeJS.ProcessEnv,
+  config: ReturnType<typeof loadConfig>,
   plan: ReturnType<typeof stageExecutionPlan>,
   appendFile: (path: string, content: string) => void,
 ): void {
@@ -55,6 +59,18 @@ function writeOutputs(
   writeOutput(env.GITHUB_OUTPUT, "matrix", JSON.stringify(stageWorkflowMatrix(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "indexes", JSON.stringify(stageWorkflowIndexes(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "labels", JSON.stringify(stageWorkflowLabels(plan)), appendFile);
+  writeOutput(
+    env.GITHUB_OUTPUT,
+    "adapters",
+    JSON.stringify(stageWorkflowAdapters(config, plan)),
+    appendFile,
+  );
+  writeOutput(
+    env.GITHUB_OUTPUT,
+    "finalizer-adapter",
+    stageFinalizerAdapter(config, plan),
+    appendFile,
+  );
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
 }

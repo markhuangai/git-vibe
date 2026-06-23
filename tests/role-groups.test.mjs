@@ -12,7 +12,9 @@ import {
   profileNamesForConfiguredStage,
   readRoleDefinition,
   singleProfileNamesForStage,
+  stageFinalizerAdapter,
   stageExecutionPlan,
+  stageWorkflowAdapters,
   stageWorkflowIndexes,
   stageWorkflowLabels,
   stageWorkflowMatrix,
@@ -47,6 +49,10 @@ describe("role group stage planning", () => {
     expect(stageWorkflowLabels(plan)).toEqual({
       0: "security - reviewer",
     });
+    expect(stageWorkflowAdapters(roleGroupConfig(), plan)).toEqual({
+      0: "claude-code-sdk",
+    });
+    expect(stageFinalizerAdapter(roleGroupConfig(), plan)).toBe("codex-sdk");
     expect(matrixMemberRowForStage(roleGroupConfig(), "review-matrix", cwd, 0)).toMatchObject({
       model: "gpt-test",
       profile: "reviewer",
@@ -354,8 +360,11 @@ describe("plan-stage action", () => {
         "ai:",
         "  profiles:",
         "    reviewer:",
+        "      adapter: claude-code-sdk",
         "      model: gpt-test",
-        "    synth: {}",
+        "    synth:",
+        "      adapter: codex-sdk",
+        "      model: gpt-synth",
         "  role_groups:",
         "    review_gate:",
         "      synthesizer: synth",
@@ -382,11 +391,19 @@ describe("plan-stage action", () => {
     expect(outputContent).toContain("git-vibe-review-matrix-member-0");
     expect(outputContent).toContain("indexes<<GITVIBE_OUTPUT\n[0]");
     expect(outputContent).toContain('labels<<GITVIBE_OUTPUT\n{"0":"security - reviewer"}');
+    expect(outputContent).toContain('adapters<<GITVIBE_OUTPUT\n{"0":"claude-code-sdk"}');
+    expect(outputContent).toContain("finalizer-adapter<<GITVIBE_OUTPUT\ncodex-sdk");
     expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
       "value: ${{ steps.plan.outputs.indexes }}",
     );
     expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
       "value: ${{ steps.plan.outputs.labels }}",
+    );
+    expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
+      "value: ${{ steps.plan.outputs.adapters }}",
+    );
+    expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
+      "value: ${{ steps.plan.outputs.finalizer-adapter }}",
     );
     expect(outputContent).toContain(matrixOutput);
     expect(matrixOutput).not.toContain("security.md");
@@ -418,8 +435,8 @@ function roleGroupConfig(role = "security.md") {
   return {
     ai: {
       profiles: {
-        reviewer: { model: "gpt-test" },
-        synth: {},
+        reviewer: { adapter: "claude-code-sdk", model: "gpt-test" },
+        synth: { adapter: "codex-sdk", model: "gpt-synth" },
       },
       role_groups: {
         review_gate: {

@@ -94,10 +94,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
@@ -115,6 +111,8 @@ jobs:
       GITVIBE_AI_ENV_JSON: ""
       GITVIBE_MCP_ENV_JSON: ""
     outputs:
+      adapters: ${{ steps.plan.outputs.adapters }}
+      finalizer-adapter: ${{ steps.plan.outputs.finalizer-adapter }}
       indexes: ${{ steps.plan.outputs.indexes }}
       labels: ${{ steps.plan.outputs.labels }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
@@ -137,10 +135,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - id: plan
         uses: ./.git-vibe/actions/plan-stage
         with:
@@ -180,10 +174,12 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
+      - name: Prepare Claude Code executable
+        if: ${{ fromJSON(needs.plan-investigate.outputs.adapters)[format('{0}', matrix.index)] == 'claude-code-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-claude-code.sh
+      - name: Prepare Codex executable
+        if: ${{ fromJSON(needs.plan-investigate.outputs.adapters)[format('{0}', matrix.index)] == 'codex-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-codex.sh
       - uses: ./.git-vibe/actions/investigate
         with:
           issue-number: ${{ inputs.issue-number }}
@@ -236,10 +232,12 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
+      - name: Prepare Claude Code executable
+        if: ${{ needs.plan-investigate.outputs.finalizer-adapter == 'claude-code-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-claude-code.sh
+      - name: Prepare Codex executable
+        if: ${{ needs.plan-investigate.outputs.finalizer-adapter == 'codex-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-codex.sh
       - uses: ./.git-vibe/actions/investigate
         with:
           issue-number: ${{ inputs.issue-number }}
