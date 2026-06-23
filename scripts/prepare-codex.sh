@@ -49,7 +49,7 @@ cleanup_codex_install() {
 
 install_codex() {
   local version="$1"
-  local root="${GITVIBE_PROVIDER_CACHE_DIR:-${RUNNER_TOOL_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}}/git-vibe/providers}"
+  local root="${GITVIBE_PROVIDER_CACHE_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/git-vibe/providers}"
   local install_dir="$root/codex-$version"
   local executable="$install_dir/node_modules/.bin/codex"
   local lock_dir="$install_dir.lock"
