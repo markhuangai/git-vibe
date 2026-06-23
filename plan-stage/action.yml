@@ -16,6 +16,12 @@ outputs:
   labels:
     description: JSON object mapping stage member indexes to display labels.
     value: ${{ steps.plan.outputs.labels }}
+  adapters:
+    description: JSON object mapping stage member indexes to GitVibe adapter names.
+    value: ${{ steps.plan.outputs.adapters }}
+  finalizer-adapter:
+    description: GitVibe adapter name used by the finalizer job.
+    value: ${{ steps.plan.outputs.finalizer-adapter }}
   max-parallel:
     description: Maximum parallel member jobs.
     value: ${{ steps.plan.outputs.max-parallel }}

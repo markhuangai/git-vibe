@@ -474,6 +474,62 @@ describe("GitVibe Codex action setup", () => {
       );
     }
   });
+
+  it("prepares selected provider executables before reusable workflow AI execution", () => {
+    const matrixSpecs = [
+      [
+        ".github/workflows/investigate.yml",
+        "plan-investigate",
+        "investigate-members",
+        "investigate",
+      ],
+      [
+        ".github/workflows/review.yml",
+        "plan-review-matrix",
+        "review-matrix-members",
+        "review-matrix",
+      ],
+      [".github/workflows/validate.yml", "plan-validate", "validate-members", "validate"],
+    ];
+
+    for (const [file, planJobName, memberJobName, finalizerJobName] of matrixSpecs) {
+      const workflow = readWorkflow(file);
+      const planJob = workflow.jobs?.[planJobName];
+      const memberJob = workflow.jobs?.[memberJobName];
+      const finalizerJob = workflow.jobs?.[finalizerJobName];
+
+      expect(planJob?.outputs, `${file} exposes member adapters`).toMatchObject({
+        adapters: "${{ steps.plan.outputs.adapters }}",
+        "finalizer-adapter": "${{ steps.plan.outputs.finalizer-adapter }}",
+      });
+      expectProviderPrepareBeforeAction({
+        action: `./.git-vibe/actions/${finalizerJobName}`,
+        codexIf: `\${{ needs.${planJobName}.outputs.finalizer-adapter == 'codex-sdk' }}`,
+        job: finalizerJob,
+        label: `${file} ${finalizerJobName}`,
+        claudeIf: `\${{ needs.${planJobName}.outputs.finalizer-adapter == 'claude-code-sdk' }}`,
+      });
+      expectProviderPrepareBeforeAction({
+        action: `./.git-vibe/actions/${finalizerJobName}`,
+        codexIf: `\${{ fromJSON(needs.${planJobName}.outputs.adapters)[format('{0}', matrix.index)] == 'codex-sdk' }}`,
+        job: memberJob,
+        label: `${file} ${memberJobName}`,
+        claudeIf: `\${{ fromJSON(needs.${planJobName}.outputs.adapters)[format('{0}', matrix.index)] == 'claude-code-sdk' }}`,
+      });
+    }
+
+    const materialize = readWorkflow(".github/workflows/materialize.yml");
+    expect(materialize.jobs?.["plan-materialize"]?.outputs).toMatchObject({
+      "finalizer-adapter": "${{ steps.plan.outputs.finalizer-adapter }}",
+    });
+    expectProviderPrepareBeforeAction({
+      action: "./.git-vibe/actions/materialize",
+      codexIf: "${{ needs.plan-materialize.outputs.finalizer-adapter == 'codex-sdk' }}",
+      job: materialize.jobs?.materialize,
+      label: ".github/workflows/materialize.yml materialize",
+      claudeIf: "${{ needs.plan-materialize.outputs.finalizer-adapter == 'claude-code-sdk' }}",
+    });
+  });
 });
 
 describe("GitVibe workflow numeric inputs", () => {
@@ -581,6 +637,30 @@ function gitVibeActionSteps(workflow, matchesUse) {
 /** @param {Workflow} workflow @param {string} jobName @param {string} stepName @returns {WorkflowStep | undefined} */
 function workflowStep(workflow, jobName, stepName) {
   return workflow.jobs?.[jobName]?.steps?.find((step) => step.name === stepName);
+}
+
+/**
+ * @param {{ action: string, codexIf: string, job?: WorkflowJob, label: string, claudeIf: string }} options
+ */
+function expectProviderPrepareBeforeAction(options) {
+  const steps = options.job?.steps || [];
+  const actionIndex = steps.findIndex((step) => step.uses === options.action);
+  const claudeIndex = steps.findIndex((step) => step.name === "Prepare Claude Code executable");
+  const codexIndex = steps.findIndex((step) => step.name === "Prepare Codex executable");
+
+  expect(actionIndex, `${options.label} invokes local action`).toBeGreaterThan(-1);
+  expect(claudeIndex, `${options.label} prepares Claude`).toBeGreaterThan(-1);
+  expect(codexIndex, `${options.label} prepares Codex`).toBeGreaterThan(-1);
+  expect(claudeIndex, `${options.label} prepares Claude before action`).toBeLessThan(actionIndex);
+  expect(codexIndex, `${options.label} prepares Codex before action`).toBeLessThan(actionIndex);
+  expect(steps[claudeIndex], `${options.label} gates Claude setup`).toMatchObject({
+    if: options.claudeIf,
+    run: "bash .git-vibe/actions/scripts/prepare-claude-code.sh",
+  });
+  expect(steps[codexIndex], `${options.label} gates Codex setup`).toMatchObject({
+    if: options.codexIf,
+    run: "bash .git-vibe/actions/scripts/prepare-codex.sh",
+  });
 }
 
 /** @param {Workflow} workflow @param {string[]} requiredJobs @returns {boolean} */

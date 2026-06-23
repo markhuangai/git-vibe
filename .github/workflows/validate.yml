@@ -124,6 +124,8 @@ jobs:
       GITVIBE_AI_ENV_JSON: ""
       GITVIBE_MCP_ENV_JSON: ""
     outputs:
+      adapters: ${{ steps.plan.outputs.adapters }}
+      finalizer-adapter: ${{ steps.plan.outputs.finalizer-adapter }}
       indexes: ${{ steps.plan.outputs.indexes }}
       labels: ${{ steps.plan.outputs.labels }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
@@ -185,6 +187,12 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
+      - name: Prepare Claude Code executable
+        if: ${{ fromJSON(needs.plan-validate.outputs.adapters)[format('{0}', matrix.index)] == 'claude-code-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-claude-code.sh
+      - name: Prepare Codex executable
+        if: ${{ fromJSON(needs.plan-validate.outputs.adapters)[format('{0}', matrix.index)] == 'codex-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-codex.sh
       - uses: ./.git-vibe/actions/validate
         with:
           issue-number: ${{ inputs.issue-number }}
@@ -238,6 +246,12 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
+      - name: Prepare Claude Code executable
+        if: ${{ needs.plan-validate.outputs.finalizer-adapter == 'claude-code-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-claude-code.sh
+      - name: Prepare Codex executable
+        if: ${{ needs.plan-validate.outputs.finalizer-adapter == 'codex-sdk' }}
+        run: bash .git-vibe/actions/scripts/prepare-codex.sh
       - uses: ./.git-vibe/actions/validate
         with:
           issue-number: ${{ inputs.issue-number }}

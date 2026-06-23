@@ -1,6 +1,6 @@
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
-import { activeProfileByName, stageConfigFor, stringValue } from "./ai-config.js";
+import { activeProfileByName, adapterName, stageConfigFor, stringValue } from "./ai-config.js";
 import type { GitVibeConfig, JsonObject, Stage, StageRunResult } from "../shared/types.js";
 
 export interface StageMatrixRow {
@@ -120,6 +120,24 @@ export function stageWorkflowLabels(plan: StageExecutionPlan): Record<string, st
       `${workflowRoleLabel(row.role)} - ${row.profile}`,
     ]),
   );
+}
+
+export function stageWorkflowAdapters(
+  config: GitVibeConfig,
+  plan: StageExecutionPlan,
+): Record<string, string> {
+  return Object.fromEntries(
+    plan.matrix.include.map((row) => [
+      String(row.index),
+      profileAdapter(config, row.profile, `ai.profiles.${row.profile}`),
+    ]),
+  );
+}
+
+export function stageFinalizerAdapter(config: GitVibeConfig, plan: StageExecutionPlan): string {
+  const profile = plan.synthesizerProfile || plan.matrix.include[0]?.profile;
+  if (!profile) throw new Error("Stage execution plan must include a finalizer profile.");
+  return profileAdapter(config, profile, `ai.profiles.${profile}`);
 }
 
 function workflowRoleLabel(role: string): string {
@@ -325,6 +343,10 @@ function profileModelName(profile: Record<string, unknown>): string {
     if (providerModel) return providerModel;
   }
   return stringValue(profile.model) || "";
+}
+
+function profileAdapter(config: GitVibeConfig, profile: string, path: string): string {
+  return adapterName(activeProfileByName(config, profile), path);
 }
 
 function assertRoleFile(cwd: string, role: string): string {

@@ -21906,6 +21906,11 @@ function activeProfileByName(config2, profileName) {
   if (!isRecord(profile)) throw new Error(`ai.profiles.${profileName} must be an object.`);
   return profile;
 }
+function adapterName(profile, profilePath = "ai profile") {
+  const adapter = stringValue(profile.adapter);
+  if (!adapter) throw new Error(`${profilePath}.adapter must be configured.`);
+  return adapter;
+}
 function stageConfigFor(config2, stage) {
   const stages = config2.ai?.stages;
   if (stages === void 0) return {};
@@ -21979,6 +21984,19 @@ function stageWorkflowLabels(plan) {
     ])
   );
 }
+function stageWorkflowAdapters(config2, plan) {
+  return Object.fromEntries(
+    plan.matrix.include.map((row) => [
+      String(row.index),
+      profileAdapter(config2, row.profile, `ai.profiles.${row.profile}`)
+    ])
+  );
+}
+function stageFinalizerAdapter(config2, plan) {
+  const profile = plan.synthesizerProfile || plan.matrix.include[0]?.profile;
+  if (!profile) throw new Error("Stage execution plan must include a finalizer profile.");
+  return profileAdapter(config2, profile, `ai.profiles.${profile}`);
+}
 function workflowRoleLabel(role) {
   if (!role) return "default";
   return basename(role).replace(/\.[^.]+$/, "") || "default";
@@ -22038,6 +22056,9 @@ function profileModelName(profile) {
     if (providerModel) return providerModel;
   }
   return stringValue(profile.model) || "";
+}
+function profileAdapter(config2, profile, path) {
+  return adapterName(activeProfileByName(config2, profile), path);
 }
 function assertRoleFile(cwd, role) {
   validateRoleFilename(role, "role");
@@ -22120,9 +22141,10 @@ function planStage(runtime = {}) {
   try {
     const stage = parseStage(argv[0]);
     const cwd = env.GITHUB_WORKSPACE || runtime.cwd || process.cwd();
-    const plan = stageExecutionPlan(loadConfig(cwd), stage, cwd);
+    const config2 = loadConfig(cwd);
+    const plan = stageExecutionPlan(config2, stage, cwd);
     log(`${stage} execution mode=${plan.mode} jobs=${plan.matrix.include.length}`);
-    writeOutputs(env, plan, runtime.appendFile || appendFileSync);
+    writeOutputs(env, config2, plan, runtime.appendFile || appendFileSync);
     return 0;
   } catch (caught) {
     error51(caught instanceof Error ? caught.message : String(caught));
@@ -22134,11 +22156,23 @@ function isDirectRun(moduleUrl, entrypoint = process.argv[1]) {
     return Boolean(entrypoint && /(?:^|[/\\])plan-stage\.(?:c?js|ts)$/.test(entrypoint));
   return Boolean(entrypoint && moduleUrl === pathToFileURL(resolve2(entrypoint)).href);
 }
-function writeOutputs(env, plan, appendFile) {
+function writeOutputs(env, config2, plan, appendFile) {
   if (!env.GITHUB_OUTPUT) return;
   writeOutput(env.GITHUB_OUTPUT, "matrix", JSON.stringify(stageWorkflowMatrix(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "indexes", JSON.stringify(stageWorkflowIndexes(plan)), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "labels", JSON.stringify(stageWorkflowLabels(plan)), appendFile);
+  writeOutput(
+    env.GITHUB_OUTPUT,
+    "adapters",
+    JSON.stringify(stageWorkflowAdapters(config2, plan)),
+    appendFile
+  );
+  writeOutput(
+    env.GITHUB_OUTPUT,
+    "finalizer-adapter",
+    stageFinalizerAdapter(config2, plan),
+    appendFile
+  );
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
 }
