@@ -94,10 +94,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
@@ -137,10 +133,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - id: plan
         uses: ./.git-vibe/actions/plan-stage
         with:
@@ -180,10 +172,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - uses: ./.git-vibe/actions/investigate
         with:
           issue-number: ${{ inputs.issue-number }}
@@ -236,10 +224,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - uses: ./.git-vibe/actions/investigate
         with:
           issue-number: ${{ inputs.issue-number }}

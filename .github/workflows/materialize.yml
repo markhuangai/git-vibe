@@ -94,10 +94,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - id: security
         uses: ./.git-vibe/actions/security-review
         with:
@@ -134,10 +130,6 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.3
-          run_install: false
       - uses: ./.git-vibe/actions/materialize
         with:
           discussion-number: ${{ inputs.discussion-number }}

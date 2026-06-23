@@ -54,24 +54,19 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Build GitVibe action runtime
+    - name: Verify GitVibe action runtime
       shell: bash
       env:
         ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
         ACTIONS_ID_TOKEN_REQUEST_URL: ""
       run: |
         cd "$GITHUB_ACTION_PATH/.."
-        if command -v corepack >/dev/null 2>&1 && corepack enable; then
-          pnpm_cmd=(corepack pnpm)
-        elif command -v pnpm >/dev/null 2>&1; then
-          pnpm_cmd=(pnpm)
-        else
-          echo "::error::GitVibe requires pnpm or Corepack on the runner."
-          exit 127
-        fi
-        echo "Using ${pnpm_cmd[*]} for GitVibe action runtime build"
-        "${pnpm_cmd[@]}" install --frozen-lockfile
-        "${pnpm_cmd[@]}" build
+        for file in dist/actions/run-action.js dist/actions/run-action.mjs; do
+          if [ ! -f "$file" ]; then
+            echo "::error::Missing prebuilt GitVibe action runtime: $file. Run corepack pnpm build and commit dist/actions."
+            exit 1
+          fi
+        done
     - id: run
       shell: bash
       env:

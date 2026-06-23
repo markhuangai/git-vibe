@@ -7,7 +7,7 @@ import { workflowBudgetInputsFor } from "../src/shared/budgets.ts";
 /**
  * @typedef {{ default?: unknown, required?: boolean, type?: string }} WorkflowInput
  * @typedef {{ concurrency?: { group?: string, ["cancel-in-progress"]?: boolean }, env?: Record<string, string>, inputs?: Record<string, WorkflowInput>, jobs?: Record<string, WorkflowJob>, name?: string, on?: { pull_request_target?: { branches?: string[], types?: string[] }, push?: { paths?: string[] }, workflow_call?: { inputs?: Record<string, WorkflowInput>, secrets?: Record<string, { required?: boolean }> }, workflow_dispatch?: { inputs?: Record<string, WorkflowInput> } }, outputs?: Record<string, { description?: string, value?: string }>, permissions?: Record<string, string>, ["run-name"]?: string }} Workflow
- * @typedef {{ env?: Record<string, string>, environment?: unknown, if?: string, name?: string, needs?: string, outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string, uses?: string, with?: Record<string, unknown> }} WorkflowJob
+ * @typedef {{ env?: Record<string, string>, environment?: unknown, if?: string, name?: string, needs?: string | string[], outputs?: Record<string, string>, permissions?: Record<string, string>, secrets?: Record<string, string>, steps?: WorkflowStep[], ["timeout-minutes"]?: string | number, uses?: string, with?: Record<string, unknown> }} WorkflowJob
  * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ env: Record<string, string>, name?: string, uses?: string, with?: Record<string, unknown> }} SimulatedStep
  * @typedef {{ inputs?: Record<string, WorkflowInput>, runs?: { steps?: WorkflowStep[] } }} ActionDefinition
@@ -18,10 +18,6 @@ const aiEnv = {
 };
 const mcpEnv = {
   GITVIBE_MCP_ENV_JSON: "${{ secrets.GITVIBE_MCP_ENV_JSON }}",
-};
-const scrubbedOidcEnv = {
-  ACTIONS_ID_TOKEN_REQUEST_TOKEN: "",
-  ACTIONS_ID_TOKEN_REQUEST_URL: "",
 };
 const legacyAiEnvNames = [
   "GITVIBE_AI_API_KEY",
@@ -415,63 +411,6 @@ describe("GitVibe workflow repository selection", () => {
   });
 });
 
-describe("GitVibe action runtime setup", () => {
-  it("clears hosted auth OIDC env from setup-only composite action steps", () => {
-    const oidcEntrypoints = [
-      "dist/actions/mark-blocked.js",
-      "dist/actions/run-action.js",
-      "dist/actions/security-review.js",
-    ];
-
-    for (const file of actionFiles) {
-      const action = readAction(file);
-      for (const step of action.runs?.steps || []) {
-        const run = String(step.run || "");
-        if (!run || oidcEntrypoints.some((entrypoint) => run.includes(entrypoint))) continue;
-
-        expect(step.env, `${file} ${step.name || step.id} clears hosted auth OIDC`).toMatchObject(
-          scrubbedOidcEnv,
-        );
-      }
-    }
-  });
-
-  it("builds generated action runtime inside composite actions", () => {
-    for (const file of actionFiles) {
-      const content = readFileSync(file, "utf8");
-      const buildStep = content.indexOf("Build GitVibe action runtime");
-      const runEntrypoint =
-        file === "mark-blocked/action.yml"
-          ? "dist/actions/mark-blocked.js"
-          : file === "plan-stage/action.yml"
-            ? "dist/actions/plan-stage.js"
-            : file === "security-review/action.yml"
-              ? "dist/actions/security-review.js"
-              : "dist/actions/run-action.js";
-      const runStep = content.indexOf(runEntrypoint);
-
-      expect(buildStep, `${file} should build dist from source on the runner`).toBeGreaterThan(-1);
-      expect(content, `${file} should not set up removed AI tooling`).not.toContain("setup-ai-cli");
-      expect(content, `${file} should prefer Corepack when available`).toContain(
-        "command -v corepack",
-      );
-      expect(content, `${file} should support installed pnpm on self-hosted runners`).toContain(
-        "command -v pnpm",
-      );
-      expect(content, `${file} should install dependencies`).toContain(
-        '"${pnpm_cmd[@]}" install --frozen-lockfile',
-      );
-      expect(content, `${file} should build generated runtime`).toContain('"${pnpm_cmd[@]}" build');
-      expect(content, `${file} should explain missing runner package manager`).toContain(
-        "GitVibe requires pnpm or Corepack on the runner.",
-      );
-      expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
-        runStep,
-      );
-    }
-  });
-});
-
 describe("GitVibe Claude Code action setup", () => {
   it("documents Linux and macOS runner support without Windows runner setup", () => {
     const prepareScript = readFileSync("scripts/prepare-claude-code.sh", "utf8");
@@ -513,7 +452,7 @@ describe("GitVibe Codex action setup", () => {
   it("leaves SDK executable resolution to the selected adapter in stage actions", () => {
     for (const file of sdkStageActionFiles) {
       const content = readFileSync(file, "utf8");
-      const buildStep = content.indexOf("Build GitVibe action runtime");
+      const verifyStep = content.indexOf("Verify GitVibe action runtime");
       const runEntrypoint = content.indexOf("dist/actions/run-action.js");
 
       expect(content, `${file} should not prepare Claude before profile selection`).not.toContain(
@@ -530,35 +469,9 @@ describe("GitVibe Codex action setup", () => {
         content,
         `${file} should not invoke Codex setup before profile selection`,
       ).not.toContain("scripts/prepare-codex.sh");
-      expect(buildStep, `${file} should build before running generated entrypoint`).toBeLessThan(
+      expect(verifyStep, `${file} should verify before running generated entrypoint`).toBeLessThan(
         runEntrypoint,
       );
-    }
-  });
-});
-
-describe("GitVibe workflow local action setup", () => {
-  it("sets up Node and pnpm before local GitVibe actions run", () => {
-    for (const file of reusableWorkflows) {
-      const workflow = readWorkflow(file);
-      for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
-        const steps = job.steps || [];
-        const localActionIndex = steps.findIndex((step) =>
-          String(step.uses || "").startsWith("./.git-vibe/actions/"),
-        );
-        if (localActionIndex === -1) continue;
-
-        const setupSteps = steps.slice(0, localActionIndex);
-        const nodeIndex = setupSteps.findIndex((step) => step.uses === "actions/setup-node@v6");
-        const pnpmIndex = setupSteps.findIndex((step) => step.uses === "pnpm/action-setup@v6");
-        expect(nodeIndex, `${file} ${jobName} installs Node before pnpm`).toBeLessThan(pnpmIndex);
-        expect(setupSteps[pnpmIndex], `${file} ${jobName} installs pnpm`).toMatchObject({
-          with: { run_install: false, version: "10.33.3" },
-        });
-        expect(setupSteps[nodeIndex], `${file} ${jobName} installs Node`).toMatchObject({
-          with: { "node-version": 22, "package-manager-cache": false },
-        });
-      }
     }
   });
 });

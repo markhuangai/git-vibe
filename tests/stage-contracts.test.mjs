@@ -8,6 +8,19 @@ import { renderPrompts } from "../src/runner/prompts.ts";
 import { loadStageSchema, validateOutput } from "../src/runner/schemas.ts";
 import { parseStage, stageDefinitions } from "../src/shared/stages.ts";
 
+const actionRuntimeFiles = [
+  "dist/actions/mark-blocked.js",
+  "dist/actions/mark-blocked.mjs",
+  "dist/actions/mcp-gateway.js",
+  "dist/actions/mcp-gateway.mjs",
+  "dist/actions/plan-stage.js",
+  "dist/actions/plan-stage.mjs",
+  "dist/actions/run-action.js",
+  "dist/actions/run-action.mjs",
+  "dist/actions/security-review.js",
+  "dist/actions/security-review.mjs",
+];
+
 /** @type {import("../src/shared/types.ts").ContextPacket} */
 const baseContext = {
   artifact: {
@@ -358,11 +371,16 @@ describe("stage output validation failures", () => {
 });
 
 describe("bundled action runtime", () => {
-  it("builds the launcher from source with a Node-compatible shebang", () => {
+  it("keeps committed action bundles in sync with source", () => {
+    const before = new Map(actionRuntimeFiles.map((file) => [file, readFileSync(file, "utf8")]));
     const build = spawnSync(process.execPath, ["scripts/build-actions.mjs"], {
       encoding: "utf8",
     });
     expect(build.status, build.stderr || build.stdout).toBe(0);
+
+    for (const [file, content] of before) {
+      expect(readFileSync(file, "utf8"), `${file} should match regenerated output`).toBe(content);
+    }
 
     const bundle = readFileSync("dist/actions/run-action.js", "utf8");
     const result = spawnSync(process.execPath, ["dist/actions/run-action.js", "investigate"], {
