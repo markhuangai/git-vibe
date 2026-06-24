@@ -9,11 +9,43 @@ import type { ResolvedMcpServer } from "./mcp-config.js";
 import type { StageLogger } from "./logging.js";
 import { redactLogText } from "./logging.js";
 
+type McpResultSafetySeverity = "none" | "high";
+
 export interface ConnectedMcpServer {
   client: Client;
   close: () => Promise<void>;
   server: ResolvedMcpServer;
 }
+
+const mcpResultHighRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
+  {
+    finding: "attempts to ignore higher-priority instructions",
+    regex:
+      /\b(?:disregard|forget|ignore|override)\b.{0,80}\b(?:above|all|developer|earlier|previous|prior|system)\b.{0,80}\b(?:instructions?|messages?|prompts?|rules?)\b/isu,
+  },
+  {
+    finding: "asks for secrets, credentials, or hidden prompts",
+    regex:
+      /\b(?:exfiltrate|print|reveal|show|steal)\b.{0,80}\b(?:api[_ -]?key|credentials?|secrets?|system prompt|tokens?)\b/isu,
+  },
+  {
+    finding: "asks the agent to bypass validation, approval, or safety controls",
+    regex:
+      /\b(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b/isu,
+  },
+  {
+    finding: "asks the agent to decode and obey an encoded payload",
+    regex:
+      /\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow)\b/isu,
+  },
+  {
+    finding: "contains a destructive shell instruction",
+    regex:
+      /\b(?:rm\s+-rf|git\s+push\s+--force|curl\b.{0,80}\|\s*(?:bash|sh)|wget\b.{0,80}\|\s*(?:bash|sh))\b/isu,
+  },
+];
+
+const maxMcpResultScanChars = 100_000;
 
 export async function connectMcpServer(options: {
   logger?: StageLogger;
@@ -67,12 +99,23 @@ export function safetyCheckedMcpResult(options: {
   tool: string;
 }): CallToolResult {
   const result = redactMcpResultSecrets(options.result, options.secretValues || []);
+  const safety = mcpResultSafety(mcpResultText(result));
   options.logger?.event("mcp.tool.safety.checked", {
-    findings: 0,
+    findings: safety.findings.length,
     server: options.server,
-    severity: "none",
+    severity: safety.severity,
     tool: options.tool,
   });
+  if (safety.severity === "high") {
+    return mcpErrorResult(
+      [
+        `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
+        "",
+        "Detected risk:",
+        ...safety.findings.map((finding) => `- ${finding}`),
+      ].join("\n"),
+    );
+  }
   return result;
 }
 
@@ -135,6 +178,15 @@ function redactMcpJsonValue(value: unknown, secrets: string[]): unknown {
 
 function activeMcpSecrets(secretValues: string[]): string[] {
   return [...new Set(secretValues.filter((value) => value.length >= 4))];
+}
+
+function mcpResultSafety(text: string): { findings: string[]; severity: McpResultSafetySeverity } {
+  const scanText =
+    text.length > maxMcpResultScanChars ? text.slice(0, maxMcpResultScanChars) : text;
+  const findings = mcpResultHighRiskPatterns
+    .filter((pattern) => pattern.regex.test(scanText))
+    .map((pattern) => pattern.finding);
+  return { findings, severity: findings.length > 0 ? "high" : "none" };
 }
 
 function transportForServer(server: ResolvedMcpServer, logger: StageLogger | undefined): Transport {

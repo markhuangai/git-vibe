@@ -9,9 +9,9 @@ export function queueAllowedSafetyFinding() {
 }
 
 export function queueBlockedSafetyFinding(finding) {
-  const [sourceLabel, risk = "prompt-injection risk"] = finding
-    .split(":")
-    .map((part) => part.trim());
+  const separator = finding.indexOf(":");
+  const sourceLabel = (separator === -1 ? finding : finding.slice(0, separator)).trim();
+  const risk = (separator === -1 ? "prompt-injection risk" : finding.slice(separator + 1)).trim();
   globalThis.__gitVibeSdkMocks.queueCodexOutput({
     findings: [
       {

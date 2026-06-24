@@ -57831,7 +57831,7 @@ async function runAiSafetyGateForStage(options) {
   const batches = safetyBatches(sources);
   const outputs = [];
   for (const batch of batches) {
-    const output = await classifySafetyBatch(options, batch);
+    const output = normalizeSafetyBatchOutput(await classifySafetyBatch(options, batch));
     outputs.push(output);
     if (output.status === "blocked") return blockedFromAiOutput(output);
   }
@@ -57842,6 +57842,7 @@ async function classifySafetyBatch(options, batch) {
     const content = await runAiStage({
       config: options.config,
       cwd: options.runner.cwd,
+      github: options.github,
       maxTurns: Math.max(1, Math.min(options.runner.maxTurns, 4)),
       prompt: safetyPrompt({ batch, options }),
       profileName: safetyProfileName(options),
@@ -57960,6 +57961,30 @@ function allowedFromAiOutputs(outputs) {
     findings: outputs.flatMap((output) => output.findings.map(formatAiFinding)),
     severity: highestSeverity(outputs.map((output) => output.severity))
   };
+}
+function normalizeSafetyBatchOutput(output) {
+  const severity = highestSeverity([
+    output.severity,
+    ...output.findings.map((finding) => finding.severity)
+  ]);
+  if (output.status === "allowed" && (severity === "medium" || severity === "high")) {
+    return {
+      ...output,
+      findings: output.findings.length > 0 ? output.findings : [
+        {
+          excerpt: "",
+          reason: "The classifier returned allowed with medium or high severity.",
+          risk: "inconsistent classifier verdict",
+          severity,
+          source_label: "safety gate"
+        }
+      ],
+      severity,
+      status: "blocked",
+      summary: "AI safety gate returned an inconsistent allowed result."
+    };
+  }
+  return { ...output, severity };
 }
 function formatAiFinding(finding) {
   const excerpt = finding.excerpt ? ` (excerpt: ${inlineCode2(finding.excerpt)})` : "";
@@ -59213,6 +59238,12 @@ async function promptInjectionBlockedResult(options) {
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
+    github: options.github || (options.client ? {
+      authWriteback: options.runner.githubAuthWriteback,
+      client: options.client,
+      repository: options.runner.repository,
+      token: options.runner.token
+    } : void 0),
     includeContext: options.includeContext,
     logger: options.logger,
     output: options.result?.parsedOutput,

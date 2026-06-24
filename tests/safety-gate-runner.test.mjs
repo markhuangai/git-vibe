@@ -44,6 +44,7 @@ afterEach(() => {
 describe("stage runner pre-LLM safety gate", () => {
   it("allows clean context before workflow LLM jobs start", async () => {
     const cwd = await workspace();
+    queueAllowedSafetyFinding();
     globalThis.fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment("The app should preserve current behavior.")]),
@@ -134,6 +135,7 @@ describe("stage runner pre-LLM safety gate", () => {
 describe("stage runner accepted-risk gate", () => {
   it("allows pre-cutoff accepted unsafe input while publishing the audit", async () => {
     const cwd = await workspace();
+    queueAllowedSafetyFinding();
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -219,6 +221,7 @@ describe("stage runner accepted-risk output gate", () => {
     const cwd = await workspace();
     queueAllowedSafetyFinding();
     globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
+    queueAllowedSafetyFinding();
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -256,6 +259,7 @@ describe("stage runner accepted-risk delta input gate", () => {
   it("does not reblock accepted artifact body after label metadata updates the artifact", async () => {
     const cwd = await workspace();
     globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
+    queueAllowedSafetyFinding();
     const fetch = fetchMock([
       issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
       commentsResponse([acceptedRiskMetadataComment({ body: unsafeInstruction() })]),

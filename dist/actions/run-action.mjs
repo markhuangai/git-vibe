@@ -36008,6 +36008,29 @@ var StreamableHTTPClientTransport = class {
 };
 
 // src/runner/mcp-client.ts
+var mcpResultHighRiskPatterns = [
+  {
+    finding: "attempts to ignore higher-priority instructions",
+    regex: /\b(?:disregard|forget|ignore|override)\b.{0,80}\b(?:above|all|developer|earlier|previous|prior|system)\b.{0,80}\b(?:instructions?|messages?|prompts?|rules?)\b/isu
+  },
+  {
+    finding: "asks for secrets, credentials, or hidden prompts",
+    regex: /\b(?:exfiltrate|print|reveal|show|steal)\b.{0,80}\b(?:api[_ -]?key|credentials?|secrets?|system prompt|tokens?)\b/isu
+  },
+  {
+    finding: "asks the agent to bypass validation, approval, or safety controls",
+    regex: /\b(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b/isu
+  },
+  {
+    finding: "asks the agent to decode and obey an encoded payload",
+    regex: /\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow)\b/isu
+  },
+  {
+    finding: "contains a destructive shell instruction",
+    regex: /\b(?:rm\s+-rf|git\s+push\s+--force|curl\b.{0,80}\|\s*(?:bash|sh)|wget\b.{0,80}\|\s*(?:bash|sh))\b/isu
+  }
+];
+var maxMcpResultScanChars = 1e5;
 async function connectMcpServer(options) {
   const transport = transportForServer(options.server, options.logger);
   const client = new Client({ name: "git-vibe", version: "1.0.0" });
@@ -36043,12 +36066,23 @@ async function callMcpTool(options) {
 }
 function safetyCheckedMcpResult(options) {
   const result = redactMcpResultSecrets(options.result, options.secretValues || []);
+  const safety = mcpResultSafety(mcpResultText(result));
   options.logger?.event("mcp.tool.safety.checked", {
-    findings: 0,
+    findings: safety.findings.length,
     server: options.server,
-    severity: "none",
+    severity: safety.severity,
     tool: options.tool
   });
+  if (safety.severity === "high") {
+    return mcpErrorResult(
+      [
+        `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
+        "",
+        "Detected risk:",
+        ...safety.findings.map((finding) => `- ${finding}`)
+      ].join("\n")
+    );
+  }
   return result;
 }
 function mcpResultText(result) {
@@ -36062,6 +36096,9 @@ function mcpResultText(result) {
   }
   if (result.structuredContent) parts.push(JSON.stringify(result.structuredContent));
   return parts.join("\n");
+}
+function mcpErrorResult(message) {
+  return { content: [{ text: message, type: "text" }], isError: true };
 }
 function redactMcpText(value, secretValues) {
   return activeMcpSecrets(secretValues).reduce(
@@ -36098,6 +36135,11 @@ function redactMcpJsonValue(value, secrets) {
 }
 function activeMcpSecrets(secretValues) {
   return [...new Set(secretValues.filter((value) => value.length >= 4))];
+}
+function mcpResultSafety(text) {
+  const scanText = text.length > maxMcpResultScanChars ? text.slice(0, maxMcpResultScanChars) : text;
+  const findings = mcpResultHighRiskPatterns.filter((pattern) => pattern.regex.test(scanText)).map((pattern) => pattern.finding);
+  return { findings, severity: findings.length > 0 ? "high" : "none" };
 }
 function transportForServer(server, logger) {
   if (server.transport === "stdio") {
@@ -62433,7 +62475,7 @@ async function runAiSafetyGateForStage(options) {
   const batches = safetyBatches(sources);
   const outputs = [];
   for (const batch of batches) {
-    const output = await classifySafetyBatch(options, batch);
+    const output = normalizeSafetyBatchOutput(await classifySafetyBatch(options, batch));
     outputs.push(output);
     if (output.status === "blocked") return blockedFromAiOutput(output);
   }
@@ -62444,6 +62486,7 @@ async function classifySafetyBatch(options, batch) {
     const content = await runAiStage({
       config: options.config,
       cwd: options.runner.cwd,
+      github: options.github,
       maxTurns: Math.max(1, Math.min(options.runner.maxTurns, 4)),
       prompt: safetyPrompt({ batch, options }),
       profileName: safetyProfileName(options),
@@ -62562,6 +62605,30 @@ function allowedFromAiOutputs(outputs) {
     findings: outputs.flatMap((output) => output.findings.map(formatAiFinding)),
     severity: highestSeverity(outputs.map((output) => output.severity))
   };
+}
+function normalizeSafetyBatchOutput(output) {
+  const severity = highestSeverity([
+    output.severity,
+    ...output.findings.map((finding) => finding.severity)
+  ]);
+  if (output.status === "allowed" && (severity === "medium" || severity === "high")) {
+    return {
+      ...output,
+      findings: output.findings.length > 0 ? output.findings : [
+        {
+          excerpt: "",
+          reason: "The classifier returned allowed with medium or high severity.",
+          risk: "inconsistent classifier verdict",
+          severity,
+          source_label: "safety gate"
+        }
+      ],
+      severity,
+      status: "blocked",
+      summary: "AI safety gate returned an inconsistent allowed result."
+    };
+  }
+  return { ...output, severity };
 }
 function formatAiFinding(finding) {
   const excerpt = finding.excerpt ? ` (excerpt: ${inlineCode2(finding.excerpt)})` : "";
@@ -64164,6 +64231,12 @@ async function promptInjectionBlockedResult(options) {
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
+    github: options.github || (options.client ? {
+      authWriteback: options.runner.githubAuthWriteback,
+      client: options.client,
+      repository: options.runner.repository,
+      token: options.runner.token
+    } : void 0),
     includeContext: options.includeContext,
     logger: options.logger,
     output: options.result?.parsedOutput,
@@ -64262,6 +64335,7 @@ async function runMatrixFinalizerResult({
     config: config2,
     context,
     extraSources: finalizerSafetySources,
+    github: aiRunOptions.github,
     includeContext: !acceptedRisk,
     logger,
     phase: "input",

@@ -127,21 +127,11 @@ const claudeMessageQueues = [];
 
 function defaultOutputForSchema(schema) {
   const schemaId = schema && typeof schema === "object" ? schema.$id : undefined;
-  if (schemaId === "safety-gate.v1") return safetyGateOutput();
   if (schemaId === "investigate.v1") return investigateOutput();
   if (schemaId === "materialize.v2") return materializeOutput();
   if (schemaId === "review-matrix.v1") return reviewMatrixOutput();
   if (schemaId === "validate.v1") return validateOutput();
   throw new Error(`No default SDK mock output configured for schema id: ${String(schemaId)}`);
-}
-
-function safetyGateOutput() {
-  return {
-    findings: [],
-    severity: "none",
-    status: "allowed",
-    summary: "No prompt-injection risk detected.",
-  };
 }
 
 function investigateOutput() {

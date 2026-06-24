@@ -1,4 +1,4 @@
-import { runAiStage } from "./ai.js";
+import { runAiStage, type RunAiStageOptions } from "./ai.js";
 import { chunkContentUnits, type ContentChunk, type ContentUnit } from "./content-units.js";
 import { summarizeError, type StageLogger } from "./logging.js";
 import {
@@ -73,6 +73,7 @@ export async function runAiSafetyGateForStage(options: {
   context: ContextPacket;
   contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
+  github?: RunAiStageOptions["github"];
   includeContext?: boolean;
   logger?: StageLogger;
   output?: JsonObject;
@@ -93,7 +94,7 @@ export async function runAiSafetyGateForStage(options: {
   const batches = safetyBatches(sources);
   const outputs: SafetyAiOutput[] = [];
   for (const batch of batches) {
-    const output = await classifySafetyBatch(options, batch);
+    const output = normalizeSafetyBatchOutput(await classifySafetyBatch(options, batch));
     outputs.push(output);
     if (output.status === "blocked") return blockedFromAiOutput(output);
   }
@@ -109,6 +110,7 @@ async function classifySafetyBatch(
     const content = await runAiStage({
       config: options.config,
       cwd: options.runner.cwd,
+      github: options.github,
       maxTurns: Math.max(1, Math.min(options.runner.maxTurns, 4)),
       prompt: safetyPrompt({ batch, options }),
       profileName: safetyProfileName(options),
@@ -242,6 +244,34 @@ function allowedFromAiOutputs(outputs: SafetyAiOutput[]): SafetyGateResult {
     findings: outputs.flatMap((output) => output.findings.map(formatAiFinding)),
     severity: highestSeverity(outputs.map((output) => output.severity)),
   };
+}
+
+function normalizeSafetyBatchOutput(output: SafetyAiOutput): SafetyAiOutput {
+  const severity = highestSeverity([
+    output.severity,
+    ...output.findings.map((finding) => finding.severity),
+  ]);
+  if (output.status === "allowed" && (severity === "medium" || severity === "high")) {
+    return {
+      ...output,
+      findings:
+        output.findings.length > 0
+          ? output.findings
+          : [
+              {
+                excerpt: "",
+                reason: "The classifier returned allowed with medium or high severity.",
+                risk: "inconsistent classifier verdict",
+                severity,
+                source_label: "safety gate",
+              },
+            ],
+      severity,
+      status: "blocked",
+      summary: "AI safety gate returned an inconsistent allowed result.",
+    };
+  }
+  return { ...output, severity };
 }
 
 function formatAiFinding(finding: SafetyAiFinding): string {

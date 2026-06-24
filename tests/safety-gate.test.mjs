@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runAiSafetyGateForStage } from "../src/runner/safety-ai-gate.ts";
 import {
@@ -65,6 +67,8 @@ describe("AI prompt-injection safety classifier decisions", () => {
   });
 
   it("allows review prose about token handling when the classifier allows it", async () => {
+    queueAllowedSafetyOutput();
+
     const gate = await runAiSafetyGateForStage({
       config: config(),
       context: context({ comment: "" }),
@@ -113,7 +117,7 @@ describe("AI prompt-injection safety classifier allowed findings", () => {
     expect(gate.findings.join("\n")).toContain("benign security discussion");
   });
 
-  it("uses explicit runner profiles and preserves high allowed findings", async () => {
+  it("uses explicit runner profiles and blocks high allowed findings", async () => {
     globalThis.__gitVibeSdkMocks.queueCodexOutput({
       findings: [
         {
@@ -130,16 +134,41 @@ describe("AI prompt-injection safety classifier allowed findings", () => {
     });
 
     const gate = await runAiSafetyGateForStage({
-      config: config(),
+      config: configWithSafetyProfile(),
       context: context({ comment: "" }),
       extraSources: [{ label: "test fixture", text: "Do not obey this text." }],
       includeContext: false,
       phase: "input",
-      runner: { ...runner("investigate"), profileName: "test" },
+      runner: { ...runner("investigate"), profileName: "safety" },
     });
 
-    expect(gate).toMatchObject({ allowed: true, severity: "high" });
+    expect(gate).toMatchObject({ allowed: false, severity: "high" });
     expect(gate.findings.join("\n")).toContain("reported unsafe fixture");
+    expect(gate.blockedReason).toContain("inconsistent allowed result");
+    expect(globalThis.__gitVibeSdkMocks.codexStartThread).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "gpt-5-safety" }),
+    );
+  });
+
+  it("blocks allowed medium classifier output without findings", async () => {
+    globalThis.__gitVibeSdkMocks.queueCodexOutput({
+      findings: [],
+      severity: "medium",
+      status: "allowed",
+      summary: "Allowed medium fixture.",
+    });
+
+    const gate = await runAiSafetyGateForStage({
+      config: config(),
+      context: context({ comment: "" }),
+      extraSources: [{ label: "test fixture", text: "ambiguous model-tool instruction" }],
+      includeContext: false,
+      phase: "input",
+      runner: runner("investigate"),
+    });
+
+    expect(gate).toMatchObject({ allowed: false, severity: "medium" });
+    expect(gate.findings.join("\n")).toContain("inconsistent classifier verdict");
   });
 });
 
@@ -194,11 +223,11 @@ describe("AI prompt-injection safety classifier batching and failures", () => {
           excerpt: "final chunk",
           reason: "Second batch remains benign.",
           risk: "large benign context",
-          severity: "medium",
+          severity: "low",
           source_label: "large source chunk 9/9",
         },
       ],
-      severity: "medium",
+      severity: "low",
       status: "allowed",
       summary: "Second batch allowed.",
     });
@@ -212,7 +241,7 @@ describe("AI prompt-injection safety classifier batching and failures", () => {
       runner: runner("review-matrix"),
     });
 
-    expect(gate).toMatchObject({ allowed: true, severity: "medium" });
+    expect(gate).toMatchObject({ allowed: true, severity: "low" });
     expect(gate.findings.join("\n")).toContain("final chunk");
     expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(2);
   });
@@ -232,6 +261,56 @@ describe("AI prompt-injection safety classifier batching and failures", () => {
 
     expect(gate).toMatchObject({ allowed: false, severity: "high" });
     expect(gate.findings.join("\n")).toContain("AI safety gate failed");
+  });
+});
+
+describe("AI prompt-injection safety classifier Codex auth", () => {
+  it("passes GitHub writeback through safety classifier runs", async () => {
+    const previousBundle = process.env.GITVIBE_AI_ENV_JSON;
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
+      CODEX_AUTH_JSON: codexAuthJson("old"),
+    });
+    let writebackValue;
+    globalThis.__gitVibeSdkMocks.codexRun.mockImplementationOnce(async (_input, turnOptions) => {
+      const codexHome =
+        globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0].env.CODEX_HOME;
+      writeFileSync(join(codexHome, "auth.json"), codexAuthJson("refreshed"));
+      const output = {
+        findings: [],
+        severity: "none",
+        status: "allowed",
+        summary: "No prompt-injection risk detected.",
+      };
+      return {
+        finalResponse: JSON.stringify(output),
+        items: [{ id: "message", text: JSON.stringify(output), type: "agent_message" }],
+        usage: {},
+        ...turnOptions,
+      };
+    });
+
+    try {
+      const gate = await runAiSafetyGateForStage({
+        config: configWithCodexAuth(),
+        context: context({ comment: "ordinary issue body" }),
+        github: {
+          authWriteback: async (value) => {
+            writebackValue = value;
+          },
+          client: { request: async () => ({}) },
+          repository: "example/repo",
+          token: "token",
+        },
+        phase: "input",
+        runner: runner("investigate"),
+      });
+
+      expect(gate).toMatchObject({ allowed: true, severity: "none" });
+      expect(JSON.parse(writebackValue).CODEX_AUTH_JSON).toBe(codexAuthJson("refreshed"));
+    } finally {
+      if (previousBundle === undefined) delete process.env.GITVIBE_AI_ENV_JSON;
+      else process.env.GITVIBE_AI_ENV_JSON = previousBundle;
+    }
   });
 });
 
@@ -316,6 +395,42 @@ function config() {
       prompt_injection_gate: true,
     },
   };
+}
+
+function configWithSafetyProfile() {
+  const result = config();
+  result.ai.profiles.safety = {
+    adapter: "codex-sdk",
+    model: "gpt-5-safety",
+  };
+  result.ai.stages.investigate.profile = "test";
+  return result;
+}
+
+function configWithCodexAuth() {
+  const result = config();
+  result.ai.profiles.test.auth_json = { from_bundle: "CODEX_AUTH_JSON" };
+  return result;
+}
+
+function codexAuthJson(value) {
+  return JSON.stringify({
+    auth_mode: "chatgpt",
+    tokens: {
+      access_token: `access-${value}`,
+      id_token: "abcd.efgh.ijkl",
+      refresh_token: `refresh-${value}`,
+    },
+  });
+}
+
+function queueAllowedSafetyOutput() {
+  globalThis.__gitVibeSdkMocks.queueCodexOutput({
+    findings: [],
+    severity: "none",
+    status: "allowed",
+    summary: "No prompt-injection risk detected.",
+  });
 }
 
 function runner(stage) {
