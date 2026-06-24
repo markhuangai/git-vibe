@@ -64521,7 +64521,13 @@ function acceptedRiskContextUnits(context, runner) {
     acceptedSource: accepted?.source,
     context,
     cutoff
-  });
+  }).filter((unit2) => !acceptedRiskReviewFeedbackUnit(context, runner, unit2));
+}
+function acceptedRiskReviewFeedbackUnit(context, runner, unit2) {
+  return context.artifact.type === "pull-request" && runner.stage === "review-matrix" && pullRequestReviewFeedbackKind(unit2.metadata?.kind);
+}
+function pullRequestReviewFeedbackKind(value) {
+  return value === "pull-request-review" || value === "pull-request-review-comment";
 }
 function contextWithoutAcceptedRiskMetadataSource(context, runner) {
   const accepted = acceptedRiskMetadataForContext(context, runner);

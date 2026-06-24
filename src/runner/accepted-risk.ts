@@ -142,7 +142,23 @@ export function acceptedRiskContextUnits(
     acceptedSource: accepted?.source,
     context,
     cutoff,
-  });
+  }).filter((unit) => !acceptedRiskReviewFeedbackUnit(context, runner, unit));
+}
+
+function acceptedRiskReviewFeedbackUnit(
+  context: ContextPacket,
+  runner: RunnerOptions,
+  unit: ContentUnit,
+): boolean {
+  return (
+    context.artifact.type === "pull-request" &&
+    runner.stage === "review-matrix" &&
+    pullRequestReviewFeedbackKind(unit.metadata?.kind)
+  );
+}
+
+function pullRequestReviewFeedbackKind(value: unknown): boolean {
+  return value === "pull-request-review" || value === "pull-request-review-comment";
 }
 
 export function contextWithoutAcceptedRiskMetadataSource(
