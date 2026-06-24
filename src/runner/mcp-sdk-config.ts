@@ -23,6 +23,8 @@ export function prepareSdkMcpConfig(options: {
   contextDir: string;
   options: RunAiStageOptions;
 }): SdkMcpConfig {
+  if (options.options.toolOverride?.length === 0) return emptySdkMcpConfig();
+
   const stageServers = modelMcpServersForStage({
     config: options.options.config,
     stage: options.options.stage,

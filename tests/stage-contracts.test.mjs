@@ -45,6 +45,7 @@ describe("stage contracts", () => {
     ]);
     expect(() => parseStage("decompose")).toThrow("Unknown GitVibe action stage");
     expect(() => parseStage("unknown")).toThrow("Unknown GitVibe action stage");
+    expect(() => parseStage(undefined)).toThrow("Unknown GitVibe action stage: <missing>");
   });
 
   it("renders prompt templates with XML sections", () => {

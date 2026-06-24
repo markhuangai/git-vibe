@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseGitVibeConfig, stageEnabled } from "../src/shared/config.ts";
+import { baseBranchFromEnv, parseGitVibeConfig, stageEnabled } from "../src/shared/config.ts";
 
 describe("GitVibe stage config gates", () => {
+  it("reads trimmed base branch overrides from env", () => {
+    expect(baseBranchFromEnv({ GITVIBE_BASE_BRANCH: " main " })).toBe("main");
+    expect(baseBranchFromEnv({ GITVIBE_BASE_BRANCH: " " })).toBeUndefined();
+    expect(baseBranchFromEnv({})).toBeUndefined();
+  });
+
   it("treats missing stage enabled config as enabled", () => {
     expect(stageEnabled({}, "validate")).toBe(true);
     expect(stageEnabled({ ai: {} }, "validate")).toBe(true);

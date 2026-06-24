@@ -356,6 +356,10 @@ version: 1
 github_auth:
   mode: github-app
 
+safety:
+  # Enabled by default. Set false to skip input/output prompt-injection scans.
+  prompt_injection_gate: true
+
 ai:
   profiles:
     codex_sdk:
@@ -425,6 +429,10 @@ tests:
 
 GitVibe uses `/git-vibe ...` as the fixed public command form. Command prefixes,
 external agent mentions, permissions, and label names are not configurable.
+
+`safety.prompt_injection_gate` controls the AI prompt-injection gate. When it is
+`true` or omitted, GitVibe scans untrusted input before a stage and scans stage
+output before publishing. When it is `false`, GitVibe skips both scans.
 
 Each AI stage must define `profile` or `role_group`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.

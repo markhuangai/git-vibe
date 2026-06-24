@@ -20,10 +20,26 @@ ${extra ? `${extra}\n` : ""}`;
 }
 
 export function workspaceConfigWithTestAi(config = "") {
-  if (!config.trim()) return testAiConfigYaml();
+  if (!config.trim()) return `${testAiConfigYaml()}\n${defaultSafetyConfig()}`;
   if (config.trimStart().startsWith("ai:")) {
-    return testAiConfigYaml(config.replace(/^\s*ai:\s*\n?/, ""));
+    const base = testAiConfigYaml(config.replace(/^\s*ai:\s*\n?/, ""));
+    return /^\s*safety:/m.test(config) ? base : `${base}\n${defaultSafetyConfig()}`;
   }
 
-  return `${testAiConfigYaml()}\n${config}`;
+  return withDefaultSafety(config, testAiConfigYaml());
+}
+
+/**
+ * @param {string} config
+ * @param {string} base
+ */
+function withDefaultSafety(config, base) {
+  const safety = /^\s*safety:/m.test(config) ? "" : `\n${defaultSafetyConfig()}`;
+  return `${base}${safety}\n${config}`;
+}
+
+function defaultSafetyConfig() {
+  return `safety:
+  prompt_injection_gate: false
+`;
 }

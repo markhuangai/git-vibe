@@ -73,9 +73,9 @@ export async function runCodexSdkStage({
       approvalPolicy: "never",
       model,
       modelReasoningEffort: codexReasoningEffort(profile),
-      sandboxMode: "danger-full-access",
+      sandboxMode: options.toolOverride?.length === 0 ? "read-only" : "danger-full-access",
       skipGitRepoCheck: true,
-      workingDirectory: options.cwd,
+      workingDirectory: options.toolOverride?.length === 0 ? contextDir : options.cwd,
     });
     const result = await thread.run(codexPrompt(options), {
       outputSchema: codexOutputSchema(options.schema),

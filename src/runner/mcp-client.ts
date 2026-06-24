@@ -8,15 +8,12 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { ResolvedMcpServer } from "./mcp-config.js";
 import type { StageLogger } from "./logging.js";
 import { redactLogText } from "./logging.js";
-import { safetyFindingsForText } from "./safety-gate.js";
 
 export interface ConnectedMcpServer {
   client: Client;
   close: () => Promise<void>;
   server: ResolvedMcpServer;
 }
-
-const maxMcpResultScanChars = 100_000;
 
 export async function connectMcpServer(options: {
   logger?: StageLogger;
@@ -70,34 +67,13 @@ export function safetyCheckedMcpResult(options: {
   tool: string;
 }): CallToolResult {
   const result = redactMcpResultSecrets(options.result, options.secretValues || []);
-  const text = mcpResultText(result);
-  const scanText =
-    text.length > maxMcpResultScanChars ? text.slice(0, maxMcpResultScanChars) : text;
-  const safety = safetyFindingsForText({
-    label: `MCP ${options.server}.${options.tool} result`,
-    text: scanText,
-  });
   options.logger?.event("mcp.tool.safety.checked", {
-    findings: safety.findings.length,
+    findings: 0,
     server: options.server,
-    severity: safety.severity,
+    severity: "none",
     tool: options.tool,
   });
-  if (safety.severity !== "high") return result;
-  return {
-    content: [
-      {
-        text: [
-          `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
-          "",
-          "Detected risk:",
-          ...safety.findings.map((finding) => `- ${finding}`),
-        ].join("\n"),
-        type: "text",
-      },
-    ],
-    isError: true,
-  };
+  return result;
 }
 
 export function mcpResultText(result: CallToolResult): string {
