@@ -97,8 +97,14 @@ describe("accepted-risk source binding", () => {
       stage: "review-matrix",
     });
 
-    expect(units.map((unit) => unit.metadata.kind)).toEqual(["comment"]);
-    expect(units.map((unit) => unit.text)).toEqual(["New ordinary comment after acceptance"]);
+    expect(units.map((unit) => unit.metadata.kind)).toEqual([
+      "pull-request-review-comment",
+      "comment",
+    ]);
+    expect(units.map((unit) => unit.text)).toEqual([
+      "Review note includes prompt-injection examples for a code fix.",
+      "New ordinary comment after acceptance",
+    ]);
   });
 });
 
