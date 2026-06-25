@@ -73,6 +73,7 @@ export async function runClaudeCodeSdkStage({
         settingSources: [],
         strictMcpConfig: Object.keys(mcpConfig.claudeMcpServers).length > 0,
         systemPrompt: options.system,
+        tools: options.toolOverride,
       },
       prompt: options.prompt,
     })) {

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { StageResultMarker } from "./stage-result-markers.js";
 import { parseStage } from "./stages.js";
 import type { ContextPacket, Stage } from "./types.js";
 
@@ -53,6 +54,24 @@ export function appendAcceptedRiskMetadataBlock(
   metadata: AcceptedRiskMetadata,
 ): string {
   return `${body.replace(metadataBlockPattern, "").trimEnd()}\n\n${acceptedRiskMetadataBlock(metadata)}`;
+}
+
+export function acceptedRiskStageResultBody(
+  marker: StageResultMarker,
+  metadata: AcceptedRiskMetadata,
+): string {
+  return [
+    stageResultMarker(marker),
+    "## GitVibe Risk Accepted",
+    "",
+    "**Status:** `blocked`",
+    "**Risk:** `accepted for one rerun`",
+    "",
+    `${inlineCode(metadata.actor || "<unknown>")} accepted this prompt-injection input risk for one \`${metadata.stage}\` rerun.`,
+    "GitVibe replaced the previous blocked result details to keep this thread readable.",
+    "",
+    acceptedRiskMetadataBlock(metadata),
+  ].join("\n");
 }
 
 export function acceptedRiskMetadataBlock(metadata: AcceptedRiskMetadata): string {
@@ -127,6 +146,17 @@ function acceptedRiskMetadataMarker(metadata: AcceptedRiskMetadata): string {
     attribute("run-attempt", metadata.runAttempt || ""),
     attribute("artifact-content-sha", metadata.artifactContentSha),
     attribute("artifact-sha", metadata.artifactSha || ""),
+  ]
+    .filter(Boolean)
+    .join(" ")} -->`;
+}
+
+function stageResultMarker(marker: StageResultMarker): string {
+  return `<!-- git-vibe:stage-result ${[
+    attribute("stage", marker.stage),
+    attribute("artifact", marker.artifact),
+    attribute("number", marker.number),
+    attribute("run", marker.run || ""),
   ]
     .filter(Boolean)
     .join(" ")} -->`;

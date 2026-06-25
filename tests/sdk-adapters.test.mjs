@@ -60,6 +60,24 @@ describe("Codex and Claude SDK adapter routing", () => {
     );
   });
 
+  it("runs Codex tool-override turns read-only in an isolated working directory", async () => {
+    const cwd = workspace();
+    const codexPath = join(cwd, "codex");
+    writeFileSync(codexPath, "");
+    chmodSync(codexPath, 0o755);
+    process.env.GITVIBE_CODEX_PATH = codexPath;
+
+    await runAiStage(stageOptions({ cwd, config: codexConfig(), toolOverride: [] }));
+
+    const threadOptions = globalThis.__gitVibeSdkMocks.codexStartThread.mock.calls[0][0];
+    expect(threadOptions).toMatchObject({
+      approvalPolicy: "never",
+      sandboxMode: "read-only",
+    });
+    expect(threadOptions.workingDirectory).toContain("git-vibe-codex-");
+    expect(threadOptions.workingDirectory).not.toBe(cwd);
+  });
+
   it("runs claude-code-sdk profiles with env bundle values and custom system prompt", async () => {
     const cwd = workspace();
     const claudePath = join(cwd, "claude");
@@ -512,7 +530,7 @@ describe("SDK MCP config warnings", () => {
   });
 });
 
-function stageOptions({ config, contextFilesRoot, cwd, logger }) {
+function stageOptions({ config, contextFilesRoot, cwd, logger, toolOverride }) {
   return {
     config,
     contextFilesRoot,
@@ -525,6 +543,7 @@ function stageOptions({ config, contextFilesRoot, cwd, logger }) {
     stage: "validate",
     stageDefinition: { schemaFile: "validate.v1.schema.json", schemaId: "validate.v1" },
     system: "System",
+    toolOverride,
   };
 }
 

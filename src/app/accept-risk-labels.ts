@@ -1,6 +1,6 @@
 import {
   acceptedRiskArtifactContentSha,
-  appendAcceptedRiskMetadataBlock,
+  acceptedRiskStageResultBody,
   type AcceptedRiskMetadata,
 } from "../shared/accepted-risk.js";
 import {
@@ -524,7 +524,9 @@ async function updateAcceptedRiskResultComment(
 ): Promise<void> {
   if (!source.id)
     throw new Error("Cannot update accepted-risk metadata: missing result comment id.");
-  const body = appendAcceptedRiskMetadataBlock(String(source.body || ""), metadata);
+  const marker = parseStageResultMarker(source.body);
+  if (!marker) throw new Error("Cannot update accepted-risk metadata: missing result marker.");
+  const body = acceptedRiskStageResultBody(marker, metadata);
   if (source.surface === "discussion-comment") {
     await updateDiscussionComment({
       body,

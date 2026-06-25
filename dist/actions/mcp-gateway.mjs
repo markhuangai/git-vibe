@@ -18974,49 +18974,8 @@ function bundleSecrets(bundle) {
   }
 }
 
-// src/runner/content-units.ts
-import { createHash } from "node:crypto";
-var defaultChunkSizeChars = 12e3;
-var defaultChunkOverlapChars = 1e3;
-function chunkContentUnits(units, options = {}) {
-  const chunkSize = options.chunkSizeChars || defaultChunkSizeChars;
-  const overlap = Math.min(options.chunkOverlapChars ?? defaultChunkOverlapChars, chunkSize - 1);
-  return units.flatMap(
-    (item) => chunkText(item.text, { chunkSize, overlap }).map((chunk, index, chunks) => ({
-      charEnd: chunk.end,
-      charStart: chunk.start,
-      id: `${item.id}:chunk-${index + 1}`,
-      index: index + 1,
-      kind: item.kind,
-      label: item.label,
-      metadata: item.metadata,
-      path: item.path,
-      sha256: sha256(chunk.text),
-      sourceUrl: item.sourceUrl,
-      text: chunk.text,
-      total: chunks.length,
-      unitId: item.id
-    }))
-  );
-}
-function chunkText(text, options) {
-  if (text.length <= options.chunkSize) return [{ end: text.length, start: 0, text }];
-  const chunks = [];
-  const step = Math.max(1, options.chunkSize - options.overlap);
-  for (let start = 0; start < text.length; start += step) {
-    const end = Math.min(text.length, start + options.chunkSize);
-    chunks.push({ end, start, text: text.slice(start, end) });
-    if (end >= text.length) break;
-  }
-  return chunks;
-}
-function sha256(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-// src/runner/safety-gate.ts
-var encodedPayloadInstructionPattern = /(?:\b(?:base64|encoded payload)\b.{0,120}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b.{0,80}\b(?:base64|encoded payload|payload)\b)/isu;
-var highRiskPatterns = [
+// src/runner/mcp-client.ts
+var mcpResultHighRiskPatterns = [
   {
     finding: "attempts to ignore higher-priority instructions",
     regex: /\b(?:disregard|forget|ignore|override)\b.{0,80}\b(?:above|all|developer|earlier|previous|prior|system)\b.{0,80}\b(?:instructions?|messages?|prompts?|rules?)\b/isu
@@ -19026,16 +18985,16 @@ var highRiskPatterns = [
     regex: /\b(?:developer mode|do anything now|dan mode|jailbreak|roleplay as unrestricted)\b/isu
   },
   {
-    finding: "asks GitVibe to bypass validation, approval, or safety controls",
-    regex: /(?:(?:^|[.!?\n]\s*)(?:please\s+|just\s+|now\s+)?(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b|\b(?:you|gitvibe|assistant|agent|model|bot|workflow|codex|claude)\s+(?:must|should|need to|needs to|have to|has to|can|will)\s+(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b)/isu
+    finding: "asks for secrets, credentials, or hidden prompts",
+    regex: /\b(?:exfiltrate|print|reveal|show|steal)\b.{0,80}\b(?:api[_ -]?keys?|credentials?|secrets?|(?:hidden\s+)?system prompts?|hidden prompts?|tokens?)\b/isu
   },
   {
-    finding: "asks for secrets, credentials, or hidden prompts",
-    regex: /\b(?:exfiltrate|print|reveal|show|steal)\b.{0,80}\b(?:api[_ -]?key|credentials?|secrets?|system prompt|tokens?)\b/isu
+    finding: "asks the agent to bypass validation, approval, or safety controls",
+    regex: /\b(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b/isu
   },
   {
     finding: "asks the agent to decode and obey an encoded payload",
-    regex: encodedPayloadInstructionPattern
+    regex: /(?:\b(?:base64|encoded payload)\b.{0,120}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b.{0,80}\b(?:base64|encoded payload|payload)\b)/isu
   },
   {
     finding: "contains a destructive shell instruction",
@@ -19054,214 +19013,6 @@ var highRiskPatterns = [
     regex: /(?:\u0438\u0433\u043d\u043e\u0440\u0438\u0440\u0443\u0439|\u0438\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c).{0,80}\u0438\u043d\u0441\u0442\u0440\u0443\u043a/su
   }
 ];
-var mediumRiskPatterns = [
-  {
-    finding: "mentions hidden system or developer prompts",
-    regex: /\b(?:developer|system)\s+prompt\b/isu
-  },
-  {
-    finding: "contains bidirectional or zero-width control characters",
-    regex: /[\u200b-\u200f\u202a-\u202e\u2066-\u2069]/u
-  },
-  {
-    finding: "contains an encoded or escaped payload",
-    regex: /(?:\\x[0-9a-f]{2}){12,}|(?:0x[0-9a-f]{2}[\s,]*){12,}/isu
-  }
-];
-var base64CandidatePattern = /(?:[A-Za-z0-9+/]{24,}={0,2})(?:\s+[A-Za-z0-9+/]{24,}={0,2})*/g;
-var urlPattern = /\bhttps?:\/\/[^\s<>)\]]+/giu;
-var suspiciousLinkedFilePattern = /\.(?:7z|apk|app|bat|bash|cmd|deb|dmg|exe|jar|msi|pkg|ps1|rar|rpm|sh|tar|tgz|war|xz|zip)(?:[?#]|$)/iu;
-var dependencyLockfileSourcePattern = /(?:^|[/\s])(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.ya?ml|yarn\.lock|bun\.lockb?)(?::|$)/iu;
-var riskyLinkActionPattern = /\b(?:curl|download|execute|fetch|install|open|read|run|source|wget)\b/iu;
-var maxSafetyMatchExcerptLength = 160;
-function safetyFindingsForText(source) {
-  const matches = analyzeChunkedSource(safetySourceUnit(source, "safety-text-0"));
-  return {
-    findings: unique(matches.map((match) => match.finding)),
-    severity: highestSeverity(matches.map((match) => match.severity))
-  };
-}
-function analyzeChunkedSource(source) {
-  const chunks = chunkContentUnits([source]);
-  const chunkMatches = chunks.flatMap(
-    (chunk) => analyzeSource({
-      label: chunk.total === 1 ? source.label : `${source.label} chunk ${chunk.index}/${chunk.total}`,
-      text: chunk.text
-    })
-  );
-  return [...chunkMatches, ...wholeSourceMatches(source)];
-}
-function analyzeSource(source) {
-  const text = source.text.trim();
-  if (!text) return [];
-  return [
-    ...patternMatches(source.label, normalizedText(text), highRiskPatterns, "high"),
-    ...patternMatches(source.label, text, mediumRiskPatterns, "medium"),
-    ...base64Matches(source),
-    ...linkMatches(source),
-    ...mixedScriptMatches(source)
-  ];
-}
-function wholeSourceMatches(source) {
-  return [...base64Matches(source), ...linkMatches(source)];
-}
-function patternMatches(label, text, patterns, severity) {
-  return patterns.flatMap((pattern) => {
-    pattern.regex.lastIndex = 0;
-    const match = pattern.regex.exec(text);
-    pattern.regex.lastIndex = 0;
-    if (!match?.[0]) return [];
-    return [{ finding: findingWithMatchedExcerpt(label, pattern.finding, text, match), severity }];
-  });
-}
-function base64Matches(source) {
-  const matches = [];
-  for (const match of source.text.matchAll(base64CandidatePattern)) {
-    const candidate = String(match[0] || "").replace(/\s+/g, "");
-    if (!validBase64Candidate(candidate)) continue;
-    const decoded = decodedBase64(candidate);
-    if (!decoded) continue;
-    const decodedHighRisk = patternMatches(
-      `${source.label} decoded base64`,
-      normalizedText(decoded),
-      highRiskPatterns,
-      "high"
-    );
-    if (decodedHighRisk.length) {
-      matches.push({
-        finding: `${source.label}: contains base64-decoded prompt-injection instructions`,
-        severity: "high"
-      });
-      continue;
-    }
-    if (encodedPayloadInstruction(source.text)) {
-      matches.push({
-        finding: `${source.label}: asks the model to decode or obey an encoded payload`,
-        severity: "high"
-      });
-    } else {
-      matches.push({
-        finding: `${source.label}: contains base64-like encoded content`,
-        severity: "medium"
-      });
-    }
-  }
-  return matches;
-}
-function mixedScriptMatches(source) {
-  const families = scriptFamilies(source.text);
-  if (families.length < 2) return [];
-  if (!/\b(?:approval|execute|instructions?|prompt|run|secrets?|system|tests?)\b/iu.test(source.text)) {
-    return [];
-  }
-  return [
-    {
-      finding: `${source.label}: mixes scripts around authority-sensitive terms`,
-      severity: "medium"
-    }
-  ];
-}
-function linkMatches(source) {
-  const matches = [];
-  for (const match of source.text.matchAll(urlPattern)) {
-    const url2 = trimmedUrl(String(match[0] || ""));
-    if (!url2) continue;
-    if (suspiciousLinkedFilePattern.test(url2)) {
-      const risky = nearbyRiskyLinkAction(source.text, match.index || 0);
-      if (dependencyLockfileSource(source.label) && !risky) continue;
-      matches.push({
-        finding: `${source.label}: references a suspicious linked file type`,
-        severity: risky ? "high" : "medium"
-      });
-    }
-    if (url2.includes("github.com/user-attachments/assets/")) {
-      matches.push({
-        finding: `${source.label}: references a GitHub user attachment`,
-        severity: "medium"
-      });
-    }
-  }
-  return matches;
-}
-function trimmedUrl(value) {
-  return value.replace(/[.,;:'"`]+$/u, "");
-}
-function nearbyRiskyLinkAction(text, index) {
-  const start = Math.max(0, index - 160);
-  const end = Math.min(text.length, index + 240);
-  return riskyLinkActionPattern.test(text.slice(start, end));
-}
-function dependencyLockfileSource(label) {
-  return dependencyLockfileSourcePattern.test(label);
-}
-function safetySourceUnit(source, id) {
-  return {
-    id,
-    kind: "safety-source",
-    label: source.label,
-    text: source.text
-  };
-}
-function normalizedText(value) {
-  return value.normalize("NFKC").replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069]/gu, "");
-}
-function findingWithMatchedExcerpt(label, finding, source, match) {
-  const excerpt = safetyMatchExcerpt(source, match.index, match[0].length);
-  const suffix = excerpt ? ` (matched excerpt: ${inlineCode(excerpt)})` : "";
-  return `${label}: ${finding}${suffix}`;
-}
-function safetyMatchExcerpt(value, start, length) {
-  const windowStart = Math.max(0, start - 48);
-  const windowEnd = Math.min(value.length, start + length + 48);
-  const prefix = windowStart > 0 ? "..." : "";
-  const suffix = windowEnd < value.length ? "..." : "";
-  const text = `${prefix}${normalizedText(value.slice(windowStart, windowEnd)).replace(/\s+/gu, " ").trim()}${suffix}`;
-  if (!text) return "";
-  const chars = [...text];
-  if (chars.length <= maxSafetyMatchExcerptLength) return text;
-  return `${chars.slice(0, maxSafetyMatchExcerptLength - 3).join("")}...`;
-}
-function inlineCode(value) {
-  return `\`${value.replaceAll("`", "'")}\``;
-}
-function validBase64Candidate(value) {
-  return value.length >= 40 && value.length <= 12e3 && value.length % 4 === 0 && /[+/=0-9]/.test(value) && /^[A-Za-z0-9+/]+={0,2}$/.test(value);
-}
-function decodedBase64(value) {
-  const decoded = Buffer.from(value, "base64").toString("utf8");
-  if (!mostlyPrintable(decoded)) return void 0;
-  return decoded;
-}
-function mostlyPrintable(value) {
-  if (!value.trim() || value.includes("\uFFFD")) return false;
-  const printable = [...value].filter((char) => /[\p{L}\p{N}\p{P}\p{S}\p{Zs}\r\n\t]/u.test(char));
-  return printable.length / [...value].length >= 0.85;
-}
-function encodedPayloadInstruction(value) {
-  return encodedPayloadInstructionPattern.test(value);
-}
-function scriptFamilies(value) {
-  const scripts = [
-    ["arabic", new RegExp("\\p{Script=Arabic}", "u")],
-    ["cjk", /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u],
-    ["cyrillic", new RegExp("\\p{Script=Cyrillic}", "u")],
-    ["greek", new RegExp("\\p{Script=Greek}", "u")],
-    ["hebrew", new RegExp("\\p{Script=Hebrew}", "u")],
-    ["latin", new RegExp("\\p{Script=Latin}", "u")]
-  ];
-  return scripts.filter(([, regex]) => regex.test(value)).map(([name]) => name);
-}
-function highestSeverity(values) {
-  if (values.includes("high")) return "high";
-  if (values.includes("medium")) return "medium";
-  return "none";
-}
-function unique(values) {
-  return [...new Set(values)];
-}
-
-// src/runner/mcp-client.ts
-var maxMcpResultScanChars = 1e5;
 async function connectMcpServer(options) {
   const transport = transportForServer(options.server, options.logger);
   const client = new Client({ name: "git-vibe", version: "1.0.0" });
@@ -19278,33 +19029,24 @@ async function connectMcpServer(options) {
 }
 function safetyCheckedMcpResult(options) {
   const result = redactMcpResultSecrets(options.result, options.secretValues || []);
-  const text = mcpResultText(result);
-  const scanText = text.length > maxMcpResultScanChars ? text.slice(0, maxMcpResultScanChars) : text;
-  const safety = safetyFindingsForText({
-    label: `MCP ${options.server}.${options.tool} result`,
-    text: scanText
-  });
+  const safety = mcpResultSafety(mcpResultText(result));
   options.logger?.event("mcp.tool.safety.checked", {
     findings: safety.findings.length,
     server: options.server,
     severity: safety.severity,
     tool: options.tool
   });
-  if (safety.severity !== "high") return result;
-  return {
-    content: [
-      {
-        text: [
-          `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
-          "",
-          "Detected risk:",
-          ...safety.findings.map((finding) => `- ${finding}`)
-        ].join("\n"),
-        type: "text"
-      }
-    ],
-    isError: true
-  };
+  if (safety.severity === "high") {
+    return mcpErrorResult(
+      [
+        `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
+        "",
+        "Detected risk:",
+        ...safety.findings.map((finding) => `- ${finding}`)
+      ].join("\n")
+    );
+  }
+  return result;
 }
 function mcpResultText(result) {
   const parts = [];
@@ -19356,6 +19098,10 @@ function redactMcpJsonValue(value, secrets) {
 }
 function activeMcpSecrets(secretValues) {
   return [...new Set(secretValues.filter((value) => value.length >= 4))];
+}
+function mcpResultSafety(text) {
+  const findings = mcpResultHighRiskPatterns.filter((pattern) => pattern.regex.test(text)).map((pattern) => pattern.finding);
+  return { findings, severity: findings.length > 0 ? "high" : "none" };
 }
 function transportForServer(server, logger) {
   if (server.transport === "stdio") {

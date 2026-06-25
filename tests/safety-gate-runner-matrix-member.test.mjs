@@ -26,6 +26,20 @@ afterEach(() => {
 describe("stage runner matrix member safety gate", () => {
   it("keeps blocked review matrix member runs artifact-only", async () => {
     const cwd = workspace();
+    globalThis.__gitVibeSdkMocks.queueCodexOutput({
+      findings: [
+        {
+          excerpt: "",
+          reason: "The classifier marked this PR file as unsafe.",
+          risk: "higher-priority instructions",
+          severity: "high",
+          source_label: "pull request file docs/prompt.md",
+        },
+      ],
+      severity: "high",
+      status: "blocked",
+      summary: "Prompt-injection input detected.",
+    });
     const fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
@@ -64,7 +78,7 @@ describe("stage runner matrix member safety gate", () => {
     expect(result.parsedOutput.findings.join("\n")).toContain("pull request file docs/prompt.md");
     expect(prReviewWrites(fetch)).toEqual([]);
     expect(labelWrites(fetch)).toEqual([]);
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -72,7 +86,12 @@ function workspace() {
   const cwd = mkdtempSync(join(tmpdir(), "git-vibe-safety-member-"));
   process.env.RUNNER_TEMP = mkdtempSync(join(tmpdir(), "git-vibe-runner-"));
   mkdirSync(join(cwd, ".github"));
-  writeFileSync(join(cwd, ".github", "git-vibe.yml"), workspaceConfigWithTestAi());
+  writeFileSync(
+    join(cwd, ".github", "git-vibe.yml"),
+    workspaceConfigWithTestAi(`safety:
+  prompt_injection_gate: true
+`),
+  );
   execFileSync("git", ["init"], { cwd, stdio: "ignore" });
   return cwd;
 }

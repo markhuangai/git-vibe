@@ -46,6 +46,7 @@ describe("git-vibe-setup update migrations", () => {
     expect(exitCode).toBe(0);
     expect(config).toContain("custom: true");
     expect(config).toContain("github_auth:\n  mode: github-app\n");
+    expect(config).toContain("safety:\n  prompt_injection_gate: true");
     expect(config).toContain("enabled: false");
     expect(config).toContain("Hosted GitHub App installs configure webhooks centrally");
     expect(config).not.toContain("webhook-pat");
@@ -232,8 +233,25 @@ describe("git-vibe-setup AI migration edge cases", () => {
     expect(config).toContain("scalar_profile: true");
     expect(config).toContain("adapter: 7");
     expect(config).toContain("adapter: custom-sdk");
+    expect(config).toContain("safety:\n  prompt_injection_gate: true");
     expect(config).not.toContain("claude-code-sdk");
     expect(config).not.toContain("codex-sdk");
+  });
+
+  it("preserves explicit prompt-injection safety config", () => {
+    const config = migrateGitVibeConfigContent(
+      [
+        "version: 1",
+        "safety:",
+        "  prompt_injection_gate: false",
+        "github_auth:",
+        "  mode: github-app",
+        "",
+      ].join("\n"),
+    );
+
+    expect(config).toContain("safety:\n  prompt_injection_gate: false");
+    expect(config).not.toContain("prompt_injection_gate: true");
   });
 
   it("preserves existing Claude env values while filling missing agentool env keys", () => {

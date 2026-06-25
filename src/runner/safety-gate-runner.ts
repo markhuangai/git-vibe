@@ -11,8 +11,9 @@ import {
   removeApprovalOnSafetyBlock,
   type SafetySource,
   safetyBlockedOutput,
-  safetyGateForStage,
 } from "./safety-gate.js";
+import { runAiSafetyGateForStage } from "./safety-ai-gate.js";
+import type { RunAiStageOptions } from "./ai.js";
 import { type PublishedArtifactComment, publishStageResultComment } from "./stage-publishing.js";
 import { applySafetyBlockedLabelTransition } from "./stage-safety-labels.js";
 
@@ -61,10 +62,12 @@ export async function blockUnsafePromptInjection(options: {
 
 export async function promptInjectionBlockedResult(options: {
   buildResult: (content: string) => Promise<StageRunResult>;
+  client?: GitHubClient;
   config: GitVibeConfig;
   context: ContextPacket;
   contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
+  github?: RunAiStageOptions["github"];
   includeContext?: boolean;
   logger: StageLogger;
   phase: "input" | "output";
@@ -72,14 +75,26 @@ export async function promptInjectionBlockedResult(options: {
   runner: RunnerOptions;
 }): Promise<StageRunResult | undefined> {
   if (options.runner.dryRun) return undefined;
-  const gate = safetyGateForStage({
+  const gate = await runAiSafetyGateForStage({
     config: options.config,
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
+    github:
+      options.github ||
+      (options.client
+        ? {
+            authWriteback: options.runner.githubAuthWriteback,
+            client: options.client,
+            repository: options.runner.repository,
+            token: options.runner.token,
+          }
+        : undefined),
     includeContext: options.includeContext,
+    logger: options.logger,
     output: options.result?.parsedOutput,
-    stage: options.runner.stage,
+    phase: options.phase,
+    runner: options.runner,
   });
   options.logger.event("safety.gate.checked", {
     allowed: gate.allowed,
