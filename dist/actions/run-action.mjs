@@ -29226,6 +29226,7 @@ var configSchema = external_exports.object({
   ai: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
   safety: external_exports.object({
     block_write_stages_on_high_risk: external_exports.boolean().optional(),
+    ignored_authors: external_exports.array(external_exports.string()).optional(),
     prompt_injection_gate: external_exports.boolean().optional(),
     remove_approval_on_block: external_exports.boolean().optional()
   }).optional(),
@@ -36703,37 +36704,67 @@ import { dirname, isAbsolute, join as join2, relative } from "node:path";
 
 // src/runner/content-units.ts
 import { createHash as createHash2 } from "node:crypto";
+
+// src/runner/ignored-authors.ts
+var defaultSafetyIgnoredAuthors = ["coderabbitai", "coderabbitai[bot]"];
+function safetyIgnoredAuthors(config2 = {}) {
+  return normalizedAuthorList([
+    ...defaultSafetyIgnoredAuthors,
+    ...config2.safety?.ignored_authors || []
+  ]);
+}
+function contextWithoutIgnoredAuthors(context, ignoredAuthors = []) {
+  const ignored = new Set(normalizedAuthorList(ignoredAuthors));
+  if (ignored.size === 0) return context;
+  const timeline = context.timeline.filter((item) => !timelineAuthorIgnored(item, ignored));
+  return timeline.length === context.timeline.length ? context : { ...context, timeline };
+}
+function timelineAuthorIgnored(item, ignoredAuthors) {
+  return ignoredTimelineKind(item.kind) && ignoredAuthors.has(normalizedAuthor(item.author));
+}
+function ignoredTimelineKind(kind) {
+  return kind === "comment" || kind === "discussion-comment" || kind === "issue-comment" || kind === "pull-request-comment" || kind === "pull-request-review" || kind === "pull-request-review-comment";
+}
+function normalizedAuthorList(authors) {
+  return Array.from(new Set(authors.map(normalizedAuthor).filter(Boolean)));
+}
+function normalizedAuthor(author) {
+  return author.trim().toLowerCase();
+}
+
+// src/runner/content-units.ts
 var defaultChunkSizeChars = 12e3;
 var defaultChunkOverlapChars = 1e3;
 var defaultPromptBudgetChars = 8e4;
-function contentUnitsForContext(context) {
+function contentUnitsForContext(context, options = {}) {
+  const sourceContext = contextWithoutIgnoredAuthors(context, options.ignoredAuthors);
   return [
-    unit("artifact-title", "artifact", "artifact title", context.artifact.title, {
-      metadata: artifactMetadata(context),
-      sourceUrl: context.artifact.url
+    unit("artifact-title", "artifact", "artifact title", sourceContext.artifact.title, {
+      metadata: artifactMetadata(sourceContext),
+      sourceUrl: sourceContext.artifact.url
     }),
-    unit("artifact-body", "artifact", "artifact body", context.artifact.body, {
-      metadata: artifactMetadata(context),
-      sourceUrl: context.artifact.url
+    unit("artifact-body", "artifact", "artifact body", sourceContext.artifact.body, {
+      metadata: artifactMetadata(sourceContext),
+      sourceUrl: sourceContext.artifact.url
     }),
-    ...context.timeline.flatMap(timelineUnits),
-    ...context.source?.comment?.body ? [
+    ...sourceContext.timeline.flatMap(timelineUnits),
+    ...sourceContext.source?.comment?.body ? [
       unit(
         "source-command-comment",
         "source-comment",
         "source command comment",
-        context.source.comment.body,
+        sourceContext.source.comment.body,
         {
           metadata: {
-            id: context.source.comment.id,
-            kind: context.source.comment.kind,
-            nodeId: context.source.comment.nodeId
+            id: sourceContext.source.comment.id,
+            kind: sourceContext.source.comment.kind,
+            nodeId: sourceContext.source.comment.nodeId
           },
-          sourceUrl: context.source.comment.url
+          sourceUrl: sourceContext.source.comment.url
         }
       )
     ] : [],
-    ...(context.handoffs || []).flatMap((handoff, index) => [
+    ...(sourceContext.handoffs || []).flatMap((handoff, index) => [
       unit(
         `handoff-${index}-${handoff.stage}-summary`,
         "handoff",
@@ -36756,27 +36787,33 @@ function contentUnitsForContext(context) {
         { metadata: handoffMetadata(handoff) }
       )
     ]),
-    ...(context.pullRequestFiles || []).map((file2, index) => pullRequestFileUnit(file2, index))
+    ...(sourceContext.pullRequestFiles || []).map(
+      (file2, index) => pullRequestFileUnit(file2, index)
+    )
   ].filter((item) => item.text.trim());
 }
-function contentUnitsOnOrAfterCutoff(context, cutoff) {
+function contentUnitsOnOrAfterCutoff(context, cutoff, options = {}) {
   const cutoffMs = cutoffTimeMs(cutoff);
   if (cutoffMs === void 0) return [];
   const cutoffSecondMs = Math.floor(cutoffMs / 1e3) * 1e3;
-  return contentUnitsForContext(context).filter((item) => {
+  return contentUnitsForContext(context, options).filter((item) => {
     const activityMs = contentUnitActivityMs(item);
     if (activityMs !== void 0) return activityMs >= cutoffSecondMs;
     return item.kind === "handoff";
   });
 }
 function acceptedRiskDeltaContentUnits(options) {
-  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff).filter(
+  const unitOptions = { ignoredAuthors: options.ignoredAuthors };
+  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff, unitOptions).filter(
     (item) => !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource)
   );
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
     return units;
   }
-  return [...contentUnitsForContext(options.context).filter(artifactContentUnit), ...units];
+  return [
+    ...contentUnitsForContext(options.context, unitOptions).filter(artifactContentUnit),
+    ...units
+  ];
 }
 function chunkContentUnits(units, options = {}) {
   const chunkSize = options.chunkSizeChars || defaultChunkSizeChars;
@@ -36800,14 +36837,16 @@ function chunkContentUnits(units, options = {}) {
   );
 }
 function packedContextForPrompt(context, options = {}) {
-  if (options.fileContext) return packedFileBackedContextForPrompt(context, options.fileContext);
-  const units = contentUnitsForContext(context);
+  const sourceContext = contextWithoutIgnoredAuthors(context, options.ignoredAuthors);
+  if (options.fileContext)
+    return packedFileBackedContextForPrompt(sourceContext, options.fileContext);
+  const units = contentUnitsForContext(sourceContext, options);
   const chunks = chunkContentUnits(units, options);
   const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
   const includedIds = new Set(included.map((chunk) => chunk.id));
   const pending = chunks.filter((chunk) => !includedIds.has(chunk.id));
   return {
-    artifact: packedArtifact(context),
+    artifact: packedArtifact(sourceContext),
     context_manifest: {
       chunk_overlap_chars: options.chunkOverlapChars ?? defaultChunkOverlapChars,
       chunk_size_chars: options.chunkSizeChars || defaultChunkSizeChars,
@@ -36818,13 +36857,13 @@ function packedContextForPrompt(context, options = {}) {
       total_units: units.length,
       units: units.map((item) => unitManifest(item, chunks, includedIds))
     },
-    generatedAt: context.generatedAt,
-    handoffs: packedHandoffs(context),
+    generatedAt: sourceContext.generatedAt,
+    handoffs: packedHandoffs(sourceContext),
     included_context_chunks: included.map(packedChunk),
-    pullRequestFiles: packedPullRequestFiles(context),
-    repository: context.repository,
-    source: packedSource(context),
-    timeline: context.timeline.map(packedTimelineItem)
+    pullRequestFiles: packedPullRequestFiles(sourceContext),
+    repository: sourceContext.repository,
+    source: packedSource(sourceContext),
+    timeline: sourceContext.timeline.map(packedTimelineItem)
   };
 }
 function packedFileBackedContextForPrompt(context, fileContext) {
@@ -36850,7 +36889,7 @@ function packedFileBackedContextForPrompt(context, fileContext) {
   };
 }
 function contextPromptCoverageForContext(context, options = {}) {
-  const chunks = chunkContentUnits(contentUnitsForContext(context), options);
+  const chunks = chunkContentUnits(contentUnitsForContext(context, options), options);
   const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
   const includedIds = new Set(included.map((chunk) => chunk.id));
   const pendingChunkIds = chunks.filter((chunk) => !includedIds.has(chunk.id)).map((chunk) => chunk.id);
@@ -37216,12 +37255,13 @@ function writePromptContextFiles(options) {
   const rootDir = join3(options.rootDir, `git-vibe-${options.stage}-context-files`);
   const unitsDir = join3(rootDir, "units");
   mkdirSync(unitsDir, { recursive: true });
+  const context = contextWithoutIgnoredAuthors(options.context, options.ignoredAuthors);
   const fullContext = writeJsonReference({
-    content: options.context,
+    content: context,
     path: join3(rootDir, "github-context.json"),
     rootDir
   });
-  const units = contentUnitsForContext(options.context).map((unit2, index) => {
+  const units = contentUnitsForContext(context).map((unit2, index) => {
     const path3 = join3(unitsDir, unitFilename(unit2.id, index));
     writeFileSync2(path3, unit2.text);
     return {
@@ -62374,7 +62414,7 @@ function removeApprovalOnSafetyBlock(config2) {
 }
 function safetyGateSources(options) {
   return [
-    ...options.includeContext ? options.contextUnits ?? contentUnitsForContext(options.context) : [],
+    ...options.includeContext ? options.contextUnits ?? contentUnitsForContext(options.context, { ignoredAuthors: options.ignoredAuthors }) : [],
     ...options.output ? [
       safetySourceUnit(
         { label: "stage output", text: JSON.stringify(options.output) },
@@ -62497,6 +62537,7 @@ async function runAiSafetyGateForStage(options) {
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
+    ignoredAuthors: safetyIgnoredAuthors(options.config),
     includeContext: options.includeContext !== false,
     output: options.output
   });
@@ -64535,7 +64576,7 @@ function acceptedRiskApplies(options) {
   });
   return false;
 }
-function acceptedRiskContextUnits(context, runner) {
+function acceptedRiskContextUnits(context, runner, ignoredAuthors = []) {
   const cutoff = runner.acceptedRisk?.cutoff;
   if (!cutoff) return [];
   const accepted = acceptedRiskMetadataForContext(context, runner);
@@ -64543,7 +64584,8 @@ function acceptedRiskContextUnits(context, runner) {
     acceptedMetadata: accepted?.metadata,
     acceptedSource: accepted?.source,
     context,
-    cutoff
+    cutoff,
+    ignoredAuthors
   });
 }
 function contextWithoutAcceptedRiskMetadataSource(context, runner) {
@@ -64965,17 +65007,26 @@ async function runStage(options) {
   const transientComments = await publishStageStart({ client, context, logger, options: runner });
   const stageContext = { client, context, definition, logger, options: runner, transientComments };
   const safetyOptions = stageSafetyOptions({ ...stageContext, config: config2 });
+  const ignoredAuthors = safetyIgnoredAuthors(config2);
   const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
+  const promptContext = contextWithoutIgnoredAuthors(
+    acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context,
+    ignoredAuthors
+  );
   const inputSafetyResult = await blockInitialPromptInput({
     acceptedRisk,
     safetyOptions
   });
   if (inputSafetyResult) return inputSafetyResult;
-  const mcpContext = await resolveMcpContext({ ...stageContext, config: config2 });
+  const mcpContext = await resolveMcpContext({ ...stageContext, config: config2, context: promptContext });
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
   const schema = loadStageSchema(definition.schemaFile);
-  const promptContext = acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context;
-  const contextFiles = persistContext({ context: promptContext, logger, options });
+  const contextFiles = persistContext({
+    context: promptContext,
+    ignoredAuthors,
+    logger,
+    options
+  });
   const prompts = buildRenderedPrompts({
     context: promptContext,
     contextFiles,
@@ -65023,7 +65074,11 @@ async function blockInitialPromptInput(options) {
   return blockPromptInput(options.safetyOptions);
 }
 async function blockAcceptedRiskDeltaInput(options) {
-  const contextUnits = acceptedRiskContextUnits(options.context, options.runner);
+  const contextUnits = acceptedRiskContextUnits(
+    options.context,
+    options.runner,
+    safetyIgnoredAuthors(options.config)
+  );
   if (contextUnits.length === 0) {
     options.logger.event("accepted_risk.input_gate.skip", {
       cutoff: options.runner.acceptedRisk?.cutoff,
@@ -65056,7 +65111,8 @@ async function runCheckedStageResult(options) {
   const result = await runStageResultForMode(options);
   recordContextCoverage({
     coverage: contextPromptCoverageForContext(options.context, {
-      budgetChars: Number.MAX_SAFE_INTEGER
+      budgetChars: Number.MAX_SAFE_INTEGER,
+      ignoredAuthors: safetyIgnoredAuthors(options.config)
     }),
     logger: options.logger
   });
@@ -65118,6 +65174,7 @@ function persistContext(options) {
   );
   const contextFiles = writePromptContextFiles({
     context: options.context,
+    ignoredAuthors: options.ignoredAuthors,
     rootDir: contextDir,
     stage: options.options.stage
   });

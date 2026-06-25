@@ -133,6 +133,7 @@ export function acceptedRiskApplies(options: {
 export function acceptedRiskContextUnits(
   context: ContextPacket,
   runner: RunnerOptions,
+  ignoredAuthors: readonly string[] = [],
 ): ContentUnit[] {
   const cutoff = runner.acceptedRisk?.cutoff;
   if (!cutoff) return [];
@@ -142,6 +143,7 @@ export function acceptedRiskContextUnits(
     acceptedSource: accepted?.source,
     context,
     cutoff,
+    ignoredAuthors,
   });
 }
 

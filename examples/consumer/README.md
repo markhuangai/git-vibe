@@ -19,6 +19,9 @@ the root `README.md`.
 `.github/git-vibe.yml` enables the AI prompt-injection gate by default:
 `safety.prompt_injection_gate: true`. Set it to `false` only when the
 repository owner wants to skip both input and output safety scans.
+CodeRabbit comments and reviews are ignored by default. Add more bot logins
+with `safety.ignored_authors` only when the repository owner wants GitVibe to
+depend on its own review instead of scanning those bots' comments.
 
 Use `GITVIBE_AI_ENV_JSON.example.json` as the shape for the
 `GITVIBE_AI_ENV_JSON` secret. If the repository config enables MCP servers, use

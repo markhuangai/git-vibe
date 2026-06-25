@@ -10,6 +10,7 @@ import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
+import { contextWithoutIgnoredAuthors, safetyIgnoredAuthors } from "./ignored-authors.js";
 import {
   contextPromptCoverageForContext,
   type ContextPromptCoverage,
@@ -116,21 +117,28 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const stageContext = { client, context, definition, logger, options: runner, transientComments };
 
   const safetyOptions = stageSafetyOptions({ ...stageContext, config });
+  const ignoredAuthors = safetyIgnoredAuthors(config);
   const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
+  const promptContext = contextWithoutIgnoredAuthors(
+    acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context,
+    ignoredAuthors,
+  );
   const inputSafetyResult = await blockInitialPromptInput({
     acceptedRisk,
     safetyOptions,
   });
   if (inputSafetyResult) return inputSafetyResult;
 
-  const mcpContext = await resolveMcpContext({ ...stageContext, config });
+  const mcpContext = await resolveMcpContext({ ...stageContext, config, context: promptContext });
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
 
   const schema = loadStageSchema(definition.schemaFile);
-  const promptContext = acceptedRisk
-    ? contextWithoutAcceptedRiskMetadataSource(context, runner)
-    : context;
-  const contextFiles = persistContext({ context: promptContext, logger, options });
+  const contextFiles = persistContext({
+    context: promptContext,
+    ignoredAuthors,
+    logger,
+    options,
+  });
   const prompts = buildRenderedPrompts({
     context: promptContext,
     contextFiles,
@@ -185,7 +193,11 @@ async function blockInitialPromptInput(options: {
 async function blockAcceptedRiskDeltaInput(
   options: StageSafetyOptions,
 ): Promise<StageRunResult | undefined> {
-  const contextUnits = acceptedRiskContextUnits(options.context, options.runner);
+  const contextUnits = acceptedRiskContextUnits(
+    options.context,
+    options.runner,
+    safetyIgnoredAuthors(options.config),
+  );
   if (contextUnits.length === 0) {
     options.logger.event("accepted_risk.input_gate.skip", {
       cutoff: options.runner.acceptedRisk?.cutoff,
@@ -237,6 +249,7 @@ async function runCheckedStageResult(options: {
   recordContextCoverage({
     coverage: contextPromptCoverageForContext(options.context, {
       budgetChars: Number.MAX_SAFE_INTEGER,
+      ignoredAuthors: safetyIgnoredAuthors(options.config),
     }),
     logger: options.logger,
   });
@@ -330,6 +343,7 @@ function recordContextCoverage(options: {
 
 function persistContext(options: {
   context: ContextPacket;
+  ignoredAuthors: readonly string[];
   logger: StageLogger;
   options: RunnerOptions;
 }): PackedPromptContextFiles {
@@ -341,6 +355,7 @@ function persistContext(options: {
   );
   const contextFiles = writePromptContextFiles({
     context: options.context,
+    ignoredAuthors: options.ignoredAuthors,
     rootDir: contextDir,
     stage: options.options.stage,
   });

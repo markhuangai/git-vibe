@@ -46,10 +46,13 @@ safety:
   prompt_injection_gate: true
   block_write_stages_on_high_risk: true
   remove_approval_on_block: false
+  ignored_authors:
+    - custom-review-bot[bot]
 `),
     ).toEqual({
       safety: {
         block_write_stages_on_high_risk: true,
+        ignored_authors: ["custom-review-bot[bot]"],
         prompt_injection_gate: true,
         remove_approval_on_block: false,
       },

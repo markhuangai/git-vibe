@@ -21873,6 +21873,7 @@ var configSchema = external_exports.object({
   ai: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
   safety: external_exports.object({
     block_write_stages_on_high_risk: external_exports.boolean().optional(),
+    ignored_authors: external_exports.array(external_exports.string()).optional(),
     prompt_injection_gate: external_exports.boolean().optional(),
     remove_approval_on_block: external_exports.boolean().optional()
   }).optional(),

@@ -13,6 +13,7 @@ const configSchema = z
     safety: z
       .object({
         block_write_stages_on_high_risk: z.boolean().optional(),
+        ignored_authors: z.array(z.string()).optional(),
         prompt_injection_gate: z.boolean().optional(),
         remove_approval_on_block: z.boolean().optional(),
       })

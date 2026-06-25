@@ -359,6 +359,9 @@ github_auth:
 safety:
   # Enabled by default. Set false to skip input/output prompt-injection scans.
   prompt_injection_gate: true
+  # CodeRabbit authors are ignored by default. Add more bot authors here.
+  ignored_authors:
+    - custom-review-bot[bot]
 
 ai:
   profiles:
@@ -433,6 +436,9 @@ external agent mentions, permissions, and label names are not configurable.
 `safety.prompt_injection_gate` controls the AI prompt-injection gate. When it is
 `true` or omitted, GitVibe scans untrusted input before a stage and scans stage
 output before publishing. When it is `false`, GitVibe skips both scans.
+`safety.ignored_authors` adds GitHub logins whose timeline comments and reviews
+are omitted from prompt-injection scans and model context. CodeRabbit
+(`coderabbitai` and `coderabbitai[bot]`) is ignored by default.
 
 Each AI stage must define `profile` or `role_group`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.

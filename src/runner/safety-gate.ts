@@ -27,12 +27,14 @@ export function safetyGateSources(options: {
   context: ContextPacket;
   contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
+  ignoredAuthors?: readonly string[];
   includeContext: boolean;
   output?: JsonObject;
 }): ContentUnit[] {
   return [
     ...(options.includeContext
-      ? (options.contextUnits ?? contentUnitsForContext(options.context))
+      ? (options.contextUnits ??
+        contentUnitsForContext(options.context, { ignoredAuthors: options.ignoredAuthors }))
       : []),
     ...(options.output
       ? [

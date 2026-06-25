@@ -29304,6 +29304,7 @@ var configSchema = external_exports.object({
   ai: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
   safety: external_exports.object({
     block_write_stages_on_high_risk: external_exports.boolean().optional(),
+    ignored_authors: external_exports.array(external_exports.string()).optional(),
     prompt_injection_gate: external_exports.boolean().optional(),
     remove_approval_on_block: external_exports.boolean().optional()
   }).optional(),
@@ -32578,36 +32579,66 @@ function validateEnvName(value, path3) {
 
 // src/runner/content-units.ts
 import { createHash as createHash2 } from "node:crypto";
+
+// src/runner/ignored-authors.ts
+var defaultSafetyIgnoredAuthors = ["coderabbitai", "coderabbitai[bot]"];
+function safetyIgnoredAuthors(config2 = {}) {
+  return normalizedAuthorList([
+    ...defaultSafetyIgnoredAuthors,
+    ...config2.safety?.ignored_authors || []
+  ]);
+}
+function contextWithoutIgnoredAuthors(context, ignoredAuthors = []) {
+  const ignored = new Set(normalizedAuthorList(ignoredAuthors));
+  if (ignored.size === 0) return context;
+  const timeline = context.timeline.filter((item) => !timelineAuthorIgnored(item, ignored));
+  return timeline.length === context.timeline.length ? context : { ...context, timeline };
+}
+function timelineAuthorIgnored(item, ignoredAuthors) {
+  return ignoredTimelineKind(item.kind) && ignoredAuthors.has(normalizedAuthor(item.author));
+}
+function ignoredTimelineKind(kind) {
+  return kind === "comment" || kind === "discussion-comment" || kind === "issue-comment" || kind === "pull-request-comment" || kind === "pull-request-review" || kind === "pull-request-review-comment";
+}
+function normalizedAuthorList(authors) {
+  return Array.from(new Set(authors.map(normalizedAuthor).filter(Boolean)));
+}
+function normalizedAuthor(author) {
+  return author.trim().toLowerCase();
+}
+
+// src/runner/content-units.ts
 var defaultChunkSizeChars = 12e3;
 var defaultChunkOverlapChars = 1e3;
-function contentUnitsForContext(context) {
+function contentUnitsForContext(context, options = {}) {
+  const sourceContext = contextWithoutIgnoredAuthors(context, options.ignoredAuthors);
   return [
-    unit("artifact-title", "artifact", "artifact title", context.artifact.title, {
-      metadata: artifactMetadata(context),
-      sourceUrl: context.artifact.url
+    unit("artifact-title", "artifact", "artifact title", sourceContext.artifact.title, {
+      metadata: artifactMetadata(sourceContext),
+      sourceUrl: sourceContext.artifact.url
     }),
-    unit("artifact-body", "artifact", "artifact body", context.artifact.body, {
-      metadata: artifactMetadata(context),
-      sourceUrl: context.artifact.url
+    unit("artifact-body", "artifact", "artifact body", sourceContext.artifact.body, {
+      metadata: artifactMetadata(sourceContext),
+      sourceUrl: sourceContext.artifact.url
     }),
-    ...context.timeline.flatMap(timelineUnits),
-    ...context.source?.comment?.body ? [
+    ...sourceContext.timeline.flatMap(timelineUnits),
+    ...sourceContext.source?.comment?.body ? [
       unit(
         "source-command-comment",
         "source-comment",
         "source command comment",
-        context.source.comment.body,
+        sourceContext.source.comment.body,
         {
           metadata: {
-            id: context.source.comment.id,
-            kind: context.source.comment.kind,
-            nodeId: context.source.comment.nodeId
+            id: sourceContext.source.comment.id,
+            kind: sourceContext.source.comment.kind,
+            nodeId: sourceContext.source.comment.nodeId
           },
-          sourceUrl: context.source.comment.url
+          sourceUrl: sourceContext.source.comment.url
         }
       )
     ] : [],
-    ...(context.handoffs || []).flatMap((handoff, index) => [
+    ...(sourceContext.handoffs || []).flatMap((handoff, index) => [
       unit(
         `handoff-${index}-${handoff.stage}-summary`,
         "handoff",
@@ -32630,27 +32661,33 @@ function contentUnitsForContext(context) {
         { metadata: handoffMetadata(handoff) }
       )
     ]),
-    ...(context.pullRequestFiles || []).map((file2, index) => pullRequestFileUnit(file2, index))
+    ...(sourceContext.pullRequestFiles || []).map(
+      (file2, index) => pullRequestFileUnit(file2, index)
+    )
   ].filter((item) => item.text.trim());
 }
-function contentUnitsOnOrAfterCutoff(context, cutoff) {
+function contentUnitsOnOrAfterCutoff(context, cutoff, options = {}) {
   const cutoffMs = cutoffTimeMs(cutoff);
   if (cutoffMs === void 0) return [];
   const cutoffSecondMs = Math.floor(cutoffMs / 1e3) * 1e3;
-  return contentUnitsForContext(context).filter((item) => {
+  return contentUnitsForContext(context, options).filter((item) => {
     const activityMs = contentUnitActivityMs(item);
     if (activityMs !== void 0) return activityMs >= cutoffSecondMs;
     return item.kind === "handoff";
   });
 }
 function acceptedRiskDeltaContentUnits(options) {
-  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff).filter(
+  const unitOptions = { ignoredAuthors: options.ignoredAuthors };
+  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff, unitOptions).filter(
     (item) => !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource)
   );
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
     return units;
   }
-  return [...contentUnitsForContext(options.context).filter(artifactContentUnit), ...units];
+  return [
+    ...contentUnitsForContext(options.context, unitOptions).filter(artifactContentUnit),
+    ...units
+  ];
 }
 function chunkContentUnits(units, options = {}) {
   const chunkSize = options.chunkSizeChars || defaultChunkSizeChars;
@@ -57716,7 +57753,7 @@ function removeApprovalOnSafetyBlock(config2) {
 }
 function safetyGateSources(options) {
   return [
-    ...options.includeContext ? options.contextUnits ?? contentUnitsForContext(options.context) : [],
+    ...options.includeContext ? options.contextUnits ?? contentUnitsForContext(options.context, { ignoredAuthors: options.ignoredAuthors }) : [],
     ...options.output ? [
       safetySourceUnit(
         { label: "stage output", text: JSON.stringify(options.output) },
@@ -57839,6 +57876,7 @@ async function runAiSafetyGateForStage(options) {
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
+    ignoredAuthors: safetyIgnoredAuthors(options.config),
     includeContext: options.includeContext !== false,
     output: options.output
   });
@@ -59569,7 +59607,7 @@ function acceptedRiskApplies(options) {
   });
   return false;
 }
-function acceptedRiskContextUnits(context, runner) {
+function acceptedRiskContextUnits(context, runner, ignoredAuthors = []) {
   const cutoff = runner.acceptedRisk?.cutoff;
   if (!cutoff) return [];
   const accepted = acceptedRiskMetadataForContext(context, runner);
@@ -59577,7 +59615,8 @@ function acceptedRiskContextUnits(context, runner) {
     acceptedMetadata: accepted?.metadata,
     acceptedSource: accepted?.source,
     context,
-    cutoff
+    cutoff,
+    ignoredAuthors
   });
 }
 async function publishAcceptedRiskAudit(options) {
@@ -59795,7 +59834,11 @@ async function runStageSecurityReview(options) {
   return { allowed: true, status: "allowed", summary: "Security review passed." };
 }
 async function blockAcceptedRiskDeltaInput(options) {
-  const contextUnits = acceptedRiskContextUnits(options.context, options.runner);
+  const contextUnits = acceptedRiskContextUnits(
+    options.context,
+    options.runner,
+    safetyIgnoredAuthors(options.config)
+  );
   if (contextUnits.length === 0) {
     options.logger.event("accepted_risk.input_gate.skip", {
       cutoff: options.runner.acceptedRisk?.cutoff,

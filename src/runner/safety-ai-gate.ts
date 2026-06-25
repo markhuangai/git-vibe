@@ -11,6 +11,7 @@ import {
   type SafetySource,
 } from "./safety-gate.js";
 import { stageConfigFor } from "./ai-config.js";
+import { safetyIgnoredAuthors } from "./ignored-authors.js";
 import { stageExecutionPlan } from "./role-groups.js";
 import { stageDefinitions } from "../shared/stages.js";
 import type { ContextPacket, GitVibeConfig, JsonObject, RunnerOptions } from "../shared/types.js";
@@ -87,6 +88,7 @@ export async function runAiSafetyGateForStage(options: {
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
+    ignoredAuthors: safetyIgnoredAuthors(options.config),
     includeContext: options.includeContext !== false,
     output: options.output,
   });
