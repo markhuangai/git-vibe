@@ -69,4 +69,6 @@ runs:
         GITVIBE_STAGE_TIMEOUT_MINUTES: ${{ inputs.stage-timeout-minutes }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_HANDOFF_DIR: ${{ inputs.handoff-dir }}
+        GITVIBE_AI_ENV_JSON: ${{ env.GITVIBE_AI_ENV_JSON }}
+        GITVIBE_MCP_ENV_JSON: ${{ env.GITVIBE_MCP_ENV_JSON }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/security-review.js" "${{ inputs.stage }}"

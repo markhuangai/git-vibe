@@ -108,6 +108,9 @@ jobs:
           package-manager-cache: false
       - id: security
         uses: ./.git-vibe/actions/security-review
+        env:
+          GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+          GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
         with:
           stage: validate
           issue-number: ${{ inputs.issue-number }}

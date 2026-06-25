@@ -158,10 +158,7 @@ describe("GitVibe workflow wiring", () => {
           expect(step.env?.GITVIBE_MCP_ENV_JSON, `${file} ${step.uses} omits MCP env`).toBe("");
           continue;
         }
-        if (
-          step.uses === "./.git-vibe/actions/mark-blocked" ||
-          step.uses === "./.git-vibe/actions/security-review"
-        ) {
+        if (step.uses === "./.git-vibe/actions/mark-blocked") {
           expect(
             step.env?.GITVIBE_AI_ENV_JSON,
             `${file} ${step.uses} omits AI env`,
@@ -170,6 +167,13 @@ describe("GitVibe workflow wiring", () => {
             step.env?.GITVIBE_MCP_ENV_JSON,
             `${file} ${step.uses} omits MCP env`,
           ).toBeUndefined();
+          continue;
+        }
+        if (step.uses === "./.git-vibe/actions/security-review") {
+          expect(step.env, `${file} ${step.uses} receives AI and MCP env`).toMatchObject({
+            ...aiEnv,
+            ...mcpEnv,
+          });
           continue;
         }
         expect(step.env, `${file} ${step.uses} receives AI and MCP env`).toMatchObject({
