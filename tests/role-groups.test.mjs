@@ -14,6 +14,7 @@ import {
   singleProfileNamesForStage,
   stageFinalizerAdapter,
   stageExecutionPlan,
+  stageSafetyAdapter,
   stageWorkflowAdapters,
   stageWorkflowIndexes,
   stageWorkflowLabels,
@@ -53,6 +54,10 @@ describe("role group stage planning", () => {
       0: "claude-code-sdk",
     });
     expect(stageFinalizerAdapter(roleGroupConfig(), plan)).toBe("codex-sdk");
+    expect(stageSafetyAdapter(roleGroupConfig(), plan)).toBe("codex-sdk");
+    expect(
+      stageSafetyAdapter({ ...roleGroupConfig(), safety: { prompt_injection_gate: false } }, plan),
+    ).toBe("");
     expect(matrixMemberRowForStage(roleGroupConfig(), "review-matrix", cwd, 0)).toMatchObject({
       model: "gpt-test",
       profile: "reviewer",
@@ -393,6 +398,7 @@ describe("plan-stage action", () => {
     expect(outputContent).toContain('labels<<GITVIBE_OUTPUT\n{"0":"security - reviewer"}');
     expect(outputContent).toContain('adapters<<GITVIBE_OUTPUT\n{"0":"claude-code-sdk"}');
     expect(outputContent).toContain("finalizer-adapter<<GITVIBE_OUTPUT\ncodex-sdk");
+    expect(outputContent).toContain("safety-adapter<<GITVIBE_OUTPUT\ncodex-sdk");
     expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
       "value: ${{ steps.plan.outputs.indexes }}",
     );
@@ -404,6 +410,9 @@ describe("plan-stage action", () => {
     );
     expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
       "value: ${{ steps.plan.outputs.finalizer-adapter }}",
+    );
+    expect(readFileSync("plan-stage/action.yml", "utf8")).toContain(
+      "value: ${{ steps.plan.outputs.safety-adapter }}",
     );
     expect(outputContent).toContain(matrixOutput);
     expect(matrixOutput).not.toContain("security.md");

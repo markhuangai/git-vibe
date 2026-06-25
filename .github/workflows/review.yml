@@ -72,6 +72,7 @@ concurrency:
 jobs:
   security-review:
     runs-on: ${{ inputs.runner }}
+    needs: plan-review-matrix
     timeout-minutes: 10
     outputs:
       allowed: ${{ steps.security.outputs.allowed }}
@@ -106,13 +107,12 @@ jobs:
         with:
           stage: review-matrix
           pr-number: ${{ inputs.pr-number }}
+          adapter: ${{ needs.plan-review-matrix.outputs.safety-adapter }}
           stage-timeout-minutes: 10
           source-comment: ${{ inputs.source-comment }}
 
   plan-review-matrix:
     runs-on: ${{ inputs.runner }}
-    needs: security-review
-    if: needs.security-review.outputs.allowed == 'true'
     timeout-minutes: 10
     env:
       GITVIBE_AI_ENV_JSON: ""
@@ -124,6 +124,7 @@ jobs:
       labels: ${{ steps.plan.outputs.labels }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
+      safety-adapter: ${{ steps.plan.outputs.safety-adapter }}
     permissions:
       id-token: write
       contents: read
@@ -150,7 +151,10 @@ jobs:
   review-matrix-members:
     name: git-vibe-review-member-${{ matrix.index }} / ${{ fromJSON(needs.plan-review-matrix.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
-    needs: plan-review-matrix
+    needs:
+      - plan-review-matrix
+      - security-review
+    if: needs.security-review.outputs.allowed == 'true'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
@@ -207,8 +211,9 @@ jobs:
     runs-on: ${{ inputs.runner }}
     needs:
       - plan-review-matrix
+      - security-review
       - review-matrix-members
-    if: always() && needs.plan-review-matrix.result == 'success'
+    if: always() && needs.plan-review-matrix.result == 'success' && needs.security-review.outputs.allowed == 'true'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

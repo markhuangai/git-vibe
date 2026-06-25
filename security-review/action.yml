@@ -29,6 +29,9 @@ inputs:
     description: Directory containing previous GitVibe stage result JSON files to review.
     required: false
     default: ""
+  adapter:
+    description: GitVibe SDK adapter used by the safety classifier.
+    required: true
 outputs:
   allowed:
     description: Whether downstream LLM jobs may run.
@@ -59,6 +62,14 @@ runs:
             exit 1
           fi
         done
+    - name: Prepare Claude Code executable
+      if: ${{ inputs.adapter == 'claude-code-sdk' }}
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/../scripts/prepare-claude-code.sh"
+    - name: Prepare Codex executable
+      if: ${{ inputs.adapter == 'codex-sdk' }}
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/../scripts/prepare-codex.sh"
     - id: review
       shell: bash
       env:

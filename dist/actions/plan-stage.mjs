@@ -21997,6 +21997,10 @@ function stageFinalizerAdapter(config2, plan) {
   if (!profile) throw new Error("Stage execution plan must include a finalizer profile.");
   return profileAdapter(config2, profile, `ai.profiles.${profile}`);
 }
+function stageSafetyAdapter(config2, plan) {
+  if (config2.safety?.prompt_injection_gate === false) return "";
+  return stageFinalizerAdapter(config2, plan);
+}
 function workflowRoleLabel(role) {
   if (!role) return "default";
   return basename(role).replace(/\.[^.]+$/, "") || "default";
@@ -22173,6 +22177,7 @@ function writeOutputs(env, config2, plan, appendFile) {
     stageFinalizerAdapter(config2, plan),
     appendFile
   );
+  writeOutput(env.GITHUB_OUTPUT, "safety-adapter", stageSafetyAdapter(config2, plan), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
 }

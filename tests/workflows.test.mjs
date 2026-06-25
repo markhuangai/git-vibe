@@ -505,6 +505,7 @@ describe("GitVibe Codex action setup", () => {
       expect(planJob?.outputs, `${file} exposes member adapters`).toMatchObject({
         adapters: "${{ steps.plan.outputs.adapters }}",
         "finalizer-adapter": "${{ steps.plan.outputs.finalizer-adapter }}",
+        "safety-adapter": "${{ steps.plan.outputs.safety-adapter }}",
       });
       expectProviderPrepareBeforeAction({
         action: `./.git-vibe/actions/${finalizerJobName}`,
@@ -525,6 +526,7 @@ describe("GitVibe Codex action setup", () => {
     const materialize = readWorkflow(".github/workflows/materialize.yml");
     expect(materialize.jobs?.["plan-materialize"]?.outputs).toMatchObject({
       "finalizer-adapter": "${{ steps.plan.outputs.finalizer-adapter }}",
+      "safety-adapter": "${{ steps.plan.outputs.safety-adapter }}",
     });
     expectProviderPrepareBeforeAction({
       action: "./.git-vibe/actions/materialize",

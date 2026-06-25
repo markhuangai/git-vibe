@@ -68,6 +68,7 @@ env:
 jobs:
   security-review:
     runs-on: ${{ inputs.runner }}
+    needs: plan-materialize
     timeout-minutes: 10
     outputs:
       allowed: ${{ steps.security.outputs.allowed }}
@@ -102,19 +103,19 @@ jobs:
         with:
           stage: materialize
           discussion-number: ${{ inputs.discussion-number }}
+          adapter: ${{ needs.plan-materialize.outputs.safety-adapter }}
           stage-timeout-minutes: 10
           source-comment: ${{ inputs.source-comment }}
 
   plan-materialize:
     runs-on: ${{ inputs.runner }}
-    needs: security-review
-    if: needs.security-review.outputs.allowed == 'true'
     timeout-minutes: 10
     env:
       GITVIBE_AI_ENV_JSON: ""
       GITVIBE_MCP_ENV_JSON: ""
     outputs:
       finalizer-adapter: ${{ steps.plan.outputs.finalizer-adapter }}
+      safety-adapter: ${{ steps.plan.outputs.safety-adapter }}
     permissions:
       id-token: write
       contents: read
@@ -141,9 +142,9 @@ jobs:
   materialize:
     runs-on: ${{ inputs.runner }}
     needs:
-      - security-review
       - plan-materialize
-    if: needs.plan-materialize.result == 'success'
+      - security-review
+    if: needs.plan-materialize.result == 'success' && needs.security-review.outputs.allowed == 'true'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
