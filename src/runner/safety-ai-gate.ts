@@ -117,10 +117,10 @@ async function classifySafetyBatch(
       profileName: safetyProfileName(options),
       schema: aiSafetySchema,
       schemaId: "safety-gate.v1",
+      sandboxMode: "read-only",
       stage: options.runner.stage,
       stageDefinition: stageDefinitions[options.runner.stage],
       system: safetySystemPrompt(),
-      toolOverride: [],
     });
     return JSON.parse(content) as SafetyAiOutput;
   } catch (error) {

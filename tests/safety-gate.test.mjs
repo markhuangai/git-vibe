@@ -404,6 +404,26 @@ describe("prompt-injection safety blocked output", () => {
     expect(output.questions[0].options[0]).toContain("git-vibe:accept-risk");
   });
 
+  it("does not suggest accept-risk for classifier runtime failures", () => {
+    const output = safetyBlockedOutput({
+      context: context({ comment: "" }),
+      gate: blockedSafetyGateResult({
+        findings: [
+          "safety gate: AI safety gate failed: ENOTEMPTY - The AI safety classifier failed.",
+        ],
+        reason: "AI safety gate failed closed.",
+      }),
+      runner: runner("validate"),
+    });
+
+    expect(output.comment_body).toContain(
+      "could not complete the prompt-injection safety classifier",
+    );
+    expect(output.comment_body).not.toContain("apply `git-vibe:accept-risk`");
+    expect(output.questions[0].options[0]).toContain("safety classifier runtime is healthy");
+    expect(output.questions[0].options[0]).not.toContain("git-vibe:accept-risk");
+  });
+
   it("falls back to default blocked wording when no reason is present", () => {
     const output = safetyBlockedOutput({
       context: context({ comment: "" }),

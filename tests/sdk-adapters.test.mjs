@@ -60,22 +60,23 @@ describe("Codex and Claude SDK adapter routing", () => {
     );
   });
 
-  it("runs Codex tool-override turns read-only in an isolated working directory", async () => {
+  it("runs Codex with an explicit read-only sandbox in the stage working directory", async () => {
     const cwd = workspace();
     const codexPath = join(cwd, "codex");
     writeFileSync(codexPath, "");
     chmodSync(codexPath, 0o755);
     process.env.GITVIBE_CODEX_PATH = codexPath;
 
-    await runAiStage(stageOptions({ cwd, config: codexConfig(), toolOverride: [] }));
+    await runAiStage(stageOptions({ cwd, config: codexConfig(), sandboxMode: "read-only" }));
 
+    const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+    expect(constructorOptions.config.features?.plugins).toBeUndefined();
     const threadOptions = globalThis.__gitVibeSdkMocks.codexStartThread.mock.calls[0][0];
     expect(threadOptions).toMatchObject({
       approvalPolicy: "never",
       sandboxMode: "read-only",
+      workingDirectory: cwd,
     });
-    expect(threadOptions.workingDirectory).toContain("git-vibe-codex-");
-    expect(threadOptions.workingDirectory).not.toBe(cwd);
   });
 
   it("runs claude-code-sdk profiles with env bundle values and custom system prompt", async () => {
@@ -444,6 +445,7 @@ describe("SDK MCP config", () => {
     await runAiStage(stageOptions({ cwd, config: codexConfigWithMcp() }));
 
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+    expect(constructorOptions.config.features?.plugins).toBeUndefined();
     expect(constructorOptions.config.mcp_servers.dense_mem).toMatchObject({
       command: process.execPath,
       enabled: true,
@@ -530,7 +532,7 @@ describe("SDK MCP config warnings", () => {
   });
 });
 
-function stageOptions({ config, contextFilesRoot, cwd, logger, toolOverride }) {
+function stageOptions({ config, contextFilesRoot, cwd, logger, sandboxMode, toolOverride }) {
   return {
     config,
     contextFilesRoot,
@@ -543,6 +545,7 @@ function stageOptions({ config, contextFilesRoot, cwd, logger, toolOverride }) {
     stage: "validate",
     stageDefinition: { schemaFile: "validate.v1.schema.json", schemaId: "validate.v1" },
     system: "System",
+    sandboxMode,
     toolOverride,
   };
 }

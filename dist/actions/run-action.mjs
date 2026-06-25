@@ -61535,9 +61535,9 @@ async function runCodexSdkStage({
       approvalPolicy: "never",
       model,
       modelReasoningEffort: codexReasoningEffort(profile),
-      sandboxMode: options.toolOverride?.length === 0 ? "read-only" : "danger-full-access",
+      sandboxMode: options.sandboxMode || "danger-full-access",
       skipGitRepoCheck: true,
-      workingDirectory: options.toolOverride?.length === 0 ? contextDir : options.cwd
+      workingDirectory: options.cwd
     });
     const result = await thread.run(codexPrompt(options), {
       outputSchema: codexOutputSchema(options.schema)
@@ -62399,10 +62399,9 @@ function blockedSafetyGateResult(options) {
 }
 function safetyBlockedOutput(options) {
   const summary = "GitVibe paused this run for maintainer review.";
+  const guidance = safetyBlockedGuidance(options.gate);
   const question = {
-    options: [
-      "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for one rerun."
-    ],
+    options: [guidance],
     question: options.gate.blockedReason || "GitVibe detected high-risk prompt-injection content in untrusted input."
   };
   const base = {
@@ -62439,11 +62438,26 @@ function safetyBlockedComment(gate) {
   return [
     gate.blockedReason || "High-risk prompt-injection content was detected before GitVibe could safely continue.",
     "",
-    "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for a one-run acceptance, or handle the case manually before automation continues.",
+    safetyBlockedCommentGuidance(gate),
     "",
     "Detected risk:",
     ...gate.findings.map((finding) => `- ${finding}`)
   ].join("\n");
+}
+function safetyBlockedGuidance(gate) {
+  if (isSafetyClassifierFailure(gate)) {
+    return "Rerun after the safety classifier runtime is healthy, or fix the safety configuration before rerunning.";
+  }
+  return "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for one rerun.";
+}
+function safetyBlockedCommentGuidance(gate) {
+  if (isSafetyClassifierFailure(gate)) {
+    return "GitVibe could not complete the prompt-injection safety classifier, so it failed closed. A trusted maintainer must rerun after the classifier runtime is healthy, fix the safety configuration, or handle the case manually before automation continues.";
+  }
+  return "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for a one-run acceptance, or handle the case manually before automation continues.";
+}
+function isSafetyClassifierFailure(gate) {
+  return gate.findings.some((finding) => finding.startsWith("safety gate: AI safety gate failed"));
 }
 
 // src/runner/safety-ai-gate.ts
@@ -62507,10 +62521,10 @@ async function classifySafetyBatch(options, batch) {
       profileName: safetyProfileName(options),
       schema: aiSafetySchema,
       schemaId: "safety-gate.v1",
+      sandboxMode: "read-only",
       stage: options.runner.stage,
       stageDefinition: stageDefinitions[options.runner.stage],
-      system: safetySystemPrompt(),
-      toolOverride: []
+      system: safetySystemPrompt()
     });
     return JSON.parse(content);
   } catch (error51) {

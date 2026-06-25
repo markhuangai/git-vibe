@@ -29,6 +29,7 @@ export interface RunAiStageOptions {
   github?: CodexAuthWritebackGitHub;
   profileName?: string;
   reserveFinalizationTurns?: boolean;
+  sandboxMode?: "danger-full-access" | "read-only" | "workspace-write";
   toolOverride?: string[];
   logger?: StageLogger;
 }
