@@ -67,6 +67,7 @@ const aiSafetySchema: JsonObject = {
 
 const maxSafetyBatchChars = 80_000;
 const safetyChunkSizeChars = 10_000;
+const safetyChunkOverlapChars = 1_000;
 
 export async function runAiSafetyGateForStage(options: {
   config: GitVibeConfig;
@@ -207,7 +208,7 @@ function safetyPrompt(options: {
 
 function safetyBatches(sources: ContentUnit[]): SafetyBatch[] {
   const chunks = chunkContentUnits(sources, {
-    chunkOverlapChars: 0,
+    chunkOverlapChars: safetyChunkOverlapChars,
     chunkSizeChars: safetyChunkSizeChars,
   });
   const batches: Array<Omit<SafetyBatch, "index" | "total">> = [];

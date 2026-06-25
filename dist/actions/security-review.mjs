@@ -57818,6 +57818,7 @@ var aiSafetySchema = {
 };
 var maxSafetyBatchChars = 8e4;
 var safetyChunkSizeChars = 1e4;
+var safetyChunkOverlapChars = 1e3;
 async function runAiSafetyGateForStage(options) {
   if (!promptInjectionGateEnabled(options.config)) return allowedSafetyGateResult();
   const sources = safetyGateSources({
@@ -57928,7 +57929,7 @@ function safetyPrompt(options) {
 }
 function safetyBatches(sources) {
   const chunks = chunkContentUnits(sources, {
-    chunkOverlapChars: 0,
+    chunkOverlapChars: safetyChunkOverlapChars,
     chunkSizeChars: safetyChunkSizeChars
   });
   const batches = [];
