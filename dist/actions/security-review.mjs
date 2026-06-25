@@ -58216,6 +58216,65 @@ var gitVibeRuntimeLabelNames = new Set(
   Object.values(gitVibeLabels).filter((label) => label.name.startsWith("gvi:")).map((label) => label.name)
 );
 
+// src/runner/stage-discussion-labels.ts
+async function applyDiscussionStageStartLabelTransition(options) {
+  if (options.runner.stage === "validate") {
+    await applyDiscussionLabels(options, {
+      add: [gitVibeLabels.validating.name],
+      remove: [gitVibeLabels.validated.name, gitVibeLabels.blocked.name]
+    });
+    return;
+  }
+}
+async function applyDiscussionLabels(options, changes) {
+  const discussionId = options.context.artifact.id;
+  if (!discussionId) {
+    options.logger.event("github.discussion.label.skip", {
+      discussion: options.context.artifact.number,
+      reason: "missing-discussion-id"
+    });
+    return;
+  }
+  for (const label of changes.remove) {
+    await removeDiscussionLabelIfPresent({ ...options, discussionId, label });
+  }
+  for (const label of changes.add) {
+    options.logger.event("github.discussion.label.start", {
+      discussion: options.context.artifact.number,
+      label
+    });
+    await addDiscussionLabel({
+      client: options.client,
+      discussionId,
+      label,
+      repository: options.runner.repository,
+      token: options.runner.token
+    });
+    options.logger.event("github.discussion.label.done", {
+      discussion: options.context.artifact.number,
+      label
+    });
+  }
+}
+async function removeDiscussionLabelIfPresent(options) {
+  try {
+    await removeDiscussionLabel({
+      client: options.client,
+      discussionId: options.discussionId,
+      label: options.label,
+      repository: options.runner.repository,
+      token: options.runner.token
+    });
+  } catch (error51) {
+    if (error51 instanceof Error && error51.message.includes("404")) return;
+    options.logger.event("github.discussion.label.remove.failed", {
+      error: error51 instanceof Error ? error51.message : String(error51),
+      label: options.label
+    });
+    throw error51;
+  }
+}
+
 // src/runner/discussion-replies.ts
 function discussionReplyToId(runner, context) {
   const source = runner.sourceComment;
@@ -58888,6 +58947,46 @@ async function cleanupStageStatusComments(options) {
     options.transientComments
   );
 }
+async function applyStageStartLabelTransition(options) {
+  if (options.context.artifact.type === "discussion") {
+    await applyDiscussionStageStartLabelTransition(options);
+    return;
+  }
+  const label = labelForStageStart(options.context, options.runner);
+  if (!label) return;
+  await applyIssueLabelTransition({ ...options, label });
+}
+async function applyIssueLabelTransition(options) {
+  for (const staleLabel of staleLabelsForTransition(
+    options.context,
+    options.label,
+    options.preserveApproval
+  )) {
+    await removeIssueLabel({
+      client: options.client,
+      issueNumber: options.context.artifact.number,
+      label: staleLabel,
+      logger: options.logger,
+      repository: options.runner.repository,
+      token: options.runner.token
+    });
+  }
+  options.logger.event("github.issue.label.start", {
+    issue: options.context.artifact.number,
+    label: options.label
+  });
+  await addIssueLabel({
+    client: options.client,
+    issueNumber: options.context.artifact.number,
+    label: options.label,
+    repository: options.runner.repository,
+    token: options.runner.token
+  });
+  options.logger.event("github.issue.label.done", {
+    issue: options.context.artifact.number,
+    label: options.label
+  });
+}
 async function publishArtifactComment(options) {
   const artifact = options.context.artifact;
   if (artifact.type === "discussion") {
@@ -59081,6 +59180,78 @@ function publishedComment(surface, id2) {
   const value = id2 === void 0 || id2 === null ? "" : String(id2).trim();
   return value ? { id: value, surface } : void 0;
 }
+async function addIssueLabel(options) {
+  const { owner, repo } = splitRepository(options.repository);
+  await options.client.request({
+    body: { labels: [options.label] },
+    method: "POST",
+    path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/labels`,
+    token: options.token
+  });
+}
+async function removeIssueLabel(options) {
+  const { owner, repo } = splitRepository(options.repository);
+  try {
+    await options.client.request({
+      method: "DELETE",
+      path: `/repos/${owner}/${repo}/issues/${options.issueNumber}/labels/${encodeURIComponent(options.label)}`,
+      token: options.token
+    });
+  } catch (error51) {
+    if (error51 instanceof Error && error51.message.includes("404")) return;
+    options.logger.event("github.issue.label.remove.failed", {
+      error: error51 instanceof Error ? error51.message : String(error51),
+      issue: options.issueNumber,
+      label: options.label
+    });
+    throw error51;
+  }
+}
+function labelForStageStart(context, runner) {
+  if (context.artifact.type === "pull-request" && runner.stage === "review-matrix") {
+    return gitVibeLabels.reviewing.name;
+  }
+  return void 0;
+}
+function staleLabelsForTransition(context, label, preserveApproval = false) {
+  const isPullRequest = context.artifact.type === "pull-request";
+  if (label === gitVibeLabels.blocked.name) {
+    const staleLabels = isPullRequest ? [
+      gitVibeLabels.investigating.name,
+      gitVibeLabels.inProgress.name,
+      gitVibeLabels.reviewing.name,
+      gitVibeLabels.approved.name,
+      gitVibeLabels.readyForApproval.name
+    ] : [gitVibeLabels.inProgress.name, gitVibeLabels.approved.name];
+    return preserveApproval ? staleLabels.filter((staleLabel) => staleLabel !== gitVibeLabels.approved.name) : staleLabels;
+  }
+  if (label === gitVibeLabels.investigated.name) {
+    return isPullRequest ? [
+      gitVibeLabels.blocked.name,
+      gitVibeLabels.investigating.name,
+      gitVibeLabels.readyForApproval.name
+    ] : [];
+  }
+  if (label === gitVibeLabels.readyForApproval.name) {
+    return isPullRequest ? [
+      gitVibeLabels.blocked.name,
+      gitVibeLabels.investigated.name,
+      gitVibeLabels.inProgress.name,
+      gitVibeLabels.investigating.name,
+      gitVibeLabels.reviewing.name
+    ] : [];
+  }
+  if (label === gitVibeLabels.reviewing.name) {
+    return isPullRequest ? [
+      gitVibeLabels.blocked.name,
+      gitVibeLabels.inProgress.name,
+      gitVibeLabels.investigated.name,
+      gitVibeLabels.investigating.name,
+      gitVibeLabels.readyForApproval.name
+    ] : [];
+  }
+  return [];
+}
 function flatReplyBody(body, source) {
   if (!source?.url) return body;
   if (isThreadedSource(source)) return body;
@@ -59106,13 +59277,13 @@ async function applySafetyBlockedLabelTransition(options) {
 }
 async function applyIssueOrPullRequestSafetyBlockedLabels(options) {
   for (const label of issueSafetyBlockedStaleLabels(options)) {
-    await removeIssueLabel({ ...options, label });
+    await removeIssueLabel2({ ...options, label });
   }
   options.logger.event("github.issue.label.start", {
     issue: options.context.artifact.number,
     label: gitVibeLabels.blocked.name
   });
-  await addIssueLabel({ ...options, label: gitVibeLabels.blocked.name });
+  await addIssueLabel2({ ...options, label: gitVibeLabels.blocked.name });
   options.logger.event("github.issue.label.done", {
     issue: options.context.artifact.number,
     label: gitVibeLabels.blocked.name
@@ -59128,7 +59299,7 @@ async function applyDiscussionSafetyBlockedLabels(options) {
     return;
   }
   for (const label of discussionSafetyBlockedStaleLabels(options)) {
-    await removeDiscussionLabelIfPresent({ ...options, discussionId, label });
+    await removeDiscussionLabelIfPresent2({ ...options, discussionId, label });
   }
   options.logger.event("github.discussion.label.start", {
     discussion: options.context.artifact.number,
@@ -59170,7 +59341,7 @@ function discussionSafetyBlockedStaleLabels(options) {
 function maybePreserveApproval(labels, preserveApproval = false) {
   return preserveApproval ? labels.filter((label) => label !== gitVibeLabels.approved.name) : labels;
 }
-async function addIssueLabel(options) {
+async function addIssueLabel2(options) {
   const { owner, repo } = splitRepository(options.runner.repository);
   await options.client.request({
     body: { labels: [options.label] },
@@ -59179,7 +59350,7 @@ async function addIssueLabel(options) {
     token: options.runner.token
   });
 }
-async function removeIssueLabel(options) {
+async function removeIssueLabel2(options) {
   const { owner, repo } = splitRepository(options.runner.repository);
   try {
     await options.client.request({
@@ -59197,7 +59368,7 @@ async function removeIssueLabel(options) {
     throw error51;
   }
 }
-async function removeDiscussionLabelIfPresent(options) {
+async function removeDiscussionLabelIfPresent2(options) {
   try {
     await removeDiscussionLabel({
       client: options.client,
@@ -59604,6 +59775,7 @@ async function runStageSecurityReview(options) {
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
+  await applySecurityReviewStartLabelTransition({ client, context, logger, options: runner });
   const transientComments = [];
   const safetyOptions = stageSafetyOptions({
     client,
@@ -59681,6 +59853,17 @@ async function loadRunnerContext(options) {
     timeline_items: context.timeline.length
   });
   return context;
+}
+async function applySecurityReviewStartLabelTransition(options) {
+  if (options.options.dryRun) return;
+  if (options.options.stage !== "review-matrix") return;
+  if (options.context.artifact.type !== "pull-request") return;
+  await applyStageStartLabelTransition({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    runner: options.options
+  });
 }
 function blockPromptInput(options, extraSources) {
   return blockUnsafePromptInjection({ ...options, extraSources, phase: "input" });

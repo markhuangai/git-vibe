@@ -76,6 +76,7 @@ export async function runStageSecurityReview(
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
+  await applySecurityReviewStartLabelTransition({ client, context, logger, options: runner });
   const transientComments: PublishedArtifactComment[] = [];
   const safetyOptions = stageSafetyOptions({
     client,
@@ -445,6 +446,23 @@ async function publishStageStart(options: {
     });
   }
   return transientComments;
+}
+
+async function applySecurityReviewStartLabelTransition(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<void> {
+  if (options.options.dryRun) return;
+  if (options.options.stage !== "review-matrix") return;
+  if (options.context.artifact.type !== "pull-request") return;
+  await applyStageStartLabelTransition({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    runner: options.options,
+  });
 }
 
 function roleDefinitionFor(options: RunnerOptions): string | undefined {
