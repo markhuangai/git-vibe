@@ -64296,12 +64296,6 @@ async function runStageResultForMode(options) {
   }
   return runStageAiResult(options);
 }
-function promptSafetySources(prompts) {
-  return [
-    { label: "rendered stage system prompt", text: prompts.system },
-    { label: "rendered stage user prompt", text: prompts.prompt }
-  ];
-}
 async function runStageAiResult({
   aiRunOptions,
   context,
@@ -65008,10 +65002,8 @@ ${mcpContext.promptAddition}`;
     prompts,
     schema
   });
-  const promptSafetyResult = await blockRenderedPromptInput({
-    acceptedRisk,
+  const promptSafetyResult = await blockMcpPromptInput({
     promptAddition: mcpContext.promptAddition,
-    prompts,
     safetyOptions
   });
   if (promptSafetyResult) return promptSafetyResult;
@@ -65051,15 +65043,13 @@ async function blockAcceptedRiskDeltaInput(options) {
     phase: "input"
   });
 }
-function blockRenderedPromptInput(options) {
-  if (options.acceptedRisk)
-    return blockUnsafePromptInjection({
-      ...options.safetyOptions,
-      extraSources: mcpPromptSafetySources(options.promptAddition),
-      includeContext: false,
-      phase: "input"
-    });
-  return blockPromptInput(options.safetyOptions, promptSafetySources(options.prompts));
+function blockMcpPromptInput(options) {
+  return blockUnsafePromptInjection({
+    ...options.safetyOptions,
+    extraSources: mcpPromptSafetySources(options.promptAddition),
+    includeContext: false,
+    phase: "input"
+  });
 }
 var mcpPromptSafetySources = (promptAddition) => promptAddition ? [{ label: "rendered MCP context prompt addition", text: promptAddition }] : [];
 async function runCheckedStageResult(options) {

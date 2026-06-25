@@ -16,7 +16,7 @@ import {
   type PackedPromptContextFiles,
 } from "./content-units.js";
 import { writePromptContextFiles } from "./context-files.js";
-import { promptSafetySources, runStageResultForMode } from "./stage-ai-results.js";
+import { runStageResultForMode } from "./stage-ai-results.js";
 import { stageRunResult } from "./stage-results.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
@@ -156,10 +156,8 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     prompts,
     schema,
   });
-  const promptSafetyResult = await blockRenderedPromptInput({
-    acceptedRisk,
+  const promptSafetyResult = await blockMcpPromptInput({
     promptAddition: mcpContext.promptAddition,
-    prompts,
     safetyOptions,
   });
   if (promptSafetyResult) return promptSafetyResult;
@@ -208,20 +206,16 @@ async function blockAcceptedRiskDeltaInput(
   });
 }
 
-function blockRenderedPromptInput(options: {
-  acceptedRisk: boolean;
+function blockMcpPromptInput(options: {
   promptAddition: string;
-  prompts: { prompt: string; system: string };
   safetyOptions: StageSafetyOptions;
 }): Promise<StageRunResult | undefined> {
-  if (options.acceptedRisk)
-    return blockUnsafePromptInjection({
-      ...options.safetyOptions,
-      extraSources: mcpPromptSafetySources(options.promptAddition),
-      includeContext: false,
-      phase: "input",
-    });
-  return blockPromptInput(options.safetyOptions, promptSafetySources(options.prompts));
+  return blockUnsafePromptInjection({
+    ...options.safetyOptions,
+    extraSources: mcpPromptSafetySources(options.promptAddition),
+    includeContext: false,
+    phase: "input",
+  });
 }
 
 const mcpPromptSafetySources = (promptAddition: string): SafetySource[] =>

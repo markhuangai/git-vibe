@@ -36,13 +36,6 @@ export async function runStageResultForMode(options: {
   return runStageAiResult(options);
 }
 
-export function promptSafetySources(prompts: { prompt: string; system: string }): SafetySource[] {
-  return [
-    { label: "rendered stage system prompt", text: prompts.system },
-    { label: "rendered stage user prompt", text: prompts.prompt },
-  ];
-}
-
 async function runStageAiResult({
   aiRunOptions,
   context,
