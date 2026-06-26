@@ -7,23 +7,26 @@ import type {
   PromptContextUnitFile,
 } from "./content-units.js";
 import { contentUnitsForContext } from "./content-units.js";
+import { contextWithoutIgnoredAuthors } from "./ignored-authors.js";
 import type { ContextPacket, JsonObject } from "../shared/types.js";
 
 export function writePromptContextFiles(options: {
   context: ContextPacket;
+  ignoredAuthors?: readonly string[];
   rootDir: string;
   stage: string;
 }): PackedPromptContextFiles {
   const rootDir = join(options.rootDir, `git-vibe-${options.stage}-context-files`);
   const unitsDir = join(rootDir, "units");
   mkdirSync(unitsDir, { recursive: true });
+  const context = contextWithoutIgnoredAuthors(options.context, options.ignoredAuthors);
 
   const fullContext = writeJsonReference({
-    content: options.context,
+    content: context,
     path: join(rootDir, "github-context.json"),
     rootDir,
   });
-  const units = contentUnitsForContext(options.context).map((unit, index) => {
+  const units = contentUnitsForContext(context).map((unit, index) => {
     const path = join(unitsDir, unitFilename(unit.id, index));
     writeFileSync(path, unit.text);
     return {

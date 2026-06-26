@@ -1,5 +1,4 @@
 import { runAiStage, type RunAiStageOptions } from "./ai.js";
-import type { SafetySource } from "./safety-gate.js";
 import { zeroMatrixResultsOutput } from "./stage-blocked-outputs.js";
 import { dryRunContent } from "./stage-dry-run.js";
 import { stageRunResult } from "./stage-results.js";
@@ -34,13 +33,6 @@ export async function runStageResultForMode(options: {
     return runMatrixFinalizerResult(options);
   }
   return runStageAiResult(options);
-}
-
-export function promptSafetySources(prompts: { prompt: string; system: string }): SafetySource[] {
-  return [
-    { label: "rendered stage system prompt", text: prompts.system },
-    { label: "rendered stage user prompt", text: prompts.prompt },
-  ];
 }
 
 async function runStageAiResult({
@@ -111,20 +103,13 @@ async function runMatrixFinalizerResult({
 
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = acceptedRisk
-    ? matrixFinalizerRoleSafetySources({ members })
-    : matrixFinalizerSafetySources({ members, results });
-  if (acceptedRisk) {
-    logger.event("matrix.finalize.member_safety.skip", {
-      reason: "accepted-risk",
-      results: results.length,
-    });
-  }
+  const finalizerSafetySources = matrixFinalizerSafetySources({ results });
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config,
     context,
     extraSources: finalizerSafetySources,
+    github: aiRunOptions.github,
     includeContext: !acceptedRisk,
     logger,
     phase: "input",
@@ -157,31 +142,18 @@ async function runMatrixFinalizerResult({
   });
 }
 
-function matrixFinalizerRoleSafetySources(options: {
-  members: ReturnType<typeof roleGroupSynthesisMembers>;
-}): SafetySource[] {
-  return options.members.map((member) => ({
-    label: `role-group ${member.role || member.profile || member.index} definition`,
-    text: member.roleDefinition,
-  }));
-}
-
 function matrixFinalizerSafetySources(options: {
-  members: ReturnType<typeof roleGroupSynthesisMembers>;
   results: ReturnType<typeof loadMatrixStageResults>;
-}): SafetySource[] {
-  return [
-    ...matrixFinalizerRoleSafetySources({ members: options.members }),
-    ...options.results.map((result, index) => ({
-      label: `matrix member result ${index + 1}`,
-      text: JSON.stringify({
-        output: result.parsedOutput,
-        role: result.role,
-        status: result.status,
-        summary: result.summary,
-      }),
-    })),
-  ];
+}) {
+  return options.results.map((result, index) => ({
+    label: `matrix member result ${index + 1}`,
+    text: JSON.stringify({
+      output: result.parsedOutput,
+      role: result.role,
+      status: result.status,
+      summary: result.summary,
+    }),
+  }));
 }
 
 function stageResultBuilder(options: {

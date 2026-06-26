@@ -10,13 +10,14 @@ import type { StageLogger } from "./logging.js";
 import { createStageLogger } from "./logging.js";
 import { buildMcpPromptContext } from "./mcp-context.js";
 import { renderPrompts } from "./prompts.js";
+import { contextWithoutIgnoredAuthors, safetyIgnoredAuthors } from "./ignored-authors.js";
 import {
   contextPromptCoverageForContext,
   type ContextPromptCoverage,
   type PackedPromptContextFiles,
 } from "./content-units.js";
 import { writePromptContextFiles } from "./context-files.js";
-import { promptSafetySources, runStageResultForMode } from "./stage-ai-results.js";
+import { runStageResultForMode } from "./stage-ai-results.js";
 import { stageRunResult } from "./stage-results.js";
 import { readRoleDefinition } from "./role-groups.js";
 import { loadStageSchema } from "./schemas.js";
@@ -25,6 +26,7 @@ import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
 import {
   acceptedRiskApplies,
   acceptedRiskContextUnits,
+  acceptedRiskLabelPresent,
   contextWithoutAcceptedRiskMetadataSource,
   publishAcceptedRiskAudit,
   publishAcceptedRiskAuditForLabeledContext,
@@ -76,6 +78,8 @@ export async function runStageSecurityReview(
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
+  const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
+  await applySecurityReviewStartLabelTransition({ client, context, logger, options: runner });
   const transientComments: PublishedArtifactComment[] = [];
   const safetyOptions = stageSafetyOptions({
     client,
@@ -86,8 +90,13 @@ export async function runStageSecurityReview(
     options: runner,
     transientComments,
   });
-  if (acceptedRiskApplies({ context, logger, runner })) {
-    return acceptedRiskSecurityReview(safetyOptions);
+  if (acceptedRisk) {
+    return acceptedRiskSecurityReview(safetyOptions, {
+      publishAudit:
+        Boolean(options.acceptedRisk) ||
+        acceptedRiskLabelPresent(context) ||
+        Boolean(runner.acceptedRisk?.run),
+    });
   }
 
   const inputSafetyResult = await blockPromptInput(safetyOptions);
@@ -115,21 +124,28 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
   const stageContext = { client, context, definition, logger, options: runner, transientComments };
 
   const safetyOptions = stageSafetyOptions({ ...stageContext, config });
+  const ignoredAuthors = safetyIgnoredAuthors(config);
   const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
+  const promptContext = contextWithoutIgnoredAuthors(
+    acceptedRisk ? contextWithoutAcceptedRiskMetadataSource(context, runner) : context,
+    ignoredAuthors,
+  );
   const inputSafetyResult = await blockInitialPromptInput({
     acceptedRisk,
     safetyOptions,
   });
   if (inputSafetyResult) return inputSafetyResult;
 
-  const mcpContext = await resolveMcpContext({ ...stageContext, config });
+  const mcpContext = await resolveMcpContext({ ...stageContext, config, context: promptContext });
   if (mcpContext.blockedResult) return finishStage(logger, mcpContext.blockedResult);
 
   const schema = loadStageSchema(definition.schemaFile);
-  const promptContext = acceptedRisk
-    ? contextWithoutAcceptedRiskMetadataSource(context, runner)
-    : context;
-  const contextFiles = persistContext({ context: promptContext, logger, options });
+  const contextFiles = persistContext({
+    context: promptContext,
+    ignoredAuthors,
+    logger,
+    options,
+  });
   const prompts = buildRenderedPrompts({
     context: promptContext,
     contextFiles,
@@ -155,10 +171,8 @@ export async function runStage(options: RunnerOptions): Promise<StageRunResult> 
     prompts,
     schema,
   });
-  const promptSafetyResult = await blockRenderedPromptInput({
-    acceptedRisk,
+  const promptSafetyResult = await blockMcpPromptInput({
     promptAddition: mcpContext.promptAddition,
-    prompts,
     safetyOptions,
   });
   if (promptSafetyResult) return promptSafetyResult;
@@ -186,7 +200,11 @@ async function blockInitialPromptInput(options: {
 async function blockAcceptedRiskDeltaInput(
   options: StageSafetyOptions,
 ): Promise<StageRunResult | undefined> {
-  const contextUnits = acceptedRiskContextUnits(options.context, options.runner);
+  const contextUnits = acceptedRiskContextUnits(
+    options.context,
+    options.runner,
+    safetyIgnoredAuthors(options.config),
+  );
   if (contextUnits.length === 0) {
     options.logger.event("accepted_risk.input_gate.skip", {
       cutoff: options.runner.acceptedRisk?.cutoff,
@@ -207,20 +225,16 @@ async function blockAcceptedRiskDeltaInput(
   });
 }
 
-function blockRenderedPromptInput(options: {
-  acceptedRisk: boolean;
+function blockMcpPromptInput(options: {
   promptAddition: string;
-  prompts: { prompt: string; system: string };
   safetyOptions: StageSafetyOptions;
 }): Promise<StageRunResult | undefined> {
-  if (options.acceptedRisk)
-    return blockUnsafePromptInjection({
-      ...options.safetyOptions,
-      extraSources: mcpPromptSafetySources(options.promptAddition),
-      includeContext: false,
-      phase: "input",
-    });
-  return blockPromptInput(options.safetyOptions, promptSafetySources(options.prompts));
+  return blockUnsafePromptInjection({
+    ...options.safetyOptions,
+    extraSources: mcpPromptSafetySources(options.promptAddition),
+    includeContext: false,
+    phase: "input",
+  });
 }
 
 const mcpPromptSafetySources = (promptAddition: string): SafetySource[] =>
@@ -242,6 +256,7 @@ async function runCheckedStageResult(options: {
   recordContextCoverage({
     coverage: contextPromptCoverageForContext(options.context, {
       budgetChars: Number.MAX_SAFE_INTEGER,
+      ignoredAuthors: safetyIgnoredAuthors(options.config),
     }),
     logger: options.logger,
   });
@@ -271,10 +286,15 @@ function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResul
 
 async function acceptedRiskSecurityReview(
   options: StageSafetyOptions,
+  audit: { publishAudit: boolean } = { publishAudit: true },
 ): Promise<StageSecurityReviewResult> {
   const blockedResult = await blockAcceptedRiskDeltaInput(options);
   if (blockedResult) return blockedSecurityReview(blockedResult);
-  await publishAcceptedRiskAudit(options);
+  if (audit.publishAudit) {
+    await publishAcceptedRiskAudit(options);
+  } else {
+    options.logger.event("accepted_risk.audit.skip", { reason: "prior-accepted-risk" });
+  }
   options.logger.event("security.review.done", {
     accepted_risk: true,
     allowed: true,
@@ -282,7 +302,9 @@ async function acceptedRiskSecurityReview(
   return {
     allowed: true,
     status: "allowed",
-    summary: "Security review passed; accepted-risk label was removed.",
+    summary: audit.publishAudit
+      ? "Security review passed; accepted-risk label was removed."
+      : "Security review passed.",
   };
 }
 
@@ -335,6 +357,7 @@ function recordContextCoverage(options: {
 
 function persistContext(options: {
   context: ContextPacket;
+  ignoredAuthors: readonly string[];
   logger: StageLogger;
   options: RunnerOptions;
 }): PackedPromptContextFiles {
@@ -346,6 +369,7 @@ function persistContext(options: {
   );
   const contextFiles = writePromptContextFiles({
     context: options.context,
+    ignoredAuthors: options.ignoredAuthors,
     rootDir: contextDir,
     stage: options.options.stage,
   });
@@ -445,6 +469,23 @@ async function publishStageStart(options: {
     });
   }
   return transientComments;
+}
+
+async function applySecurityReviewStartLabelTransition(options: {
+  client: GitHubClient;
+  context: ContextPacket;
+  logger: StageLogger;
+  options: RunnerOptions;
+}): Promise<void> {
+  if (options.options.dryRun) return;
+  if (options.options.stage !== "review-matrix") return;
+  if (options.context.artifact.type !== "pull-request") return;
+  await applyStageStartLabelTransition({
+    client: options.client,
+    context: options.context,
+    logger: options.logger,
+    runner: options.options,
+  });
 }
 
 function roleDefinitionFor(options: RunnerOptions): string | undefined {

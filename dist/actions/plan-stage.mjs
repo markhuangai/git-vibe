@@ -21873,6 +21873,7 @@ var configSchema = external_exports.object({
   ai: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
   safety: external_exports.object({
     block_write_stages_on_high_risk: external_exports.boolean().optional(),
+    ignored_authors: external_exports.array(external_exports.string()).optional(),
     prompt_injection_gate: external_exports.boolean().optional(),
     remove_approval_on_block: external_exports.boolean().optional()
   }).optional(),
@@ -21996,6 +21997,10 @@ function stageFinalizerAdapter(config2, plan) {
   const profile = plan.synthesizerProfile || plan.matrix.include[0]?.profile;
   if (!profile) throw new Error("Stage execution plan must include a finalizer profile.");
   return profileAdapter(config2, profile, `ai.profiles.${profile}`);
+}
+function stageSafetyAdapter(config2, plan) {
+  if (config2.safety?.prompt_injection_gate === false) return "";
+  return stageFinalizerAdapter(config2, plan);
 }
 function workflowRoleLabel(role) {
   if (!role) return "default";
@@ -22173,6 +22178,7 @@ function writeOutputs(env, config2, plan, appendFile) {
     stageFinalizerAdapter(config2, plan),
     appendFile
   );
+  writeOutput(env.GITHUB_OUTPUT, "safety-adapter", stageSafetyAdapter(config2, plan), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
 }

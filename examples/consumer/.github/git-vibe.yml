@@ -19,6 +19,14 @@ event_delivery:
 github_auth:
   mode: github-app
 
+safety:
+  # Prompt-injection scans run before and after AI stages by default.
+  # Set to false to disable both input and output safety scanning.
+  prompt_injection_gate: true
+  # CodeRabbit comments and reviews are ignored by default. Add other bot logins here.
+  # ignored_authors:
+  #   - custom-review-bot[bot]
+
 tests:
   commands: []
 

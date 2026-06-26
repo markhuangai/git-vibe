@@ -22,6 +22,9 @@ outputs:
   finalizer-adapter:
     description: GitVibe adapter name used by the finalizer job.
     value: ${{ steps.plan.outputs.finalizer-adapter }}
+  safety-adapter:
+    description: GitVibe adapter name used by the prompt-injection safety gate.
+    value: ${{ steps.plan.outputs.safety-adapter }}
   max-parallel:
     description: Maximum parallel member jobs.
     value: ${{ steps.plan.outputs.max-parallel }}

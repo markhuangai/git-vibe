@@ -80,6 +80,7 @@ env:
 jobs:
   security-review:
     runs-on: ${{ inputs.runner }}
+    needs: plan-validate
     timeout-minutes: 10
     outputs:
       allowed: ${{ steps.security.outputs.allowed }}
@@ -108,17 +109,19 @@ jobs:
           package-manager-cache: false
       - id: security
         uses: ./.git-vibe/actions/security-review
+        env:
+          GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
+          GITVIBE_MCP_ENV_JSON: ${{ secrets.GITVIBE_MCP_ENV_JSON }}
         with:
           stage: validate
           issue-number: ${{ inputs.issue-number }}
           discussion-number: ${{ inputs.discussion-number }}
+          adapter: ${{ needs.plan-validate.outputs.safety-adapter }}
           stage-timeout-minutes: 10
           source-comment: ${{ inputs.source-comment }}
 
   plan-validate:
     runs-on: ${{ inputs.runner }}
-    needs: security-review
-    if: needs.security-review.outputs.allowed == 'true'
     timeout-minutes: 10
     env:
       GITVIBE_AI_ENV_JSON: ""
@@ -130,6 +133,7 @@ jobs:
       labels: ${{ steps.plan.outputs.labels }}
       max-parallel: ${{ steps.plan.outputs.max-parallel }}
       mode: ${{ steps.plan.outputs.mode }}
+      safety-adapter: ${{ steps.plan.outputs.safety-adapter }}
     permissions:
       id-token: write
       contents: read
@@ -156,7 +160,10 @@ jobs:
   validate-members:
     name: git-vibe-validate-member-${{ matrix.index }} / ${{ fromJSON(needs.plan-validate.outputs.labels)[format('{0}', matrix.index)] }}
     runs-on: ${{ inputs.runner }}
-    needs: plan-validate
+    needs:
+      - plan-validate
+      - security-review
+    if: needs.security-review.outputs.allowed == 'true'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}
@@ -214,8 +221,9 @@ jobs:
     runs-on: ${{ inputs.runner }}
     needs:
       - plan-validate
+      - security-review
       - validate-members
-    if: always() && needs.plan-validate.result == 'success'
+    if: always() && needs.plan-validate.result == 'success' && needs.security-review.outputs.allowed == 'true'
     timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
     env:
       GITVIBE_AI_ENV_JSON: ${{ secrets.GITVIBE_AI_ENV_JSON }}

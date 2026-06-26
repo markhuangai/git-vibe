@@ -50,6 +50,7 @@ export interface GitVibeConfig {
   ai?: JsonObject;
   safety?: {
     block_write_stages_on_high_risk?: boolean;
+    ignored_authors?: string[];
     prompt_injection_gate?: boolean;
     remove_approval_on_block?: boolean;
   };

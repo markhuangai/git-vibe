@@ -7,6 +7,7 @@ import {
   type AcceptedRiskMetadataSource,
 } from "../shared/accepted-risk.js";
 import type { ContextPacket, JsonObject, PullRequestFile, TimelineItem } from "../shared/types.js";
+import { contextWithoutIgnoredAuthors } from "./ignored-authors.js";
 
 export interface ContentUnit {
   id: string;
@@ -65,7 +66,11 @@ export interface PackedPromptContextFiles {
   units_dir: string;
 }
 
-interface PackContextOptions {
+interface ContextUnitOptions {
+  ignoredAuthors?: readonly string[];
+}
+
+interface PackContextOptions extends ContextUnitOptions {
   budgetChars?: number;
   chunkOverlapChars?: number;
   chunkSizeChars?: number;
@@ -76,36 +81,40 @@ const defaultChunkSizeChars = 12_000;
 const defaultChunkOverlapChars = 1_000;
 const defaultPromptBudgetChars = 80_000;
 
-export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
+export function contentUnitsForContext(
+  context: ContextPacket,
+  options: ContextUnitOptions = {},
+): ContentUnit[] {
+  const sourceContext = contextWithoutIgnoredAuthors(context, options.ignoredAuthors);
   return [
-    unit("artifact-title", "artifact", "artifact title", context.artifact.title, {
-      metadata: artifactMetadata(context),
-      sourceUrl: context.artifact.url,
+    unit("artifact-title", "artifact", "artifact title", sourceContext.artifact.title, {
+      metadata: artifactMetadata(sourceContext),
+      sourceUrl: sourceContext.artifact.url,
     }),
-    unit("artifact-body", "artifact", "artifact body", context.artifact.body, {
-      metadata: artifactMetadata(context),
-      sourceUrl: context.artifact.url,
+    unit("artifact-body", "artifact", "artifact body", sourceContext.artifact.body, {
+      metadata: artifactMetadata(sourceContext),
+      sourceUrl: sourceContext.artifact.url,
     }),
-    ...context.timeline.flatMap(timelineUnits),
-    ...(context.source?.comment?.body
+    ...sourceContext.timeline.flatMap(timelineUnits),
+    ...(sourceContext.source?.comment?.body
       ? [
           unit(
             "source-command-comment",
             "source-comment",
             "source command comment",
-            context.source.comment.body,
+            sourceContext.source.comment.body,
             {
               metadata: {
-                id: context.source.comment.id,
-                kind: context.source.comment.kind,
-                nodeId: context.source.comment.nodeId,
+                id: sourceContext.source.comment.id,
+                kind: sourceContext.source.comment.kind,
+                nodeId: sourceContext.source.comment.nodeId,
               },
-              sourceUrl: context.source.comment.url,
+              sourceUrl: sourceContext.source.comment.url,
             },
           ),
         ]
       : []),
-    ...(context.handoffs || []).flatMap((handoff, index) => [
+    ...(sourceContext.handoffs || []).flatMap((handoff, index) => [
       unit(
         `handoff-${index}-${handoff.stage}-summary`,
         "handoff",
@@ -128,15 +137,21 @@ export function contentUnitsForContext(context: ContextPacket): ContentUnit[] {
         { metadata: handoffMetadata(handoff) },
       ),
     ]),
-    ...(context.pullRequestFiles || []).map((file, index) => pullRequestFileUnit(file, index)),
+    ...(sourceContext.pullRequestFiles || []).map((file, index) =>
+      pullRequestFileUnit(file, index),
+    ),
   ].filter((item) => item.text.trim());
 }
 
-export function contentUnitsOnOrAfterCutoff(context: ContextPacket, cutoff: string): ContentUnit[] {
+export function contentUnitsOnOrAfterCutoff(
+  context: ContextPacket,
+  cutoff: string,
+  options: ContextUnitOptions = {},
+): ContentUnit[] {
   const cutoffMs = cutoffTimeMs(cutoff);
   if (cutoffMs === undefined) return [];
   const cutoffSecondMs = Math.floor(cutoffMs / 1000) * 1000;
-  return contentUnitsForContext(context).filter((item) => {
+  return contentUnitsForContext(context, options).filter((item) => {
     const activityMs = contentUnitActivityMs(item);
     if (activityMs !== undefined) return activityMs >= cutoffSecondMs;
     return item.kind === "handoff";
@@ -148,8 +163,10 @@ export function acceptedRiskDeltaContentUnits(options: {
   acceptedSource?: AcceptedRiskMetadataSource;
   context: ContextPacket;
   cutoff: string;
+  ignoredAuthors?: readonly string[];
 }): ContentUnit[] {
-  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff).filter(
+  const unitOptions = { ignoredAuthors: options.ignoredAuthors };
+  const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff, unitOptions).filter(
     (item) =>
       !artifactContentUnit(item) &&
       !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource),
@@ -157,7 +174,10 @@ export function acceptedRiskDeltaContentUnits(options: {
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
     return units;
   }
-  return [...contentUnitsForContext(options.context).filter(artifactContentUnit), ...units];
+  return [
+    ...contentUnitsForContext(options.context, unitOptions).filter(artifactContentUnit),
+    ...units,
+  ];
 }
 
 export function chunkContentUnits(
@@ -189,15 +209,17 @@ export function packedContextForPrompt(
   context: ContextPacket,
   options: PackContextOptions = {},
 ): JsonObject {
-  if (options.fileContext) return packedFileBackedContextForPrompt(context, options.fileContext);
+  const sourceContext = contextWithoutIgnoredAuthors(context, options.ignoredAuthors);
+  if (options.fileContext)
+    return packedFileBackedContextForPrompt(sourceContext, options.fileContext);
 
-  const units = contentUnitsForContext(context);
+  const units = contentUnitsForContext(sourceContext, options);
   const chunks = chunkContentUnits(units, options);
   const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
   const includedIds = new Set(included.map((chunk) => chunk.id));
   const pending = chunks.filter((chunk) => !includedIds.has(chunk.id));
   return {
-    artifact: packedArtifact(context),
+    artifact: packedArtifact(sourceContext),
     context_manifest: {
       chunk_overlap_chars: options.chunkOverlapChars ?? defaultChunkOverlapChars,
       chunk_size_chars: options.chunkSizeChars || defaultChunkSizeChars,
@@ -208,13 +230,13 @@ export function packedContextForPrompt(
       total_units: units.length,
       units: units.map((item) => unitManifest(item, chunks, includedIds)),
     },
-    generatedAt: context.generatedAt,
-    handoffs: packedHandoffs(context),
+    generatedAt: sourceContext.generatedAt,
+    handoffs: packedHandoffs(sourceContext),
     included_context_chunks: included.map(packedChunk),
-    pullRequestFiles: packedPullRequestFiles(context),
-    repository: context.repository,
-    source: packedSource(context),
-    timeline: context.timeline.map(packedTimelineItem),
+    pullRequestFiles: packedPullRequestFiles(sourceContext),
+    repository: sourceContext.repository,
+    source: packedSource(sourceContext),
+    timeline: sourceContext.timeline.map(packedTimelineItem),
   };
 }
 
@@ -248,7 +270,7 @@ export function contextPromptCoverageForContext(
   context: ContextPacket,
   options: PackContextOptions = {},
 ): ContextPromptCoverage {
-  const chunks = chunkContentUnits(contentUnitsForContext(context), options);
+  const chunks = chunkContentUnits(contentUnitsForContext(context, options), options);
   const included = selectPromptChunks(chunks, options.budgetChars || defaultPromptBudgetChars);
   const includedIds = new Set(included.map((chunk) => chunk.id));
   const pendingChunkIds = chunks

@@ -38,13 +38,14 @@ describe("GitVibe app server accept-risk labels", () => {
     expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(workflowDispatches(client)).toEqual([]);
     const updatedResult = requestBodies(client, "PATCH", "/issues/comments/100").at(-1).body;
+    expect(updatedResult).toContain("## GitVibe Risk Accepted");
     expect(updatedResult).toContain("### Accepted Risk");
     expect(updatedResult).toContain("git-vibe:accepted-risk-metadata");
     expect(updatedResult).toContain("run=88");
     expect(updatedResult).toContain("run-attempt=2");
     expect(updatedResult).toContain("Accepted workflow run: `88`");
-    expect(updatedResult).toContain("Accepted stages: `validate`");
-    expect(updatedResult).toContain("Artifact title/body SHA");
+    expect(updatedResult).not.toContain("### Required Fixes");
+    expect(updatedResult).not.toContain("Original blocked finding");
     expect(requestPaths(client, "DELETE")).toContain(
       "/repos/example/repo/issues/9/labels/git-vibe%3Aaccept-risk",
     );
@@ -186,15 +187,12 @@ describe("GitVibe app server accept-risk pull request reviews", () => {
 
     expect(requestPaths(client, "POST")).toContain("/repos/example/repo/actions/runs/88/rerun");
     expect(workflowDispatches(client)).toEqual([]);
-    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
-      "### Accepted Risk",
-    );
-    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
-      "Accepted workflow run: `88`",
-    );
-    expect(requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body).toContain(
-      "Pull request head SHA: `head-sha`",
-    );
+    const updatedReview = requestBodies(client, "PUT", "/pulls/12/reviews/200").at(-1).body;
+    expect(updatedReview).toContain("## GitVibe Risk Accepted");
+    expect(updatedReview).toContain("Accepted workflow run: `88`");
+    expect(updatedReview).toContain("Pull request head SHA: `head-sha`");
+    expect(updatedReview).not.toContain("### Required Fixes");
+    expect(updatedReview).not.toContain("Original blocked finding");
     expect(requestPaths(client, "DELETE")).toEqual(
       expect.arrayContaining([
         "/repos/example/repo/issues/12/labels/gvi%3Aready-for-approval",
@@ -678,6 +676,9 @@ function stageResultBody({ artifact, number, run = "88", stage, status = "blocke
     "**Next state:** `blocked`",
     "",
     "GitVibe paused this run for maintainer review.",
+    "",
+    "### Required Fixes",
+    "1. Original blocked finding with a very long explanation.",
   ].join("\n");
 }
 

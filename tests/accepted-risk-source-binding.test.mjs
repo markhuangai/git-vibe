@@ -63,6 +63,49 @@ describe("accepted-risk source binding", () => {
 
     expect(units.map((unit) => unit.id)).toEqual(["timeline-1-comment-copy"]);
   });
+
+  it("lets review-matrix evaluate post-cutoff pull request review feedback", () => {
+    const context = contextPacket();
+    const metadata = acceptedRiskMetadataFor(context);
+    context.timeline = [
+      timelineComment({
+        body: blockedResultBody(metadata),
+        id: "100",
+        kind: "pull-request-review",
+        updatedAt: cutoff,
+        url: "https://github.com/example/repo/pull/12#pullrequestreview-100",
+      }),
+      timelineComment({
+        author: "coderabbitai",
+        body: "Review note includes prompt-injection examples for a code fix.",
+        createdAt: "2026-01-04T12:01:00Z",
+        id: "review-comment",
+        kind: "pull-request-review-comment",
+        url: "https://github.com/example/repo/pull/12#discussion_r1",
+      }),
+      timelineComment({
+        author: "guest",
+        body: "New ordinary comment after acceptance",
+        createdAt: "2026-01-04T12:02:00Z",
+        id: "ordinary-comment",
+        url: "https://github.com/example/repo/pull/12#issuecomment-ordinary",
+      }),
+    ];
+
+    const units = acceptedRiskContextUnits(context, {
+      acceptedRisk: { cutoff, stages: ["review-matrix"] },
+      stage: "review-matrix",
+    });
+
+    expect(units.map((unit) => unit.metadata.kind)).toEqual([
+      "pull-request-review-comment",
+      "comment",
+    ]);
+    expect(units.map((unit) => unit.text)).toEqual([
+      "Review note includes prompt-injection examples for a code fix.",
+      "New ordinary comment after acceptance",
+    ]);
+  });
 });
 
 function acceptedRiskMetadataFor(context, { stage = "review-matrix" } = {}) {
@@ -128,8 +171,9 @@ function timelineComment({
   body,
   createdAt = "2026-01-04T00:00:00Z",
   id,
+  kind = "comment",
   updatedAt,
   url = `https://github.com/example/repo/issues/12#issuecomment-${id}`,
 }) {
-  return { author, authorAssociation, body, createdAt, id, kind: "comment", updatedAt, url };
+  return { author, authorAssociation, body, createdAt, id, kind, updatedAt, url };
 }

@@ -45,9 +45,7 @@ describe("Codex and Claude SDK adapter routing", () => {
         env: expect.any(Object),
       }),
     );
-    expect(constructorOptions.env.CODEX_HOME).toContain("git-vibe-codex-");
-    expect(constructorOptions.env.CODEX_HOME).not.toBe(process.env.CODEX_HOME);
-    expect(existsSync(constructorOptions.env.CODEX_HOME)).toBe(false);
+    expect(constructorOptions.env.CODEX_HOME).toBe(process.env.CODEX_HOME);
     expect(globalThis.__gitVibeSdkMocks.codexStartThread).toHaveBeenCalledWith(
       expect.objectContaining({
         additionalDirectories: [contextFilesRoot],
@@ -60,42 +58,73 @@ describe("Codex and Claude SDK adapter routing", () => {
     );
   });
 
+  it("runs Codex with an explicit read-only sandbox in the stage working directory", async () => {
+    const cwd = workspace();
+    const codexPath = join(cwd, "codex");
+    writeFileSync(codexPath, "");
+    chmodSync(codexPath, 0o755);
+    process.env.GITVIBE_CODEX_PATH = codexPath;
+
+    await runAiStage(stageOptions({ cwd, config: codexConfig(), sandboxMode: "read-only" }));
+
+    const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+    expect(constructorOptions.config.features?.plugins).toBeUndefined();
+    const threadOptions = globalThis.__gitVibeSdkMocks.codexStartThread.mock.calls[0][0];
+    expect(threadOptions).toMatchObject({
+      approvalPolicy: "never",
+      sandboxMode: "read-only",
+      workingDirectory: cwd,
+    });
+  });
+});
+
+describe("Claude SDK adapter routing", () => {
   it("runs claude-code-sdk profiles with env bundle values and custom system prompt", async () => {
     const cwd = workspace();
     const claudePath = join(cwd, "claude");
     writeFileSync(claudePath, "");
     chmodSync(claudePath, 0o755);
     process.env.GITVIBE_CLAUDE_CODE_PATH = claudePath;
+    process.env.HOME = join(cwd, "runner-home");
+    process.env.CLAUDE_CONFIG_DIR = join(cwd, "runner-claude-config");
     process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
       ANTHROPIC_BASE_URL: "https://anthropic.example",
       GITVIBE_AI_API_KEY: "test-key",
     });
-    const output = await runAiStage(stageOptions({ cwd, config: claudeConfig() }));
+    const config = claudeConfig({
+      env: {
+        ANTHROPIC_API_KEY: { from_bundle: "GITVIBE_AI_API_KEY" },
+        ANTHROPIC_BASE_URL: { from_bundle: "ANTHROPIC_BASE_URL" },
+        CLAUDE_CONFIG_DIR: "/tmp/profile-claude-config",
+        HOME: "/tmp/profile-home",
+      },
+    });
+    const output = await runAiStage(stageOptions({ cwd, config }));
 
     expect(JSON.parse(output)).toMatchObject({
       next_state: "ready-for-implementation",
       stage: "validate",
     });
-    expect(globalThis.__gitVibeSdkMocks.claudeQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        options: expect.objectContaining({
-          allowDangerouslySkipPermissions: true,
-          cwd,
-          effort: "max",
-          env: expect.objectContaining({
-            ANTHROPIC_API_KEY: "test-key",
-            ANTHROPIC_BASE_URL: "https://anthropic.example",
-          }),
-          model: "opus",
-          pathToClaudeCodeExecutable: claudePath,
-          permissionMode: "bypassPermissions",
-          persistSession: false,
-          settingSources: [],
-          systemPrompt: expect.stringContaining("System"),
-        }),
-        prompt: "Prompt",
-      }),
-    );
+    const queryCall = globalThis.__gitVibeSdkMocks.claudeQuery.mock.calls[0][0];
+    const queryOptions = queryCall.options;
+    expect(queryCall.prompt).toBe("Prompt");
+    expect(queryOptions).toMatchObject({
+      allowDangerouslySkipPermissions: true,
+      cwd,
+      effort: "max",
+      env: {
+        ANTHROPIC_API_KEY: "test-key",
+        ANTHROPIC_BASE_URL: "https://anthropic.example",
+        CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
+        HOME: process.env.HOME,
+      },
+      model: "opus",
+      pathToClaudeCodeExecutable: claudePath,
+      permissionMode: "bypassPermissions",
+      persistSession: false,
+      systemPrompt: expect.stringContaining("System"),
+    });
+    expect(queryOptions).not.toHaveProperty("settingSources");
   });
 });
 
@@ -426,6 +455,7 @@ describe("SDK MCP config", () => {
     await runAiStage(stageOptions({ cwd, config: codexConfigWithMcp() }));
 
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+    expect(constructorOptions.config.features?.plugins).toBeUndefined();
     expect(constructorOptions.config.mcp_servers.dense_mem).toMatchObject({
       command: process.execPath,
       enabled: true,
@@ -512,7 +542,7 @@ describe("SDK MCP config warnings", () => {
   });
 });
 
-function stageOptions({ config, contextFilesRoot, cwd, logger }) {
+function stageOptions({ config, contextFilesRoot, cwd, logger, sandboxMode, toolOverride }) {
   return {
     config,
     contextFilesRoot,
@@ -525,6 +555,8 @@ function stageOptions({ config, contextFilesRoot, cwd, logger }) {
     stage: "validate",
     stageDefinition: { schemaFile: "validate.v1.schema.json", schemaId: "validate.v1" },
     system: "System",
+    sandboxMode,
+    toolOverride,
   };
 }
 

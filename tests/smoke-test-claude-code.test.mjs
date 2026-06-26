@@ -68,6 +68,8 @@ ai:
       adapter: claude-code-sdk
       env:
         ANTHROPIC_MODEL: glm-5
+        CLAUDE_CONFIG_DIR: /tmp/profile-claude-config
+        HOME: /tmp/profile-home
       model: opus
       reasoning:
         effort: max
@@ -78,6 +80,7 @@ ai:
       cwd,
       dependencies: { query },
       env: {
+        CLAUDE_CONFIG_DIR: "/home/runner/.claude",
         GITVIBE_AI_SMOKE_CLAUDE_PROFILE: "alternate",
         HOME: "/home/runner",
         PATH: "/usr/bin",
@@ -85,6 +88,7 @@ ai:
     });
 
     expect(report).toEqual({ model: "opus", profileName: "alternate" });
+    const queryOptions = query.mock.calls[0][0].options;
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -94,10 +98,14 @@ ai:
           outputFormat: expect.objectContaining({ type: "json_schema" }),
           permissionMode: "bypassPermissions",
           persistSession: false,
-          settingSources: [],
         }),
       }),
     );
+    expect(queryOptions.env).toMatchObject({
+      CLAUDE_CONFIG_DIR: "/home/runner/.claude",
+      HOME: "/home/runner",
+    });
+    expect(queryOptions).not.toHaveProperty("settingSources");
   });
 });
 

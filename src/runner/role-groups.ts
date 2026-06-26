@@ -140,6 +140,11 @@ export function stageFinalizerAdapter(config: GitVibeConfig, plan: StageExecutio
   return profileAdapter(config, profile, `ai.profiles.${profile}`);
 }
 
+export function stageSafetyAdapter(config: GitVibeConfig, plan: StageExecutionPlan): string {
+  if (config.safety?.prompt_injection_gate === false) return "";
+  return stageFinalizerAdapter(config, plan);
+}
+
 function workflowRoleLabel(role: string): string {
   if (!role) return "default";
   return basename(role).replace(/\.[^.]+$/, "") || "default";

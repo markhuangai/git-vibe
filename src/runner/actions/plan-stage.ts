@@ -7,6 +7,7 @@ import { loadConfig } from "../config.js";
 import {
   stageFinalizerAdapter,
   stageExecutionPlan,
+  stageSafetyAdapter,
   stageWorkflowAdapters,
   stageWorkflowIndexes,
   stageWorkflowLabels,
@@ -71,6 +72,7 @@ function writeOutputs(
     stageFinalizerAdapter(config, plan),
     appendFile,
   );
+  writeOutput(env.GITHUB_OUTPUT, "safety-adapter", stageSafetyAdapter(config, plan), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "max-parallel", String(plan.maxParallel), appendFile);
   writeOutput(env.GITHUB_OUTPUT, "mode", plan.mode, appendFile);
 }

@@ -134,7 +134,8 @@ export function pinWorkflowReleaseRefs(content: string, releaseTag: string): str
 export function migrateGitVibeConfigContent(content: string): string {
   const migratedComments = migrateLegacyEventDeliveryComments(content);
   const migratedAuth = migrateGithubAuthConfig(migratedComments);
-  return ensureTrailingNewline(migrateLegacyAiProfiles(migratedAuth));
+  const migratedSafety = migratePromptInjectionSafetyConfig(migratedAuth);
+  return ensureTrailingNewline(migrateLegacyAiProfiles(migratedSafety));
 }
 
 function isManagedWorkflowTarget(file: InstallFile): boolean {
@@ -346,6 +347,20 @@ function migrateGithubAuthConfig(content: string): string {
     return content.replace(/^github_auth:\n(?:[ \t]+.*(?:\n|$))*/m, githubAppAuth);
   }
   return `${content.trimEnd()}\n\n${githubAppAuth}`;
+}
+
+function migratePromptInjectionSafetyConfig(content: string): string {
+  const document = parseDocument(content);
+  if (document.errors.length > 0) {
+    throw new Error(
+      `git-vibe-setup could not migrate .github/git-vibe.yml because it is not valid YAML: ${document.errors[0]?.message}`,
+    );
+  }
+
+  const root = document.contents;
+  if (!isMap(root) || root.has("safety")) return content;
+
+  return `${content.trimEnd()}\n\nsafety:\n  prompt_injection_gate: true\n`;
 }
 
 function migrateLegacyAiProfiles(content: string): string {

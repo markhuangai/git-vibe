@@ -10,6 +10,7 @@ import {
   acceptedRiskMetadataBlock,
 } from "../src/shared/accepted-risk.ts";
 import { workspaceConfigWithTestAi } from "./support/ai-config.mjs";
+import { queueAllowedSafetyFinding, queueBlockedSafetyFinding } from "./support/safety-ai.mjs";
 
 const mocks = vi.hoisted(() => ({
   buildMcpPromptContext: vi.fn(),
@@ -43,6 +44,7 @@ afterEach(() => {
 describe("stage runner pre-LLM safety gate", () => {
   it("allows clean context before workflow LLM jobs start", async () => {
     const cwd = await workspace();
+    queueAllowedSafetyFinding();
     globalThis.fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment("The app should preserve current behavior.")]),
@@ -65,11 +67,12 @@ describe("stage runner pre-LLM safety gate", () => {
       status: "allowed",
       summary: "Security review passed.",
     });
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 
   it("blocks unsafe context before workflow LLM jobs start", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("source command comment: higher-priority instructions");
     globalThis.fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -96,11 +99,12 @@ describe("stage runner pre-LLM safety gate", () => {
     expect(result.result?.parsedOutput.findings.join("\n")).toContain(
       "higher-priority instructions",
     );
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 
   it("blocks read-only stages before calling the model", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("source command comment: higher-priority instructions");
     globalThis.fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -124,13 +128,14 @@ describe("stage runner pre-LLM safety gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("stage runner accepted-risk gate", () => {
   it("allows pre-cutoff accepted unsafe input while publishing the audit", async () => {
     const cwd = await workspace();
+    queueAllowedSafetyFinding();
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -166,11 +171,12 @@ describe("stage runner accepted-risk gate", () => {
     expect(bodies).not.toContain("GitVibe paused this run");
     expect(bodies).toContain("GitVibe Risk Accepted");
     expect(labelRemovalPath(fetch, "git-vibe:accept-risk")).toBeTruthy();
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 
   it("blocks post-cutoff unsafe input after accepted-risk", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("source command comment: higher-priority instructions");
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction(), "2026-01-05T00:00:00Z")]),
@@ -206,14 +212,16 @@ describe("stage runner accepted-risk gate", () => {
     );
     expect(issueCommentBodies(fetch).join("\n")).not.toContain("GitVibe Risk Accepted");
     expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("stage runner accepted-risk output gate", () => {
   it("does not reblock accepted input risk when stage output is clean", async () => {
     const cwd = await workspace();
+    queueAllowedSafetyFinding();
     globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
+    queueAllowedSafetyFinding();
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -243,7 +251,7 @@ describe("stage runner accepted-risk output gate", () => {
       status: "completed",
       summary: "Ready.",
     });
-    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -251,6 +259,7 @@ describe("stage runner accepted-risk delta input gate", () => {
   it("does not reblock accepted artifact body after label metadata updates the artifact", async () => {
     const cwd = await workspace();
     globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
+    queueAllowedSafetyFinding();
     const fetch = fetchMock([
       issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
       commentsResponse([acceptedRiskMetadataComment({ body: unsafeInstruction() })]),
@@ -280,11 +289,12 @@ describe("stage runner accepted-risk delta input gate", () => {
       status: "completed",
       summary: "Ready.",
     });
-    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(2);
   });
 
   it("blocks accepted artifact bodies that changed after risk acceptance", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("artifact body: higher-priority instructions");
     const fetch = fetchMock([
       issueResponse(unsafeInstruction(), "2026-01-05T00:00:00Z"),
       commentsResponse([acceptedRiskMetadataComment({ body: "Previously accepted body" })]),
@@ -311,14 +321,14 @@ describe("stage runner accepted-risk delta input gate", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("stage runner accepted-risk post-cutoff input gate", () => {
   it("blocks post-cutoff unsafe input before the stage model runs", async () => {
     const cwd = await workspace();
-    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
+    queueBlockedSafetyFinding("source command comment: higher-priority instructions");
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction(), "2026-01-05T00:00:00Z")]),
@@ -348,18 +358,18 @@ describe("stage runner accepted-risk post-cutoff input gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 
   it("blocks untimestamped handoff input before the stage model runs", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("investigate handoff output: higher-priority instructions");
     const handoffDir = join(cwd, "handoffs");
     mkdirSync(handoffDir);
     writeFileSync(
       join(handoffDir, "git-vibe-investigate-result.json"),
       JSON.stringify(legacyHandoff({ findings: [unsafeInstruction()] })),
     );
-    globalThis.__gitVibeSdkMocks.queueCodexOutput(investigateOutput("Ready to implement."));
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([]),
@@ -390,13 +400,14 @@ describe("stage runner accepted-risk post-cutoff input gate", () => {
       summary: "GitVibe paused this run for maintainer review.",
     });
     expect(result.parsedOutput.findings.join("\n")).toContain("handoff");
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("stage runner accepted-risk MCP input gate", () => {
   it("blocks unsafe MCP prompt additions after the accepted-risk delta scan", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("rendered MCP context prompt addition: higher-priority instructions");
     mocks.buildMcpPromptContext.mockResolvedValueOnce({
       promptAddition: `<mcp_context>${unsafeInstruction()}</mcp_context>`,
     });
@@ -426,13 +437,14 @@ describe("stage runner accepted-risk MCP input gate", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("stage runner accepted-risk output gate", () => {
   it("still blocks unsafe stage output after accepted input risk", async () => {
     const cwd = await workspace();
+    queueAllowedSafetyFinding();
     globalThis.__gitVibeSdkMocks.queueCodexOutput({
       assumptions: [],
       blocking_questions: [],
@@ -444,6 +456,7 @@ describe("stage runner accepted-risk output gate", () => {
       status: "completed",
       summary: "Ready.",
     });
+    queueBlockedSafetyFinding("stage output: higher-priority instructions");
     const fetch = fetchMock([
       issueResponse("Issue body"),
       commentsResponse([issueComment(unsafeInstruction())]),
@@ -472,7 +485,7 @@ describe("stage runner accepted-risk output gate", () => {
       status: "blocked",
       summary: "GitVibe paused this run for maintainer review.",
     });
-    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(3);
     expect(result.parsedOutput.findings.join("\n")).toContain("higher-priority instructions");
     expect(labelRequestBody(fetch, "gvi:blocked")?.labels).toEqual(["gvi:blocked"]);
   });
@@ -481,6 +494,7 @@ describe("stage runner accepted-risk output gate", () => {
 describe("stage runner PR changed-file safety gate", () => {
   it("blocks unsafe pull request changed files before workflow LLM jobs start", async () => {
     const cwd = await workspace();
+    queueBlockedSafetyFinding("pull request file docs/prompt.md: higher-priority instructions");
     globalThis.fetch = fetchMock([
       issueResponse("PR body"),
       commentsResponse([]),
@@ -513,7 +527,7 @@ describe("stage runner PR changed-file safety gate", () => {
     expect(result.result?.parsedOutput.findings.join("\n")).toContain(
       "pull request file docs/prompt.md",
     );
-    expect(globalThis.__gitVibeSdkMocks.codexRun).not.toHaveBeenCalled();
+    expect(globalThis.__gitVibeSdkMocks.codexRun).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -521,7 +535,12 @@ async function workspace() {
   const cwd = await mkdtemp(join(tmpdir(), "git-vibe-safety-runner-"));
   process.env.RUNNER_TEMP = mkdtempSync(join(tmpdir(), "git-vibe-runner-"));
   mkdirSync(join(cwd, ".github"));
-  writeFileSync(join(cwd, ".github", "git-vibe.yml"), workspaceConfigWithTestAi());
+  writeFileSync(
+    join(cwd, ".github", "git-vibe.yml"),
+    workspaceConfigWithTestAi(`safety:
+  prompt_injection_gate: true
+`),
+  );
   execFileSync("git", ["init"], { cwd, stdio: "ignore" });
   return cwd;
 }

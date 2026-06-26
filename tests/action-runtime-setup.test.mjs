@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 /**
- * @typedef {{ env?: Record<string, string>, id?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
+ * @typedef {{ env?: Record<string, string>, id?: string, if?: string, name?: string, run?: string, uses?: string, with?: Record<string, unknown> }} WorkflowStep
  * @typedef {{ steps?: WorkflowStep[] }} WorkflowJob
  * @typedef {{ jobs?: Record<string, WorkflowJob> }} Workflow
- * @typedef {{ runs?: { steps?: WorkflowStep[] } }} ActionDefinition
+ * @typedef {{ inputs?: Record<string, { required?: boolean }>, runs?: { steps?: WorkflowStep[] } }} ActionDefinition
  */
 
 const reusableWorkflows = [
@@ -103,6 +103,28 @@ describe("GitVibe prebuilt action runtime", () => {
         });
       }
     }
+  });
+
+  it("prepares the selected safety classifier provider before security review", () => {
+    const securityAction = readAction("security-review/action.yml");
+    const steps = securityAction.runs?.steps || [];
+    const reviewIndex = steps.findIndex((step) => step.id === "review");
+    const claudeIndex = steps.findIndex((step) => step.name === "Prepare Claude Code executable");
+    const codexIndex = steps.findIndex((step) => step.name === "Prepare Codex executable");
+
+    expect(securityAction.inputs?.adapter).toMatchObject({ required: true });
+    expect(claudeIndex).toBeGreaterThan(-1);
+    expect(codexIndex).toBeGreaterThan(-1);
+    expect(claudeIndex).toBeLessThan(reviewIndex);
+    expect(codexIndex).toBeLessThan(reviewIndex);
+    expect(steps[claudeIndex]).toMatchObject({
+      if: "${{ inputs.adapter == 'claude-code-sdk' }}",
+      run: 'bash "$GITHUB_ACTION_PATH/../scripts/prepare-claude-code.sh"',
+    });
+    expect(steps[codexIndex]).toMatchObject({
+      if: "${{ inputs.adapter == 'codex-sdk' }}",
+      run: 'bash "$GITHUB_ACTION_PATH/../scripts/prepare-codex.sh"',
+    });
   });
 });
 

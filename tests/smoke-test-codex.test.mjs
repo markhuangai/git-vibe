@@ -1,10 +1,12 @@
 // @ts-nocheck
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -35,6 +37,7 @@ ai:
     const config = readCodexSmokeConfig({
       cwd,
       env: {
+        CODEX_HOME: join(cwd, "codex-home"),
         GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
       },
     });
@@ -49,6 +52,35 @@ ai:
       '{"auth_mode":"chatgpt"}',
     );
     expect(config.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
+  });
+
+  it("tightens existing auth_json file permissions", () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      enabled: true
+      adapter: codex-sdk
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
+      model: gpt-5-test
+`);
+    const codexHome = join(cwd, "codex-home");
+    const authPath = join(codexHome, "auth.json");
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(authPath, "{}");
+    chmodSync(authPath, 0o644);
+
+    readCodexSmokeConfig({
+      cwd,
+      env: {
+        CODEX_HOME: codexHome,
+        GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
+      },
+    });
+
+    expect(statSync(authPath).mode & 0o777).toBe(0o600);
+    expect(readFileSync(authPath, "utf8")).toBe('{"auth_mode":"chatgpt"}');
   });
 });
 
@@ -76,21 +108,21 @@ ai:
       expect(readFileSync(join(codexHome, "auth.json"), "utf8")).toBe('{"auth_mode":"chatgpt"}');
       return { startThread };
     });
+    const installedCodexHome = join(cwd, "runner-codex-home");
 
     const report = await runCodexSmokeTest({
       cwd,
       dependencies: { Codex },
       env: {
-        CODEX_HOME: "/runner/codex-home",
+        CODEX_HOME: installedCodexHome,
         GITVIBE_CODEX_PATH: "/runner/codex",
         GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
       },
     });
 
     expect(report).toEqual({ model: "gpt-5-test", profileName: "codex" });
-    expect(codexHome).toContain("git-vibe-codex-smoke-");
-    expect(codexHome).not.toBe("/runner/codex-home");
-    expect(existsSync(codexHome)).toBe(false);
+    expect(codexHome).toBe(installedCodexHome);
+    expect(existsSync(codexHome)).toBe(true);
     expect(Codex).toHaveBeenCalledWith(
       expect.objectContaining({ codexPathOverride: "/runner/codex" }),
     );
@@ -121,23 +153,66 @@ ai:
       adapter: codex-sdk
       env:
         CODEX_BASE_URL: https://codex.example
+        CODEX_HOME: /tmp/profile-codex-home
       model: gpt-5-alt
 `);
     const Codex = codexDependency('```json\n{"ok": true, "source": "codex"}\n```');
+    const installedCodexHome = join(cwd, "installed-codex-home");
 
     const report = await runCodexSmokeTest({
       cwd,
       dependencies: { Codex },
-      env: { GITVIBE_AI_SMOKE_CODEX_PROFILE: "alternate", PATH: "/usr/bin" },
+      env: {
+        CODEX_HOME: installedCodexHome,
+        GITVIBE_AI_SMOKE_CODEX_PROFILE: "alternate",
+        PATH: "/usr/bin",
+      },
     });
 
     expect(report).toEqual({ model: "gpt-5-alt", profileName: "alternate" });
     expect(Codex).toHaveBeenCalledWith({
       env: expect.objectContaining({
         CODEX_BASE_URL: "https://codex.example",
+        CODEX_HOME: installedCodexHome,
         PATH: "/usr/bin",
       }),
     });
+  });
+});
+
+describe("Codex SDK smoke response parsing", () => {
+  it("extracts embedded JSON responses and omits non-string child env values", async () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      enabled: true
+      adapter: codex-sdk
+      model: gpt-5-test
+`);
+    const Codex = vi.fn(function Codex(options) {
+      expect(options.env.PATH).toBe("/usr/bin");
+      expect(options.env.NUMERIC_VALUE).toBeUndefined();
+      return {
+        startThread: vi.fn(() => ({
+          run: vi.fn(async () => ({
+            finalResponse: 'Result: {"ok": true, "source": "codex"}.',
+          })),
+        })),
+      };
+    });
+
+    const report = await runCodexSmokeTest({
+      cwd,
+      dependencies: { Codex },
+      env: {
+        HOME: "",
+        NUMERIC_VALUE: 123,
+        PATH: "/usr/bin",
+      },
+    });
+
+    expect(report).toEqual({ model: "gpt-5-test", profileName: "codex" });
   });
 });
 
@@ -176,6 +251,31 @@ describe("Codex SDK smoke failure handling", () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining(".github/git-vibe.yml is required"),
     );
+  });
+
+  it("returns nonzero from main on non-error SDK failures", async () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      model: gpt-5-test
+`);
+    const logger = { error: vi.fn(), log: vi.fn() };
+
+    await expect(
+      main({
+        cwd,
+        dependencies: {
+          Codex: vi.fn(function Codex() {
+            throw "sdk failed";
+          }),
+        },
+        env: {},
+        logger,
+      }),
+    ).resolves.toBe(1);
+    expect(logger.error).toHaveBeenCalledWith("[git-vibe] sdk failed");
   });
 });
 
@@ -220,6 +320,16 @@ ai:
         cwd: writeConfig(`
 ai:
   profiles:
+    codex: []
+`),
+        env: {},
+      }),
+    ).toThrow("does not define an enabled codex-sdk profile");
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
     codex:
       adapter: codex-sdk
 `),
@@ -242,7 +352,7 @@ ai:
     ).toThrow("reasoning.effort is not supported by codex-sdk: max");
   });
 
-  it("validates reasoning before creating a smoke CODEX_HOME", () => {
+  it("validates reasoning before writing smoke Codex auth", () => {
     const cwd = writeConfig(`
 ai:
   profiles:
@@ -260,16 +370,30 @@ ai:
       readCodexSmokeConfig({
         cwd,
         env: {
+          CODEX_HOME: join(cwd, "codex-home"),
           GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
         },
       }),
     ).toThrow("reasoning.effort is not supported by codex-sdk: max");
+    expect(existsSync(join(cwd, "codex-home", "auth.json"))).toBe(false);
     expect(codexSmokeTempDirNames()).toEqual(before);
   });
 });
 
 describe("Codex SDK smoke env failures", () => {
   it("rejects invalid env mappings and bundle values", () => {
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      model: gpt-5-test
+`),
+        env: { GITVIBE_AI_ENV_JSON: "[]" },
+      }),
+    ).toThrow("GITVIBE_AI_ENV_JSON must be a JSON object.");
     expect(() =>
       readCodexSmokeConfig({
         cwd: writeConfig(`
@@ -284,6 +408,21 @@ ai:
         env: {},
       }),
     ).toThrow("env keys must be non-empty strings");
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      env:
+        CODEX_API_KEY:
+          from_bundle: ""
+      model: gpt-5-test
+`),
+        env: {},
+      }),
+    ).toThrow("ai.profiles.codex.env.CODEX_API_KEY.from_bundle must be a non-empty string.");
     expect(() =>
       readCodexSmokeConfig({
         cwd: writeConfig(`

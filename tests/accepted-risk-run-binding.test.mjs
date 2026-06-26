@@ -82,15 +82,7 @@ describe("accepted-risk workflow run binding", () => {
       acceptedRiskFromContext({
         context: issueContext({
           artifact: { labels: [gitVibeLabels.acceptRisk.name] },
-          timeline: [
-            blockedResultComment({
-              metadata: acceptedRiskMetadata({
-                stage: "materialize",
-                stages: ["materialize", "validate"],
-              }),
-              stage: "materialize",
-            }),
-          ],
+          timeline: [],
         }),
         logger: logger(),
         runner: runner({ acceptedRisk: undefined, stage: "materialize" }),
@@ -130,8 +122,90 @@ describe("accepted-risk workflow run audit binding", () => {
   });
 });
 
+describe("accepted-risk previous metadata", () => {
+  it("derives accepted risk from previous trusted accepted-risk metadata", () => {
+    const metadata = acceptedRiskMetadata({
+      run: "88",
+      stage: "materialize",
+      stages: ["materialize", "validate"],
+    });
+
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [blockedResultComment({ metadata, stage: "materialize" })],
+        }),
+        logger: logger(),
+        runner: runner({
+          acceptedRisk: undefined,
+          stage: "validate",
+          workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
+        }),
+      }),
+    ).toEqual({
+      actor: "maintainer",
+      artifactSha: undefined,
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize", "validate"],
+    });
+  });
+
+  it("rejects previous pull request accepted-risk metadata after the PR head changes", () => {
+    const context = pullRequestContext({
+      timeline: [
+        blockedResultComment({
+          markerArtifact: "pull-request",
+          metadata: acceptedRiskMetadata({
+            artifact: "pull-request",
+            artifactSha: "old-sha",
+            number: "12",
+            stage: "review-matrix",
+            stages: ["review-matrix"],
+          }),
+          stage: "review-matrix",
+        }),
+      ],
+    });
+
+    expect(
+      acceptedRiskFromContext({
+        context,
+        logger: logger(),
+        runner: runner({
+          acceptedRisk: undefined,
+          issueNumber: "",
+          prNumber: "12",
+          stage: "review-matrix",
+        }),
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("accepted-risk metadata validation", () => {
+  it("ignores metadata whose accepted stage does not match the result marker", () => {
+    expect(
+      acceptedRiskFromContext({
+        context: issueContext({
+          timeline: [
+            blockedResultComment({
+              metadata: acceptedRiskMetadata({
+                stage: "validate",
+                stages: ["materialize"],
+              }),
+              stage: "materialize",
+            }),
+          ],
+        }),
+        logger: logger(),
+        runner: runner({ acceptedRisk: undefined, stage: "materialize" }),
+      }),
+    ).toBeUndefined();
+  });
+});
+
 describe("accepted-risk workflow run binding rejection", () => {
-  it("ignores metadata bound to a different workflow run", () => {
+  it("uses previous metadata bound to a different workflow run for scan narrowing", () => {
     const loggerMock = logger();
 
     expect(
@@ -155,11 +229,17 @@ describe("accepted-risk workflow run binding rejection", () => {
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
-    ).toBeUndefined();
-    expect(loggerMock.event).toHaveBeenCalledWith("accepted_risk.skip", {
-      reason: "workflow-run-not-bound",
-      run: "99",
+    ).toEqual({
+      actor: "maintainer",
+      artifactSha: undefined,
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
+    expect(loggerMock.event).toHaveBeenCalledWith("accepted_risk.context.detected", {
+      cutoff: "2026-01-04T00:00:00Z",
+      source: "metadata-baseline",
       stage: "materialize",
+      stages: "materialize",
     });
   });
 
@@ -217,7 +297,7 @@ describe("accepted-risk workflow run binding rejection", () => {
 });
 
 describe("accepted-risk workflow run audit binding rejection", () => {
-  it("ignores run audit markers without the current workflow attempt", () => {
+  it("falls back to previous metadata when run audit markers lack the current attempt", () => {
     const metadata = acceptedRiskMetadata({ stage: "materialize", stages: ["materialize"] });
     const runnerOptions = runner({
       acceptedRisk: undefined,
@@ -237,7 +317,10 @@ describe("accepted-risk workflow run audit binding rejection", () => {
         logger: logger(),
         runner: runnerOptions,
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
     expect(
       acceptedRiskFromContext({
         context: issueContext({
@@ -249,7 +332,10 @@ describe("accepted-risk workflow run audit binding rejection", () => {
         logger: logger(),
         runner: runnerOptions,
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
   });
 });
 
@@ -286,6 +372,31 @@ function issueContext(overrides = {}) {
       title: "Issue title",
       type: "issue",
       url: "https://github.com/example/repo/issues/12",
+    },
+    generatedAt: "2026-01-01T00:00:00Z",
+    repository: "example/repo",
+    timeline: [],
+  };
+  return {
+    ...context,
+    ...overrides,
+    artifact: { ...context.artifact, ...(overrides.artifact || {}) },
+  };
+}
+
+function pullRequestContext(overrides = {}) {
+  const context = {
+    artifact: {
+      body: "",
+      number: "12",
+      pullRequestHead: {
+        branch: "git-vibe/12",
+        repository: "example/repo",
+        sha: "current-sha",
+      },
+      title: "PR title",
+      type: "pull-request",
+      url: "https://github.com/example/repo/pull/12",
     },
     generatedAt: "2026-01-01T00:00:00Z",
     repository: "example/repo",

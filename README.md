@@ -356,6 +356,13 @@ version: 1
 github_auth:
   mode: github-app
 
+safety:
+  # Enabled by default. Set false to skip input/output prompt-injection scans.
+  prompt_injection_gate: true
+  # CodeRabbit authors are ignored by default. Add more bot authors here.
+  ignored_authors:
+    - custom-review-bot[bot]
+
 ai:
   profiles:
     codex_sdk:
@@ -380,8 +387,8 @@ ai:
       model: opus
       reasoning:
         effort: max
-      # Optional explicit repo context. GitVibe does not auto-load AGENTS.md,
-      # CLAUDE.md, or other native agent files.
+      # Optional explicit repo context appended to GitVibe's rendered prompt.
+      # Native SDKs may also load their installed user/project configuration.
       # context:
       #   files:
       #     - AGENTS.md
@@ -426,6 +433,13 @@ tests:
 GitVibe uses `/git-vibe ...` as the fixed public command form. Command prefixes,
 external agent mentions, permissions, and label names are not configurable.
 
+`safety.prompt_injection_gate` controls the AI prompt-injection gate. When it is
+`true` or omitted, GitVibe scans untrusted input before a stage and scans stage
+output before publishing. When it is `false`, GitVibe skips both scans.
+`safety.ignored_authors` adds GitHub logins whose timeline comments and reviews
+are omitted from prompt-injection scans and model context. CodeRabbit
+(`coderabbitai` and `coderabbitai[bot]`) is ignored by default.
+
 Each AI stage must define `profile` or `role_group`; GitVibe fails fast instead of
 falling back to a profile name the repository may not have configured.
 Role definitions referenced by `role_group` live in `.git-vibe/role-group/*.md`.
@@ -439,8 +453,8 @@ agents can read exact evidence with normal repository tools instead of receiving
 large inline prompt payloads.
 Profiles may opt into shared repository guidance with
 `ai.profiles.<name>.context.files`. Listed files are appended to the rendered
-system prompt for that profile; GitVibe never auto-loads `AGENTS.md` or
-`CLAUDE.md`.
+system prompt for that profile. Native SDK adapters may also load their
+installed user/project configuration.
 
 Stages may also opt into MCP servers through `ai.stages.<stage>.mcp`. Each
 server can expose a flat `tools` list to the model. For advanced deterministic

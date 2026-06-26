@@ -8,7 +8,8 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { ResolvedMcpServer } from "./mcp-config.js";
 import type { StageLogger } from "./logging.js";
 import { redactLogText } from "./logging.js";
-import { safetyFindingsForText } from "./safety-gate.js";
+
+type McpResultSafetySeverity = "none" | "high";
 
 export interface ConnectedMcpServer {
   client: Client;
@@ -16,7 +17,52 @@ export interface ConnectedMcpServer {
   server: ResolvedMcpServer;
 }
 
-const maxMcpResultScanChars = 100_000;
+const mcpResultHighRiskPatterns: Array<{ finding: string; regex: RegExp }> = [
+  {
+    finding: "attempts to ignore higher-priority instructions",
+    regex:
+      /\b(?:disregard|forget|ignore|override)\b.{0,80}\b(?:above|all|developer|earlier|previous|prior|system)\b.{0,80}\b(?:instructions?|messages?|prompts?|rules?)\b/isu,
+  },
+  {
+    finding: "attempts to activate an alternate model mode",
+    regex: /\b(?:developer mode|do anything now|dan mode|jailbreak|roleplay as unrestricted)\b/isu,
+  },
+  {
+    finding: "asks for secrets, credentials, or hidden prompts",
+    regex:
+      /\b(?:exfiltrate|print|reveal|show|steal)\b.{0,80}\b(?:api[_ -]?keys?|credentials?|secrets?|(?:hidden\s+)?system prompts?|hidden prompts?|tokens?)\b/isu,
+  },
+  {
+    finding: "asks the agent to bypass validation, approval, or safety controls",
+    regex:
+      /\b(?:bypass|disable|skip)\b.{0,80}\b(?:approval|checks?|guardrails?|policy|safety|tests?|validation)\b/isu,
+  },
+  {
+    finding: "asks the agent to decode and obey an encoded payload",
+    regex:
+      /(?:\b(?:base64|encoded payload)\b.{0,120}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:base64|encoded payload|payload)\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b|\bdecode\b.{0,80}\b(?:execute|obey|run|follow\s+(?:(?:the|its)\s+)?instructions?)\b.{0,80}\b(?:base64|encoded payload|payload)\b)/isu,
+  },
+  {
+    finding: "contains a destructive shell instruction",
+    regex:
+      /\b(?:rm\s+-rf|git\s+push\s+--force|curl\b.{0,80}\|\s*(?:bash|sh)|wget\b.{0,80}\|\s*(?:bash|sh))\b/isu,
+  },
+  {
+    finding: "contains a multilingual instruction override",
+    regex:
+      /\b(?:ignora|ignorez|ignoriere)\b.{0,80}\b(?:anteriores|instrucciones|instructions|anweisungen)\b/isu,
+  },
+  {
+    finding: "contains a CJK instruction override",
+    regex:
+      /(?:\u5ffd\u7565|\u7121\u8996).{0,80}(?:\u6307\u4ee4|\u6307\u793a|\u7cfb\u7d71|\u7cfb\u7edf)/su,
+  },
+  {
+    finding: "contains a Cyrillic instruction override",
+    regex:
+      /(?:\u0438\u0433\u043d\u043e\u0440\u0438\u0440\u0443\u0439|\u0438\u0433\u043d\u043e\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c).{0,80}\u0438\u043d\u0441\u0442\u0440\u0443\u043a/su,
+  },
+];
 
 export async function connectMcpServer(options: {
   logger?: StageLogger;
@@ -70,34 +116,24 @@ export function safetyCheckedMcpResult(options: {
   tool: string;
 }): CallToolResult {
   const result = redactMcpResultSecrets(options.result, options.secretValues || []);
-  const text = mcpResultText(result);
-  const scanText =
-    text.length > maxMcpResultScanChars ? text.slice(0, maxMcpResultScanChars) : text;
-  const safety = safetyFindingsForText({
-    label: `MCP ${options.server}.${options.tool} result`,
-    text: scanText,
-  });
+  const safety = mcpResultSafety(mcpResultText(result));
   options.logger?.event("mcp.tool.safety.checked", {
     findings: safety.findings.length,
     server: options.server,
     severity: safety.severity,
     tool: options.tool,
   });
-  if (safety.severity !== "high") return result;
-  return {
-    content: [
-      {
-        text: [
-          `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
-          "",
-          "Detected risk:",
-          ...safety.findings.map((finding) => `- ${finding}`),
-        ].join("\n"),
-        type: "text",
-      },
-    ],
-    isError: true,
-  };
+  if (safety.severity === "high") {
+    return mcpErrorResult(
+      [
+        `Error [mcp:${options.server}.${options.tool}]: high-risk prompt-injection content detected in MCP tool result.`,
+        "",
+        "Detected risk:",
+        ...safety.findings.map((finding) => `- ${finding}`),
+      ].join("\n"),
+    );
+  }
+  return result;
 }
 
 export function mcpResultText(result: CallToolResult): string {
@@ -159,6 +195,13 @@ function redactMcpJsonValue(value: unknown, secrets: string[]): unknown {
 
 function activeMcpSecrets(secretValues: string[]): string[] {
   return [...new Set(secretValues.filter((value) => value.length >= 4))];
+}
+
+function mcpResultSafety(text: string): { findings: string[]; severity: McpResultSafetySeverity } {
+  const findings = mcpResultHighRiskPatterns
+    .filter((pattern) => pattern.regex.test(text))
+    .map((pattern) => pattern.finding);
+  return { findings, severity: findings.length > 0 ? "high" : "none" };
 }
 
 function transportForServer(server: ResolvedMcpServer, logger: StageLogger | undefined): Transport {

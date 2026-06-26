@@ -127,7 +127,7 @@ describe("accepted-risk context derivation", () => {
 });
 
 describe("accepted-risk context rejection", () => {
-  it("ignores stale run audits and untrusted accepted-risk metadata", () => {
+  it("uses trusted previous accepted-risk metadata and ignores untrusted metadata", () => {
     const trustedMetadata = acceptedRiskMetadata({
       stage: "materialize",
       stages: ["materialize"],
@@ -148,7 +148,10 @@ describe("accepted-risk context rejection", () => {
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
 
     expect(
       acceptedRiskFromContext({
@@ -169,7 +172,7 @@ describe("accepted-risk context rejection", () => {
     ).toBeUndefined();
   });
 
-  it("ignores current run audit markers from untrusted authors", () => {
+  it("does not require current run audit markers to be trusted", () => {
     const trustedMetadata = acceptedRiskMetadata({
       stage: "materialize",
       stages: ["materialize"],
@@ -195,7 +198,10 @@ describe("accepted-risk context rejection", () => {
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
   });
 });
 
@@ -219,11 +225,11 @@ describe("accepted-risk context marker rejection", () => {
     ).toBeUndefined();
   });
 
-  it("ignores downstream metadata without a current run audit marker", () => {
+  it("uses trusted metadata without a current run audit marker", () => {
     const context = issueContext({
       timeline: [
         blockedResultComment({
-          metadata: acceptedRiskMetadata({ stage: "materialize" }),
+          metadata: acceptedRiskMetadata({ stage: "materialize", stages: ["materialize"] }),
           stage: "materialize",
         }),
         issueTimelineComment("Audit text without a marker"),
@@ -236,7 +242,10 @@ describe("accepted-risk context marker rejection", () => {
         logger: logger(),
         runner: runner({ acceptedRisk: undefined, stage: "materialize", workflowRunUrl: "" }),
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
     expect(
       acceptedRiskFromContext({
         context,
@@ -247,7 +256,10 @@ describe("accepted-risk context marker rejection", () => {
           workflowRunUrl: "https://github.com/example/repo/actions/runs/99",
         }),
       }),
-    ).toBeUndefined();
+    ).toMatchObject({
+      cutoff: "2026-01-04T00:00:00Z",
+      stages: ["materialize"],
+    });
   });
 });
 

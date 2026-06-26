@@ -15,6 +15,9 @@ event_delivery:
 github_auth:
   mode: github-app
 
+safety:
+  prompt_injection_gate: true
+
 tests:
   commands:
     - pnpm install --frozen-lockfile
@@ -44,9 +47,9 @@ ai:
           from_bundle: GITVIBE_AI_API_KEY
         ANTHROPIC_BASE_URL:
           from_bundle: ANTHROPIC_BASE_URL
-        ANTHROPIC_DEFAULT_OPUS_MODEL: kimi-k2.5
-        ANTHROPIC_DEFAULT_SONNET_MODEL: kimi-k2.5
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: kimi-k2.5
+        ANTHROPIC_DEFAULT_OPUS_MODEL: MiniMax-M2.5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: MiniMax-M2.5
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: MiniMax-M2.5
         ANTHROPIC_MODEL: opus
         CLAUDE_CODE_SUBAGENT_MODEL: opus
       model: opus

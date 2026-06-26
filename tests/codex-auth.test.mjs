@@ -26,25 +26,69 @@ afterEach(() => {
 });
 
 describe("Codex auth environment", () => {
-  it("seeds auth.json from the AI env bundle and strips bundle secrets from the child env", () => {
+  it("seeds bundled auth.json in the GitVibe temp CODEX_HOME", () => {
+    const runnerTemp = tempDir();
+    process.env.CODEX_HOME = join(tempDir(), "persistent-codex-home");
+    process.env.RUNNER_TEMP = runnerTemp;
     const prepared = prepare();
+    const codexHome = join(runnerTemp, "git-vibe", "codex-home");
 
     expect(readFileSync(prepared.auth.authPath, "utf8")).toBe(codexAuthJson("old"));
-    expect(prepared.env.CODEX_HOME).toContain("git-vibe-codex-test-");
+    expect(prepared.env.CODEX_HOME).toBe(codexHome);
+    expect(prepared.auth.authPath).toBe(join(codexHome, "auth.json"));
     expect(prepared.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(prepared.env.CODEX_AUTH_JSON).toBeUndefined();
   });
 
-  it("isolates CODEX_HOME when the profile has no auth_json source", () => {
-    const contextDir = tempDir();
+  it("uses RUNNER_TEMP for bundled auth when CODEX_HOME is absent", () => {
+    const runnerTemp = tempDir();
+    delete process.env.CODEX_HOME;
+    process.env.HOME = tempDir();
+    process.env.RUNNER_TEMP = runnerTemp;
+    const prepared = prepare();
+
+    expect(prepared.env.CODEX_HOME).toBe(join(runnerTemp, "git-vibe", "codex-home"));
+    expect(readFileSync(prepared.auth.authPath, "utf8")).toBe(codexAuthJson("old"));
+  });
+
+  it("preserves configured CODEX_HOME when the profile has no auth_json source", () => {
+    const codexHome = join(tempDir(), "codex-home");
+    process.env.CODEX_HOME = codexHome;
     const prepared = prepareCodexEnv({
-      contextDir,
       profile: { model: "gpt-5.5" },
       profileName: "codex_sdk",
     });
 
     expect(prepared.auth).toBeUndefined();
-    expect(prepared.env.CODEX_HOME).toBe(join(contextDir, "codex-home"));
+    expect(prepared.env.CODEX_HOME).toBe(codexHome);
+  });
+
+  it("uses the installed default CODEX_HOME without bundled auth", () => {
+    const home = tempDir();
+    delete process.env.CODEX_HOME;
+    process.env.HOME = home;
+    const prepared = prepareCodexEnv({
+      profile: { model: "gpt-5.5" },
+      profileName: "codex_sdk",
+    });
+
+    expect(prepared.auth).toBeUndefined();
+    expect(prepared.env.CODEX_HOME).toBe(join(home, ".codex"));
+  });
+
+  it("ignores profile CODEX_HOME overrides", () => {
+    const installedCodexHome = join(tempDir(), "installed-codex-home");
+    process.env.CODEX_HOME = installedCodexHome;
+    const prepared = prepareCodexEnv({
+      profile: {
+        env: { CODEX_HOME: "/tmp/profile-codex-home" },
+        model: "gpt-5.5",
+      },
+      profileName: "codex_sdk",
+    });
+
+    expect(prepared.auth).toBeUndefined();
+    expect(prepared.env.CODEX_HOME).toBe(installedCodexHome);
   });
 
   it("rejects auth_json bundle sources that resolve to empty strings", () => {
@@ -311,7 +355,6 @@ describe("Codex auth write-back validation", () => {
 
 function prepare() {
   return prepareCodexEnv({
-    contextDir: tempDir(),
     profile: {
       auth_json: { from_bundle: "CODEX_AUTH_JSON" },
       model: "gpt-5.5",

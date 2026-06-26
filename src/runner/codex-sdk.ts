@@ -48,7 +48,7 @@ export async function runCodexSdkStage({
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-codex-"));
   try {
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
-    const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });
+    const codexEnv = prepareCodexEnv({ profile, profileName });
     const sdk = new Codex({
       codexPathOverride: codexExecutablePath(),
       config: codexConfig(profile, mcpConfig.codexConfig),
@@ -73,7 +73,7 @@ export async function runCodexSdkStage({
       approvalPolicy: "never",
       model,
       modelReasoningEffort: codexReasoningEffort(profile),
-      sandboxMode: "danger-full-access",
+      sandboxMode: options.sandboxMode || "danger-full-access",
       skipGitRepoCheck: true,
       workingDirectory: options.cwd,
     });
