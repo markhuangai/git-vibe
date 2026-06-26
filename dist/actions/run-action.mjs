@@ -64404,13 +64404,7 @@ async function runMatrixFinalizerResult({
   }
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = acceptedRisk ? [] : matrixFinalizerSafetySources({ results });
-  if (acceptedRisk) {
-    logger.event("matrix.finalize.member_safety.skip", {
-      reason: "accepted-risk",
-      results: results.length
-    });
-  }
+  const finalizerSafetySources = matrixFinalizerSafetySources({ results });
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config: config2,
@@ -64517,7 +64511,12 @@ function acceptedRiskFromContext(options) {
   const candidate = acceptedRiskMetadataForRunner(options.context, options.runner);
   if (!candidate) return void 0;
   const source = acceptedRiskRuntimeSource(candidate.metadata, options.context, options.runner);
-  if (!source) {
+  const acceptedRisk = source ? acceptedRiskFromMetadata(candidate.metadata) : acceptedRiskWithoutRunBinding(candidate.metadata);
+  if (!source && !acceptedRiskApplies({
+    context: options.context,
+    logger: options.logger,
+    runner: { ...options.runner, acceptedRisk }
+  })) {
     options.logger.event("accepted_risk.skip", {
       reason: "workflow-run-not-bound",
       run: workflowRunIdFromUrl(options.runner.workflowRunUrl) || "",
@@ -64527,18 +64526,11 @@ function acceptedRiskFromContext(options) {
   }
   options.logger.event("accepted_risk.context.detected", {
     cutoff: candidate.metadata.cutoff,
-    source,
+    source: source || "metadata-baseline",
     stage: options.runner.stage,
     stages: candidate.metadata.stages.join(",")
   });
-  return {
-    actor: candidate.metadata.actor,
-    artifactSha: candidate.metadata.artifactSha,
-    cutoff: candidate.metadata.cutoff,
-    run: candidate.metadata.run,
-    runAttempt: candidate.metadata.runAttempt,
-    stages: candidate.metadata.stages
-  };
+  return acceptedRisk;
 }
 function runnerWithAcceptedRiskFromContext(options) {
   const acceptedRisk = acceptedRiskFromContext(options);
@@ -64684,6 +64676,24 @@ function acceptedRiskMetadataSource(item) {
     id: stringValue4(item.id),
     kind: item.kind,
     sourceUrl: item.url || void 0
+  };
+}
+function acceptedRiskFromMetadata(metadata) {
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    run: metadata.run,
+    runAttempt: metadata.runAttempt,
+    stages: metadata.stages
+  };
+}
+function acceptedRiskWithoutRunBinding(metadata) {
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    stages: metadata.stages
   };
 }
 function acceptedRiskHandoffSourceMatches(handoff, acceptedSource) {

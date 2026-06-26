@@ -48,7 +48,17 @@ export function acceptedRiskFromContext(options: {
   if (!candidate) return undefined;
 
   const source = acceptedRiskRuntimeSource(candidate.metadata, options.context, options.runner);
-  if (!source) {
+  const acceptedRisk = source
+    ? acceptedRiskFromMetadata(candidate.metadata)
+    : acceptedRiskWithoutRunBinding(candidate.metadata);
+  if (
+    !source &&
+    !acceptedRiskApplies({
+      context: options.context,
+      logger: options.logger,
+      runner: { ...options.runner, acceptedRisk },
+    })
+  ) {
     options.logger.event("accepted_risk.skip", {
       reason: "workflow-run-not-bound",
       run: workflowRunIdFromUrl(options.runner.workflowRunUrl) || "",
@@ -59,18 +69,11 @@ export function acceptedRiskFromContext(options: {
 
   options.logger.event("accepted_risk.context.detected", {
     cutoff: candidate.metadata.cutoff,
-    source,
+    source: source || "metadata-baseline",
     stage: options.runner.stage,
     stages: candidate.metadata.stages.join(","),
   });
-  return {
-    actor: candidate.metadata.actor,
-    artifactSha: candidate.metadata.artifactSha,
-    cutoff: candidate.metadata.cutoff,
-    run: candidate.metadata.run,
-    runAttempt: candidate.metadata.runAttempt,
-    stages: candidate.metadata.stages,
-  };
+  return acceptedRisk;
 }
 
 export function runnerWithAcceptedRiskFromContext(options: {
@@ -295,6 +298,30 @@ function acceptedRiskMetadataSource(item: TimelineItem): AcceptedRiskMetadataSou
     id: stringValue(item.id),
     kind: item.kind,
     sourceUrl: item.url || undefined,
+  };
+}
+
+function acceptedRiskFromMetadata(
+  metadata: AcceptedRiskMetadata,
+): NonNullable<RunnerOptions["acceptedRisk"]> {
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    run: metadata.run,
+    runAttempt: metadata.runAttempt,
+    stages: metadata.stages,
+  };
+}
+
+function acceptedRiskWithoutRunBinding(
+  metadata: AcceptedRiskMetadata,
+): NonNullable<RunnerOptions["acceptedRisk"]> {
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    stages: metadata.stages,
   };
 }
 

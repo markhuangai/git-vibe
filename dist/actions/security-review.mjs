@@ -59557,7 +59557,12 @@ function acceptedRiskFromContext(options) {
   const candidate = acceptedRiskMetadataForRunner(options.context, options.runner);
   if (!candidate) return void 0;
   const source = acceptedRiskRuntimeSource(candidate.metadata, options.context, options.runner);
-  if (!source) {
+  const acceptedRisk = source ? acceptedRiskFromMetadata(candidate.metadata) : acceptedRiskWithoutRunBinding(candidate.metadata);
+  if (!source && !acceptedRiskApplies({
+    context: options.context,
+    logger: options.logger,
+    runner: { ...options.runner, acceptedRisk }
+  })) {
     options.logger.event("accepted_risk.skip", {
       reason: "workflow-run-not-bound",
       run: workflowRunIdFromUrl(options.runner.workflowRunUrl) || "",
@@ -59567,18 +59572,11 @@ function acceptedRiskFromContext(options) {
   }
   options.logger.event("accepted_risk.context.detected", {
     cutoff: candidate.metadata.cutoff,
-    source,
+    source: source || "metadata-baseline",
     stage: options.runner.stage,
     stages: candidate.metadata.stages.join(",")
   });
-  return {
-    actor: candidate.metadata.actor,
-    artifactSha: candidate.metadata.artifactSha,
-    cutoff: candidate.metadata.cutoff,
-    run: candidate.metadata.run,
-    runAttempt: candidate.metadata.runAttempt,
-    stages: candidate.metadata.stages
-  };
+  return acceptedRisk;
 }
 function runnerWithAcceptedRiskFromContext(options) {
   const acceptedRisk = acceptedRiskFromContext(options);
@@ -59635,6 +59633,9 @@ function acceptedRiskContextUnits(context, runner, ignoredAuthors = []) {
     cutoff,
     ignoredAuthors
   });
+}
+function acceptedRiskLabelPresent(context) {
+  return (context.artifact.labels || []).includes(gitVibeLabels.acceptRisk.name);
 }
 async function publishAcceptedRiskAudit(options) {
   if (options.runner.dryRun) {
@@ -59705,6 +59706,24 @@ function acceptedRiskMetadataSource(item) {
     id: stringValue4(item.id),
     kind: item.kind,
     sourceUrl: item.url || void 0
+  };
+}
+function acceptedRiskFromMetadata(metadata) {
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    run: metadata.run,
+    runAttempt: metadata.runAttempt,
+    stages: metadata.stages
+  };
+}
+function acceptedRiskWithoutRunBinding(metadata) {
+  return {
+    actor: metadata.actor,
+    artifactSha: metadata.artifactSha,
+    cutoff: metadata.cutoff,
+    stages: metadata.stages
   };
 }
 function acceptedRiskRuntimeSource(metadata, context, runner) {
@@ -59831,6 +59850,7 @@ async function runStageSecurityReview(options) {
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
+  const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
   await applySecurityReviewStartLabelTransition({ client, context, logger, options: runner });
   const transientComments = [];
   const safetyOptions = stageSafetyOptions({
@@ -59842,8 +59862,10 @@ async function runStageSecurityReview(options) {
     options: runner,
     transientComments
   });
-  if (acceptedRiskApplies({ context, logger, runner })) {
-    return acceptedRiskSecurityReview(safetyOptions);
+  if (acceptedRisk) {
+    return acceptedRiskSecurityReview(safetyOptions, {
+      publishAudit: Boolean(options.acceptedRisk) || acceptedRiskLabelPresent(context) || Boolean(runner.acceptedRisk?.run)
+    });
   }
   const inputSafetyResult = await blockPromptInput(safetyOptions);
   if (inputSafetyResult) return blockedSecurityReview(inputSafetyResult);
@@ -59878,10 +59900,14 @@ async function blockAcceptedRiskDeltaInput(options) {
 function blockedSecurityReview(result) {
   return { allowed: false, result, status: result.status, summary: result.summary };
 }
-async function acceptedRiskSecurityReview(options) {
+async function acceptedRiskSecurityReview(options, audit = { publishAudit: true }) {
   const blockedResult = await blockAcceptedRiskDeltaInput(options);
   if (blockedResult) return blockedSecurityReview(blockedResult);
-  await publishAcceptedRiskAudit(options);
+  if (audit.publishAudit) {
+    await publishAcceptedRiskAudit(options);
+  } else {
+    options.logger.event("accepted_risk.audit.skip", { reason: "prior-accepted-risk" });
+  }
   options.logger.event("security.review.done", {
     accepted_risk: true,
     allowed: true
@@ -59889,7 +59915,7 @@ async function acceptedRiskSecurityReview(options) {
   return {
     allowed: true,
     status: "allowed",
-    summary: "Security review passed; accepted-risk label was removed."
+    summary: audit.publishAudit ? "Security review passed; accepted-risk label was removed." : "Security review passed."
   };
 }
 async function loadRunnerContext(options) {

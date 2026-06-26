@@ -26,6 +26,7 @@ import { blockUnsafePromptInjection } from "./safety-gate-runner.js";
 import {
   acceptedRiskApplies,
   acceptedRiskContextUnits,
+  acceptedRiskLabelPresent,
   contextWithoutAcceptedRiskMetadataSource,
   publishAcceptedRiskAudit,
   publishAcceptedRiskAuditForLabeledContext,
@@ -77,6 +78,7 @@ export async function runStageSecurityReview(
   const client = new GitHubClient();
   const context = await loadRunnerContext({ client, definition, logger, options });
   const runner = runnerWithAcceptedRiskFromContext({ context, logger, runner: options });
+  const acceptedRisk = acceptedRiskApplies({ context, logger, runner });
   await applySecurityReviewStartLabelTransition({ client, context, logger, options: runner });
   const transientComments: PublishedArtifactComment[] = [];
   const safetyOptions = stageSafetyOptions({
@@ -88,8 +90,13 @@ export async function runStageSecurityReview(
     options: runner,
     transientComments,
   });
-  if (acceptedRiskApplies({ context, logger, runner })) {
-    return acceptedRiskSecurityReview(safetyOptions);
+  if (acceptedRisk) {
+    return acceptedRiskSecurityReview(safetyOptions, {
+      publishAudit:
+        Boolean(options.acceptedRisk) ||
+        acceptedRiskLabelPresent(context) ||
+        Boolean(runner.acceptedRisk?.run),
+    });
   }
 
   const inputSafetyResult = await blockPromptInput(safetyOptions);
@@ -279,10 +286,15 @@ function blockedSecurityReview(result: StageRunResult): StageSecurityReviewResul
 
 async function acceptedRiskSecurityReview(
   options: StageSafetyOptions,
+  audit: { publishAudit: boolean } = { publishAudit: true },
 ): Promise<StageSecurityReviewResult> {
   const blockedResult = await blockAcceptedRiskDeltaInput(options);
   if (blockedResult) return blockedSecurityReview(blockedResult);
-  await publishAcceptedRiskAudit(options);
+  if (audit.publishAudit) {
+    await publishAcceptedRiskAudit(options);
+  } else {
+    options.logger.event("accepted_risk.audit.skip", { reason: "prior-accepted-risk" });
+  }
   options.logger.event("security.review.done", {
     accepted_risk: true,
     allowed: true,
@@ -290,7 +302,9 @@ async function acceptedRiskSecurityReview(
   return {
     allowed: true,
     status: "allowed",
-    summary: "Security review passed; accepted-risk label was removed.",
+    summary: audit.publishAudit
+      ? "Security review passed; accepted-risk label was removed."
+      : "Security review passed.",
   };
 }
 

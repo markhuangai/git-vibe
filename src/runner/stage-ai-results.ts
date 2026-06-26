@@ -103,13 +103,7 @@ async function runMatrixFinalizerResult({
 
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = acceptedRisk ? [] : matrixFinalizerSafetySources({ results });
-  if (acceptedRisk) {
-    logger.event("matrix.finalize.member_safety.skip", {
-      reason: "accepted-risk",
-      results: results.length,
-    });
-  }
+  const finalizerSafetySources = matrixFinalizerSafetySources({ results });
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config,
