@@ -64387,7 +64387,7 @@ async function runMatrixFinalizerResult({
   }
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = acceptedRisk ? matrixFinalizerRoleSafetySources({ members }) : matrixFinalizerSafetySources({ members, results });
+  const finalizerSafetySources = acceptedRisk ? [] : matrixFinalizerSafetySources({ results });
   if (acceptedRisk) {
     logger.event("matrix.finalize.member_safety.skip", {
       reason: "accepted-risk",
@@ -64430,25 +64430,16 @@ async function runMatrixFinalizerResult({
     options
   });
 }
-function matrixFinalizerRoleSafetySources(options) {
-  return options.members.map((member) => ({
-    label: `role-group ${member.role || member.profile || member.index} definition`,
-    text: member.roleDefinition
-  }));
-}
 function matrixFinalizerSafetySources(options) {
-  return [
-    ...matrixFinalizerRoleSafetySources({ members: options.members }),
-    ...options.results.map((result, index) => ({
-      label: `matrix member result ${index + 1}`,
-      text: JSON.stringify({
-        output: result.parsedOutput,
-        role: result.role,
-        status: result.status,
-        summary: result.summary
-      })
-    }))
-  ];
+  return options.results.map((result, index) => ({
+    label: `matrix member result ${index + 1}`,
+    text: JSON.stringify({
+      output: result.parsedOutput,
+      role: result.role,
+      status: result.status,
+      summary: result.summary
+    })
+  }));
 }
 function stageResultBuilder(options) {
   return (content) => stageRunResult({
