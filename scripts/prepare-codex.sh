@@ -7,22 +7,11 @@ repo_dir="$(cd "$script_dir/.." && pwd)"
 
 export_path() {
   local executable="$1"
-  local codex_home
-  codex_home="$(codex_home_dir)"
   "$executable" --version >/dev/null
   if [ -n "${GITHUB_ENV:-}" ]; then
     echo "GITVIBE_CODEX_PATH=$executable" >> "$GITHUB_ENV"
-    echo "CODEX_HOME=$codex_home" >> "$GITHUB_ENV"
   fi
   echo "Using Codex executable at $executable"
-  echo "Using Codex home at $codex_home"
-}
-
-codex_home_dir() {
-  local root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/git-vibe/codex-home"
-  mkdir -p "$root"
-  chmod 700 "$root"
-  echo "$root"
 }
 
 codex_version() {

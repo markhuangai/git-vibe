@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("Codex preparation script", () => {
-  it("exports a GitVibe temp CODEX_HOME while leaving the Codex install path untouched", () => {
+  it("exports the Codex executable without overriding CODEX_HOME", () => {
     const cwd = mkdtempSync(join(tmpdir(), "git-vibe-codex-prepare-"));
     const executable = join(cwd, "codex");
     const githubEnv = join(cwd, "github-env");
@@ -29,7 +29,7 @@ describe("Codex preparation script", () => {
 
       expect(result.status).toBe(0);
       expect(exportedEnv).toContain(`GITVIBE_CODEX_PATH=${executable}`);
-      expect(exportedEnv).toContain(`CODEX_HOME=${join(runnerTemp, "git-vibe", "codex-home")}`);
+      expect(exportedEnv).not.toContain("CODEX_HOME=");
       expect(exportedEnv).not.toContain("persistent-codex-home");
     } finally {
       rmSync(cwd, { force: true, recursive: true });
