@@ -123,6 +123,7 @@ async function classifySafetyBatch(
       stage: options.runner.stage,
       stageDefinition: stageDefinitions[options.runner.stage],
       system: safetySystemPrompt(),
+      toolOverride: [],
     });
     return JSON.parse(content) as SafetyAiOutput;
   } catch (error) {

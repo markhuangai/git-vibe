@@ -62582,7 +62582,8 @@ async function classifySafetyBatch(options, batch) {
       sandboxMode: "read-only",
       stage: options.runner.stage,
       stageDefinition: stageDefinitions[options.runner.stage],
-      system: safetySystemPrompt()
+      system: safetySystemPrompt(),
+      toolOverride: []
     });
     return JSON.parse(content);
   } catch (error51) {

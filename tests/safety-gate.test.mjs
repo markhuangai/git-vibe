@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -170,6 +170,53 @@ describe("AI prompt-injection safety classifier allowed findings", () => {
 
     expect(gate).toMatchObject({ allowed: false, severity: "medium" });
     expect(gate.findings.join("\n")).toContain("inconsistent classifier verdict");
+  });
+});
+
+describe("AI prompt-injection safety classifier tool isolation", () => {
+  it("does not pass configured MCP tools to Codex classifier runs", async () => {
+    queueAllowedSafetyOutput();
+
+    const gate = await runAiSafetyGateForStage({
+      config: configWithModelMcp(),
+      context: context({ comment: "ordinary issue body" }),
+      phase: "input",
+      runner: runner("investigate"),
+    });
+
+    const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+    expect(gate).toMatchObject({ allowed: true, severity: "none" });
+    expect(constructorOptions.config).toEqual({});
+  });
+
+  it("does not pass configured MCP tools to Claude classifier runs", async () => {
+    const previousClaudePath = process.env.GITVIBE_CLAUDE_CODE_PATH;
+    const cwd = mkdtempSync(join(tmpdir(), "git-vibe-safety-claude-"));
+    const claudePath = join(cwd, "claude");
+    writeFileSync(claudePath, "");
+    chmodSync(claudePath, 0o755);
+    process.env.GITVIBE_CLAUDE_CODE_PATH = claudePath;
+    globalThis.__gitVibeSdkMocks.queueClaudeOutput(allowedSafetyOutput());
+
+    try {
+      const gate = await runAiSafetyGateForStage({
+        config: claudeConfigWithModelMcp(),
+        context: context({ comment: "ordinary issue body" }),
+        phase: "input",
+        runner: runner("investigate"),
+      });
+
+      const queryOptions = globalThis.__gitVibeSdkMocks.claudeQuery.mock.calls[0][0].options;
+      expect(gate).toMatchObject({ allowed: true, severity: "none" });
+      expect(queryOptions.allowedTools).toEqual([]);
+      expect(queryOptions.mcpServers).toEqual({});
+      expect(queryOptions.strictMcpConfig).toBe(false);
+      expect(queryOptions.tools).toEqual([]);
+    } finally {
+      if (previousClaudePath === undefined) delete process.env.GITVIBE_CLAUDE_CODE_PATH;
+      else process.env.GITVIBE_CLAUDE_CODE_PATH = previousClaudePath;
+      rmSync(cwd, { force: true, recursive: true });
+    }
   });
 });
 
@@ -481,6 +528,45 @@ function configWithCodexAuth() {
   return result;
 }
 
+function configWithModelMcp() {
+  const result = config();
+  result.ai.mcp = mcpServersConfig();
+  for (const stageConfig of Object.values(result.ai.stages)) {
+    stageConfig.mcp = mcpStageConfig();
+  }
+  return result;
+}
+
+function claudeConfigWithModelMcp() {
+  const result = configWithModelMcp();
+  result.ai.profiles.test = {
+    adapter: "claude-code-sdk",
+    model: "opus",
+  };
+  return result;
+}
+
+function mcpServersConfig() {
+  return {
+    servers: {
+      dense_mem: {
+        args: ["server.js"],
+        command: "node",
+        transport: "stdio",
+      },
+    },
+  };
+}
+
+function mcpStageConfig() {
+  return {
+    dense_mem: {
+      required: true,
+      tools: ["search_memory"],
+    },
+  };
+}
+
 function codexAuthJson(value) {
   return JSON.stringify({
     auth_mode: "chatgpt",
@@ -493,12 +579,16 @@ function codexAuthJson(value) {
 }
 
 function queueAllowedSafetyOutput() {
-  globalThis.__gitVibeSdkMocks.queueCodexOutput({
+  globalThis.__gitVibeSdkMocks.queueCodexOutput(allowedSafetyOutput());
+}
+
+function allowedSafetyOutput() {
+  return {
     findings: [],
     severity: "none",
     status: "allowed",
     summary: "No prompt-injection risk detected.",
-  });
+  };
 }
 
 function safetyPromptSources(callIndex) {
