@@ -180,6 +180,42 @@ ai:
   });
 });
 
+describe("Codex SDK smoke response parsing", () => {
+  it("extracts embedded JSON responses and omits non-string child env values", async () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      enabled: true
+      adapter: codex-sdk
+      model: gpt-5-test
+`);
+    const Codex = vi.fn(function Codex(options) {
+      expect(options.env.PATH).toBe("/usr/bin");
+      expect(options.env.NUMERIC_VALUE).toBeUndefined();
+      return {
+        startThread: vi.fn(() => ({
+          run: vi.fn(async () => ({
+            finalResponse: 'Result: {"ok": true, "source": "codex"}.',
+          })),
+        })),
+      };
+    });
+
+    const report = await runCodexSmokeTest({
+      cwd,
+      dependencies: { Codex },
+      env: {
+        HOME: "",
+        NUMERIC_VALUE: 123,
+        PATH: "/usr/bin",
+      },
+    });
+
+    expect(report).toEqual({ model: "gpt-5-test", profileName: "codex" });
+  });
+});
+
 describe("Codex SDK smoke main", () => {
   it("returns zero from main on successful smoke runs", async () => {
     const cwd = writeConfig(`
@@ -215,6 +251,31 @@ describe("Codex SDK smoke failure handling", () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining(".github/git-vibe.yml is required"),
     );
+  });
+
+  it("returns nonzero from main on non-error SDK failures", async () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      model: gpt-5-test
+`);
+    const logger = { error: vi.fn(), log: vi.fn() };
+
+    await expect(
+      main({
+        cwd,
+        dependencies: {
+          Codex: vi.fn(function Codex() {
+            throw "sdk failed";
+          }),
+        },
+        env: {},
+        logger,
+      }),
+    ).resolves.toBe(1);
+    expect(logger.error).toHaveBeenCalledWith("[git-vibe] sdk failed");
   });
 });
 
@@ -254,6 +315,16 @@ ai:
         env: { GITVIBE_AI_SMOKE_CODEX_PROFILE: "codex" },
       }),
     ).toThrow("AI profile codex must be an enabled codex-sdk profile.");
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
+    codex: []
+`),
+        env: {},
+      }),
+    ).toThrow("does not define an enabled codex-sdk profile");
     expect(() =>
       readCodexSmokeConfig({
         cwd: writeConfig(`
@@ -318,6 +389,18 @@ ai:
   profiles:
     codex:
       adapter: codex-sdk
+      model: gpt-5-test
+`),
+        env: { GITVIBE_AI_ENV_JSON: "[]" },
+      }),
+    ).toThrow("GITVIBE_AI_ENV_JSON must be a JSON object.");
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
       env:
         "": value
       model: gpt-5-test
@@ -325,6 +408,21 @@ ai:
         env: {},
       }),
     ).toThrow("env keys must be non-empty strings");
+    expect(() =>
+      readCodexSmokeConfig({
+        cwd: writeConfig(`
+ai:
+  profiles:
+    codex:
+      adapter: codex-sdk
+      env:
+        CODEX_API_KEY:
+          from_bundle: ""
+      model: gpt-5-test
+`),
+        env: {},
+      }),
+    ).toThrow("ai.profiles.codex.env.CODEX_API_KEY.from_bundle must be a non-empty string.");
     expect(() =>
       readCodexSmokeConfig({
         cwd: writeConfig(`
