@@ -1,10 +1,12 @@
 // @ts-nocheck
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,6 +52,35 @@ ai:
       '{"auth_mode":"chatgpt"}',
     );
     expect(config.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
+  });
+
+  it("tightens existing auth_json file permissions", () => {
+    const cwd = writeConfig(`
+ai:
+  profiles:
+    codex:
+      enabled: true
+      adapter: codex-sdk
+      auth_json:
+        from_bundle: CODEX_AUTH_JSON
+      model: gpt-5-test
+`);
+    const codexHome = join(cwd, "codex-home");
+    const authPath = join(codexHome, "auth.json");
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(authPath, "{}");
+    chmodSync(authPath, 0o644);
+
+    readCodexSmokeConfig({
+      cwd,
+      env: {
+        CODEX_HOME: codexHome,
+        GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"auth_mode":"chatgpt"}' }),
+      },
+    });
+
+    expect(statSync(authPath).mode & 0o777).toBe(0o600);
+    expect(readFileSync(authPath, "utf8")).toBe('{"auth_mode":"chatgpt"}');
   });
 });
 

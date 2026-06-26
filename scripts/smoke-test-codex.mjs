@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Codex } from "@openai/codex-sdk";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -156,7 +156,9 @@ function writeCodexAuth(env, authJson) {
   if (!codexHome) throw new Error("Codex auth_json requires an installed Codex home.");
   env.CODEX_HOME = codexHome;
   mkdirSync(codexHome, { recursive: true });
-  writeFileSync(join(codexHome, "auth.json"), authJson, { mode: 0o600 });
+  const authPath = join(codexHome, "auth.json");
+  writeFileSync(authPath, authJson, { mode: 0o600 });
+  chmodSync(authPath, 0o600);
 }
 
 /**
