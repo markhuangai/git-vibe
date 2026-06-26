@@ -29248,7 +29248,7 @@ function parseGitVibeConfig(content) {
 
 // src/runner/stage-runner.ts
 import { mkdtempSync as mkdtempSync3, writeFileSync as writeFileSync5 } from "node:fs";
-import { tmpdir as tmpdir3 } from "node:os";
+import { tmpdir as tmpdir4 } from "node:os";
 import { join as join11 } from "node:path";
 
 // src/shared/github.ts
@@ -57399,7 +57399,7 @@ function logSdkPromptPreview(logger, stage, label, text) {
 // src/runner/codex-sdk.ts
 import { accessSync as accessSync2, constants as constants2, existsSync as existsSync4, mkdtempSync as mkdtempSync2, rmSync as rmSync3 } from "node:fs";
 import { createRequire as createRequire3 } from "node:module";
-import { tmpdir as tmpdir2 } from "node:os";
+import { tmpdir as tmpdir3 } from "node:os";
 import { dirname as dirname4, join as join8 } from "node:path";
 
 // node_modules/.pnpm/@openai+codex-sdk@0.141.0/node_modules/@openai/codex-sdk/dist/index.js
@@ -57931,7 +57931,7 @@ var Codex = class {
 
 // src/runner/codex-auth.ts
 import { mkdirSync as mkdirSync4, readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
+import { homedir as homedir2, tmpdir as tmpdir2 } from "node:os";
 import { join as join7 } from "node:path";
 
 // node_modules/.pnpm/libsodium@0.8.4/node_modules/libsodium/dist/modules-esm/libsodium.mjs
@@ -61394,14 +61394,17 @@ async function encryptedSecretValue(value, publicKey) {
 function prepareCodexEnv(options) {
   const profilePath = `ai.profiles.${options.profileName}`;
   const env = sdkProfileEnv(options.profile, profilePath);
-  const codexHome = installedCodexHome();
+  const authSourcePath = `${profilePath}.auth_json`;
+  const authBundleKey = bundleKeyFromSource(options.profile.auth_json, authSourcePath);
+  const codexHome = authBundleKey ? gitVibeCodexHome() : installedCodexHome();
   if (codexHome) env.CODEX_HOME = codexHome;
   else delete env.CODEX_HOME;
   const auth2 = prepareCodexAuth({
+    bundleKey: authBundleKey,
     env,
     profile: options.profile,
     profileName: options.profileName,
-    profilePath
+    sourcePath: authSourcePath
   });
   return { auth: auth2, env };
 }
@@ -61458,18 +61461,19 @@ async function writeBackCodexAuth(options) {
   });
 }
 function prepareCodexAuth(options) {
-  const sourcePath = `${options.profilePath}.auth_json`;
-  const bundleKey = bundleKeyFromSource(options.profile.auth_json, sourcePath);
-  if (!bundleKey) return void 0;
-  const authJson = bundleValueFromSource(options.profile.auth_json, sourcePath);
-  if (!authJson) throw new Error(`${sourcePath}.from_bundle resolved to an empty value.`);
+  if (!options.bundleKey) return void 0;
+  const authJson = bundleValueFromSource(options.profile.auth_json, options.sourcePath);
+  if (!authJson) throw new Error(`${options.sourcePath}.from_bundle resolved to an empty value.`);
   const codexHome = options.env.CODEX_HOME;
-  if (!codexHome) throw new Error(`${sourcePath} requires an installed Codex home.`);
+  if (!codexHome) throw new Error(`${options.sourcePath} requires a Codex home.`);
   options.env.CODEX_HOME = codexHome;
   mkdirSync4(codexHome, { recursive: true });
   const authPath = join7(codexHome, "auth.json");
   writeFileSync4(authPath, authJson, { mode: 384 });
-  return { authPath, bundleKey, profileName: options.profileName };
+  return { authPath, bundleKey: options.bundleKey, profileName: options.profileName };
+}
+function gitVibeCodexHome() {
+  return join7(stringValue(process.env.RUNNER_TEMP) || tmpdir2(), "git-vibe", "codex-home");
 }
 function installedCodexHome() {
   const configured = stringValue(process.env.CODEX_HOME);
@@ -61566,7 +61570,7 @@ async function runCodexSdkStage({
   profileName
 }) {
   const model = sdkModelName(profile, "codex-sdk");
-  const contextDir = mkdtempSync2(join8(tmpdir2(), "git-vibe-codex-"));
+  const contextDir = mkdtempSync2(join8(tmpdir3(), "git-vibe-codex-"));
   try {
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
     const codexEnv = prepareCodexEnv({ profile, profileName });
@@ -65185,7 +65189,7 @@ function recordContextCoverage(options) {
   });
 }
 function persistContext(options) {
-  const baseTempDir = process.env.RUNNER_TEMP || tmpdir3();
+  const baseTempDir = process.env.RUNNER_TEMP || tmpdir4();
   const contextDir = mkdtempSync3(join11(baseTempDir, `git-vibe-${options.options.stage}-`));
   writeFileSync5(
     join11(contextDir, `git-vibe-${options.options.stage}-context.json`),

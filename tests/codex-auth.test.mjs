@@ -26,24 +26,28 @@ afterEach(() => {
 });
 
 describe("Codex auth environment", () => {
-  it("seeds auth.json from the AI env bundle in configured CODEX_HOME", () => {
-    const codexHome = join(tempDir(), "codex-home");
-    process.env.CODEX_HOME = codexHome;
+  it("seeds bundled auth.json in the GitVibe temp CODEX_HOME", () => {
+    const runnerTemp = tempDir();
+    process.env.CODEX_HOME = join(tempDir(), "persistent-codex-home");
+    process.env.RUNNER_TEMP = runnerTemp;
     const prepared = prepare();
+    const codexHome = join(runnerTemp, "git-vibe", "codex-home");
 
     expect(readFileSync(prepared.auth.authPath, "utf8")).toBe(codexAuthJson("old"));
     expect(prepared.env.CODEX_HOME).toBe(codexHome);
+    expect(prepared.auth.authPath).toBe(join(codexHome, "auth.json"));
     expect(prepared.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
     expect(prepared.env.CODEX_AUTH_JSON).toBeUndefined();
   });
 
-  it("uses HOME/.codex when bundled auth needs a Codex home", () => {
-    const home = tempDir();
+  it("uses RUNNER_TEMP for bundled auth when CODEX_HOME is absent", () => {
+    const runnerTemp = tempDir();
     delete process.env.CODEX_HOME;
-    process.env.HOME = home;
+    process.env.HOME = tempDir();
+    process.env.RUNNER_TEMP = runnerTemp;
     const prepared = prepare();
 
-    expect(prepared.env.CODEX_HOME).toBe(join(home, ".codex"));
+    expect(prepared.env.CODEX_HOME).toBe(join(runnerTemp, "git-vibe", "codex-home"));
     expect(readFileSync(prepared.auth.authPath, "utf8")).toBe(codexAuthJson("old"));
   });
 

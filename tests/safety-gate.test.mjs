@@ -357,8 +357,10 @@ describe("AI prompt-injection safety classifier Codex auth", () => {
   it("passes GitHub writeback through safety classifier runs", async () => {
     const previousBundle = process.env.GITVIBE_AI_ENV_JSON;
     const previousCodexHome = process.env.CODEX_HOME;
-    const codexHome = mkdtempSync(join(tmpdir(), "git-vibe-safety-codex-home-"));
-    process.env.CODEX_HOME = codexHome;
+    const previousRunnerTemp = process.env.RUNNER_TEMP;
+    const runnerTemp = mkdtempSync(join(tmpdir(), "git-vibe-safety-codex-home-"));
+    process.env.CODEX_HOME = join(runnerTemp, "persistent-codex-home");
+    process.env.RUNNER_TEMP = runnerTemp;
     process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
       CODEX_AUTH_JSON: codexAuthJson("old"),
     });
@@ -399,12 +401,17 @@ describe("AI prompt-injection safety classifier Codex auth", () => {
 
       expect(gate).toMatchObject({ allowed: true, severity: "none" });
       expect(JSON.parse(writebackValue).CODEX_AUTH_JSON).toBe(codexAuthJson("refreshed"));
+      expect(globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0].env.CODEX_HOME).toBe(
+        join(runnerTemp, "git-vibe", "codex-home"),
+      );
     } finally {
       if (previousBundle === undefined) delete process.env.GITVIBE_AI_ENV_JSON;
       else process.env.GITVIBE_AI_ENV_JSON = previousBundle;
       if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
       else process.env.CODEX_HOME = previousCodexHome;
-      rmSync(codexHome, { force: true, recursive: true });
+      if (previousRunnerTemp === undefined) delete process.env.RUNNER_TEMP;
+      else process.env.RUNNER_TEMP = previousRunnerTemp;
+      rmSync(runnerTemp, { force: true, recursive: true });
     }
   });
 });

@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GitHubClient } from "../shared/github.js";
 import { updateRepositorySecret } from "../shared/repository-secrets.js";
@@ -38,14 +38,17 @@ export function prepareCodexEnv(options: {
 }): PreparedCodexEnv {
   const profilePath = `ai.profiles.${options.profileName}`;
   const env = sdkProfileEnv(options.profile, profilePath);
-  const codexHome = installedCodexHome();
+  const authSourcePath = `${profilePath}.auth_json`;
+  const authBundleKey = bundleKeyFromSource(options.profile.auth_json, authSourcePath);
+  const codexHome = authBundleKey ? gitVibeCodexHome() : installedCodexHome();
   if (codexHome) env.CODEX_HOME = codexHome;
   else delete env.CODEX_HOME;
   const auth = prepareCodexAuth({
+    bundleKey: authBundleKey,
     env,
     profile: options.profile,
     profileName: options.profileName,
-    profilePath,
+    sourcePath: authSourcePath,
   });
   return { auth, env };
 }
@@ -111,24 +114,27 @@ export async function writeBackCodexAuth(options: {
 }
 
 function prepareCodexAuth(options: {
+  bundleKey: string | undefined;
   env: NodeJS.ProcessEnv;
   profile: Record<string, unknown>;
   profileName: string;
-  profilePath: string;
+  sourcePath: string;
 }): PreparedCodexAuth | undefined {
-  const sourcePath = `${options.profilePath}.auth_json`;
-  const bundleKey = bundleKeyFromSource(options.profile.auth_json, sourcePath);
-  if (!bundleKey) return undefined;
+  if (!options.bundleKey) return undefined;
 
-  const authJson = bundleValueFromSource(options.profile.auth_json, sourcePath);
-  if (!authJson) throw new Error(`${sourcePath}.from_bundle resolved to an empty value.`);
+  const authJson = bundleValueFromSource(options.profile.auth_json, options.sourcePath);
+  if (!authJson) throw new Error(`${options.sourcePath}.from_bundle resolved to an empty value.`);
   const codexHome = options.env.CODEX_HOME;
-  if (!codexHome) throw new Error(`${sourcePath} requires an installed Codex home.`);
+  if (!codexHome) throw new Error(`${options.sourcePath} requires a Codex home.`);
   options.env.CODEX_HOME = codexHome;
   mkdirSync(codexHome, { recursive: true });
   const authPath = join(codexHome, "auth.json");
   writeFileSync(authPath, authJson, { mode: 0o600 });
-  return { authPath, bundleKey, profileName: options.profileName };
+  return { authPath, bundleKey: options.bundleKey, profileName: options.profileName };
+}
+
+function gitVibeCodexHome(): string {
+  return join(stringValue(process.env.RUNNER_TEMP) || tmpdir(), "git-vibe", "codex-home");
 }
 
 function installedCodexHome(): string | undefined {
