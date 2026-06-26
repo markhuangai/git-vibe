@@ -77,7 +77,6 @@ export async function runClaudeCodeSmokeTest({ cwd, dependencies = defaultDepend
       },
       permissionMode: "bypassPermissions",
       persistSession: false,
-      settingSources: [],
       systemPrompt: "You are running a GitVibe smoke test. Do not modify files.",
     },
     prompt:
@@ -111,6 +110,7 @@ export function readClaudeSmokeConfig({ cwd, env }) {
   const { profile, profileName } = claudeProfile(config, env.GITVIBE_AI_SMOKE_CLAUDE_PROFILE);
   const bundle = aiEnvBundle(env);
   const { childEnv, secrets } = profileEnv(profile, bundle, env, `ai.profiles.${profileName}`);
+  applyInstalledClaudeEnv(childEnv, env);
   const model = stringValue(profile.model);
   const reasoning = recordValueOrEmpty(profile.reasoning);
   if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
@@ -134,6 +134,20 @@ function claudeEffort(effort) {
     return /** @type {ClaudeSmokeConfig["effort"]} */ (effort);
   }
   throw new Error(`AI profile reasoning.effort is not supported by claude-code-sdk: ${effort}.`);
+}
+
+/**
+ * @param {NodeJS.ProcessEnv} childEnv
+ * @param {Env} env
+ */
+function applyInstalledClaudeEnv(childEnv, env) {
+  const home = stringValue(env.HOME) || homedir();
+  if (home) childEnv.HOME = home;
+  else delete childEnv.HOME;
+
+  const configDir = stringValue(env.CLAUDE_CONFIG_DIR);
+  if (configDir) childEnv.CLAUDE_CONFIG_DIR = configDir;
+  else delete childEnv.CLAUDE_CONFIG_DIR;
 }
 
 /**

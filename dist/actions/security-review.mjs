@@ -33004,7 +33004,7 @@ function isRecord3(value) {
 // src/runner/claude-code-sdk.ts
 import { accessSync, constants, existsSync as existsSync3, mkdtempSync, rmSync as rmSync2 } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname as dirname2, join as join4 } from "node:path";
 
 // node_modules/.pnpm/@anthropic-ai+claude-agent-sdk@0.3.183_@anthropic-ai+sdk@0.105.0_zod@4.4.3__@modelconte_f4cdc4a0a53c5a9d5ab9670718d5f4f8/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs
@@ -52712,6 +52712,7 @@ async function runClaudeCodeSdkStage({
   try {
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
     const env = sdkProfileEnv(profile, `ai.profiles.${profileName}`);
+    applyInstalledClaudeEnv(env);
     env.CLAUDE_AGENT_SDK_CLIENT_APP ??= "git-vibe";
     const executable = claudeCodeExecutablePath();
     options.logger?.event("ai.request.start", {
@@ -52748,7 +52749,6 @@ async function runClaudeCodeSdkStage({
         pathToClaudeCodeExecutable: executable,
         permissionMode: "bypassPermissions",
         persistSession: false,
-        settingSources: [],
         strictMcpConfig: Object.keys(mcpConfig.claudeMcpServers).length > 0,
         systemPrompt: options.system,
         tools: options.toolOverride
@@ -52792,6 +52792,14 @@ function claudeEffort(profile) {
   if (!effort) return void 0;
   if (isClaudeEffort(effort)) return effort;
   throw new Error(`AI profile reasoning.effort is not supported by claude-code-sdk: ${effort}.`);
+}
+function applyInstalledClaudeEnv(env) {
+  const home = stringValue(process.env.HOME) || homedir();
+  if (home) env.HOME = home;
+  else delete env.HOME;
+  const configDir = stringValue(process.env.CLAUDE_CONFIG_DIR);
+  if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
+  else delete env.CLAUDE_CONFIG_DIR;
 }
 function isClaudeEffort(value) {
   return ["low", "medium", "high", "xhigh", "max"].includes(value);
@@ -52926,7 +52934,7 @@ function logSdkPromptPreview(logger, stage, label, text) {
 }
 
 // src/runner/codex-sdk.ts
-import { accessSync as accessSync2, constants as constants2, existsSync as existsSync5, mkdtempSync as mkdtempSync2, rmSync as rmSync3 } from "node:fs";
+import { accessSync as accessSync2, constants as constants2, existsSync as existsSync4, mkdtempSync as mkdtempSync2, rmSync as rmSync3 } from "node:fs";
 import { createRequire as createRequire3 } from "node:module";
 import { tmpdir as tmpdir2 } from "node:os";
 import { dirname as dirname3, join as join6 } from "node:path";
@@ -53459,7 +53467,8 @@ var Codex = class {
 };
 
 // src/runner/codex-auth.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
+import { mkdirSync as mkdirSync3, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
 import { join as join5 } from "node:path";
 
 // node_modules/.pnpm/libsodium@0.8.4/node_modules/libsodium/dist/modules-esm/libsodium.mjs
@@ -56922,10 +56931,10 @@ async function encryptedSecretValue(value, publicKey) {
 function prepareCodexEnv(options) {
   const profilePath = `ai.profiles.${options.profileName}`;
   const env = sdkProfileEnv(options.profile, profilePath);
-  env.CODEX_HOME = join5(options.contextDir, "codex-home");
-  mkdirSync3(env.CODEX_HOME, { recursive: true });
+  const codexHome = installedCodexHome();
+  if (codexHome) env.CODEX_HOME = codexHome;
+  else delete env.CODEX_HOME;
   const auth2 = prepareCodexAuth({
-    contextDir: options.contextDir,
     env,
     profile: options.profile,
     profileName: options.profileName,
@@ -56992,11 +57001,19 @@ function prepareCodexAuth(options) {
   const authJson = bundleValueFromSource(options.profile.auth_json, sourcePath);
   if (!authJson) throw new Error(`${sourcePath}.from_bundle resolved to an empty value.`);
   const codexHome = options.env.CODEX_HOME;
+  if (!codexHome) throw new Error(`${sourcePath} requires an installed Codex home.`);
   options.env.CODEX_HOME = codexHome;
   mkdirSync3(codexHome, { recursive: true });
   const authPath = join5(codexHome, "auth.json");
-  if (!existsSync4(authPath)) writeFileSync3(authPath, authJson);
+  writeFileSync3(authPath, authJson, { mode: 384 });
   return { authPath, bundleKey, profileName: options.profileName };
+}
+function installedCodexHome() {
+  const configured = stringValue(process.env.CODEX_HOME);
+  if (configured) return configured;
+  const home = stringValue(process.env.HOME) || homedir2();
+  if (!home) return void 0;
+  return join5(home, ".codex");
 }
 function updatedAiEnvBundle(auth2, refreshedAuthJson) {
   const bundle = parseRequiredAiEnvBundle(
@@ -57089,7 +57106,7 @@ async function runCodexSdkStage({
   const contextDir = mkdtempSync2(join6(tmpdir2(), "git-vibe-codex-"));
   try {
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
-    const codexEnv = prepareCodexEnv({ contextDir, profile, profileName });
+    const codexEnv = prepareCodexEnv({ profile, profileName });
     const sdk = new Codex({
       codexPathOverride: codexExecutablePath(),
       config: codexConfig(profile, mcpConfig.codexConfig),
@@ -57163,7 +57180,7 @@ function isCodexReasoningEffort(value) {
 function codexExecutablePath() {
   const configured = stringValue(process.env.GITVIBE_CODEX_PATH);
   if (configured) {
-    if (!existsSync5(configured)) {
+    if (!existsSync4(configured)) {
       throw new Error(`GITVIBE_CODEX_PATH does not exist: ${configured}`);
     }
     if (!isExecutable2(configured)) {

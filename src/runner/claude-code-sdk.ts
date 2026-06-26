@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { query, type EffortLevel, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { RunAiStageOptions } from "./ai.js";
@@ -32,6 +32,7 @@ export async function runClaudeCodeSdkStage({
   try {
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
     const env = sdkProfileEnv(profile, `ai.profiles.${profileName}`);
+    applyInstalledClaudeEnv(env);
     env.CLAUDE_AGENT_SDK_CLIENT_APP ??= "git-vibe";
     const executable = claudeCodeExecutablePath();
 
@@ -70,7 +71,6 @@ export async function runClaudeCodeSdkStage({
         pathToClaudeCodeExecutable: executable,
         permissionMode: "bypassPermissions",
         persistSession: false,
-        settingSources: [],
         strictMcpConfig: Object.keys(mcpConfig.claudeMcpServers).length > 0,
         systemPrompt: options.system,
         tools: options.toolOverride,
@@ -117,6 +117,16 @@ function claudeEffort(profile: Record<string, unknown>): EffortLevel | undefined
   if (!effort) return undefined;
   if (isClaudeEffort(effort)) return effort;
   throw new Error(`AI profile reasoning.effort is not supported by claude-code-sdk: ${effort}.`);
+}
+
+function applyInstalledClaudeEnv(env: NodeJS.ProcessEnv): void {
+  const home = stringValue(process.env.HOME) || homedir();
+  if (home) env.HOME = home;
+  else delete env.HOME;
+
+  const configDir = stringValue(process.env.CLAUDE_CONFIG_DIR);
+  if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
+  else delete env.CLAUDE_CONFIG_DIR;
 }
 
 function isClaudeEffort(value: string): value is EffortLevel {

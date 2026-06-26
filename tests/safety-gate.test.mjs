@@ -1,5 +1,6 @@
 // @ts-nocheck
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runAiSafetyGateForStage } from "../src/runner/safety-ai-gate.ts";
@@ -308,6 +309,9 @@ describe("AI prompt-injection safety classifier batch overlap", () => {
 describe("AI prompt-injection safety classifier Codex auth", () => {
   it("passes GitHub writeback through safety classifier runs", async () => {
     const previousBundle = process.env.GITVIBE_AI_ENV_JSON;
+    const previousCodexHome = process.env.CODEX_HOME;
+    const codexHome = mkdtempSync(join(tmpdir(), "git-vibe-safety-codex-home-"));
+    process.env.CODEX_HOME = codexHome;
     process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
       CODEX_AUTH_JSON: codexAuthJson("old"),
     });
@@ -351,6 +355,9 @@ describe("AI prompt-injection safety classifier Codex auth", () => {
     } finally {
       if (previousBundle === undefined) delete process.env.GITVIBE_AI_ENV_JSON;
       else process.env.GITVIBE_AI_ENV_JSON = previousBundle;
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      rmSync(codexHome, { force: true, recursive: true });
     }
   });
 });
