@@ -128,7 +128,11 @@ export function acceptedRiskApplies(options: {
       });
       return false;
     }
-    if (accepted.artifactSha && !currentSha) {
+    if (!accepted.artifactSha) {
+      options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
+      return false;
+    }
+    if (!currentSha) {
       options.logger.event("accepted_risk.skip", {
         reason: "missing-current-pull-request-head-sha",
       });

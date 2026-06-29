@@ -5,6 +5,7 @@ import { stageRunResult } from "./stage-results.js";
 import { promptInjectionBlockedResult } from "./safety-gate-runner.js";
 import {
   loadMatrixStageResults,
+  type MatrixStageResult,
   roleGroupSynthesisMembers,
   stageExecutionPlan,
   synthesisPromptAddition,
@@ -104,7 +105,8 @@ async function runMatrixFinalizerResult({
 
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = matrixFinalizerSafetySources({ results });
+  const sanitizedResults = sanitizedMatrixMemberResults(results);
+  const finalizerSafetySources = matrixFinalizerSafetySources({ results: sanitizedResults });
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config,
@@ -124,7 +126,7 @@ async function runMatrixFinalizerResult({
       expected,
       failed,
       members,
-      results,
+      results: sanitizedResults,
       roleGroup: plan.roleGroup,
       stage: options.stage,
     }),
@@ -143,42 +145,107 @@ async function runMatrixFinalizerResult({
   });
 }
 
-function matrixFinalizerSafetySources(options: {
-  results: ReturnType<typeof loadMatrixStageResults>;
-}) {
+function matrixFinalizerSafetySources(options: { results: MatrixStageResult[] }) {
   return options.results.map((result, index) => ({
     label: `matrix member result ${index + 1}`,
     text: JSON.stringify({
-      output: sanitizedMatrixMemberSafetyValue(result.parsedOutput),
+      output: result.parsedOutput,
       role: result.role,
       status: result.status,
-      summary: sanitizedGitVibeSafetyBoilerplate(result.summary),
+      summary: result.summary,
     }),
   }));
 }
 
-function sanitizedMatrixMemberSafetyValue(value: unknown): unknown {
-  if (typeof value === "string") return sanitizedGitVibeSafetyBoilerplate(value);
-  if (Array.isArray(value)) return value.map(sanitizedMatrixMemberSafetyValue);
+function sanitizedMatrixMemberResults(results: MatrixStageResult[]): MatrixStageResult[] {
+  return results.map((result) => {
+    const safetyBlocked = isGitVibeSafetyBlockedOutput(result.parsedOutput);
+    return {
+      ...result,
+      parsedOutput: sanitizedMatrixMemberSafetyValue(
+        result.parsedOutput,
+        [],
+        safetyBlocked,
+      ) as JsonObject,
+      summary: sanitizedMatrixMemberText(result.summary, ["summary"], safetyBlocked),
+    };
+  });
+}
+
+function sanitizedMatrixMemberSafetyValue(
+  value: unknown,
+  path: string[],
+  safetyBlocked: boolean,
+): unknown {
+  if (typeof value === "string") return sanitizedMatrixMemberText(value, path, safetyBlocked);
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizedMatrixMemberSafetyValue(item, path, safetyBlocked));
+  }
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value as JsonObject).map(([key, item]) => [
       key,
-      sanitizedMatrixMemberSafetyValue(item),
+      sanitizedMatrixMemberSafetyValue(item, [...path, key], safetyBlocked),
     ]),
   );
 }
 
-function sanitizedGitVibeSafetyBoilerplate(value: string): string {
-  return gitVibeSafetyBoilerplatePatterns
+function sanitizedMatrixMemberText(value: string, path: string[], safetyBlocked: boolean): string {
+  if (path.includes("findings")) return value;
+  const safetyBlockedField = safetyBlocked && gitVibeSafetyBlockedPath(path);
+  if (gitVibeOwnedText(value)) {
+    const patterns = [
+      ...gitVibeOwnedLinePatterns,
+      ...(safetyBlockedField ? gitVibeSafetyBlockedLinePatterns : []),
+    ];
+    return sanitizedGitVibeBoilerplate(value, patterns);
+  }
+  if (!safetyBlockedField) return value;
+  return sanitizedGitVibeBoilerplate(value, gitVibeSafetyBlockedLinePatterns);
+}
+
+function sanitizedGitVibeBoilerplate(value: string, patterns: RegExp[]): string {
+  return patterns
     .reduce((text, pattern) => text.replace(pattern, ""), value)
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-const gitVibeSafetyBoilerplatePatterns = [
-  /\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*/g,
-  /<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->/g,
+function gitVibeOwnedText(value: string): boolean {
+  return (
+    gitVibeMarkerPattern.test(value) ||
+    /^## GitVibe Risk Accepted\s*$/m.test(value) ||
+    /^### Accepted Risk\s*$/m.test(value)
+  );
+}
+
+function gitVibeSafetyBlockedPath(path: string[]): boolean {
+  const key = path.at(-1);
+  return (
+    key === "summary" ||
+    key === "comment_body" ||
+    key === "question" ||
+    path.includes("questions") ||
+    path.includes("blocking_questions")
+  );
+}
+
+function isGitVibeSafetyBlockedOutput(output: JsonObject): boolean {
+  return (
+    output.status === "blocked" &&
+    output.next_state === "blocked" &&
+    output.summary === "GitVibe paused this run for maintainer review."
+  );
+}
+
+const gitVibeMarkerPattern = new RegExp(String.raw`<!--\s*git-vibe:`, "i");
+
+const gitVibeOwnedLinePatterns = [
+  new RegExp(
+    String.raw`\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*`,
+    "g",
+  ),
+  new RegExp(String.raw`<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->`, "g"),
   /^## GitVibe Risk Accepted\s*$/gm,
   /^### Accepted Risk\s*$/gm,
   /^Accepted at: .*$/gm,
@@ -187,11 +254,14 @@ const gitVibeSafetyBoilerplatePatterns = [
   /^Accepted stages: .*$/gm,
   /^Artifact title\/body SHA: .*$/gm,
   /^Pull request head SHA: .*$/gm,
-  /GitVibe paused this run for maintainer review\./g,
   /GitVibe replaced the previous blocked result details to keep this thread readable\./g,
   /GitVibe removed `git-vibe:accept-risk`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned\./g,
   /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for matching (?:`[\w-]+` )?context\./g,
   /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for one `?[\w-]+`? (?:run|rerun)\./g,
+];
+
+const gitVibeSafetyBlockedLinePatterns = [
+  /GitVibe paused this run for maintainer review\./g,
   /Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context\./g,
   /GitVibe treats issue bodies, comments, diffs, repository files, and future image\/OCR text as untrusted data\. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues\./g,
 ];

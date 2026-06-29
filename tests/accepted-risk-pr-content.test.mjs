@@ -10,6 +10,7 @@ describe("accepted-risk runner pull request content scope", () => {
     const runner = pullRequestReviewRunner();
 
     expect(acceptedRiskApplies({ context, logger, runner: legacyRunner(runner) })).toBe(false);
+    expect(acceptedRiskApplies({ context, logger, runner: contentOnlyRunner(runner) })).toBe(false);
     expect(acceptedRiskApplies({ context: contextWithoutHeadSha(context), logger, runner })).toBe(
       false,
     );
@@ -54,6 +55,9 @@ describe("accepted-risk runner pull request content scope", () => {
     expect(logger.event).toHaveBeenCalledWith("accepted_risk.skip", {
       reason: "pull-request-artifact-content-changed",
     });
+    expect(logger.event).toHaveBeenCalledWith("accepted_risk.skip", {
+      reason: "missing-accepted-artifact-sha",
+    });
   });
 });
 
@@ -64,6 +68,16 @@ function legacyRunner(runner) {
       artifactSha: "old-sha",
       cutoff: "2026-01-04T00:00:00Z",
       stages: ["review-matrix"],
+    },
+  };
+}
+
+function contentOnlyRunner(runner) {
+  return {
+    ...runner,
+    acceptedRisk: {
+      ...runner.acceptedRisk,
+      artifactSha: undefined,
     },
   };
 }

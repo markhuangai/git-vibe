@@ -64426,7 +64426,8 @@ async function runMatrixFinalizerResult({
   }
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = matrixFinalizerSafetySources({ results });
+  const sanitizedResults = sanitizedMatrixMemberResults(results);
+  const finalizerSafetySources = matrixFinalizerSafetySources({ results: sanitizedResults });
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config: config2,
@@ -64445,7 +64446,7 @@ async function runMatrixFinalizerResult({
       expected,
       failed,
       members,
-      results,
+      results: sanitizedResults,
       roleGroup: plan.roleGroup,
       stage: options.stage
     })
@@ -64467,30 +64468,73 @@ function matrixFinalizerSafetySources(options) {
   return options.results.map((result, index) => ({
     label: `matrix member result ${index + 1}`,
     text: JSON.stringify({
-      output: sanitizedMatrixMemberSafetyValue(result.parsedOutput),
+      output: result.parsedOutput,
       role: result.role,
       status: result.status,
-      summary: sanitizedGitVibeSafetyBoilerplate(result.summary)
+      summary: result.summary
     })
   }));
 }
-function sanitizedMatrixMemberSafetyValue(value) {
-  if (typeof value === "string") return sanitizedGitVibeSafetyBoilerplate(value);
-  if (Array.isArray(value)) return value.map(sanitizedMatrixMemberSafetyValue);
+function sanitizedMatrixMemberResults(results) {
+  return results.map((result) => {
+    const safetyBlocked = isGitVibeSafetyBlockedOutput(result.parsedOutput);
+    return {
+      ...result,
+      parsedOutput: sanitizedMatrixMemberSafetyValue(
+        result.parsedOutput,
+        [],
+        safetyBlocked
+      ),
+      summary: sanitizedMatrixMemberText(result.summary, ["summary"], safetyBlocked)
+    };
+  });
+}
+function sanitizedMatrixMemberSafetyValue(value, path3, safetyBlocked) {
+  if (typeof value === "string") return sanitizedMatrixMemberText(value, path3, safetyBlocked);
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizedMatrixMemberSafetyValue(item, path3, safetyBlocked));
+  }
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      sanitizedMatrixMemberSafetyValue(item)
+      sanitizedMatrixMemberSafetyValue(item, [...path3, key], safetyBlocked)
     ])
   );
 }
-function sanitizedGitVibeSafetyBoilerplate(value) {
-  return gitVibeSafetyBoilerplatePatterns.reduce((text, pattern) => text.replace(pattern, ""), value).replace(/\n{3,}/g, "\n\n").trim();
+function sanitizedMatrixMemberText(value, path3, safetyBlocked) {
+  if (path3.includes("findings")) return value;
+  const safetyBlockedField = safetyBlocked && gitVibeSafetyBlockedPath(path3);
+  if (gitVibeOwnedText(value)) {
+    const patterns = [
+      ...gitVibeOwnedLinePatterns,
+      ...safetyBlockedField ? gitVibeSafetyBlockedLinePatterns : []
+    ];
+    return sanitizedGitVibeBoilerplate(value, patterns);
+  }
+  if (!safetyBlockedField) return value;
+  return sanitizedGitVibeBoilerplate(value, gitVibeSafetyBlockedLinePatterns);
 }
-var gitVibeSafetyBoilerplatePatterns = [
-  /\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*/g,
-  /<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->/g,
+function sanitizedGitVibeBoilerplate(value, patterns) {
+  return patterns.reduce((text, pattern) => text.replace(pattern, ""), value).replace(/\n{3,}/g, "\n\n").trim();
+}
+function gitVibeOwnedText(value) {
+  return gitVibeMarkerPattern.test(value) || /^## GitVibe Risk Accepted\s*$/m.test(value) || /^### Accepted Risk\s*$/m.test(value);
+}
+function gitVibeSafetyBlockedPath(path3) {
+  const key = path3.at(-1);
+  return key === "summary" || key === "comment_body" || key === "question" || path3.includes("questions") || path3.includes("blocking_questions");
+}
+function isGitVibeSafetyBlockedOutput(output) {
+  return output.status === "blocked" && output.next_state === "blocked" && output.summary === "GitVibe paused this run for maintainer review.";
+}
+var gitVibeMarkerPattern = new RegExp(String.raw`<!--\s*git-vibe:`, "i");
+var gitVibeOwnedLinePatterns = [
+  new RegExp(
+    String.raw`\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*`,
+    "g"
+  ),
+  new RegExp(String.raw`<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->`, "g"),
   /^## GitVibe Risk Accepted\s*$/gm,
   /^### Accepted Risk\s*$/gm,
   /^Accepted at: .*$/gm,
@@ -64499,11 +64543,13 @@ var gitVibeSafetyBoilerplatePatterns = [
   /^Accepted stages: .*$/gm,
   /^Artifact title\/body SHA: .*$/gm,
   /^Pull request head SHA: .*$/gm,
-  /GitVibe paused this run for maintainer review\./g,
   /GitVibe replaced the previous blocked result details to keep this thread readable\./g,
   /GitVibe removed `git-vibe:accept-risk`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned\./g,
   /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for matching (?:`[\w-]+` )?context\./g,
-  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for one `?[\w-]+`? (?:run|rerun)\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for one `?[\w-]+`? (?:run|rerun)\./g
+];
+var gitVibeSafetyBlockedLinePatterns = [
+  /GitVibe paused this run for maintainer review\./g,
   /Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context\./g,
   /GitVibe treats issue bodies, comments, diffs, repository files, and future image\/OCR text as untrusted data\. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues\./g
 ];
@@ -64627,7 +64673,11 @@ function acceptedRiskApplies(options) {
       });
       return false;
     }
-    if (accepted.artifactSha && !currentSha) {
+    if (!accepted.artifactSha) {
+      options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
+      return false;
+    }
+    if (!currentSha) {
       options.logger.event("accepted_risk.skip", {
         reason: "missing-current-pull-request-head-sha"
       });
@@ -65650,6 +65700,8 @@ async function runAction(runtime = {}) {
   try {
     const stage = parseStage(argv[0]);
     const executionMode = executionModeEnv(env);
+    const failOnBlocked = booleanEnv(env, "GITVIBE_FAIL_ON_BLOCKED", false);
+    const failOnChangesRequired = booleanEnv(env, "GITVIBE_FAIL_ON_CHANGES_REQUIRED", false);
     const token = await resolveGitHubToken(
       runtime,
       env,
@@ -65690,7 +65742,7 @@ async function runAction(runtime = {}) {
     log(`${stage} status=${result.status}`);
     log(result.summary);
     writeOutputs(env, result, runtime.appendFile || appendFileSync4);
-    if (shouldFailOnStatus(env, result.status)) {
+    if (shouldFailOnStatus(failOnBlocked, result.status)) {
       error51(`${stage} returned status ${result.status}; stopping workflow.`);
       return 1;
     }
@@ -65698,7 +65750,7 @@ async function runAction(runtime = {}) {
       error51("investigate is not ready for implementation; stopping workflow.");
       return 1;
     }
-    if (shouldFailOnReviewChangesRequired(env, stage, executionMode, result)) {
+    if (shouldFailOnReviewChangesRequired(failOnChangesRequired, stage, executionMode, result)) {
       error51("review-matrix returned next_state changes-required; stopping workflow.");
       return 1;
     }
@@ -65811,14 +65863,14 @@ function writeOutputs(env, result, appendFile) {
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
 }
-function shouldFailOnStatus(env, status) {
-  return booleanEnv(env, "GITVIBE_FAIL_ON_BLOCKED", false) && status !== "completed";
+function shouldFailOnStatus(failOnBlocked, status) {
+  return failOnBlocked && status !== "completed";
 }
 function shouldFailOnInvestigationReadiness(env, stage, result) {
   return stage === "investigate" && envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true" && !isInvestigationReady(result.parsedOutput);
 }
-function shouldFailOnReviewChangesRequired(env, stage, executionMode, result) {
-  return stage === "review-matrix" && executionMode === "finalizer" && booleanEnv(env, "GITVIBE_FAIL_ON_CHANGES_REQUIRED", false) && stringOutput(result.parsedOutput.next_state) === "changes-required";
+function shouldFailOnReviewChangesRequired(failOnChangesRequired, stage, executionMode, result) {
+  return stage === "review-matrix" && executionMode === "finalizer" && failOnChangesRequired && stringOutput(result.parsedOutput.next_state) === "changes-required";
 }
 function writeOutput(outputPath, name, value, appendFile) {
   appendFile(outputPath, `${name}<<GITVIBE_OUTPUT
@@ -65835,9 +65887,11 @@ function envValue(env, name) {
   return env[name] || "";
 }
 function booleanEnv(env, name, fallback) {
-  const value = envValue(env, name).toLowerCase();
+  const value = envValue(env, name).trim().toLowerCase();
   if (!value) return fallback;
-  return value === "true";
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false.`);
 }
 function stringOutput(value) {
   return typeof value === "string" ? value.trim() : "";

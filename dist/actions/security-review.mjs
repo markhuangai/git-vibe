@@ -59530,6 +59530,28 @@ async function promptInjectionBlockedResult(options) {
   return result;
 }
 
+// src/runner/stage-ai-results.ts
+var gitVibeMarkerPattern = new RegExp(String.raw`<!--\s*git-vibe:`, "i");
+var gitVibeOwnedLinePatterns = [
+  new RegExp(
+    String.raw`\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*`,
+    "g"
+  ),
+  new RegExp(String.raw`<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->`, "g"),
+  /^## GitVibe Risk Accepted\s*$/gm,
+  /^### Accepted Risk\s*$/gm,
+  /^Accepted at: .*$/gm,
+  /^Accepted workflow run: .*$/gm,
+  /^Accepted workflow attempt: .*$/gm,
+  /^Accepted stages: .*$/gm,
+  /^Artifact title\/body SHA: .*$/gm,
+  /^Pull request head SHA: .*$/gm,
+  /GitVibe replaced the previous blocked result details to keep this thread readable\./g,
+  /GitVibe removed `git-vibe:accept-risk`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for matching (?:`[\w-]+` )?context\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for one `?[\w-]+`? (?:run|rerun)\./g
+];
+
 // src/shared/stage-result-markers.ts
 function parseStageResultMarker2(body) {
   const match = String(body || "").match(/<!--\s*git-vibe:stage-result\s+([^>]*)-->/);
@@ -59640,7 +59662,11 @@ function acceptedRiskApplies(options) {
       });
       return false;
     }
-    if (accepted.artifactSha && !currentSha) {
+    if (!accepted.artifactSha) {
+      options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
+      return false;
+    }
+    if (!currentSha) {
       options.logger.event("accepted_risk.skip", {
         reason: "missing-current-pull-request-head-sha"
       });

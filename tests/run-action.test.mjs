@@ -588,6 +588,27 @@ describe("GitVibe action launcher failure paths", () => {
 });
 
 describe("GitVibe action launcher review finalizer failure paths", () => {
+  it("rejects invalid fail-on-changes-required values before running the stage", async () => {
+    const error = vi.fn();
+    const runStage = vi.fn();
+
+    await expect(
+      runAction({
+        argv: ["review-matrix"],
+        env: {
+          ...baseEnv,
+          GITVIBE_EXECUTION_MODE: "finalizer",
+          GITVIBE_FAIL_ON_CHANGES_REQUIRED: "yes",
+        },
+        error,
+        runStage,
+      }),
+    ).resolves.toBe(1);
+
+    expect(error).toHaveBeenCalledWith("GITVIBE_FAIL_ON_CHANGES_REQUIRED must be true or false.");
+    expect(runStage).not.toHaveBeenCalled();
+  });
+
   it("can fail review finalization when changes are required", async () => {
     const error = vi.fn();
     const runStage = vi.fn().mockResolvedValue({
