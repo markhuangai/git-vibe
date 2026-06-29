@@ -5,11 +5,14 @@ import {
   acceptedRiskFromContext,
   publishAcceptedRiskAudit,
 } from "../src/runner/accepted-risk.ts";
-import { acceptedRiskMetadataBlock } from "../src/shared/accepted-risk.ts";
+import {
+  acceptedRiskArtifactContentSha,
+  acceptedRiskMetadataBlock,
+} from "../src/shared/accepted-risk.ts";
 import { gitVibeLabels } from "../src/shared/labels.ts";
 
-describe("accepted-risk runner scope", () => {
-  it("only applies to the accepted stage and current pull request head SHA", () => {
+describe("accepted-risk runner baseline scope", () => {
+  it("requires accepted risk, matching stage, and valid cutoff", () => {
     const logger = { event: vi.fn() };
     const context = pullRequestContext();
     const runner = pullRequestReviewRunner();
@@ -41,19 +44,6 @@ describe("accepted-risk runner scope", () => {
     ).toBe(false);
     expect(
       acceptedRiskApplies({
-        context: {
-          ...context,
-          artifact: {
-            ...context.artifact,
-            pullRequestHead: { branch: "git-vibe/12", repository: "example/repo" },
-          },
-        },
-        logger,
-        runner,
-      }),
-    ).toBe(false);
-    expect(
-      acceptedRiskApplies({
         context: issueContext(),
         logger,
         runner: {
@@ -79,10 +69,6 @@ describe("accepted-risk runner scope", () => {
         runner: { ...runner, acceptedRisk: { cutoff: "not-a-date", stages: ["review-matrix"] } },
       }),
     ).toBe(false);
-    expect(logger.event).toHaveBeenCalledWith(
-      "accepted_risk.skip",
-      expect.objectContaining({ reason: "pull-request-head-changed" }),
-    );
     expect(logger.event).toHaveBeenCalledWith("accepted_risk.skip", {
       reason: "missing-accepted-artifact-sha",
     });
@@ -119,6 +105,7 @@ describe("accepted-risk context derivation", () => {
       }),
     ).toEqual({
       actor: "maintainer",
+      artifactContentSha: "accepted-artifact-content-sha",
       artifactSha: undefined,
       cutoff: "2026-01-04T00:00:00Z",
       stages: ["materialize", "validate"],
@@ -496,6 +483,7 @@ function runner(overrides = {}) {
 function pullRequestReviewRunner(overrides = {}) {
   return /** @type {import("../src/shared/types.ts").RunnerOptions} */ ({
     acceptedRisk: {
+      artifactContentSha: acceptedRiskArtifactContentSha({ body: "", title: "PR title" }),
       artifactSha: "current-sha",
       cutoff: "2026-01-04T00:00:00Z",
       stages: ["review-matrix"],

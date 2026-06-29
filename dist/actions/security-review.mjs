@@ -32678,16 +32678,15 @@ function contentUnitsOnOrAfterCutoff(context, cutoff, options = {}) {
 }
 function acceptedRiskDeltaContentUnits(options) {
   const unitOptions = { ignoredAuthors: options.ignoredAuthors };
+  const allUnits = contentUnitsForContext(options.context, unitOptions);
   const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff, unitOptions).filter(
     (item) => !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource)
   );
+  const headDeltaUnits = pullRequestHeadChanged(options) ? allUnits.filter(pullRequestFileContentUnit) : [];
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
-    return units;
+    return uniqueContentUnits([...units, ...headDeltaUnits]);
   }
-  return [
-    ...contentUnitsForContext(options.context, unitOptions).filter(artifactContentUnit),
-    ...units
-  ];
+  return uniqueContentUnits([...allUnits.filter(artifactContentUnit), ...units, ...headDeltaUnits]);
 }
 function chunkContentUnits(units, options = {}) {
   const chunkSize = options.chunkSizeChars || defaultChunkSizeChars;
@@ -32733,6 +32732,24 @@ function artifactContentAccepted(context, acceptedSha) {
 }
 function artifactContentUnit(item) {
   return item.id === "artifact-title" || item.id === "artifact-body";
+}
+function pullRequestFileContentUnit(item) {
+  return item.kind === "pull-request-file";
+}
+function pullRequestHeadChanged(options) {
+  if (options.context.artifact.type !== "pull-request") return false;
+  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
+  return Boolean(
+    options.acceptedArtifactSha && currentSha && currentSha !== options.acceptedArtifactSha
+  );
+}
+function uniqueContentUnits(units) {
+  const seen = /* @__PURE__ */ new Set();
+  return units.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 function acceptedRiskMetadataUnit(item, acceptedMetadata, acceptedSource) {
   if (!acceptedMetadata || !acceptedSource) return false;
@@ -57848,13 +57865,13 @@ function safetyBlockedGuidance(gate) {
   if (isSafetyClassifierFailure(gate)) {
     return "Rerun after the safety classifier runtime is healthy, or fix the safety configuration before rerunning.";
   }
-  return "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for one rerun.";
+  return "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context.";
 }
 function safetyBlockedCommentGuidance(gate) {
   if (isSafetyClassifierFailure(gate)) {
     return "GitVibe could not complete the prompt-injection safety classifier, so it failed closed. A trusted maintainer must rerun after the classifier runtime is healthy, fix the safety configuration, or handle the case manually before automation continues.";
   }
-  return "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for a one-run acceptance, or handle the case manually before automation continues.";
+  return "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues.";
 }
 function isSafetyClassifierFailure(gate) {
   return gate.findings.some((finding) => finding.startsWith("safety gate: AI safety gate failed"));
@@ -59615,11 +59632,26 @@ function acceptedRiskApplies(options) {
     return false;
   }
   if (options.context.artifact.type !== "pull-request") return true;
+  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
+  if (accepted.artifactContentSha) {
+    if (!acceptedRiskArtifactContentAccepted(options.context, accepted)) {
+      options.logger.event("accepted_risk.skip", {
+        reason: "pull-request-artifact-content-changed"
+      });
+      return false;
+    }
+    if (accepted.artifactSha && !currentSha) {
+      options.logger.event("accepted_risk.skip", {
+        reason: "missing-current-pull-request-head-sha"
+      });
+      return false;
+    }
+    return true;
+  }
   if (!accepted.artifactSha) {
     options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
     return false;
   }
-  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
   if (currentSha && currentSha === accepted.artifactSha) return true;
   options.logger.event("accepted_risk.skip", {
     current_sha: currentSha,
@@ -59632,6 +59664,7 @@ function acceptedRiskContextUnits(context, runner, ignoredAuthors = []) {
   if (!cutoff) return [];
   const accepted = acceptedRiskMetadataForContext(context, runner);
   return acceptedRiskDeltaContentUnits({
+    acceptedArtifactSha: runner.acceptedRisk?.artifactSha,
     acceptedMetadata: accepted?.metadata,
     acceptedSource: accepted?.source,
     context,
@@ -59671,9 +59704,9 @@ function acceptedRiskAuditBody(options) {
     `<!-- git-vibe:risk-accepted stage=${options.runner.stage} artifact=${options.context.artifact.type} number=${options.context.artifact.number}${runAttribute}${attemptAttribute} -->`,
     "## GitVibe Risk Accepted",
     "",
-    `${actorLabel(actor)} accepted prompt-injection input risk for one \`${options.runner.stage}\` run.`,
+    `${actorLabel(actor)} accepted prompt-injection input risk for matching \`${options.runner.stage}\` context.`,
     riskLine,
-    `GitVibe removed \`${gitVibeLabels.acceptRisk.name}\`; future runs require a fresh label.`,
+    `GitVibe removed \`${gitVibeLabels.acceptRisk.name}\`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned.`,
     options.runner.workflowRunUrl ? `Workflow run: ${options.runner.workflowRunUrl}` : ""
   ].filter(Boolean).join("\n");
 }
@@ -59716,6 +59749,7 @@ function acceptedRiskMetadataSource(item) {
 function acceptedRiskFromMetadata(metadata) {
   return {
     actor: metadata.actor,
+    artifactContentSha: metadata.artifactContentSha,
     artifactSha: metadata.artifactSha,
     cutoff: metadata.cutoff,
     run: metadata.run,
@@ -59726,6 +59760,7 @@ function acceptedRiskFromMetadata(metadata) {
 function acceptedRiskWithoutRunBinding(metadata) {
   return {
     actor: metadata.actor,
+    artifactContentSha: metadata.artifactContentSha,
     artifactSha: metadata.artifactSha,
     cutoff: metadata.cutoff,
     stages: metadata.stages
@@ -59769,7 +59804,10 @@ function stringValue4(value) {
   return text || void 0;
 }
 function acceptedRiskMetadataMatches(options) {
-  return options.metadata.artifact === options.context.artifact.type && options.metadata.number === options.context.artifact.number && options.metadata.cutoff === options.accepted.cutoff && (!options.accepted.run || options.metadata.run === options.accepted.run) && (!options.accepted.runAttempt || options.metadata.runAttempt === options.accepted.runAttempt) && options.metadata.stages.includes(options.runner.stage);
+  return options.metadata.artifact === options.context.artifact.type && options.metadata.number === options.context.artifact.number && options.metadata.cutoff === options.accepted.cutoff && (!options.accepted.artifactContentSha || options.metadata.artifactContentSha === options.accepted.artifactContentSha) && (!options.accepted.run || options.metadata.run === options.accepted.run) && (!options.accepted.runAttempt || options.metadata.runAttempt === options.accepted.runAttempt) && options.metadata.stages.includes(options.runner.stage);
+}
+function acceptedRiskArtifactContentAccepted(context, accepted) {
+  return acceptedRiskArtifactContentSha(context.artifact) === accepted.artifactContentSha;
 }
 async function publishDiscussionAudit(options, body) {
   const discussionId = options.context.artifact.id;

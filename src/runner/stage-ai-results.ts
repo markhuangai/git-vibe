@@ -15,6 +15,7 @@ import { stageDefinitions } from "../shared/stages.js";
 import type {
   ContextPacket,
   GitVibeConfig,
+  JsonObject,
   RunnerOptions,
   StageRunResult,
 } from "../shared/types.js";
@@ -148,13 +149,52 @@ function matrixFinalizerSafetySources(options: {
   return options.results.map((result, index) => ({
     label: `matrix member result ${index + 1}`,
     text: JSON.stringify({
-      output: result.parsedOutput,
+      output: sanitizedMatrixMemberSafetyValue(result.parsedOutput),
       role: result.role,
       status: result.status,
-      summary: result.summary,
+      summary: sanitizedGitVibeSafetyBoilerplate(result.summary),
     }),
   }));
 }
+
+function sanitizedMatrixMemberSafetyValue(value: unknown): unknown {
+  if (typeof value === "string") return sanitizedGitVibeSafetyBoilerplate(value);
+  if (Array.isArray(value)) return value.map(sanitizedMatrixMemberSafetyValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as JsonObject).map(([key, item]) => [
+      key,
+      sanitizedMatrixMemberSafetyValue(item),
+    ]),
+  );
+}
+
+function sanitizedGitVibeSafetyBoilerplate(value: string): string {
+  return gitVibeSafetyBoilerplatePatterns
+    .reduce((text, pattern) => text.replace(pattern, ""), value)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+const gitVibeSafetyBoilerplatePatterns = [
+  /\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*/g,
+  /<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->/g,
+  /^## GitVibe Risk Accepted\s*$/gm,
+  /^### Accepted Risk\s*$/gm,
+  /^Accepted at: .*$/gm,
+  /^Accepted workflow run: .*$/gm,
+  /^Accepted workflow attempt: .*$/gm,
+  /^Accepted stages: .*$/gm,
+  /^Artifact title\/body SHA: .*$/gm,
+  /^Pull request head SHA: .*$/gm,
+  /GitVibe paused this run for maintainer review\./g,
+  /GitVibe replaced the previous blocked result details to keep this thread readable\./g,
+  /GitVibe removed `git-vibe:accept-risk`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for matching (?:`[\w-]+` )?context\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for one `?[\w-]+`? (?:run|rerun)\./g,
+  /Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context\./g,
+  /GitVibe treats issue bodies, comments, diffs, repository files, and future image\/OCR text as untrusted data\. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues\./g,
+];
 
 function stageResultBuilder(options: {
   context: ContextPacket;

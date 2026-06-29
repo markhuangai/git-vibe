@@ -19,6 +19,7 @@ export interface StageDefinition {
 export interface RunnerOptions {
   acceptedRisk?: {
     actor?: string;
+    artifactContentSha?: string;
     artifactSha?: string;
     cutoff: string;
     run?: string;

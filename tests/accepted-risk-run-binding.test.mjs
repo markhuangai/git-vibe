@@ -31,9 +31,11 @@ describe("accepted-risk workflow run binding", () => {
       }),
     ).toEqual({
       actor: "maintainer",
+      artifactContentSha: "accepted-artifact-content-sha",
       artifactSha: undefined,
       cutoff: "2026-01-04T00:00:00Z",
       run: "99",
+      runAttempt: undefined,
       stages: ["materialize", "validate"],
     });
     expect(logger.event).toHaveBeenCalledWith("accepted_risk.context.detected", {
@@ -144,6 +146,7 @@ describe("accepted-risk previous metadata", () => {
       }),
     ).toEqual({
       actor: "maintainer",
+      artifactContentSha: "accepted-artifact-content-sha",
       artifactSha: undefined,
       cutoff: "2026-01-04T00:00:00Z",
       stages: ["materialize", "validate"],
@@ -231,6 +234,7 @@ describe("accepted-risk workflow run binding rejection", () => {
       }),
     ).toEqual({
       actor: "maintainer",
+      artifactContentSha: "accepted-artifact-content-sha",
       artifactSha: undefined,
       cutoff: "2026-01-04T00:00:00Z",
       stages: ["materialize"],

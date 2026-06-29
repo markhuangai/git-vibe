@@ -159,6 +159,7 @@ export function contentUnitsOnOrAfterCutoff(
 }
 
 export function acceptedRiskDeltaContentUnits(options: {
+  acceptedArtifactSha?: string;
   acceptedMetadata?: AcceptedRiskMetadata;
   acceptedSource?: AcceptedRiskMetadataSource;
   context: ContextPacket;
@@ -166,18 +167,19 @@ export function acceptedRiskDeltaContentUnits(options: {
   ignoredAuthors?: readonly string[];
 }): ContentUnit[] {
   const unitOptions = { ignoredAuthors: options.ignoredAuthors };
+  const allUnits = contentUnitsForContext(options.context, unitOptions);
   const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff, unitOptions).filter(
     (item) =>
       !artifactContentUnit(item) &&
       !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource),
   );
+  const headDeltaUnits = pullRequestHeadChanged(options)
+    ? allUnits.filter(pullRequestFileContentUnit)
+    : [];
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
-    return units;
+    return uniqueContentUnits([...units, ...headDeltaUnits]);
   }
-  return [
-    ...contentUnitsForContext(options.context, unitOptions).filter(artifactContentUnit),
-    ...units,
-  ];
+  return uniqueContentUnits([...allUnits.filter(artifactContentUnit), ...units, ...headDeltaUnits]);
 }
 
 export function chunkContentUnits(
@@ -317,6 +319,30 @@ function artifactContentAccepted(context: ContextPacket, acceptedSha: string | u
 
 function artifactContentUnit(item: ContentUnit): boolean {
   return item.id === "artifact-title" || item.id === "artifact-body";
+}
+
+function pullRequestFileContentUnit(item: ContentUnit): boolean {
+  return item.kind === "pull-request-file";
+}
+
+function pullRequestHeadChanged(options: {
+  acceptedArtifactSha?: string;
+  context: ContextPacket;
+}): boolean {
+  if (options.context.artifact.type !== "pull-request") return false;
+  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
+  return Boolean(
+    options.acceptedArtifactSha && currentSha && currentSha !== options.acceptedArtifactSha,
+  );
+}
+
+function uniqueContentUnits(units: ContentUnit[]): ContentUnit[] {
+  const seen = new Set<string>();
+  return units.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 function acceptedRiskMetadataUnit(

@@ -26,6 +26,10 @@ inputs:
     description: Return a non-zero action status when the stage result is not completed.
     required: false
     default: "false"
+  fail-on-changes-required:
+    description: Return a non-zero action status when the final review requires changes.
+    required: false
+    default: "false"
   execution-mode:
     description: "Internal execution mode: standard, member, or finalizer."
     required: false
@@ -76,6 +80,7 @@ runs:
         GITVIBE_MAX_TURNS: ${{ inputs.max-turns }}
         GITVIBE_SOURCE_COMMENT: ${{ inputs.source-comment }}
         GITVIBE_FAIL_ON_BLOCKED: ${{ inputs.fail-on-blocked }}
+        GITVIBE_FAIL_ON_CHANGES_REQUIRED: ${{ inputs.fail-on-changes-required }}
         GITVIBE_EXECUTION_MODE: ${{ inputs.execution-mode }}
         GITVIBE_MEMBER_INDEX: ${{ inputs.member-index }}
       run: node "$GITHUB_ACTION_PATH/../dist/actions/run-action.js" review-matrix

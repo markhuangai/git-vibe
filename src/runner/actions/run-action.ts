@@ -88,6 +88,10 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
       error("investigate is not ready for implementation; stopping workflow.");
       return 1;
     }
+    if (shouldFailOnReviewChangesRequired(env, stage, executionMode, result)) {
+      error("review-matrix returned next_state changes-required; stopping workflow.");
+      return 1;
+    }
     return 0;
   } catch (caught) {
     error(redactLogText(caught instanceof Error ? caught.message : String(caught)));
@@ -244,9 +248,7 @@ function writeOutputs(
 }
 
 function shouldFailOnStatus(env: NodeJS.ProcessEnv, status: string): boolean {
-  return (
-    envValue(env, "GITVIBE_FAIL_ON_BLOCKED").toLowerCase() === "true" && status !== "completed"
-  );
+  return booleanEnv(env, "GITVIBE_FAIL_ON_BLOCKED", false) && status !== "completed";
 }
 
 function shouldFailOnInvestigationReadiness(
@@ -258,6 +260,20 @@ function shouldFailOnInvestigationReadiness(
     stage === "investigate" &&
     envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true" &&
     !isInvestigationReady(result.parsedOutput)
+  );
+}
+
+function shouldFailOnReviewChangesRequired(
+  env: NodeJS.ProcessEnv,
+  stage: ReturnType<typeof parseStage>,
+  executionMode: RunnerOptions["executionMode"],
+  result: StageRunResult,
+): boolean {
+  return (
+    stage === "review-matrix" &&
+    executionMode === "finalizer" &&
+    booleanEnv(env, "GITVIBE_FAIL_ON_CHANGES_REQUIRED", false) &&
+    stringOutput(result.parsedOutput.next_state) === "changes-required"
   );
 }
 
@@ -278,6 +294,12 @@ function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
 
 function envValue(env: NodeJS.ProcessEnv, name: string): string {
   return env[name] || "";
+}
+
+function booleanEnv(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
+  const value = envValue(env, name).toLowerCase();
+  if (!value) return fallback;
+  return value === "true";
 }
 
 function stringOutput(value: unknown): string {

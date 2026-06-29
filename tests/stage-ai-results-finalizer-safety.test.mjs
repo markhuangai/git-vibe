@@ -77,6 +77,69 @@ describe("matrix finalizer safety sources", () => {
   });
 });
 
+describe("matrix finalizer safety source sanitization", () => {
+  it("strips GitVibe safety boilerplate without hiding member findings", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "git-vibe-finalizer-safety-"));
+    const resultsDir = join(cwd, "member-results");
+    writeRole(cwd, "security.md", "Review the change for security regressions.");
+    mkdirSync(resultsDir);
+    writeFileSync(
+      join(resultsDir, "git-vibe-validate-result.json"),
+      memberResult({
+        comment_body: [
+          "<!-- git-vibe:stage-result stage=validate artifact=issue number=12 -->",
+          "GitVibe paused this run for maintainer review.",
+          "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues.",
+          "Role-authored risk: PR changes log credentials.",
+        ].join("\n"),
+        findings: ["Role-authored risk: PR changes log credentials."],
+        questions: [
+          {
+            options: [
+              "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context.",
+            ],
+            question: "High-risk prompt-injection content was detected.",
+          },
+        ],
+      }),
+    );
+    const config = roleGroupConfig();
+    const definition = stageDefinitions.validate;
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(allowedSafetyOutput());
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(synthesizedOutput());
+
+    await runStageResultForMode({
+      acceptedRisk: false,
+      aiRunOptions: {
+        config,
+        cwd,
+        maxTurns: 2,
+        prompt: "base prompt",
+        schema: loadStageSchema(definition.schemaFile),
+        schemaId: definition.schemaId,
+        stage: "validate",
+        stageDefinition: definition,
+        system: "system prompt",
+      },
+      config,
+      context: contextPacket(),
+      definition,
+      executionMode: "finalizer",
+      logger: { event: vi.fn() },
+      options: runnerOptions(cwd, resultsDir),
+    });
+
+    const safetyPrompt = safetyPromptJson(
+      String(globalThis.__gitVibeSdkMocks.codexRun.mock.calls[0][0]),
+    );
+    const promptText = JSON.stringify(safetyPrompt);
+    expect(promptText).not.toContain("git-vibe:stage-result");
+    expect(promptText).not.toContain("git-vibe:accept-risk");
+    expect(promptText).not.toContain("GitVibe treats issue bodies");
+    expect(promptText).toContain("Role-authored risk: PR changes log credentials.");
+  });
+});
+
 function roleGroupConfig() {
   return {
     ai: {
@@ -140,7 +203,7 @@ function writeRole(cwd, file, content) {
   writeFileSync(join(cwd, ".git-vibe", "role-group", file), content);
 }
 
-function memberResult() {
+function memberResult(outputOverrides = {}) {
   return JSON.stringify({
     parsedOutput: {
       assumptions: [],
@@ -151,6 +214,7 @@ function memberResult() {
       stage: "validate",
       status: "completed",
       summary: "Role reviewed.",
+      ...outputOverrides,
     },
     profile: "test",
     role: "security.md",
