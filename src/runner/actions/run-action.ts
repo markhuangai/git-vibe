@@ -39,6 +39,8 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
   try {
     const stage = parseStage(argv[0]);
     const executionMode = executionModeEnv(env);
+    const failOnBlocked = booleanEnv(env, "GITVIBE_FAIL_ON_BLOCKED", false);
+    const failOnChangesRequired = booleanEnv(env, "GITVIBE_FAIL_ON_CHANGES_REQUIRED", false);
     const token = await resolveGitHubToken(
       runtime,
       env,
@@ -80,12 +82,16 @@ export async function runAction(runtime: ActionRuntime = {}): Promise<number> {
     log(`${stage} status=${result.status}`);
     log(result.summary);
     writeOutputs(env, result, runtime.appendFile || appendFileSync);
-    if (shouldFailOnStatus(env, result.status)) {
+    if (shouldFailOnStatus(failOnBlocked, result.status)) {
       error(`${stage} returned status ${result.status}; stopping workflow.`);
       return 1;
     }
     if (shouldFailOnInvestigationReadiness(env, stage, result)) {
       error("investigate is not ready for implementation; stopping workflow.");
+      return 1;
+    }
+    if (shouldFailOnReviewChangesRequired(failOnChangesRequired, stage, executionMode, result)) {
+      error("review-matrix returned next_state changes-required; stopping workflow.");
       return 1;
     }
     return 0;
@@ -243,10 +249,8 @@ function writeOutputs(
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
 }
 
-function shouldFailOnStatus(env: NodeJS.ProcessEnv, status: string): boolean {
-  return (
-    envValue(env, "GITVIBE_FAIL_ON_BLOCKED").toLowerCase() === "true" && status !== "completed"
-  );
+function shouldFailOnStatus(failOnBlocked: boolean, status: string): boolean {
+  return failOnBlocked && status !== "completed";
 }
 
 function shouldFailOnInvestigationReadiness(
@@ -258,6 +262,20 @@ function shouldFailOnInvestigationReadiness(
     stage === "investigate" &&
     envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true" &&
     !isInvestigationReady(result.parsedOutput)
+  );
+}
+
+function shouldFailOnReviewChangesRequired(
+  failOnChangesRequired: boolean,
+  stage: ReturnType<typeof parseStage>,
+  executionMode: RunnerOptions["executionMode"],
+  result: StageRunResult,
+): boolean {
+  return (
+    stage === "review-matrix" &&
+    executionMode === "finalizer" &&
+    failOnChangesRequired &&
+    stringOutput(result.parsedOutput.next_state) === "changes-required"
   );
 }
 
@@ -278,6 +296,14 @@ function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
 
 function envValue(env: NodeJS.ProcessEnv, name: string): string {
   return env[name] || "";
+}
+
+function booleanEnv(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
+  const value = envValue(env, name).trim().toLowerCase();
+  if (!value) return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false.`);
 }
 
 function stringOutput(value: unknown): string {

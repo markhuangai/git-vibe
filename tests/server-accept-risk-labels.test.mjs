@@ -13,7 +13,7 @@ import {
 } from "./support/server-app.mjs";
 
 describe("GitVibe app server accept-risk labels", () => {
-  it("resumes the latest blocked issue stage with one-run accepted risk", async () => {
+  it("resumes the latest blocked issue stage with matching-context accepted risk", async () => {
     const client = createClient({
       comments: [
         stageResultComment({

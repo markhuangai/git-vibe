@@ -36804,16 +36804,15 @@ function contentUnitsOnOrAfterCutoff(context, cutoff, options = {}) {
 }
 function acceptedRiskDeltaContentUnits(options) {
   const unitOptions = { ignoredAuthors: options.ignoredAuthors };
+  const allUnits = contentUnitsForContext(options.context, unitOptions);
   const units = contentUnitsOnOrAfterCutoff(options.context, options.cutoff, unitOptions).filter(
     (item) => !artifactContentUnit(item) && !acceptedRiskMetadataUnit(item, options.acceptedMetadata, options.acceptedSource)
   );
+  const headDeltaUnits = pullRequestHeadChanged(options) ? allUnits.filter(pullRequestFileContentUnit) : [];
   if (artifactContentAccepted(options.context, options.acceptedMetadata?.artifactContentSha)) {
-    return units;
+    return uniqueContentUnits([...units, ...headDeltaUnits]);
   }
-  return [
-    ...contentUnitsForContext(options.context, unitOptions).filter(artifactContentUnit),
-    ...units
-  ];
+  return uniqueContentUnits([...allUnits.filter(artifactContentUnit), ...units, ...headDeltaUnits]);
 }
 function chunkContentUnits(units, options = {}) {
   const chunkSize = options.chunkSizeChars || defaultChunkSizeChars;
@@ -36923,6 +36922,24 @@ function artifactContentAccepted(context, acceptedSha) {
 }
 function artifactContentUnit(item) {
   return item.id === "artifact-title" || item.id === "artifact-body";
+}
+function pullRequestFileContentUnit(item) {
+  return item.kind === "pull-request-file";
+}
+function pullRequestHeadChanged(options) {
+  if (options.context.artifact.type !== "pull-request") return false;
+  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
+  return Boolean(
+    options.acceptedArtifactSha && currentSha && currentSha !== options.acceptedArtifactSha
+  );
+}
+function uniqueContentUnits(units) {
+  const seen = /* @__PURE__ */ new Set();
+  return units.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 function acceptedRiskMetadataUnit(item, acceptedMetadata, acceptedSource) {
   if (!acceptedMetadata || !acceptedSource) return false;
@@ -62509,13 +62526,13 @@ function safetyBlockedGuidance(gate) {
   if (isSafetyClassifierFailure(gate)) {
     return "Rerun after the safety classifier runtime is healthy, or fix the safety configuration before rerunning.";
   }
-  return "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for one rerun.";
+  return "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context.";
 }
 function safetyBlockedCommentGuidance(gate) {
   if (isSafetyClassifierFailure(gate)) {
     return "GitVibe could not complete the prompt-injection safety classifier, so it failed closed. A trusted maintainer must rerun after the classifier runtime is healthy, fix the safety configuration, or handle the case manually before automation continues.";
   }
-  return "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for a one-run acceptance, or handle the case manually before automation continues.";
+  return "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues.";
 }
 function isSafetyClassifierFailure(gate) {
   return gate.findings.some((finding) => finding.startsWith("safety gate: AI safety gate failed"));
@@ -64409,7 +64426,8 @@ async function runMatrixFinalizerResult({
   }
   const members = roleGroupSynthesisMembers(options.cwd, plan);
   const buildResult = stageResultBuilder({ context, definition, logger, options });
-  const finalizerSafetySources = matrixFinalizerSafetySources({ results });
+  const sanitizedResults = sanitizedMatrixMemberResults(results);
+  const finalizerSafetySources = matrixFinalizerSafetySources({ results: sanitizedResults });
   const blocked = await promptInjectionBlockedResult({
     buildResult,
     config: config2,
@@ -64428,7 +64446,7 @@ async function runMatrixFinalizerResult({
       expected,
       failed,
       members,
-      results,
+      results: sanitizedResults,
       roleGroup: plan.roleGroup,
       stage: options.stage
     })
@@ -64457,6 +64475,84 @@ function matrixFinalizerSafetySources(options) {
     })
   }));
 }
+function sanitizedMatrixMemberResults(results) {
+  return results.map((result) => {
+    const safetyBlocked = isGitVibeSafetyBlockedOutput(result.parsedOutput);
+    return {
+      ...result,
+      parsedOutput: sanitizedMatrixMemberSafetyValue(
+        result.parsedOutput,
+        [],
+        safetyBlocked
+      ),
+      summary: sanitizedMatrixMemberText(result.summary, ["summary"], safetyBlocked)
+    };
+  });
+}
+function sanitizedMatrixMemberSafetyValue(value, path3, safetyBlocked) {
+  if (typeof value === "string") return sanitizedMatrixMemberText(value, path3, safetyBlocked);
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizedMatrixMemberSafetyValue(item, path3, safetyBlocked));
+  }
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      sanitizedMatrixMemberSafetyValue(item, [...path3, key], safetyBlocked)
+    ])
+  );
+}
+function sanitizedMatrixMemberText(value, path3, safetyBlocked) {
+  if (path3.includes("findings")) return value;
+  const safetyBlockedField = safetyBlocked && gitVibeSafetyBlockedPath(path3);
+  if (gitVibeOwnedText(value)) {
+    const patterns = [
+      ...gitVibeOwnedLinePatterns,
+      ...safetyBlockedField ? gitVibeSafetyBlockedLinePatterns : []
+    ];
+    return sanitizedGitVibeBoilerplate(value, patterns);
+  }
+  if (!safetyBlockedField) return value;
+  return sanitizedGitVibeBoilerplate(value, gitVibeSafetyBlockedLinePatterns);
+}
+function sanitizedGitVibeBoilerplate(value, patterns) {
+  return patterns.reduce((text, pattern) => text.replace(pattern, ""), value).replace(/\n{3,}/g, "\n\n").trim();
+}
+function gitVibeOwnedText(value) {
+  return gitVibeMarkerPattern.test(value) || /^## GitVibe Risk Accepted\s*$/m.test(value) || /^### Accepted Risk\s*$/m.test(value);
+}
+function gitVibeSafetyBlockedPath(path3) {
+  const key = path3.at(-1);
+  return key === "summary" || key === "comment_body" || key === "question" || path3.includes("questions") || path3.includes("blocking_questions");
+}
+function isGitVibeSafetyBlockedOutput(output) {
+  return output.status === "blocked" && output.next_state === "blocked" && output.summary === "GitVibe paused this run for maintainer review.";
+}
+var gitVibeMarkerPattern = new RegExp(String.raw`<!--\s*git-vibe:`, "i");
+var gitVibeOwnedLinePatterns = [
+  new RegExp(
+    String.raw`\n*<!--\s*git-vibe:accepted-risk-metadata\s+[^>]*-->[\s\S]*?<!--\s*git-vibe:accepted-risk-end\s*-->\n*`,
+    "g"
+  ),
+  new RegExp(String.raw`<!--\s*git-vibe:(?:stage-result|risk-accepted)\s+[^>]*-->`, "g"),
+  /^## GitVibe Risk Accepted\s*$/gm,
+  /^### Accepted Risk\s*$/gm,
+  /^Accepted at: .*$/gm,
+  /^Accepted workflow run: .*$/gm,
+  /^Accepted workflow attempt: .*$/gm,
+  /^Accepted stages: .*$/gm,
+  /^Artifact title\/body SHA: .*$/gm,
+  /^Pull request head SHA: .*$/gm,
+  /GitVibe replaced the previous blocked result details to keep this thread readable\./g,
+  /GitVibe removed `git-vibe:accept-risk`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for matching (?:`[\w-]+` )?context\./g,
+  /(?:`[^`]+`|@[\w-]+) accepted (?:this )?prompt-injection input risk for one `?[\w-]+`? (?:run|rerun)\./g
+];
+var gitVibeSafetyBlockedLinePatterns = [
+  /GitVibe paused this run for maintainer review\./g,
+  /Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context\./g,
+  /GitVibe treats issue bodies, comments, diffs, repository files, and future image\/OCR text as untrusted data\. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues\./g
+];
 function stageResultBuilder(options) {
   return (content) => stageRunResult({
     content,
@@ -64569,11 +64665,30 @@ function acceptedRiskApplies(options) {
     return false;
   }
   if (options.context.artifact.type !== "pull-request") return true;
+  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
+  if (accepted.artifactContentSha) {
+    if (!acceptedRiskArtifactContentAccepted(options.context, accepted)) {
+      options.logger.event("accepted_risk.skip", {
+        reason: "pull-request-artifact-content-changed"
+      });
+      return false;
+    }
+    if (!accepted.artifactSha) {
+      options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
+      return false;
+    }
+    if (!currentSha) {
+      options.logger.event("accepted_risk.skip", {
+        reason: "missing-current-pull-request-head-sha"
+      });
+      return false;
+    }
+    return true;
+  }
   if (!accepted.artifactSha) {
     options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
     return false;
   }
-  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
   if (currentSha && currentSha === accepted.artifactSha) return true;
   options.logger.event("accepted_risk.skip", {
     current_sha: currentSha,
@@ -64586,6 +64701,7 @@ function acceptedRiskContextUnits(context, runner, ignoredAuthors = []) {
   if (!cutoff) return [];
   const accepted = acceptedRiskMetadataForContext(context, runner);
   return acceptedRiskDeltaContentUnits({
+    acceptedArtifactSha: runner.acceptedRisk?.artifactSha,
     acceptedMetadata: accepted?.metadata,
     acceptedSource: accepted?.source,
     context,
@@ -64641,9 +64757,9 @@ function acceptedRiskAuditBody(options) {
     `<!-- git-vibe:risk-accepted stage=${options.runner.stage} artifact=${options.context.artifact.type} number=${options.context.artifact.number}${runAttribute}${attemptAttribute} -->`,
     "## GitVibe Risk Accepted",
     "",
-    `${actorLabel(actor)} accepted prompt-injection input risk for one \`${options.runner.stage}\` run.`,
+    `${actorLabel(actor)} accepted prompt-injection input risk for matching \`${options.runner.stage}\` context.`,
     riskLine,
-    `GitVibe removed \`${gitVibeLabels.acceptRisk.name}\`; future runs require a fresh label.`,
+    `GitVibe removed \`${gitVibeLabels.acceptRisk.name}\`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned.`,
     options.runner.workflowRunUrl ? `Workflow run: ${options.runner.workflowRunUrl}` : ""
   ].filter(Boolean).join("\n");
 }
@@ -64686,6 +64802,7 @@ function acceptedRiskMetadataSource(item) {
 function acceptedRiskFromMetadata(metadata) {
   return {
     actor: metadata.actor,
+    artifactContentSha: metadata.artifactContentSha,
     artifactSha: metadata.artifactSha,
     cutoff: metadata.cutoff,
     run: metadata.run,
@@ -64696,6 +64813,7 @@ function acceptedRiskFromMetadata(metadata) {
 function acceptedRiskWithoutRunBinding(metadata) {
   return {
     actor: metadata.actor,
+    artifactContentSha: metadata.artifactContentSha,
     artifactSha: metadata.artifactSha,
     cutoff: metadata.cutoff,
     stages: metadata.stages
@@ -64751,7 +64869,10 @@ function stringValue4(value) {
   return text || void 0;
 }
 function acceptedRiskMetadataMatches(options) {
-  return options.metadata.artifact === options.context.artifact.type && options.metadata.number === options.context.artifact.number && options.metadata.cutoff === options.accepted.cutoff && (!options.accepted.run || options.metadata.run === options.accepted.run) && (!options.accepted.runAttempt || options.metadata.runAttempt === options.accepted.runAttempt) && options.metadata.stages.includes(options.runner.stage);
+  return options.metadata.artifact === options.context.artifact.type && options.metadata.number === options.context.artifact.number && options.metadata.cutoff === options.accepted.cutoff && (!options.accepted.artifactContentSha || options.metadata.artifactContentSha === options.accepted.artifactContentSha) && (!options.accepted.run || options.metadata.run === options.accepted.run) && (!options.accepted.runAttempt || options.metadata.runAttempt === options.accepted.runAttempt) && options.metadata.stages.includes(options.runner.stage);
+}
+function acceptedRiskArtifactContentAccepted(context, accepted) {
+  return acceptedRiskArtifactContentSha(context.artifact) === accepted.artifactContentSha;
 }
 async function publishDiscussionAudit(options, body) {
   const discussionId = options.context.artifact.id;
@@ -65579,6 +65700,8 @@ async function runAction(runtime = {}) {
   try {
     const stage = parseStage(argv[0]);
     const executionMode = executionModeEnv(env);
+    const failOnBlocked = booleanEnv(env, "GITVIBE_FAIL_ON_BLOCKED", false);
+    const failOnChangesRequired = booleanEnv(env, "GITVIBE_FAIL_ON_CHANGES_REQUIRED", false);
     const token = await resolveGitHubToken(
       runtime,
       env,
@@ -65619,12 +65742,16 @@ async function runAction(runtime = {}) {
     log(`${stage} status=${result.status}`);
     log(result.summary);
     writeOutputs(env, result, runtime.appendFile || appendFileSync4);
-    if (shouldFailOnStatus(env, result.status)) {
+    if (shouldFailOnStatus(failOnBlocked, result.status)) {
       error51(`${stage} returned status ${result.status}; stopping workflow.`);
       return 1;
     }
     if (shouldFailOnInvestigationReadiness(env, stage, result)) {
       error51("investigate is not ready for implementation; stopping workflow.");
+      return 1;
+    }
+    if (shouldFailOnReviewChangesRequired(failOnChangesRequired, stage, executionMode, result)) {
+      error51("review-matrix returned next_state changes-required; stopping workflow.");
       return 1;
     }
     return 0;
@@ -65736,11 +65863,14 @@ function writeOutputs(env, result, appendFile) {
   if (result.resultFile)
     writeOutput(env.GITHUB_OUTPUT, "result-file", result.resultFile, appendFile);
 }
-function shouldFailOnStatus(env, status) {
-  return envValue(env, "GITVIBE_FAIL_ON_BLOCKED").toLowerCase() === "true" && status !== "completed";
+function shouldFailOnStatus(failOnBlocked, status) {
+  return failOnBlocked && status !== "completed";
 }
 function shouldFailOnInvestigationReadiness(env, stage, result) {
   return stage === "investigate" && envValue(env, "GITVIBE_FAIL_ON_NOT_READY").toLowerCase() === "true" && !isInvestigationReady(result.parsedOutput);
+}
+function shouldFailOnReviewChangesRequired(failOnChangesRequired, stage, executionMode, result) {
+  return stage === "review-matrix" && executionMode === "finalizer" && failOnChangesRequired && stringOutput(result.parsedOutput.next_state) === "changes-required";
 }
 function writeOutput(outputPath, name, value, appendFile) {
   appendFile(outputPath, `${name}<<GITVIBE_OUTPUT
@@ -65755,6 +65885,13 @@ function requiredEnv2(env, name) {
 }
 function envValue(env, name) {
   return env[name] || "";
+}
+function booleanEnv(env, name, fallback) {
+  const value = envValue(env, name).trim().toLowerCase();
+  if (!value) return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false.`);
 }
 function stringOutput(value) {
   return typeof value === "string" ? value.trim() : "";

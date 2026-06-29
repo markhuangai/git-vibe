@@ -23,6 +23,9 @@ CodeRabbit comments and reviews are ignored by default. Add more bot logins
 with `safety.ignored_authors` only when the repository owner wants GitVibe to
 depend on its own review instead of scanning those bots' comments.
 
+The review wrapper fails PR review checks when the final review result is
+`blocked` or `changes-required`.
+
 Use `GITVIBE_AI_ENV_JSON.example.json` as the shape for the
 `GITVIBE_AI_ENV_JSON` secret. If the repository config enables MCP servers, use
 `GITVIBE_MCP_ENV_JSON.example.json` as the shape for the optional

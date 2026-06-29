@@ -567,6 +567,79 @@ describe("GitVibe action launcher failure paths", () => {
     );
   });
 
+  it("leaves blocked stage results non-failing by default", async () => {
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "Needs answers",
+      parsedOutput: {},
+      schemaId: "investigate.v1",
+      status: "blocked",
+      summary: "Critical questions are unanswered.",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        argv: ["investigate"],
+        env: baseEnv,
+        runStage,
+      }),
+    ).resolves.toBe(0);
+  });
+});
+
+describe("GitVibe action launcher review finalizer failure paths", () => {
+  it("rejects invalid fail-on-changes-required values before running the stage", async () => {
+    const error = vi.fn();
+    const runStage = vi.fn();
+
+    await expect(
+      runAction({
+        argv: ["review-matrix"],
+        env: {
+          ...baseEnv,
+          GITVIBE_EXECUTION_MODE: "finalizer",
+          GITVIBE_FAIL_ON_CHANGES_REQUIRED: "yes",
+        },
+        error,
+        runStage,
+      }),
+    ).resolves.toBe(1);
+
+    expect(error).toHaveBeenCalledWith("GITVIBE_FAIL_ON_CHANGES_REQUIRED must be true or false.");
+    expect(runStage).not.toHaveBeenCalled();
+  });
+
+  it("can fail review finalization when changes are required", async () => {
+    const error = vi.fn();
+    const runStage = vi.fn().mockResolvedValue({
+      commentBody: "Changes required.",
+      parsedOutput: { next_state: "changes-required" },
+      schemaId: "review-matrix.v1",
+      status: "completed",
+      summary: "Changes required.",
+      validationErrors: [],
+    });
+
+    await expect(
+      runAction({
+        argv: ["review-matrix"],
+        env: {
+          ...baseEnv,
+          GITVIBE_EXECUTION_MODE: "finalizer",
+          GITVIBE_FAIL_ON_CHANGES_REQUIRED: "true",
+        },
+        error,
+        runStage,
+      }),
+    ).resolves.toBe(1);
+
+    expect(error).toHaveBeenCalledWith(
+      "review-matrix returned next_state changes-required; stopping workflow.",
+    );
+  });
+});
+
+describe("GitVibe action launcher runtime failure paths", () => {
   it("reports non-error stage failures and detects bundled direct execution", async () => {
     const error = vi.fn();
 

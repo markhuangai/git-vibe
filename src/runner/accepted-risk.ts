@@ -4,6 +4,7 @@ import { gitVibeLabels } from "../shared/labels.js";
 import { parseStageResultMarker, stageResultStatus } from "../shared/stage-result-markers.js";
 import { workflowRunIdFromUrl } from "../shared/status-comments.js";
 import {
+  acceptedRiskArtifactContentSha,
   acceptedRiskMetadataBodySha,
   parseAcceptedRiskMetadata,
   type AcceptedRiskMetadata,
@@ -119,12 +120,30 @@ export function acceptedRiskApplies(options: {
     return false;
   }
   if (options.context.artifact.type !== "pull-request") return true;
+  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
+  if (accepted.artifactContentSha) {
+    if (!acceptedRiskArtifactContentAccepted(options.context, accepted)) {
+      options.logger.event("accepted_risk.skip", {
+        reason: "pull-request-artifact-content-changed",
+      });
+      return false;
+    }
+    if (!accepted.artifactSha) {
+      options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
+      return false;
+    }
+    if (!currentSha) {
+      options.logger.event("accepted_risk.skip", {
+        reason: "missing-current-pull-request-head-sha",
+      });
+      return false;
+    }
+    return true;
+  }
   if (!accepted.artifactSha) {
     options.logger.event("accepted_risk.skip", { reason: "missing-accepted-artifact-sha" });
     return false;
   }
-
-  const currentSha = options.context.artifact.pullRequestHead?.sha || "";
   if (currentSha && currentSha === accepted.artifactSha) return true;
   options.logger.event("accepted_risk.skip", {
     current_sha: currentSha,
@@ -142,6 +161,7 @@ export function acceptedRiskContextUnits(
   if (!cutoff) return [];
   const accepted = acceptedRiskMetadataForContext(context, runner);
   return acceptedRiskDeltaContentUnits({
+    acceptedArtifactSha: runner.acceptedRisk?.artifactSha,
     acceptedMetadata: accepted?.metadata,
     acceptedSource: accepted?.source,
     context,
@@ -227,9 +247,9 @@ function acceptedRiskAuditBody(options: {
     `<!-- git-vibe:risk-accepted stage=${options.runner.stage} artifact=${options.context.artifact.type} number=${options.context.artifact.number}${runAttribute}${attemptAttribute} -->`,
     "## GitVibe Risk Accepted",
     "",
-    `${actorLabel(actor)} accepted prompt-injection input risk for one \`${options.runner.stage}\` run.`,
+    `${actorLabel(actor)} accepted prompt-injection input risk for matching \`${options.runner.stage}\` context.`,
     riskLine,
-    `GitVibe removed \`${gitVibeLabels.acceptRisk.name}\`; future runs require a fresh label.`,
+    `GitVibe removed \`${gitVibeLabels.acceptRisk.name}\`; future runs reuse this acceptance only while the accepted artifact context still matches, and new context is still scanned.`,
     options.runner.workflowRunUrl ? `Workflow run: ${options.runner.workflowRunUrl}` : "",
   ]
     .filter(Boolean)
@@ -306,6 +326,7 @@ function acceptedRiskFromMetadata(
 ): NonNullable<RunnerOptions["acceptedRisk"]> {
   return {
     actor: metadata.actor,
+    artifactContentSha: metadata.artifactContentSha,
     artifactSha: metadata.artifactSha,
     cutoff: metadata.cutoff,
     run: metadata.run,
@@ -319,6 +340,7 @@ function acceptedRiskWithoutRunBinding(
 ): NonNullable<RunnerOptions["acceptedRisk"]> {
   return {
     actor: metadata.actor,
+    artifactContentSha: metadata.artifactContentSha,
     artifactSha: metadata.artifactSha,
     cutoff: metadata.cutoff,
     stages: metadata.stages,
@@ -420,10 +442,19 @@ function acceptedRiskMetadataMatches(options: {
     options.metadata.artifact === options.context.artifact.type &&
     options.metadata.number === options.context.artifact.number &&
     options.metadata.cutoff === options.accepted.cutoff &&
+    (!options.accepted.artifactContentSha ||
+      options.metadata.artifactContentSha === options.accepted.artifactContentSha) &&
     (!options.accepted.run || options.metadata.run === options.accepted.run) &&
     (!options.accepted.runAttempt || options.metadata.runAttempt === options.accepted.runAttempt) &&
     options.metadata.stages.includes(options.runner.stage)
   );
+}
+
+function acceptedRiskArtifactContentAccepted(
+  context: ContextPacket,
+  accepted: NonNullable<RunnerOptions["acceptedRisk"]>,
+): boolean {
+  return acceptedRiskArtifactContentSha(context.artifact) === accepted.artifactContentSha;
 }
 
 async function publishDiscussionAudit(
