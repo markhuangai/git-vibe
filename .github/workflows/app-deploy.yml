@@ -1,6 +1,12 @@
 name: GitVibe app deploy
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to deploy.
+        required: true
+        type: string
   workflow_call:
     inputs:
       release_tag:

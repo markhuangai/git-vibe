@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 describe("GitVibe app deployment boundary", () => {
-  it("deploys only release images passed by the release workflow", () => {
+  it("deploys only release-tagged images passed by release or manual dispatch", () => {
     const workflow = readWorkflow(".github/workflows/app-deploy.yml");
     const content = readFileSync(".github/workflows/app-deploy.yml", "utf8");
     const deploySteps = /** @type {Array<{ uses?: string, run?: string }>} */ (
@@ -14,9 +14,13 @@ describe("GitVibe app deployment boundary", () => {
       required: true,
       type: "string",
     });
+    expect(workflow.on?.workflow_dispatch?.inputs?.release_tag).toMatchObject({
+      required: true,
+      type: "string",
+    });
+    expect(workflow.on?.workflow_dispatch?.inputs?.source_image_tag).toBeUndefined();
     expect(workflow.on?.release).toBeUndefined();
     expect(workflow.on?.push).toBeUndefined();
-    expect(workflow.on?.workflow_dispatch).toBeUndefined();
     expect(workflow.permissions).toMatchObject({
       contents: "read",
       packages: "read",
