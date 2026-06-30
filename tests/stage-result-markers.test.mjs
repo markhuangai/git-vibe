@@ -131,7 +131,7 @@ describe("accepted-risk compact stage result bodies", () => {
     });
     expect(stageResultStatus(body)).toBe("blocked");
     expect(body).toContain("## GitVibe Risk Accepted");
-    expect(body).toContain("**Risk:** `accepted for one rerun`");
+    expect(body).toContain("**Risk:** `accepted for matching context`");
     expect(body).not.toContain("### Required Fixes");
     expect(parseAcceptedRiskMetadata(body)).toEqual(metadata);
   });

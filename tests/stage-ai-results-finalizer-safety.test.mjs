@@ -77,6 +77,80 @@ describe("matrix finalizer safety sources", () => {
   });
 });
 
+describe("matrix finalizer safety source sanitization", () => {
+  it("strips GitVibe safety boilerplate from safety and synthesis prompts", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "git-vibe-finalizer-safety-"));
+    const resultsDir = join(cwd, "member-results");
+    writeRole(cwd, "security.md", "Review the change for security regressions.");
+    mkdirSync(resultsDir);
+    const quotedBoilerplate =
+      "Role evidence quotes GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data.";
+    writeFileSync(
+      join(resultsDir, "git-vibe-validate-result.json"),
+      memberResult({
+        parsedOutput: {
+          comment_body: [
+            "<!-- git-vibe:stage-result stage=validate artifact=issue number=12 -->",
+            "GitVibe paused this run for maintainer review.",
+            "GitVibe treats issue bodies, comments, diffs, repository files, and future image/OCR text as untrusted data. A trusted maintainer must change the flagged content, adjust safety configuration, apply `git-vibe:accept-risk` for matching context, or handle the case manually before automation continues.",
+            "Role-authored risk: PR changes log credentials.",
+          ].join("\n"),
+          findings: ["Role-authored risk: PR changes log credentials.", quotedBoilerplate],
+          next_state: "blocked",
+          questions: [
+            {
+              options: [
+                "Change the flagged content or safety configuration, or apply `git-vibe:accept-risk` to accept this prompt-injection input risk for matching context.",
+              ],
+              question: "High-risk prompt-injection content was detected.",
+            },
+          ],
+          status: "blocked",
+          summary: "GitVibe paused this run for maintainer review.",
+        },
+        summary: "GitVibe paused this run for maintainer review.",
+      }),
+    );
+    const config = roleGroupConfig();
+    const definition = stageDefinitions.validate;
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(allowedSafetyOutput());
+    globalThis.__gitVibeSdkMocks.queueCodexOutput(synthesizedOutput());
+
+    await runStageResultForMode({
+      acceptedRisk: false,
+      aiRunOptions: {
+        config,
+        cwd,
+        maxTurns: 2,
+        prompt: "base prompt",
+        schema: loadStageSchema(definition.schemaFile),
+        schemaId: definition.schemaId,
+        stage: "validate",
+        stageDefinition: definition,
+        system: "system prompt",
+      },
+      config,
+      context: contextPacket(),
+      definition,
+      executionMode: "finalizer",
+      logger: { event: vi.fn() },
+      options: runnerOptions(cwd, resultsDir),
+    });
+
+    const calls = globalThis.__gitVibeSdkMocks.codexRun.mock.calls.map(([input]) => String(input));
+    const safetyPromptText = JSON.stringify(safetyPromptJson(calls[0]));
+    const synthesisPromptText = calls[1];
+    for (const promptText of [safetyPromptText, synthesisPromptText]) {
+      expect(promptText).not.toContain("git-vibe:stage-result");
+      expect(promptText).not.toContain("git-vibe:accept-risk");
+      expect(promptText).not.toContain("GitVibe paused this run");
+      expect(promptText).toContain("Role-authored risk: PR changes log credentials.");
+      expect(promptText).toContain(quotedBoilerplate);
+      expect(occurrences(promptText, "GitVibe treats issue bodies")).toBe(1);
+    }
+  });
+});
+
 function roleGroupConfig() {
   return {
     ai: {
@@ -140,7 +214,7 @@ function writeRole(cwd, file, content) {
   writeFileSync(join(cwd, ".git-vibe", "role-group", file), content);
 }
 
-function memberResult() {
+function memberResult({ parsedOutput = {}, ...resultOverrides } = {}) {
   return JSON.stringify({
     parsedOutput: {
       assumptions: [],
@@ -151,6 +225,7 @@ function memberResult() {
       stage: "validate",
       status: "completed",
       summary: "Role reviewed.",
+      ...parsedOutput,
     },
     profile: "test",
     role: "security.md",
@@ -158,6 +233,7 @@ function memberResult() {
     stage: "validate",
     status: "completed",
     summary: "Role reviewed.",
+    ...resultOverrides,
   });
 }
 
@@ -185,4 +261,8 @@ function synthesizedOutput() {
 
 function safetyPromptJson(input) {
   return JSON.parse(input.slice(input.indexOf("{")));
+}
+
+function occurrences(value, needle) {
+  return value.split(needle).length - 1;
 }

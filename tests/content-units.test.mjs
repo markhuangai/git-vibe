@@ -254,6 +254,28 @@ describe("accepted-risk metadata context unit filtering", () => {
       ),
     ).toEqual([]);
 
+    const changedHeadContext = {
+      ...context,
+      artifact: {
+        ...context.artifact,
+        pullRequestHead: {
+          branch: "feature",
+          repository: "example/repo",
+          sha: "current-sha",
+        },
+      },
+    };
+
+    expect(
+      acceptedRiskDeltaContentUnits({
+        acceptedArtifactSha: "accepted-sha",
+        acceptedMetadata,
+        acceptedSource,
+        context: changedHeadContext,
+        cutoff,
+      }).map((unit) => unit.id),
+    ).toEqual(["pull-request-file-0-docs-prompt-md"]);
+
     const changedContext = { ...context, artifact: { ...context.artifact, body: "Changed body" } };
 
     expect(
