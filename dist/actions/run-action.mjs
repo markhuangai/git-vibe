@@ -30287,6 +30287,7 @@ function parseStageResultCommentHandoff(item) {
     parsedOutput,
     schemaId: `${stage}.v1`,
     source: {
+      author: item.author,
       bodySha: acceptedRiskMetadataBodySha(body),
       databaseId: item.databaseId,
       id: item.id,
@@ -37004,6 +37005,7 @@ function handoffMetadata(handoff) {
   return {
     createdAt: handoff.createdAt,
     schemaId: handoff.schemaId,
+    sourceAuthor: handoff.source?.author,
     sourceBodySha: handoff.source?.bodySha,
     sourceDatabaseId: handoff.source?.databaseId,
     sourceId: handoff.source?.id,
@@ -62451,8 +62453,13 @@ function removeApprovalOnSafetyBlock(config2) {
   return config2.safety?.remove_approval_on_block !== false;
 }
 function safetyGateSources(options) {
+  const contextUnits = options.includeContext ? safetyContextUnits({
+    context: options.context,
+    contextUnits: options.contextUnits,
+    ignoredAuthors: options.ignoredAuthors
+  }) : [];
   return [
-    ...options.includeContext ? options.contextUnits ?? contentUnitsForContext(options.context, { ignoredAuthors: options.ignoredAuthors }) : [],
+    ...options.includeContext ? contextUnits : [],
     ...options.output ? [
       safetySourceUnit(
         { label: "stage output", text: JSON.stringify(options.output) },
@@ -62464,6 +62471,49 @@ function safetyGateSources(options) {
     )
   ].filter((source) => source.text.trim());
 }
+function sanitizedSafetyContextUnits(units) {
+  return units.map(
+    (item) => gitVibeOwnedPriorSafetyResultUnit(item) ? { ...item, text: gitVibePriorSafetyResultPlaceholder(item) } : item
+  );
+}
+function safetyContextUnits(options) {
+  return sanitizedSafetyContextUnits(
+    options.contextUnits ?? contentUnitsForContext(options.context, { ignoredAuthors: options.ignoredAuthors })
+  );
+}
+function gitVibeOwnedPriorSafetyResultUnit(unit2) {
+  if (!priorGitVibeSafetyResultText(unit2.text)) return false;
+  if (unit2.kind === "timeline") return gitVibeAutomationAuthor(unit2.metadata?.author);
+  if (unit2.kind === "handoff") {
+    const sourceAuthor = stringMetadata(unit2.metadata?.sourceAuthor);
+    return !sourceAuthor || gitVibeAutomationAuthor(sourceAuthor);
+  }
+  return false;
+}
+function priorGitVibeSafetyResultText(text) {
+  if (gitVibeAcceptedRiskText(text)) return true;
+  return text.includes("GitVibe paused this run for maintainer review.") && (text.includes("prompt-injection") || text.includes("git-vibe:accept-risk") || /"next_state"\s*:\s*"blocked"/.test(text) || /"status"\s*:\s*"blocked"/.test(text));
+}
+function gitVibeAcceptedRiskText(text) {
+  return gitVibeAcceptedRiskMetadataPattern.test(text) || /^## GitVibe Risk Accepted\s*$/m.test(text);
+}
+function gitVibeAutomationAuthor(value) {
+  return stringMetadata(value).toLowerCase() === "gitvibe-for-github[bot]";
+}
+function gitVibePriorSafetyResultPlaceholder(unit2) {
+  const stage = stringMetadata(unit2.metadata?.stage);
+  return [
+    "[GitVibe-owned prior prompt-injection safety result omitted from input safety scan.]",
+    stage ? `stage: ${stage}` : ""
+  ].filter(Boolean).join("\n");
+}
+function stringMetadata(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+var gitVibeAcceptedRiskMetadataPattern = new RegExp(
+  String.raw`<!--\s*git-vibe:accepted-risk-metadata\b`,
+  "i"
+);
 function allowedSafetyGateResult() {
   return { allowed: true, findings: [], severity: "none" };
 }

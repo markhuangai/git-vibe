@@ -447,6 +447,7 @@ function handoffMetadata(handoff: NonNullable<ContextPacket["handoffs"]>[number]
   return {
     createdAt: handoff.createdAt,
     schemaId: handoff.schemaId,
+    sourceAuthor: handoff.source?.author,
     sourceBodySha: handoff.source?.bodySha,
     sourceDatabaseId: handoff.source?.databaseId,
     sourceId: handoff.source?.id,
