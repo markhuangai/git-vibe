@@ -115,6 +115,7 @@ function parseStageResultCommentHandoff(item: TimelineItem): StageHandoff | unde
     parsedOutput,
     schemaId: `${stage}.v1`,
     source: {
+      author: item.author,
       bodySha: acceptedRiskMetadataBodySha(body),
       databaseId: item.databaseId,
       id: item.id,
