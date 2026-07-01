@@ -78,7 +78,8 @@ function gitVibeOwnedPriorSafetyResultUnit(unit: ContentUnit): boolean {
   if (unit.kind === "timeline") return gitVibeAutomationAuthor(unit.metadata?.author);
   if (unit.kind === "handoff") {
     const sourceAuthor = stringMetadata(unit.metadata?.sourceAuthor);
-    return !sourceAuthor || gitVibeAutomationAuthor(sourceAuthor);
+    if (sourceAuthor) return gitVibeAutomationAuthor(sourceAuthor);
+    return !stringMetadata(unit.metadata?.sourceKind) && !stringMetadata(unit.metadata?.sourceUrl);
   }
   return false;
 }
@@ -101,7 +102,7 @@ function gitVibeAcceptedRiskText(text: string): boolean {
 }
 
 function gitVibeAutomationAuthor(value: unknown): boolean {
-  return stringMetadata(value).toLowerCase() === "gitvibe-for-github[bot]";
+  return gitVibeAutomationAuthors.has(stringMetadata(value).toLowerCase());
 }
 
 function gitVibePriorSafetyResultPlaceholder(unit: ContentUnit): string {
@@ -122,6 +123,7 @@ const gitVibeAcceptedRiskMetadataPattern = new RegExp(
   String.raw`<!--\s*git-vibe:accepted-risk-metadata\b`,
   "i",
 );
+const gitVibeAutomationAuthors = new Set(["gitvibe-for-github", "gitvibe-for-github[bot]"]);
 
 export function allowedSafetyGateResult(): SafetyGateResult {
   return { allowed: true, findings: [], severity: "none" };

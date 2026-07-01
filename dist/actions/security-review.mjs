@@ -57825,7 +57825,8 @@ function gitVibeOwnedPriorSafetyResultUnit(unit2) {
   if (unit2.kind === "timeline") return gitVibeAutomationAuthor(unit2.metadata?.author);
   if (unit2.kind === "handoff") {
     const sourceAuthor = stringMetadata(unit2.metadata?.sourceAuthor);
-    return !sourceAuthor || gitVibeAutomationAuthor(sourceAuthor);
+    if (sourceAuthor) return gitVibeAutomationAuthor(sourceAuthor);
+    return !stringMetadata(unit2.metadata?.sourceKind) && !stringMetadata(unit2.metadata?.sourceUrl);
   }
   return false;
 }
@@ -57837,7 +57838,7 @@ function gitVibeAcceptedRiskText(text) {
   return gitVibeAcceptedRiskMetadataPattern.test(text) || /^## GitVibe Risk Accepted\s*$/m.test(text);
 }
 function gitVibeAutomationAuthor(value) {
-  return stringMetadata(value).toLowerCase() === "gitvibe-for-github[bot]";
+  return gitVibeAutomationAuthors.has(stringMetadata(value).toLowerCase());
 }
 function gitVibePriorSafetyResultPlaceholder(unit2) {
   const stage = stringMetadata(unit2.metadata?.stage);
@@ -57853,6 +57854,7 @@ var gitVibeAcceptedRiskMetadataPattern = new RegExp(
   String.raw`<!--\s*git-vibe:accepted-risk-metadata\b`,
   "i"
 );
+var gitVibeAutomationAuthors = /* @__PURE__ */ new Set(["gitvibe-for-github", "gitvibe-for-github[bot]"]);
 function allowedSafetyGateResult() {
   return { allowed: true, findings: [], severity: "none" };
 }
