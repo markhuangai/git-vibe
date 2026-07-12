@@ -118,6 +118,8 @@ describe("git-vibe-setup CLI AI profile migrations", () => {
         "          from_bundle: GITVIBE_AI_API_KEY",
         "    old_codex:",
         "      adapter: cli-codex",
+        "      auth_json:",
+        "        from_bundle: CODEX_AUTH_JSON",
         "      model: gpt-5-codex",
         "  stages:",
         "    validate:",
@@ -138,9 +140,47 @@ describe("git-vibe-setup CLI AI profile migrations", () => {
     expect(config).toContain("old_claude:\n      adapter: claude-code-sdk");
     expect(config).toContain("model: opus");
     expect(config).toContain("old_codex:\n      adapter: codex-sdk");
+    expect(config).toContain("api_key:\n        from_bundle: GITVIBE_AI_API_KEY");
+    expect(config).toContain("base_url:\n        from_bundle: CODEX_BASE_URL");
     expect(config).toContain("model: gpt-5-codex");
+    expect(config).not.toContain("auth_json");
     expect(config).not.toContain("cli-claude-code");
     expect(config).not.toContain("cli-codex");
+  });
+
+  it("migrates existing codex-sdk auth_json profiles to proxy auth fields", async () => {
+    const cwd = workspace();
+
+    mkdirSync(join(cwd, ".github"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".github", "git-vibe.yml"),
+      [
+        "version: 1",
+        "ai:",
+        "  profiles:",
+        "    codex:",
+        "      adapter: codex-sdk",
+        "      auth_json:",
+        "        from_bundle: CODEX_AUTH_JSON",
+        "      model: gpt-5-codex",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await setupCli({
+      argv: ["update"],
+      cwd,
+      fetchImpl: fetchGitHubOk([release({ tag_name: "v1.2.3" })]),
+      log: () => undefined,
+    });
+
+    const config = readFileSync(join(cwd, ".github", "git-vibe.yml"), "utf8");
+    expect(exitCode).toBe(0);
+    expect(config).toContain("codex:\n      adapter: codex-sdk");
+    expect(config).toContain("api_key:\n        from_bundle: GITVIBE_AI_API_KEY");
+    expect(config).toContain("base_url:\n        from_bundle: CODEX_BASE_URL");
+    expect(config).not.toContain("auth_json");
+    expect(config).not.toContain("CODEX_AUTH_JSON");
   });
 });
 

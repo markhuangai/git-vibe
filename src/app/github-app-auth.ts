@@ -7,6 +7,7 @@ import {
 } from "../shared/github-app-permissions.js";
 
 export {
+  canWriteBackCodexAuthForGitHubActionsJob,
   isGitHubActionsRunnerPermissionProfile,
   isGitHubAppPermissionProfile,
   permissionsForProfile,

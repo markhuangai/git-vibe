@@ -41,10 +41,10 @@ ai:
   profiles:
     codex_sdk:
       adapter: codex-sdk
-      # Key inside GITVIBE_AI_ENV_JSON. Stores escaped auth.json text from jq -Rs .
-      # Requires the GitVibe GitHub App repository Secrets write permission for refresh write-back.
-      auth_json:
-        from_bundle: CODEX_AUTH_JSON
+      api_key:
+        from_bundle: GITVIBE_AI_API_KEY
+      base_url:
+        from_bundle: CODEX_BASE_URL
       model: gpt-5.3-codex
       reasoning:
         effort: high

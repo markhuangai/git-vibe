@@ -15,6 +15,7 @@ import {
   GitHubAppInstallationTokenProvider,
   type InstallationTokenProvider,
 } from "./github-app-auth.js";
+import { writeBackActionsCodexAuth } from "./actions-codex-auth.js";
 import { gitVibeLabels, isGitVibeRuntimeLabel, isInternalGitVibeLabel } from "../shared/labels.js";
 import { defaultActionsOidcAudience } from "../shared/hosted-app.js";
 import {
@@ -130,6 +131,7 @@ export function createGitVibeApp(options: GitVibeAppOptions): GitVibeApp {
         res,
         (event, payload) => handleWebhook(state, event, payload),
         (body) => handleActionsToken(state, body),
+        (body) => handleActionsCodexAuthWriteback(state, body),
       ),
     handleWebhook: (event, payload) => handleWebhook(state, event, payload),
   };
@@ -263,6 +265,17 @@ async function webhookContext(state: AppState, event: string, payload: WebhookPa
 
 function handleActionsToken(state: AppState, body: string) {
   return exchangeActionsToken({
+    audience: state.config.actionsOidcAudience,
+    body,
+    client: state.client,
+    tokenProvider: state.appAuth,
+    trustedWorkflowRefPattern: state.trustedWorkflowRefPattern,
+    verifier: state.actionsOidcVerifier,
+  });
+}
+
+function handleActionsCodexAuthWriteback(state: AppState, body: string) {
+  return writeBackActionsCodexAuth({
     audience: state.config.actionsOidcAudience,
     body,
     client: state.client,
