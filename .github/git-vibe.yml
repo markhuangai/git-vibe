@@ -31,8 +31,10 @@ ai:
   profiles:
     codex_5.5_xhigh:
       adapter: codex-sdk
-      auth_json:
-        from_bundle: CODEX_AUTH_JSON
+      api_key:
+        from_bundle: GITVIBE_AI_API_KEY
+      base_url:
+        from_bundle: CODEX_BASE_URL
       model: gpt-5.5
       reasoning:
         effort: xhigh

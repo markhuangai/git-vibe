@@ -11,7 +11,7 @@ import {
 import type { RunAiStageOptions } from "./ai.js";
 import { logSdkWebPolicyNotice } from "./ai-web-policy.js";
 import { codexOutputSchema, isRecord, sdkModelName, stringValue } from "./sdk-adapter-utils.js";
-import { prepareCodexEnv, writeBackCodexAuth } from "./codex-auth.js";
+import { codexAuthOptions, prepareCodexEnv } from "./codex-auth.js";
 import { summarizeError } from "./logging.js";
 import { prepareSdkMcpConfig } from "./mcp-sdk-config.js";
 import { validatedSdkOutput } from "./sdk-output.js";
@@ -48,8 +48,13 @@ export async function runCodexSdkStage({
   const contextDir = mkdtempSync(join(tmpdir(), "git-vibe-codex-"));
   try {
     const mcpConfig = prepareSdkMcpConfig({ contextDir, options });
-    const codexEnv = prepareCodexEnv({ profile, profileName });
+    const codexEnv = prepareCodexEnv({
+      codexHome: join(contextDir, "codex-home"),
+      profile,
+      profileName,
+    });
     const sdk = new Codex({
+      ...codexAuthOptions(codexEnv),
       codexPathOverride: codexExecutablePath(),
       config: codexConfig(profile, mcpConfig.codexConfig),
       env: stringEnv(codexEnv.env),
@@ -93,12 +98,6 @@ export async function runCodexSdkStage({
       output_tokens: result.usage?.output_tokens,
       profile: profileName,
     });
-    await writeBackCodexAuth({
-      auth: codexEnv.auth,
-      github: options.github,
-      invalidAuth: "skip",
-      logger: options.logger,
-    });
     return validated;
   } finally {
     rmSync(contextDir, { force: true, recursive: true });
@@ -112,6 +111,7 @@ function codexConfig(
   const reasoning = profile.reasoning as Record<string, unknown> | undefined;
   const summary = stringValue(reasoning?.summary);
   return {
+    model_provider: "openai",
     ...mcpConfig,
     ...(summary ? { model_reasoning_summary: summary } : {}),
   };

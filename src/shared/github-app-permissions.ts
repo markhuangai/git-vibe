@@ -5,10 +5,7 @@ export type GitHubActionsRunnerPermissionProfile =
   | "runner-status-write"
   | "runner-workflow-write";
 
-export type GitHubAppServerPermissionProfile =
-  | "server"
-  | "server-checks-read"
-  | "server-secrets-write";
+export type GitHubAppServerPermissionProfile = "server" | "server-checks-read";
 
 export type GitHubAppPermissionProfile =
   | GitHubAppServerPermissionProfile
@@ -25,11 +22,7 @@ const runnerPermissionProfiles = new Set<string>([
   "runner-workflow-write",
 ]);
 
-const serverPermissionProfiles = new Set<string>([
-  "server",
-  "server-checks-read",
-  "server-secrets-write",
-]);
+const serverPermissionProfiles = new Set<string>(["server", "server-checks-read"]);
 
 const readOnlyJobs: Record<string, string[]> = {
   "investigate.yml": ["plan-investigate"],
@@ -46,13 +39,6 @@ const statusWriteJobs: Record<string, string[]> = {
 
 const workflowWriteJobs: Record<string, string[]> = {
   "review.yml": ["review-matrix"],
-};
-
-const codexAuthWritebackJobs: Record<string, string[]> = {
-  "investigate.yml": ["investigate"],
-  "materialize.yml": ["materialize"],
-  "review.yml": ["review-matrix"],
-  "validate.yml": ["validate"],
 };
 
 const memberJobPrefixes = [
@@ -77,10 +63,6 @@ export function permissionsForProfile(
     case "server-checks-read":
       return {
         checks: "read",
-      };
-    case "server-secrets-write":
-      return {
-        secrets: "write",
       };
     case "runner-read":
       return {
@@ -129,15 +111,6 @@ export function runnerPermissionProfileForGitHubActionsJob(
   return undefined;
 }
 
-export function canWriteBackCodexAuthForGitHubActionsJob(
-  identity: GitHubActionsJobIdentity,
-): boolean {
-  const workflowFile = workflowFileFromJobWorkflowRef(identity.jobWorkflowRef);
-  const jobName = jobNameFromCheckRun(identity.checkRunName);
-  if (!workflowFile || !jobName) return false;
-  return memberJob(jobName) || listedJob(codexAuthWritebackJobs, workflowFile, jobName);
-}
-
 function workflowFileFromJobWorkflowRef(value: string): string | undefined {
   return /\.github\/workflows\/([^/@]+\.ya?ml)@/.exec(value)?.[1];
 }
@@ -160,8 +133,7 @@ function knownGitVibeJobName(jobName: string): boolean {
     memberJob(jobName) ||
     listedAnyJob(readOnlyJobs, jobName) ||
     listedAnyJob(statusWriteJobs, jobName) ||
-    listedAnyJob(workflowWriteJobs, jobName) ||
-    listedAnyJob(codexAuthWritebackJobs, jobName)
+    listedAnyJob(workflowWriteJobs, jobName)
   );
 }
 

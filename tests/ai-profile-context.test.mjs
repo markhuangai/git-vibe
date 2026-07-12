@@ -2,12 +2,25 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runAiStage } from "../src/runner/ai.ts";
 import { stageDefinitions } from "../src/shared/stages.ts";
 
+const originalEnv = { ...process.env };
+
+beforeEach(() => {
+  process.env = {
+    ...originalEnv,
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      GITVIBE_AI_API_KEY: "test-key",
+    }),
+  };
+});
+
 afterEach(() => {
   globalThis.__gitVibeSdkMocks.resetSdkMocks();
+  process.env = { ...originalEnv };
 });
 
 describe("AI profile context routing", () => {
@@ -40,7 +53,9 @@ describe("AI profile context routing", () => {
     const cwd = contextWorkspace({ "MATRIX.md": "Use matrix member guidance." });
     const config = stageRoutingConfig();
     config.ai.profiles.matrix_profile = {
+      api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
       adapter: "codex-sdk",
+      base_url: { from_bundle: "CODEX_BASE_URL" },
       context: { files: ["MATRIX.md"] },
       model: "matrix-model",
     };
@@ -85,7 +100,9 @@ function stageRoutingConfig() {
     ai: {
       profiles: {
         validation_profile: {
+          api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
           adapter: "codex-sdk",
+          base_url: { from_bundle: "CODEX_BASE_URL" },
           model: "stage-model",
         },
       },

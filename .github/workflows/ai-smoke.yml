@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run-codex:
-        description: Run Codex SDK smoke test with auth.json on the pipeline runner.
+        description: Run Codex SDK smoke test with proxy auth on the pipeline runner.
         required: false
         type: boolean
         default: false

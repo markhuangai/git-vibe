@@ -1,4 +1,4 @@
-import { runAiStage, type RunAiStageOptions } from "./ai.js";
+import { runAiStage } from "./ai.js";
 import { chunkContentUnits, type ContentChunk, type ContentUnit } from "./content-units.js";
 import { summarizeError, type StageLogger } from "./logging.js";
 import {
@@ -75,7 +75,6 @@ export async function runAiSafetyGateForStage(options: {
   context: ContextPacket;
   contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
-  github?: RunAiStageOptions["github"];
   includeContext?: boolean;
   logger?: StageLogger;
   output?: JsonObject;
@@ -113,7 +112,6 @@ async function classifySafetyBatch(
     const content = await runAiStage({
       config: options.config,
       cwd: options.runner.cwd,
-      github: options.github,
       maxTurns: Math.max(1, Math.min(options.runner.maxTurns, 4)),
       prompt: safetyPrompt({ batch, options }),
       profileName: safetyProfileName(options),

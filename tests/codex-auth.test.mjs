@@ -1,10 +1,9 @@
 // @ts-nocheck
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import sodium from "libsodium-wrappers";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { prepareCodexEnv, writeBackCodexAuth } from "../src/runner/codex-auth.ts";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { codexAuthOptions, prepareCodexEnv } from "../src/runner/codex-auth.ts";
 
 const originalEnv = { ...process.env };
 const tempDirs = [];
@@ -12,413 +11,138 @@ const tempDirs = [];
 beforeEach(() => {
   process.env = {
     ...originalEnv,
+    CODEX_HOME: "/ambient/codex-home",
     GITVIBE_AI_ENV_JSON: JSON.stringify({
-      CODEX_AUTH_JSON: codexAuthJson("old"),
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
       GITVIBE_AI_API_KEY: "test-key",
     }),
   };
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
   process.env = { ...originalEnv };
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true });
 });
 
-describe("Codex auth environment", () => {
-  it("seeds bundled auth.json in the GitVibe temp CODEX_HOME", () => {
-    const runnerTemp = tempDir();
-    process.env.CODEX_HOME = join(tempDir(), "persistent-codex-home");
-    process.env.RUNNER_TEMP = runnerTemp;
-    const prepared = prepare();
-    const codexHome = join(runnerTemp, "git-vibe", "codex-home");
-
-    expect(readFileSync(prepared.auth.authPath, "utf8")).toBe(codexAuthJson("old"));
-    expect(prepared.env.CODEX_HOME).toBe(codexHome);
-    expect(prepared.auth.authPath).toBe(join(codexHome, "auth.json"));
-    expect(prepared.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
-    expect(prepared.env.CODEX_AUTH_JSON).toBeUndefined();
-  });
-
-  it("uses RUNNER_TEMP for bundled auth when CODEX_HOME is absent", () => {
-    const runnerTemp = tempDir();
-    delete process.env.CODEX_HOME;
-    process.env.HOME = tempDir();
-    process.env.RUNNER_TEMP = runnerTemp;
-    const prepared = prepare();
-
-    expect(prepared.env.CODEX_HOME).toBe(join(runnerTemp, "git-vibe", "codex-home"));
-    expect(readFileSync(prepared.auth.authPath, "utf8")).toBe(codexAuthJson("old"));
-  });
-
-  it("preserves configured CODEX_HOME when the profile has no auth_json source", () => {
+describe("Codex proxy auth environment", () => {
+  it("resolves proxy settings from the bundle and forces an isolated CODEX_HOME", () => {
     const codexHome = join(tempDir(), "codex-home");
-    process.env.CODEX_HOME = codexHome;
     const prepared = prepareCodexEnv({
-      profile: { model: "gpt-5.5" },
-      profileName: "codex_sdk",
-    });
-
-    expect(prepared.auth).toBeUndefined();
-    expect(prepared.env.CODEX_HOME).toBe(codexHome);
-  });
-
-  it("uses the installed default CODEX_HOME without bundled auth", () => {
-    const home = tempDir();
-    delete process.env.CODEX_HOME;
-    process.env.HOME = home;
-    const prepared = prepareCodexEnv({
-      profile: { model: "gpt-5.5" },
-      profileName: "codex_sdk",
-    });
-
-    expect(prepared.auth).toBeUndefined();
-    expect(prepared.env.CODEX_HOME).toBe(join(home, ".codex"));
-  });
-
-  it("ignores profile CODEX_HOME overrides", () => {
-    const installedCodexHome = join(tempDir(), "installed-codex-home");
-    process.env.CODEX_HOME = installedCodexHome;
-    const prepared = prepareCodexEnv({
+      codexHome,
       profile: {
-        env: { CODEX_HOME: "/tmp/profile-codex-home" },
+        api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+        base_url: { from_bundle: "CODEX_BASE_URL" },
+        env: {
+          CODEX_HOME: "/profile/codex-home",
+          EXTRA_LITERAL: "literal",
+        },
         model: "gpt-5.5",
       },
       profileName: "codex_sdk",
     });
 
-    expect(prepared.auth).toBeUndefined();
-    expect(prepared.env.CODEX_HOME).toBe(installedCodexHome);
+    expect(prepared).toMatchObject({
+      apiKey: "test-key",
+      baseUrl: "https://codex-proxy.example/v1",
+    });
+    expect(prepared.env.CODEX_HOME).toBe(codexHome);
+    expect(prepared.env.EXTRA_LITERAL).toBe("literal");
+    expect(prepared.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
+    expect(prepared.env.CODEX_BASE_URL).toBeUndefined();
+    expect(prepared.env.GITVIBE_AI_API_KEY).toBeUndefined();
+    expect(existsSync(codexHome)).toBe(true);
   });
 
-  it("rejects auth_json bundle sources that resolve to empty strings", () => {
-    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_AUTH_JSON: "" });
+  it("passes proxy settings as Codex SDK auth options", () => {
+    const prepared = prepare();
 
-    expect(() => prepare()).toThrow(
-      "ai.profiles.codex_sdk.auth_json.from_bundle resolved to an empty value.",
-    );
+    expect(codexAuthOptions(prepared)).toEqual({
+      apiKey: "test-key",
+      baseUrl: "https://codex-proxy.example/v1",
+    });
   });
 });
 
-describe("Codex auth write-back", () => {
-  it("updates the repository AI env bundle secret with refreshed auth JSON", async () => {
-    const prepared = prepare();
-    writeFileSync(prepared.auth.authPath, codexAuthJson("refreshed"));
-    const client = await githubClientWithPublicKey();
-    const logger = { event: vi.fn() };
-
-    await writeBackCodexAuth({
-      auth: prepared.auth,
-      github: { client, repository: "example/repo", token: "token" },
-      logger,
-    });
-
-    const requests = client.request.mock.calls.map(([request]) => request);
-    expect(requests[0]).toMatchObject({
-      method: "GET",
-      path: "/repos/example/repo/actions/secrets/public-key",
-    });
-    expect(requests[1]).toMatchObject({
-      body: expect.objectContaining({ key_id: "key-id" }),
-      method: "PUT",
-      path: "/repos/example/repo/actions/secrets/GITVIBE_AI_ENV_JSON",
-    });
-    expect(requests[1].body.encrypted_value).toEqual(expect.any(String));
-    expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON)).toEqual({
-      CODEX_AUTH_JSON: codexAuthJson("refreshed"),
-      GITVIBE_AI_API_KEY: "test-key",
-    });
-    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.validation.done", {
-      auth_mode: "chatgpt",
-      bundle_key: "CODEX_AUTH_JSON",
-      has_access_token: true,
-      has_id_token: true,
-      has_refresh_token: true,
-      has_tokens: true,
-    });
-    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.writeback.done", {
-      bundle_key: "CODEX_AUTH_JSON",
-      secret: "GITVIBE_AI_ENV_JSON",
-    });
-    expect(eventIndex(logger, "codex.auth_json.validation.done")).toBeLessThan(
-      eventIndex(logger, "codex.auth_json.writeback.done"),
-    );
-  });
-
-  it("uses the hosted broker callback when provided", async () => {
-    const prepared = prepare();
-    writeFileSync(prepared.auth.authPath, codexAuthJson("refreshed"));
-    const authWriteback = vi.fn();
-    const client = { request: vi.fn() };
-
-    await writeBackCodexAuth({
-      auth: prepared.auth,
-      github: {
-        authWriteback,
-        client,
-        repository: "example/repo",
-        token: "runner-token",
-      },
-    });
-
-    expect(authWriteback).toHaveBeenCalledWith(
-      JSON.stringify({
-        CODEX_AUTH_JSON: codexAuthJson("refreshed"),
-        GITVIBE_AI_API_KEY: "test-key",
+describe("Codex proxy auth validation", () => {
+  it("requires typed proxy fields on codex-sdk profiles", () => {
+    expect(() =>
+      prepareCodexEnv({
+        codexHome: join(tempDir(), "codex-home"),
+        profile: {
+          auth_json: { from_bundle: "CODEX_AUTH_JSON" },
+          model: "gpt-5.5",
+        },
+        profileName: "codex_sdk",
       }),
-    );
-    expect(client.request).not.toHaveBeenCalled();
-    expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON).CODEX_AUTH_JSON).toBe(
-      codexAuthJson("refreshed"),
-    );
-  });
-});
+    ).toThrow("ai.profiles.codex_sdk.base_url is required for codex-sdk profiles.");
 
-describe("Codex auth write-back edge cases", () => {
-  it("skips GitHub writes when Codex leaves auth JSON unchanged", async () => {
-    const prepared = prepare();
-    const logger = { event: vi.fn() };
-
-    await writeBackCodexAuth({ auth: prepared.auth, github: undefined, logger });
-
-    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.writeback.skip", {
-      reason: "unchanged",
-    });
-  });
-
-  it("fails changed auth write-back without a GitHub token that can update secrets", async () => {
-    const prepared = prepare();
-    writeFileSync(prepared.auth.authPath, codexAuthJson("refreshed"));
-
-    await expect(writeBackCodexAuth({ auth: prepared.auth, github: undefined })).rejects.toThrow(
-      "GitVibe GitHub App Secrets write permission is required",
-    );
-  });
-
-  it("fails changed auth write-back when GitHub omits the Actions public key", async () => {
-    const prepared = prepare();
-    writeFileSync(prepared.auth.authPath, codexAuthJson("refreshed"));
-    const client = { request: vi.fn(async () => ({})) };
-
-    await expect(
-      writeBackCodexAuth({
-        auth: prepared.auth,
-        github: { client, repository: "example/repo", token: "token" },
+    expect(() =>
+      prepareCodexEnv({
+        codexHome: join(tempDir(), "codex-home"),
+        profile: {
+          base_url: { from_bundle: "CODEX_BASE_URL" },
+          model: "gpt-5.5",
+        },
+        profileName: "codex_sdk",
       }),
-    ).rejects.toThrow("GitHub repository example/repo did not return an Actions public key.");
-  });
-});
-
-const invalidCodexAuthCases = [
-  ["malformed JSON", "{", "Codex auth.json must be valid JSON before write-back:"],
-  [
-    "missing auth mode",
-    JSON.stringify({
-      tokens: {
-        id_token: validIdToken("refreshed"),
-        refresh_token: "refresh-refreshed",
-      },
-    }),
-    "Codex auth.json auth_mode is required.",
-  ],
-  [
-    "non-object tokens",
-    JSON.stringify({ auth_mode: "chatgpt", tokens: [] }),
-    "Codex auth.json tokens must be a JSON object when present.",
-  ],
-  [
-    "malformed ID token",
-    JSON.stringify({
-      auth_mode: "chatgpt",
-      tokens: {
-        access_token: "access-refreshed",
-        id_token: "not-a-jwt",
-        refresh_token: "refresh-refreshed",
-      },
-    }),
-    "Codex auth.json tokens.id_token must be JWT-shaped.",
-  ],
-  [
-    "missing token object",
-    JSON.stringify({ auth_mode: "chatgpt" }),
-    "Codex auth.json tokens are required for chatgpt auth.",
-  ],
-  [
-    "missing ID token",
-    JSON.stringify({
-      auth_mode: "chatgpt",
-      tokens: {
-        refresh_token: "refresh-refreshed",
-      },
-    }),
-    "Codex auth.json tokens.id_token is required for chatgpt auth.",
-  ],
-  [
-    "missing refresh token",
-    JSON.stringify({
-      auth_mode: "chatgpt",
-      tokens: {
-        access_token: "access-refreshed",
-        id_token: validIdToken("refreshed"),
-      },
-    }),
-    "Codex auth.json tokens.refresh_token is required for chatgpt auth.",
-  ],
-  [
-    "non-string auth mode",
-    JSON.stringify({ auth_mode: 12 }),
-    "Codex auth.json auth_mode must be a string.",
-  ],
-  [
-    "blank access token",
-    JSON.stringify({
-      auth_mode: "chatgpt",
-      tokens: {
-        access_token: " ",
-        id_token: validIdToken("refreshed"),
-        refresh_token: "refresh-refreshed",
-      },
-    }),
-    "Codex auth.json tokens.access_token must be non-empty.",
-  ],
-];
-
-describe("Codex auth write-back validation", () => {
-  it("allows non-ChatGPT Codex auth objects without token metadata", async () => {
-    const prepared = prepare();
-    const authJson = `${JSON.stringify({ OPENAI_API_KEY: "test-api-key", auth_mode: "api_key" })}\n`;
-    writeFileSync(prepared.auth.authPath, authJson);
-    const client = await githubClientWithPublicKey();
-    const logger = { event: vi.fn() };
-
-    await writeBackCodexAuth({
-      auth: prepared.auth,
-      github: { client, repository: "example/repo", token: "token" },
-      logger,
-    });
-
-    expect(JSON.parse(process.env.GITVIBE_AI_ENV_JSON).CODEX_AUTH_JSON).toBe(authJson);
-    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.validation.done", {
-      auth_mode: "api_key",
-      bundle_key: "CODEX_AUTH_JSON",
-      has_access_token: false,
-      has_id_token: false,
-      has_refresh_token: false,
-      has_tokens: false,
-    });
+    ).toThrow("ai.profiles.codex_sdk.api_key is required for codex-sdk profiles.");
   });
 
-  it.each(invalidCodexAuthCases)(
-    "rejects %s before updating the AI env bundle secret",
-    async (_name, authJson, message) => {
-      await expectInvalidRefreshedAuth(authJson, message);
-    },
-  );
+  it("rejects missing, empty, and malformed proxy bundle values", () => {
+    expect(() =>
+      prepare({
+        env: { GITVIBE_AI_ENV_JSON: JSON.stringify({ GITVIBE_AI_API_KEY: "test-key" }) },
+      }),
+    ).toThrow("GITVIBE_AI_ENV_JSON key CODEX_BASE_URL is required");
 
-  it("skips invalid refreshed auth when write-back is best effort", async () => {
-    const prepared = prepare();
-    const originalBundle = process.env.GITVIBE_AI_ENV_JSON;
-    writeFileSync(
-      prepared.auth.authPath,
-      JSON.stringify({
-        auth_mode: "chatgpt",
-        tokens: {
-          access_token: "access-refreshed",
-          id_token: "header.refreshed.signature",
-          refresh_token: "refresh-refreshed",
+    expect(() =>
+      prepare({
+        env: {
+          GITVIBE_AI_ENV_JSON: JSON.stringify({
+            CODEX_BASE_URL: " ",
+            GITVIBE_AI_API_KEY: "test-key",
+          }),
         },
       }),
-    );
-    const client = await githubClientWithPublicKey();
-    const logger = { event: vi.fn() };
+    ).toThrow("ai.profiles.codex_sdk.base_url.from_bundle resolved to an empty value.");
 
-    await expect(
-      writeBackCodexAuth({
-        auth: prepared.auth,
-        github: { client, repository: "example/repo", token: "token" },
-        invalidAuth: "skip",
-        logger,
+    expect(() =>
+      prepare({
+        env: {
+          GITVIBE_AI_ENV_JSON: JSON.stringify({
+            CODEX_BASE_URL: "ftp://codex-proxy.example",
+            GITVIBE_AI_API_KEY: "test-key",
+          }),
+        },
       }),
-    ).resolves.toBeUndefined();
+    ).toThrow(
+      "ai.profiles.codex_sdk.base_url.from_bundle must resolve to an absolute HTTP(S) URL.",
+    );
 
-    expect(client.request).not.toHaveBeenCalled();
-    expect(process.env.GITVIBE_AI_ENV_JSON).toBe(originalBundle);
-    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.validation.failed", {
-      bundle_key: "CODEX_AUTH_JSON",
-      reason: expect.stringContaining("Codex auth.json tokens.id_token must be JWT-shaped."),
-    });
-    expect(logger.event).toHaveBeenCalledWith("codex.auth_json.writeback.skip", {
-      reason: "invalid-refreshed-auth",
-    });
+    expect(() =>
+      prepare({
+        env: {
+          GITVIBE_AI_ENV_JSON: JSON.stringify({
+            CODEX_BASE_URL: "https://codex-proxy.example/v1",
+            GITVIBE_AI_API_KEY: "",
+          }),
+        },
+      }),
+    ).toThrow("ai.profiles.codex_sdk.api_key.from_bundle resolved to an empty value.");
   });
 });
 
-function prepare() {
+function prepare({ env } = {}) {
+  if (env) process.env = { ...originalEnv, ...env };
   return prepareCodexEnv({
+    codexHome: join(tempDir(), "codex-home"),
     profile: {
-      auth_json: { from_bundle: "CODEX_AUTH_JSON" },
+      api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
+      base_url: { from_bundle: "CODEX_BASE_URL" },
       model: "gpt-5.5",
     },
     profileName: "codex_sdk",
   });
-}
-
-function codexAuthJson(label) {
-  return `${JSON.stringify({
-    auth_mode: "chatgpt",
-    last_refresh: "2026-05-09T11:57:42.136804048Z",
-    tokens: {
-      access_token: `access-${label}`,
-      account_id: "05eae55c-50ed-4afe-9a8f-4a3127e7d5a3",
-      id_token: validIdToken(label),
-      refresh_token: `refresh-${label}`,
-    },
-  })}\n`;
-}
-
-function validIdToken(label) {
-  return ["header", label, "signature"]
-    .map((part) => Buffer.from(part).toString("base64url"))
-    .join(".");
-}
-
-function eventIndex(logger, eventName) {
-  return logger.event.mock.calls.findIndex(([name]) => name === eventName);
-}
-
-async function expectInvalidRefreshedAuth(authJson, message) {
-  const prepared = prepare();
-  const originalBundle = process.env.GITVIBE_AI_ENV_JSON;
-  writeFileSync(prepared.auth.authPath, authJson);
-  const client = await githubClientWithPublicKey();
-  const logger = { event: vi.fn() };
-
-  await expect(
-    writeBackCodexAuth({
-      auth: prepared.auth,
-      github: { client, repository: "example/repo", token: "token" },
-      logger,
-    }),
-  ).rejects.toThrow(message);
-
-  expect(client.request).not.toHaveBeenCalled();
-  expect(process.env.GITVIBE_AI_ENV_JSON).toBe(originalBundle);
-  expect(logger.event).toHaveBeenCalledWith("codex.auth_json.validation.failed", {
-    bundle_key: "CODEX_AUTH_JSON",
-    reason: expect.stringContaining(message),
-  });
-}
-
-async function githubClientWithPublicKey() {
-  await sodium.ready;
-  const keyPair = sodium.crypto_box_keypair();
-  const publicKey = sodium.to_base64(keyPair.publicKey, sodium.base64_variants.ORIGINAL);
-  return {
-    request: vi.fn(async (request) => {
-      if (request.method === "GET") return { key: publicKey, key_id: "key-id" };
-      return {};
-    }),
-  };
 }
 
 function tempDir() {

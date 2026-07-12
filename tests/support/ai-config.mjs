@@ -6,6 +6,10 @@ function testAiConfigYaml(extraAi = "") {
   profiles:
     test:
       adapter: codex-sdk
+      api_key:
+        from_bundle: GITVIBE_AI_API_KEY
+      base_url:
+        from_bundle: CODEX_BASE_URL
       model: gpt-5-test
       reasoning:
         effort: high

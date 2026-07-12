@@ -12,6 +12,10 @@ const originalEnv = { ...process.env };
 beforeEach(() => {
   process.env = {
     ...originalEnv,
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      GITVIBE_AI_API_KEY: "test-key",
+    }),
     RUNNER_TEMP: mkdtempSync(join(tmpdir(), "git-vibe-runner-")),
   };
 });
@@ -156,7 +160,9 @@ function roleGroupConfig() {
     ai: {
       profiles: {
         test: {
+          api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
           adapter: "codex-sdk",
+          base_url: { from_bundle: "CODEX_BASE_URL" },
           model: "test-model",
         },
       },
