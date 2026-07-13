@@ -29,14 +29,6 @@ ai:
     review_timeout_minutes: 60
     default_max_turns: 200
   profiles:
-    codex_5.5_xhigh:
-      adapter: codex-sdk
-      auth_json:
-        from_bundle: CODEX_AUTH_JSON
-      model: gpt-5.5
-      reasoning:
-        effort: xhigh
-        summary: concise
     claude_code:
       adapter: claude-code-sdk
       context:
@@ -68,7 +60,7 @@ ai:
             from_bundle: DENSE_MEM_API_KEY
   role_groups:
     swarm:
-      synthesizer: codex_5.5_xhigh
+      synthesizer: claude_code
       parallel: 3
       roles:
         - role: correctness.md
@@ -107,7 +99,7 @@ ai:
             - list_communities
             - get_community_summary
     materialize:
-      profile: codex_5.5_xhigh
+      profile: claude_code
       mcp:
         dense_mem:
           required: true
