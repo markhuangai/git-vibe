@@ -37,7 +37,7 @@ ai:
         from_bundle: GITVIBE_AI_BASE_URL
       model: gpt-5.6
       reasoning:
-        effort: max
+        effort: xhigh
         summary: concise
     claude_code:
       adapter: claude-code-sdk

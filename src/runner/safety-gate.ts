@@ -76,11 +76,7 @@ function safetyContextUnits(options: {
 function gitVibeOwnedPriorSafetyResultUnit(unit: ContentUnit): boolean {
   if (!priorGitVibeSafetyResultText(unit.text)) return false;
   if (unit.kind === "timeline") return gitVibeAutomationAuthor(unit.metadata?.author);
-  if (unit.kind === "handoff") {
-    const sourceAuthor = stringMetadata(unit.metadata?.sourceAuthor);
-    if (sourceAuthor) return gitVibeAutomationAuthor(sourceAuthor);
-    return !stringMetadata(unit.metadata?.sourceKind) && !stringMetadata(unit.metadata?.sourceUrl);
-  }
+  if (unit.kind === "handoff") return gitVibeAutomationAuthor(unit.metadata?.sourceAuthor);
   return false;
 }
 

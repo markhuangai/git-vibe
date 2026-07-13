@@ -58900,11 +58900,7 @@ function safetyContextUnits(options) {
 function gitVibeOwnedPriorSafetyResultUnit(unit2) {
   if (!priorGitVibeSafetyResultText(unit2.text)) return false;
   if (unit2.kind === "timeline") return gitVibeAutomationAuthor(unit2.metadata?.author);
-  if (unit2.kind === "handoff") {
-    const sourceAuthor = stringMetadata(unit2.metadata?.sourceAuthor);
-    if (sourceAuthor) return gitVibeAutomationAuthor(sourceAuthor);
-    return !stringMetadata(unit2.metadata?.sourceKind) && !stringMetadata(unit2.metadata?.sourceUrl);
-  }
+  if (unit2.kind === "handoff") return gitVibeAutomationAuthor(unit2.metadata?.sourceAuthor);
   return false;
 }
 function priorGitVibeSafetyResultText(text) {
