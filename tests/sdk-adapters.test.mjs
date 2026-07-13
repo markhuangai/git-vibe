@@ -15,7 +15,13 @@ import { runAiStage } from "../src/runner/ai.ts";
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
-  process.env = { ...originalEnv };
+  process.env = {
+    ...originalEnv,
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      GITVIBE_AI_API_KEY: "test-key",
+    }),
+  };
 });
 
 afterEach(() => {
@@ -40,12 +46,19 @@ describe("Codex and Claude SDK adapter routing", () => {
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
     expect(globalThis.__gitVibeSdkMocks.codexConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
+        apiKey: "test-key",
+        baseUrl: "https://codex-proxy.example/v1",
         codexPathOverride: codexPath,
-        config: {},
+        config: { model_provider: "openai" },
         env: expect.any(Object),
       }),
     );
-    expect(constructorOptions.env.CODEX_HOME).toBe(process.env.CODEX_HOME);
+    expect(constructorOptions.env.CODEX_HOME).not.toBe(process.env.CODEX_HOME);
+    expect(constructorOptions.env.CODEX_HOME).toContain("git-vibe-codex-");
+    expect(constructorOptions.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
+    expect(constructorOptions.env.CODEX_BASE_URL).toBeUndefined();
+    expect(constructorOptions.env.GITVIBE_AI_API_KEY).toBeUndefined();
+    expect(existsSync(constructorOptions.env.CODEX_HOME)).toBe(false);
     expect(globalThis.__gitVibeSdkMocks.codexStartThread).toHaveBeenCalledWith(
       expect.objectContaining({
         additionalDirectories: [contextFilesRoot],
@@ -69,6 +82,7 @@ describe("Codex and Claude SDK adapter routing", () => {
 
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
     expect(constructorOptions.config.features?.plugins).toBeUndefined();
+    expect(constructorOptions.config.model_provider).toBe("openai");
     const threadOptions = globalThis.__gitVibeSdkMocks.codexStartThread.mock.calls[0][0];
     expect(threadOptions).toMatchObject({
       approvalPolicy: "never",
@@ -133,7 +147,11 @@ describe("Codex SDK adapter logging", () => {
     const cwd = workspace();
     const logger = { event: vi.fn() };
     const secret = "codex-secret-that-crosses-the-old-truncation-boundary";
-    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({ CODEX_SECRET: secret });
+    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      CODEX_SECRET: secret,
+      GITVIBE_AI_API_KEY: "test-key",
+    });
     const output = validValidateOutput({ summary: "Logged." });
     globalThis.__gitVibeSdkMocks.queueCodexResult({
       finalResponse: JSON.stringify(output),
@@ -176,7 +194,7 @@ describe("Codex SDK adapter logging", () => {
 
     expect(globalThis.__gitVibeSdkMocks.codexConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
-        config: { model_reasoning_summary: "concise" },
+        config: { model_provider: "openai", model_reasoning_summary: "concise" },
       }),
     );
     expect(globalThis.__gitVibeSdkMocks.codexStartThread).toHaveBeenCalledWith(
@@ -435,113 +453,6 @@ describe("SDK adapter config validation", () => {
   });
 });
 
-describe("SDK MCP config", () => {
-  it("passes stage MCP gateway config to Codex SDK", async () => {
-    const cwd = workspace();
-    process.env.GITHUB_ACTION_PATH = join(cwd, "action");
-    process.env.GITVIBE_MCP_ENV_JSON = JSON.stringify({ DENSE_TOKEN: "secret-token" });
-    let gatewayContent;
-    globalThis.__gitVibeSdkMocks.codexRun.mockImplementationOnce(async () => {
-      const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
-      const gatewayPath =
-        constructorOptions.config.mcp_servers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
-      gatewayContent = JSON.parse(readFileSync(gatewayPath, "utf8"));
-      return {
-        finalResponse: JSON.stringify(validValidateOutput()),
-        items: [],
-        usage: {},
-      };
-    });
-    await runAiStage(stageOptions({ cwd, config: codexConfigWithMcp() }));
-
-    const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
-    expect(constructorOptions.config.features?.plugins).toBeUndefined();
-    expect(constructorOptions.config.mcp_servers.dense_mem).toMatchObject({
-      command: process.execPath,
-      enabled: true,
-      enabled_tools: ["search_memory"],
-      args: [join(cwd, "dist/actions/mcp-gateway.js")],
-      required: true,
-      tools: { search_memory: { approval_mode: "approve" } },
-    });
-    const gatewayPath =
-      constructorOptions.config.mcp_servers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
-    expect(gatewayContent).toMatchObject({
-      allowTools: ["search_memory"],
-      required: true,
-      server: {
-        args: ["server.js"],
-        command: "node",
-        name: "dense_mem",
-        transport: "stdio",
-      },
-    });
-    expect(existsSync(gatewayPath)).toBe(false);
-  });
-
-  it("passes stage MCP gateway config to Claude SDK", async () => {
-    const cwd = workspace();
-    process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
-      ANTHROPIC_BASE_URL: "https://anthropic.example",
-      GITVIBE_AI_API_KEY: "test-key",
-    });
-    process.env.GITVIBE_MCP_ENV_JSON = JSON.stringify({ DENSE_TOKEN: "secret-token" });
-    let gatewayContent;
-    globalThis.__gitVibeSdkMocks.claudeQuery.mockImplementationOnce(async function* (params) {
-      const gatewayPath = params.options.mcpServers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
-      gatewayContent = JSON.parse(readFileSync(gatewayPath, "utf8"));
-      yield {
-        duration_ms: 1,
-        is_error: false,
-        num_turns: 1,
-        result: JSON.stringify(validValidateOutput()),
-        stop_reason: "stop",
-        structured_output: validValidateOutput(),
-        subtype: "success",
-        type: "result",
-      };
-    });
-    await runAiStage(stageOptions({ cwd, config: claudeConfigWithMcp() }));
-
-    const queryOptions = globalThis.__gitVibeSdkMocks.claudeQuery.mock.calls[0][0].options;
-    expect(queryOptions.allowedTools).toEqual(["mcp__dense_mem__search_memory"]);
-    expect(queryOptions.strictMcpConfig).toBe(true);
-    expect(queryOptions.mcpServers.dense_mem).toMatchObject({
-      alwaysLoad: true,
-      command: process.execPath,
-      type: "stdio",
-    });
-    const gatewayPath = queryOptions.mcpServers.dense_mem.env.GITVIBE_MCP_GATEWAY_CONFIG;
-    expect(gatewayContent).toMatchObject({
-      allowTools: ["search_memory"],
-      required: true,
-    });
-    expect(existsSync(gatewayPath)).toBe(false);
-  });
-});
-
-describe("SDK MCP config warnings", () => {
-  it("warns and leaves SDK MCP config empty for optional unresolved model servers", async () => {
-    const cwd = workspace();
-    const logger = { event: vi.fn() };
-    await runAiStage(
-      stageOptions({
-        config: optionalBrokenMcpConfig(),
-        cwd,
-        logger,
-      }),
-    );
-
-    expect(globalThis.__gitVibeSdkMocks.codexConstructor).toHaveBeenCalledWith(
-      expect.objectContaining({ config: {} }),
-    );
-    expect(logger.event).toHaveBeenCalledWith("mcp.sdk_config.warning", {
-      reason: "ai.mcp.servers.dense_mem.command must be configured for stdio MCP servers.",
-      server: "dense_mem",
-    });
-  });
-});
-
 function stageOptions({ config, contextFilesRoot, cwd, logger, sandboxMode, toolOverride }) {
   return {
     config,
@@ -566,7 +477,9 @@ function codexConfig(overrides = {}) {
     ai: {
       profiles: {
         test: {
+          api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
           adapter: "codex-sdk",
+          base_url: { from_bundle: "CODEX_BASE_URL" },
           model: "gpt-5-test",
           reasoning: { effort: "high" },
           ...profileOverrides,
@@ -602,70 +515,6 @@ function legacyConfig(adapter) {
     ai: {
       profiles: { test: { adapter, model: "legacy" } },
       stages: { validate: { profile: "test" } },
-    },
-  };
-}
-
-function codexConfigWithMcp() {
-  return withMcp(codexConfig());
-}
-
-function claudeConfigWithMcp() {
-  return withMcp(claudeConfig());
-}
-
-function withMcp(config) {
-  return {
-    ai: {
-      ...config.ai,
-      mcp: {
-        servers: {
-          dense_mem: {
-            args: ["server.js"],
-            command: "node",
-            env: { DENSE_TOKEN: { from_bundle: "DENSE_TOKEN" } },
-            transport: "stdio",
-          },
-        },
-      },
-      stages: {
-        validate: {
-          mcp: {
-            dense_mem: {
-              required: true,
-              tools: ["search_memory"],
-            },
-          },
-          profile: "test",
-        },
-      },
-    },
-  };
-}
-
-function optionalBrokenMcpConfig() {
-  const config = codexConfig();
-  return {
-    ai: {
-      ...config.ai,
-      mcp: {
-        servers: {
-          dense_mem: {
-            transport: "stdio",
-          },
-        },
-      },
-      stages: {
-        validate: {
-          mcp: {
-            dense_mem: {
-              required: false,
-              tools: ["search_memory"],
-            },
-          },
-          profile: "test",
-        },
-      },
     },
   };
 }

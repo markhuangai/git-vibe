@@ -1,5 +1,5 @@
 const requiredSecrets = [
-  ["GITVIBE_AI_ENV_JSON", "JSON env bundle for AI provider config and CLI auth."],
+  ["GITVIBE_AI_ENV_JSON", "JSON env bundle for AI provider and proxy config."],
 ] as const;
 
 const usefulVariables = [

@@ -13,7 +13,6 @@ import {
   safetyBlockedOutput,
 } from "./safety-gate.js";
 import { runAiSafetyGateForStage } from "./safety-ai-gate.js";
-import type { RunAiStageOptions } from "./ai.js";
 import { type PublishedArtifactComment, publishStageResultComment } from "./stage-publishing.js";
 import { applySafetyBlockedLabelTransition } from "./stage-safety-labels.js";
 
@@ -67,7 +66,6 @@ export async function promptInjectionBlockedResult(options: {
   context: ContextPacket;
   contextUnits?: ContentUnit[];
   extraSources?: SafetySource[];
-  github?: RunAiStageOptions["github"];
   includeContext?: boolean;
   logger: StageLogger;
   phase: "input" | "output";
@@ -80,16 +78,6 @@ export async function promptInjectionBlockedResult(options: {
     context: options.context,
     contextUnits: options.contextUnits,
     extraSources: options.extraSources,
-    github:
-      options.github ||
-      (options.client
-        ? {
-            authWriteback: options.runner.githubAuthWriteback,
-            client: options.client,
-            repository: options.runner.repository,
-            token: options.runner.token,
-          }
-        : undefined),
     includeContext: options.includeContext,
     logger: options.logger,
     output: options.result?.parsedOutput,

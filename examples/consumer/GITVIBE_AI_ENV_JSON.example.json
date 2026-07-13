@@ -1,5 +1,5 @@
 {
   "ANTHROPIC_BASE_URL": "https://api.provider.example/anthropic",
-  "CODEX_AUTH_JSON": "{\"tokens\":[]}",
+  "CODEX_BASE_URL": "https://codex-proxy.example/v1",
   "GITVIBE_AI_API_KEY": "replace-with-ai-provider-api-key"
 }

@@ -7,7 +7,6 @@ import {
 import { extractValidatedOutput } from "./ai-output.js";
 import { systemWithWebPolicy } from "./ai-web-policy.js";
 import { runClaudeCodeSdkStage } from "./claude-code-sdk.js";
-import type { CodexAuthWritebackGitHub } from "./codex-auth.js";
 import { runCodexSdkStage } from "./codex-sdk.js";
 import type { StageLogger } from "./logging.js";
 import { systemWithProfileContext } from "./profile-context.js";
@@ -26,7 +25,6 @@ export interface RunAiStageOptions {
   stage: Stage;
   stageDefinition: StageDefinition;
   system: string;
-  github?: CodexAuthWritebackGitHub;
   profileName?: string;
   reserveFinalizationTurns?: boolean;
   sandboxMode?: "danger-full-access" | "read-only" | "workspace-write";

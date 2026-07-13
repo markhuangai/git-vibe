@@ -60,12 +60,13 @@ describe("GitVibe app actions token endpoint", () => {
   });
 });
 
-describe("GitVibe app actions Codex auth endpoint", () => {
-  it("updates the AI env bundle secret for authorized AI jobs", async () => {
+describe("GitVibe app legacy Codex auth endpoint", () => {
+  it("keeps the legacy Codex auth writeback endpoint for older pinned workflows", async () => {
     const appAuth = createAppAuth();
+    const actionsOidcVerifier = { verify: vi.fn(async () => trustedClaims) };
     const client = clientForHostedAuth({ head_sha: "abc123", name: "validate / validate" });
     const app = createApp({
-      actionsOidcVerifier: { verify: vi.fn(async () => trustedClaims) },
+      actionsOidcVerifier,
       appAuth,
       client,
     });
@@ -76,6 +77,13 @@ describe("GitVibe app actions Codex auth endpoint", () => {
        * @param {string} url
        */
       async (url) => {
+        await expect(
+          requestJson(url, "POST", "/actions/codex-auth", JSON.stringify({ oidcToken: "oidc" })),
+        ).resolves.toMatchObject({
+          body: { error: "value is required." },
+          status: 400,
+        });
+
         await expect(
           requestJson(
             url,
@@ -93,6 +101,10 @@ describe("GitVibe app actions Codex auth endpoint", () => {
       },
     );
 
+    expect(actionsOidcVerifier.verify).toHaveBeenCalledWith(
+      "oidc",
+      "https://git-vibe.markhuang.ai/actions/token",
+    );
     expect(tokenProfiles(appAuth)).toEqual(["server-checks-read", "server-secrets-write"]);
     expect(requestPaths(client)).toEqual([
       "/repos/example/repo/check-runs/123456",
@@ -101,7 +113,7 @@ describe("GitVibe app actions Codex auth endpoint", () => {
     ]);
   });
 
-  it("rejects non-AI jobs and malformed bundle values", async () => {
+  it("rejects non-AI jobs on the legacy Codex auth writeback endpoint", async () => {
     const app = createApp({
       actionsOidcVerifier: { verify: vi.fn(async () => trustedClaims) },
       client: clientForHostedAuth({ head_sha: "abc123", name: "validate / security-review" }),
@@ -123,18 +135,6 @@ describe("GitVibe app actions Codex auth endpoint", () => {
         ).resolves.toMatchObject({
           body: { error: "GitHub Actions job is not authorized to update Codex auth." },
           status: 403,
-        });
-
-        await expect(
-          requestJson(
-            url,
-            "POST",
-            "/actions/codex-auth",
-            JSON.stringify({ oidcToken: "oidc", value: "[]" }),
-          ),
-        ).resolves.toMatchObject({
-          body: { error: "value must be a JSON object string." },
-          status: 400,
         });
       },
     );

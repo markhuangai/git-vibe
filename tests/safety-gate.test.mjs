@@ -1,14 +1,30 @@
 // @ts-nocheck
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runAiSafetyGateForStage } from "../src/runner/safety-ai-gate.ts";
 import {
   blockedSafetyGateResult,
   safetyBlockedOutput,
   safetyGateSources,
 } from "../src/runner/safety-gate.ts";
+
+const originalEnv = { ...process.env };
+
+beforeEach(() => {
+  process.env = {
+    ...originalEnv,
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      GITVIBE_AI_API_KEY: "test-key",
+    }),
+  };
+});
+
+afterEach(() => {
+  process.env = { ...originalEnv };
+});
 
 describe("AI prompt-injection safety gate", () => {
   it("skips all input and output scanning when disabled", async () => {
@@ -186,7 +202,7 @@ describe("AI prompt-injection safety classifier tool isolation", () => {
 
     const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
     expect(gate).toMatchObject({ allowed: true, severity: "none" });
-    expect(constructorOptions.config).toEqual({});
+    expect(constructorOptions.config).toEqual({ model_provider: "openai" });
   });
 
   it("does not pass configured MCP tools to Claude classifier runs", async () => {
@@ -353,22 +369,15 @@ describe("AI prompt-injection safety classifier batch overlap", () => {
   });
 });
 
-describe("AI prompt-injection safety classifier Codex auth", () => {
-  it("passes GitHub writeback through safety classifier runs", async () => {
-    const previousBundle = process.env.GITVIBE_AI_ENV_JSON;
-    const previousCodexHome = process.env.CODEX_HOME;
-    const previousRunnerTemp = process.env.RUNNER_TEMP;
+describe("AI prompt-injection safety classifier Codex proxy auth", () => {
+  it("passes proxy auth through safety classifier runs with isolated Codex state", async () => {
     const runnerTemp = mkdtempSync(join(tmpdir(), "git-vibe-safety-codex-home-"));
     process.env.CODEX_HOME = join(runnerTemp, "persistent-codex-home");
-    process.env.RUNNER_TEMP = runnerTemp;
     process.env.GITVIBE_AI_ENV_JSON = JSON.stringify({
-      CODEX_AUTH_JSON: codexAuthJson("old"),
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      GITVIBE_AI_API_KEY: "test-key",
     });
-    let writebackValue;
     globalThis.__gitVibeSdkMocks.codexRun.mockImplementationOnce(async (_input, turnOptions) => {
-      const codexHome =
-        globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0].env.CODEX_HOME;
-      writeFileSync(join(codexHome, "auth.json"), codexAuthJson("refreshed"));
       const output = {
         findings: [],
         severity: "none",
@@ -385,32 +394,22 @@ describe("AI prompt-injection safety classifier Codex auth", () => {
 
     try {
       const gate = await runAiSafetyGateForStage({
-        config: configWithCodexAuth(),
+        config: config(),
         context: context({ comment: "ordinary issue body" }),
-        github: {
-          authWriteback: async (value) => {
-            writebackValue = value;
-          },
-          client: { request: async () => ({}) },
-          repository: "example/repo",
-          token: "token",
-        },
         phase: "input",
         runner: runner("investigate"),
       });
 
       expect(gate).toMatchObject({ allowed: true, severity: "none" });
-      expect(JSON.parse(writebackValue).CODEX_AUTH_JSON).toBe(codexAuthJson("refreshed"));
-      expect(globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0].env.CODEX_HOME).toBe(
-        join(runnerTemp, "git-vibe", "codex-home"),
-      );
+      const constructorOptions = globalThis.__gitVibeSdkMocks.codexConstructor.mock.calls[0][0];
+      expect(constructorOptions).toMatchObject({
+        apiKey: "test-key",
+        baseUrl: "https://codex-proxy.example/v1",
+      });
+      expect(constructorOptions.env.CODEX_HOME).not.toBe(process.env.CODEX_HOME);
+      expect(constructorOptions.env.GITVIBE_AI_ENV_JSON).toBeUndefined();
+      expect(existsSync(constructorOptions.env.CODEX_HOME)).toBe(false);
     } finally {
-      if (previousBundle === undefined) delete process.env.GITVIBE_AI_ENV_JSON;
-      else process.env.GITVIBE_AI_ENV_JSON = previousBundle;
-      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
-      else process.env.CODEX_HOME = previousCodexHome;
-      if (previousRunnerTemp === undefined) delete process.env.RUNNER_TEMP;
-      else process.env.RUNNER_TEMP = previousRunnerTemp;
       rmSync(runnerTemp, { force: true, recursive: true });
     }
   });
@@ -502,7 +501,9 @@ function config() {
     ai: {
       profiles: {
         test: {
+          api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
           adapter: "codex-sdk",
+          base_url: { from_bundle: "CODEX_BASE_URL" },
           model: "gpt-5-test",
         },
       },
@@ -522,16 +523,12 @@ function config() {
 function configWithSafetyProfile() {
   const result = config();
   result.ai.profiles.safety = {
+    api_key: { from_bundle: "GITVIBE_AI_API_KEY" },
     adapter: "codex-sdk",
+    base_url: { from_bundle: "CODEX_BASE_URL" },
     model: "gpt-5-safety",
   };
   result.ai.stages.investigate.profile = "test";
-  return result;
-}
-
-function configWithCodexAuth() {
-  const result = config();
-  result.ai.profiles.test.auth_json = { from_bundle: "CODEX_AUTH_JSON" };
   return result;
 }
 
@@ -572,17 +569,6 @@ function mcpStageConfig() {
       tools: ["search_memory"],
     },
   };
-}
-
-function codexAuthJson(value) {
-  return JSON.stringify({
-    auth_mode: "chatgpt",
-    tokens: {
-      access_token: `access-${value}`,
-      id_token: "abcd.efgh.ijkl",
-      refresh_token: `refresh-${value}`,
-    },
-  });
 }
 
 function queueAllowedSafetyOutput() {

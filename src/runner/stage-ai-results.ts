@@ -112,7 +112,6 @@ async function runMatrixFinalizerResult({
     config,
     context,
     extraSources: finalizerSafetySources,
-    github: aiRunOptions.github,
     includeContext: !acceptedRisk,
     logger,
     phase: "input",

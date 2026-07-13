@@ -11,11 +11,11 @@ import {
   RemoteGitHubActionsOidcVerifier,
   type GitHubActionsOidcVerifier,
 } from "./actions-token.js";
-import { writeBackActionsCodexAuth } from "./actions-codex-auth.js";
 import {
   GitHubAppInstallationTokenProvider,
   type InstallationTokenProvider,
 } from "./github-app-auth.js";
+import { writeBackActionsCodexAuth } from "./actions-codex-auth.js";
 import { gitVibeLabels, isGitVibeRuntimeLabel, isInternalGitVibeLabel } from "../shared/labels.js";
 import { defaultActionsOidcAudience } from "../shared/hosted-app.js";
 import {

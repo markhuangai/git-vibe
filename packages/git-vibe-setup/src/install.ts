@@ -399,8 +399,10 @@ function migrateLegacyAiProfile(profile: YAMLMap<unknown, unknown>): boolean {
   }
   if (adapter === "cli-codex") {
     profile.set("adapter", "codex-sdk");
+    migrateCodexProxyProfile(profile);
     return true;
   }
+  if (adapter === "codex-sdk") return migrateCodexProxyProfile(profile);
   return false;
 }
 
@@ -452,6 +454,30 @@ function ensureClaudeModel(profile: YAMLMap<unknown, unknown>): void {
   setIfMissing(profile, "model", "opus");
 }
 
+function migrateCodexProxyProfile(profile: YAMLMap<unknown, unknown>): boolean {
+  let changed = false;
+  if (profile.has("auth_json")) {
+    profile.delete("auth_json");
+    changed = true;
+  }
+  if (!profile.has("api_key")) {
+    profile.set("api_key", bundleSource("GITVIBE_AI_API_KEY"));
+    changed = true;
+  }
+  if (!profile.has("base_url")) {
+    profile.set("base_url", bundleSource("CODEX_BASE_URL"));
+    changed = true;
+  }
+  if (changed) orderProfileKeys(profile);
+  return changed;
+}
+
+function bundleSource(key: string): YAMLMap<unknown, unknown> {
+  const source = new YAMLMap();
+  source.set("from_bundle", key);
+  return source;
+}
+
 function ensureMap(parent: YAMLMap<unknown, unknown>, key: string): YAMLMap<unknown, unknown> {
   const value = parent.get(key, true);
   if (isMap(value)) return value;
@@ -493,10 +519,12 @@ function stringNodeValue(value: unknown): string | undefined {
 function orderProfileKeys(profile: YAMLMap<unknown, unknown>): void {
   const priorities = new Map([
     ["adapter", 0],
-    ["env", 1],
-    ["model", 2],
-    ["reasoning", 3],
-    ["provider_options", 4],
+    ["api_key", 1],
+    ["base_url", 2],
+    ["env", 3],
+    ["model", 4],
+    ["reasoning", 5],
+    ["provider_options", 6],
   ]);
   profile.items.sort((left, right) => {
     return profileKeyPriority(left, priorities) - profileKeyPriority(right, priorities);

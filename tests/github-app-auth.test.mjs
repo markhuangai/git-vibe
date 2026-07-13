@@ -255,6 +255,7 @@ describe("GitHub App permission profiles", () => {
   it("recognizes server and runner permission profile names", () => {
     expect(isGitHubAppPermissionProfile("server-checks-read")).toBe(true);
     expect(isGitHubAppPermissionProfile("runner-read")).toBe(true);
+    expect(isGitHubAppPermissionProfile("server-secrets-write")).toBe(true);
     expect(isGitHubAppPermissionProfile("owner")).toBe(false);
   });
 });
@@ -272,7 +273,7 @@ describe("GitHub Actions hosted auth job mapping", () => {
     expect(profile("review.yml", "review / security")).toBeUndefined();
   });
 
-  it("allows Codex auth writeback only for AI execution jobs", () => {
+  it("allows legacy Codex auth writeback only for AI execution jobs", () => {
     expect(canWriteback("validate.yml", "validate / validate")).toBe(true);
     expect(canWriteback("review.yml", "review / review-matrix")).toBe(true);
     expect(canWriteback("review.yml", "review / git-vibe-review-member-1 / security")).toBe(true);
