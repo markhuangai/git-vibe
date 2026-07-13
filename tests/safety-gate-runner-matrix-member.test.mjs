@@ -14,7 +14,10 @@ const originalEnv = { ...process.env };
 beforeEach(() => {
   process.env = {
     ...originalEnv,
-    GITVIBE_AI_ENV_JSON: JSON.stringify({ GITVIBE_AI_API_KEY: "test-key" }),
+    GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
+      GITVIBE_AI_API_KEY: "test-key",
+    }),
   };
 });
 

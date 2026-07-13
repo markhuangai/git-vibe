@@ -1,11 +1,10 @@
 // @ts-nocheck
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  githubAppCodexAuthWriteback,
   githubAppToken,
   runnerPermissionProfileForStage,
 } from "../src/runner/actions/github-app-token.ts";
-import { defaultActionsCodexAuthUrl, defaultActionsTokenUrl } from "../src/shared/hosted-app.ts";
+import { defaultActionsTokenUrl } from "../src/shared/hosted-app.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -135,54 +134,6 @@ describe("GitHub App token action hosted exchange", () => {
   });
 });
 
-describe("GitHub App token action Codex auth writeback", () => {
-  it("posts refreshed Codex auth bundles to the hosted writeback endpoint", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
-      .mockResolvedValueOnce(jsonResponse({ updated: true }));
-
-    await expect(
-      githubAppCodexAuthWriteback(JSON.stringify({ CODEX_AUTH_JSON: "{}" }), {
-        env: {
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request-token",
-          ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.test/id",
-          GITVIBE_ACTIONS_CODEX_AUTH_URL: "https://git-vibe.example/actions/codex-auth",
-        },
-        fetch: fetchImpl,
-      }),
-    ).resolves.toBeUndefined();
-
-    expect(String(fetchImpl.mock.calls[0][0])).toBe(
-      `https://token.actions.test/id?audience=${encodeURIComponent(defaultActionsTokenUrl)}`,
-    );
-    expect(fetchImpl.mock.calls[1]).toMatchObject([
-      "https://git-vibe.example/actions/codex-auth",
-      {
-        body: JSON.stringify({
-          oidcToken: "oidc-token",
-          value: JSON.stringify({ CODEX_AUTH_JSON: "{}" }),
-        }),
-        method: "POST",
-      },
-    ]);
-  });
-
-  it("uses the hosted Codex auth writeback URL by default", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
-      .mockResolvedValueOnce(jsonResponse({ updated: true }));
-
-    await githubAppCodexAuthWriteback("{}", {
-      env: tokenRequestEnv(),
-      fetch: fetchImpl,
-    });
-
-    expect(fetchImpl.mock.calls[1][0]).toBe(defaultActionsCodexAuthUrl);
-  });
-});
-
 describe("GitHub App token action response validation", () => {
   it("surfaces invalid OIDC and GitVibe token endpoint responses", async () => {
     await expect(
@@ -219,16 +170,6 @@ describe("GitHub App token action response validation", () => {
         permissionProfile: "runner-status-write",
       }),
     ).rejects.toThrow("GitHub Actions OIDC token response must be a JSON object");
-
-    await expect(
-      githubAppCodexAuthWriteback("{}", {
-        env: tokenRequestEnv(),
-        fetch: vi
-          .fn()
-          .mockResolvedValueOnce(jsonResponse({ value: "oidc-token" }))
-          .mockResolvedValueOnce(textResponse("", 200)),
-      }),
-    ).rejects.toThrow("GitVibe actions Codex auth response was missing updated=true");
   });
 
   it("fails hosted auth HTTP calls with a clear timeout error", async () => {

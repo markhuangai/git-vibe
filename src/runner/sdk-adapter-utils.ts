@@ -73,14 +73,6 @@ export function bundleValueFromSource(
   return bundleValue(source, sourcePath, bundle);
 }
 
-export function bundleKeyFromSource(source: unknown, sourcePath: string): string | undefined {
-  if (source === undefined) return undefined;
-  if (!isRecord(source)) throw new Error(`${sourcePath} must be an object with from_bundle.`);
-  const key = stringValue(source.from_bundle);
-  if (!key) throw new Error(`${sourcePath}.from_bundle must be a non-empty string.`);
-  return key;
-}
-
 export function optionalAiEnvBundleSecretValues(
   baseEnv: NodeJS.ProcessEnv = process.env,
 ): string[] {

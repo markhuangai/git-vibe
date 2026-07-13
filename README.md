@@ -197,7 +197,7 @@ Store AI provider values in `GITVIBE_AI_ENV_JSON`:
 ```json
 {
   "ANTHROPIC_BASE_URL": "https://api.provider.example/anthropic",
-  "CODEX_AUTH_JSON": "{\"tokens\":[]}",
+  "CODEX_BASE_URL": "https://codex-proxy.example/v1",
   "GITVIBE_AI_API_KEY": "..."
 }
 ```
@@ -212,11 +212,9 @@ Store MCP credentials separately in `GITVIBE_MCP_ENV_JSON` when stages use
 }
 ```
 
-Prepare Codex auth JSON as a compact string before adding it to the bundle:
-
-```bash
-jq -Rs . < ~/.codex/auth.json
-```
+Codex profiles require `base_url` and `api_key` fields in `.github/git-vibe.yml`.
+GitVibe passes those values to the Codex SDK directly; it does not read or
+write `~/.codex/auth.json`.
 
 Hosted GitVibe uses the installed GitHub App for GitHub writes. Customers do not
 create a repo-level webhook or `GITVIBE_GITHUB_TOKEN` secret.
@@ -298,7 +296,6 @@ Contents: Read and write
 Discussions: Read and write
 Issues: Read and write
 Pull requests: Read and write
-Secrets: Read and write
 Variables: Read-only
 Workflows: Read and write
 ```
@@ -367,8 +364,10 @@ ai:
   profiles:
     codex_sdk:
       adapter: codex-sdk
-      auth_json:
-        from_bundle: CODEX_AUTH_JSON
+      api_key:
+        from_bundle: GITVIBE_AI_API_KEY
+      base_url:
+        from_bundle: CODEX_BASE_URL
       model: gpt-5.5
       reasoning:
         effort: high

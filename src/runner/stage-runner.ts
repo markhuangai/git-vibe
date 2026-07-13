@@ -395,12 +395,6 @@ function buildAiRunOptions(options: {
     config: options.config,
     contextFilesRoot: options.contextFiles.root_dir,
     cwd: options.options.cwd,
-    github: {
-      authWriteback: options.options.githubAuthWriteback,
-      client: options.client,
-      repository: options.options.repository,
-      token: options.options.token,
-    },
     logger: options.logger,
     maxTurns: options.options.maxTurns,
     profileName: options.options.profileName,

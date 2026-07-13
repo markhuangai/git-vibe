@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { Codex } from "@openai/codex-sdk";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
@@ -10,7 +10,7 @@ import { parse } from "yaml";
 /**
  * @typedef {Record<string, string | undefined>} Env
  * @typedef {{ error(message: string): void, log(message: string): void }} Logger
- * @typedef {{ authJson?: string, codexHome?: string, env: NodeJS.ProcessEnv, model: string, profileName: string, reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh", secrets: string[] }} CodexSmokeConfig
+ * @typedef {{ apiKey: string, baseUrl: string, env: NodeJS.ProcessEnv, model: string, profileName: string, reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh", secrets: string[] }} CodexSmokeConfig
  * @typedef {{ ok: boolean, source: "codex" }} CodexSmokeOutput
  * @typedef {{ Codex: typeof Codex }} CodexSmokeDependencies
  */
@@ -62,27 +62,35 @@ export async function main({
  */
 export async function runCodexSmokeTest({ cwd, dependencies = defaultDependencies, env }) {
   const config = readCodexSmokeConfig({ cwd, env });
-  const codex = new dependencies.Codex({
-    ...(env.GITVIBE_CODEX_PATH ? { codexPathOverride: env.GITVIBE_CODEX_PATH } : {}),
-    env: stringEnv(config.env),
-  });
-  const thread = codex.startThread({
-    approvalPolicy: "never",
-    model: config.model,
-    modelReasoningEffort: config.reasoningEffort,
-    sandboxMode: "danger-full-access",
-    skipGitRepoCheck: true,
-    workingDirectory: cwd,
-  });
-  const result = await thread.run(
-    'Return exactly this JSON object: {"ok": true, "source": "codex"}. Do not modify files.',
-    { outputSchema },
-  );
-  const output = codexOutput(result.finalResponse, config.secrets);
-  if (output.ok !== true || output.source !== "codex") {
-    throw new Error(
-      `unexpected Codex SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
+  const codexHome = mkdtempSync(join(tmpdir(), "git-vibe-codex-smoke-home-"));
+  try {
+    const codex = new dependencies.Codex({
+      ...(env.GITVIBE_CODEX_PATH ? { codexPathOverride: env.GITVIBE_CODEX_PATH } : {}),
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+      config: { model_provider: "openai" },
+      env: stringEnv({ ...config.env, CODEX_HOME: codexHome }),
+    });
+    const thread = codex.startThread({
+      approvalPolicy: "never",
+      model: config.model,
+      modelReasoningEffort: config.reasoningEffort,
+      sandboxMode: "danger-full-access",
+      skipGitRepoCheck: true,
+      workingDirectory: cwd,
+    });
+    const result = await thread.run(
+      'Return exactly this JSON object: {"ok": true, "source": "codex"}. Do not modify files.',
+      { outputSchema },
     );
+    const output = codexOutput(result.finalResponse, config.secrets);
+    if (output.ok !== true || output.source !== "codex") {
+      throw new Error(
+        `unexpected Codex SDK smoke response: ${redact(JSON.stringify(output), config.secrets)}`,
+      );
+    }
+  } finally {
+    rmSync(codexHome, { force: true, recursive: true });
   }
   return { model: config.model, profileName: config.profileName };
 }
@@ -103,30 +111,22 @@ export function readCodexSmokeConfig({ cwd, env }) {
       throw new Error(`ai.profiles.${profileName}.env keys must be non-empty strings.`);
     childEnv[target] = envValue(source, bundle, `ai.profiles.${profileName}.env.${target}`);
   }
-  const codexHome = installedCodexHome(env);
-  if (codexHome) childEnv.CODEX_HOME = codexHome;
-  else delete childEnv.CODEX_HOME;
-  const authJson = optionalBundleValue(
-    profile.auth_json,
-    bundle,
-    `ai.profiles.${profileName}.auth_json`,
-  );
+  delete childEnv.CODEX_HOME;
   const model = stringValue(profile.model);
   if (!model) throw new Error(`AI profile ${profileName} model must be configured.`);
   const effort = stringValue(recordValueOrEmpty(profile.reasoning).effort);
   const reasoningEffort = codexReasoningEffort(effort);
-  if (authJson !== undefined) {
-    if (!authJson.trim()) {
-      throw new Error(`ai.profiles.${profileName}.auth_json must resolve to a non-empty string.`);
-    }
-  }
-  if (authJson !== undefined) {
-    writeCodexAuth(childEnv, authJson);
-  }
+  const baseUrl = requiredBundleValue(
+    profile.base_url,
+    bundle,
+    `ai.profiles.${profileName}.base_url`,
+  );
+  validateHttpBaseUrl(baseUrl, `ai.profiles.${profileName}.base_url`);
+  const apiKey = requiredBundleValue(profile.api_key, bundle, `ai.profiles.${profileName}.api_key`);
 
   return {
-    authJson,
-    codexHome,
+    apiKey,
+    baseUrl,
     env: childEnv,
     model,
     profileName,
@@ -148,29 +148,33 @@ function codexReasoningEffort(effort) {
 }
 
 /**
- * @param {NodeJS.ProcessEnv} env
- * @param {string} authJson
+ * @param {unknown} source
+ * @param {Record<string, string>} bundle
+ * @param {string} path
+ * @returns {string}
  */
-function writeCodexAuth(env, authJson) {
-  const codexHome = env.CODEX_HOME;
-  if (!codexHome) throw new Error("Codex auth_json requires an installed Codex home.");
-  env.CODEX_HOME = codexHome;
-  mkdirSync(codexHome, { recursive: true });
-  const authPath = join(codexHome, "auth.json");
-  writeFileSync(authPath, authJson, { mode: 0o600 });
-  chmodSync(authPath, 0o600);
+function requiredBundleValue(source, bundle, path) {
+  if (source === undefined) throw new Error(`${path} is required for codex-sdk profiles.`);
+  const value = envValue(source, bundle, path);
+  const trimmed = stringValue(value);
+  if (!trimmed) throw new Error(`${path}.from_bundle resolved to an empty value.`);
+  return trimmed.trim();
 }
 
 /**
- * @param {Env} env
- * @returns {string | undefined}
+ * @param {string} value
+ * @param {string} path
  */
-function installedCodexHome(env) {
-  const configured = stringValue(env.CODEX_HOME);
-  if (configured) return configured;
-  const home = stringValue(env.HOME) || homedir();
-  if (!home) return undefined;
-  return join(home, ".codex");
+function validateHttpBaseUrl(value, path) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${path}.from_bundle must resolve to an absolute HTTP(S) URL.`);
+  }
+  if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
+    throw new Error(`${path}.from_bundle must resolve to an absolute HTTP(S) URL.`);
+  }
 }
 
 /**
@@ -245,17 +249,6 @@ function recordValueOrEmpty(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? /** @type {Record<string, unknown>} */ (value)
     : {};
-}
-
-/**
- * @param {unknown} source
- * @param {Record<string, string>} bundle
- * @param {string} path
- * @returns {string | undefined}
- */
-function optionalBundleValue(source, bundle, path) {
-  if (source === undefined) return undefined;
-  return envValue(source, bundle, path);
 }
 
 /**

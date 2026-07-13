@@ -41,7 +41,6 @@
     "@openai/codex-sdk": "^0.141.0",
     "ajv": "^8.20.0",
     "jose": "^6.2.3",
-    "libsodium-wrappers": "^0.8.4",
     "yaml": "^2.8.4",
     "zod": "^4.4.3"
   },

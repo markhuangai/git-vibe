@@ -18,6 +18,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     GITVIBE_AI_ENV_JSON: JSON.stringify({
+      CODEX_BASE_URL: "https://codex-proxy.example/v1",
       GITVIBE_AI_API_KEY: "test-key",
     }),
     RUNNER_TEMP: mkdtempSync(join(tmpdir(), "git-vibe-runner-")),
@@ -538,7 +539,14 @@ function roleGroupConfigWithContext(stage = "review-matrix") {
 }
 
 function profileYaml() {
-  return ["      adapter: codex-sdk", "      model: test-model"].join("\n");
+  return [
+    "      adapter: codex-sdk",
+    "      api_key:",
+    "        from_bundle: GITVIBE_AI_API_KEY",
+    "      base_url:",
+    "        from_bundle: CODEX_BASE_URL",
+    "      model: test-model",
+  ].join("\n");
 }
 
 function profileYamlWithContext() {

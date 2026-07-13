@@ -30,7 +30,6 @@ export interface RunnerOptions {
   dryRun: boolean;
   executionMode?: "finalizer" | "member" | "standard";
   failOnNotReady?: boolean;
-  githubAuthWriteback?: (value: string) => Promise<void>;
   handoffDir?: string;
   issueNumber: string;
   memberResultsDir?: string;
@@ -82,6 +81,7 @@ export interface StageHandoff {
   parsedOutput: JsonObject;
   schemaId: string;
   source?: {
+    author?: string;
     bodySha?: string;
     databaseId?: number | string;
     id?: string;

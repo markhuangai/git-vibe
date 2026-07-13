@@ -29,6 +29,16 @@ ai:
     review_timeout_minutes: 60
     default_max_turns: 200
   profiles:
+    codex_5.6_max:
+      adapter: codex-sdk
+      api_key:
+        from_bundle: GITVIBE_AI_API_KEY
+      base_url:
+        from_bundle: GITVIBE_AI_BASE_URL
+      model: gpt-5.6
+      reasoning:
+        effort: xhigh
+        summary: concise
     claude_code:
       adapter: claude-code-sdk
       context:

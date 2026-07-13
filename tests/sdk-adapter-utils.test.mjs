@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  bundleKeyFromSource,
   bundleValueFromMcpSource,
   bundleValueFromSource,
   optionalAiEnvBundleSecretValues,
@@ -30,7 +29,7 @@ describe("SDK profile environment bundle", () => {
       "ai.profiles.claude_minimax",
       {
         CLAUDE_CODE_OAUTH_TOKEN: "old-claude-token",
-        CODEX_AUTH_JSON: "old-codex-auth",
+        CODEX_API_KEY: "old-codex-key",
         GITVIBE_GITHUB_APP_TOKEN: "repo-token",
         GITVIBE_AI_API_KEY: "old-ai-key",
         GITVIBE_AI_BASE_URL: "https://old-ai.test/v1",
@@ -50,7 +49,7 @@ describe("SDK profile environment bundle", () => {
       PATH: "/bin",
     });
     expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
-    expect(env.CODEX_AUTH_JSON).toBeUndefined();
+    expect(env.CODEX_API_KEY).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     expect(env.GITVIBE_GITHUB_APP_TOKEN).toBeUndefined();
     expect(env.GITVIBE_AI_API_KEY).toBeUndefined();
@@ -61,7 +60,7 @@ describe("SDK profile environment bundle", () => {
   it("removes bundled and legacy secrets when a profile has no env mapping", () => {
     const env = sdkProfileEnv({ model: "gpt-5" }, "ai.profiles.no_env", {
       CLAUDE_CODE_OAUTH_TOKEN: "old-claude-token",
-      CODEX_AUTH_JSON: "old-codex-auth",
+      CODEX_API_KEY: "old-codex-key",
       GITVIBE_AI_API_KEY: "old-ai-key",
       GITVIBE_AI_BASE_URL: "https://old-ai.test/v1",
       GITVIBE_AI_ENV_JSON: JSON.stringify({ UNUSED_KEY: "unused" }),
@@ -70,7 +69,7 @@ describe("SDK profile environment bundle", () => {
 
     expect(env.PATH).toBe("/bin");
     expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
-    expect(env.CODEX_AUTH_JSON).toBeUndefined();
+    expect(env.CODEX_API_KEY).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     expect(env.GITVIBE_AI_API_KEY).toBeUndefined();
     expect(env.GITVIBE_AI_BASE_URL).toBeUndefined();
@@ -96,13 +95,13 @@ describe("SDK profile environment bundle", () => {
 });
 
 describe("SDK profile environment bundle values", () => {
-  it("resolves Codex auth JSON from the bundle", () => {
+  it("resolves profile fields from the AI env bundle", () => {
     expect(
-      bundleValueFromSource({ from_bundle: "CODEX_AUTH_JSON" }, "ai.profiles.codex.auth_json", {
-        GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_AUTH_JSON: '{"tokens":[]}' }),
+      bundleValueFromSource({ from_bundle: "CODEX_BASE_URL" }, "ai.profiles.codex.base_url", {
+        GITVIBE_AI_ENV_JSON: JSON.stringify({ CODEX_BASE_URL: "https://codex.example/v1" }),
       }),
-    ).toBe('{"tokens":[]}');
-    expect(bundleValueFromSource(undefined, "ai.profiles.codex.auth_json", {})).toBeUndefined();
+    ).toBe("https://codex.example/v1");
+    expect(bundleValueFromSource(undefined, "ai.profiles.codex.base_url", {})).toBeUndefined();
   });
 
   it("allows literal-only profile env without an AI env bundle", () => {
@@ -123,13 +122,6 @@ describe("SDK profile environment bundle values", () => {
       PATH: "/bin",
     });
     expect(env.GITVIBE_AI_ENV_JSON).toBeUndefined();
-  });
-
-  it("resolves Codex auth bundle keys without reading the bundle", () => {
-    expect(bundleKeyFromSource(undefined, "ai.profiles.codex.auth_json")).toBeUndefined();
-    expect(
-      bundleKeyFromSource({ from_bundle: "CODEX_AUTH_JSON" }, "ai.profiles.codex.auth_json"),
-    ).toBe("CODEX_AUTH_JSON");
   });
 
   it("resolves MCP env bundle sources from GITVIBE_MCP_ENV_JSON", () => {
@@ -217,15 +209,6 @@ describe("SDK profile environment bundle validation", () => {
         GITVIBE_AI_ENV_JSON: JSON.stringify({ KEY: "value" }),
       }),
     ).toThrow("ai.profiles.bad.env.TARGET must be an object with from_bundle.");
-  });
-
-  it("rejects invalid Codex auth bundle key sources", () => {
-    expect(() => bundleKeyFromSource([], "ai.profiles.codex.auth_json")).toThrow(
-      "ai.profiles.codex.auth_json must be an object with from_bundle.",
-    );
-    expect(() => bundleKeyFromSource({}, "ai.profiles.codex.auth_json")).toThrow(
-      "ai.profiles.codex.auth_json.from_bundle must be a non-empty string.",
-    );
   });
 });
 
