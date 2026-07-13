@@ -296,7 +296,6 @@ Contents: Read and write
 Discussions: Read and write
 Issues: Read and write
 Pull requests: Read and write
-Secrets: Read and write
 Variables: Read-only
 Workflows: Read and write
 ```

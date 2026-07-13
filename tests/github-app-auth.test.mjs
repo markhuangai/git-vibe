@@ -2,7 +2,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
-  canWriteBackCodexAuthForGitHubActionsJob,
   GitHubAppInstallationTokenProvider,
   isGitHubAppPermissionProfile,
   permissionsForProfile,
@@ -229,7 +228,6 @@ describe("GitHub App permission profiles", () => {
       pull_requests: "write",
     });
     expect(permissionsForProfile("server-checks-read")).toEqual({ checks: "read" });
-    expect(permissionsForProfile("server-secrets-write")).toEqual({ secrets: "write" });
     expect(permissionsForProfile("runner-read")).toEqual({
       contents: "read",
       discussions: "read",
@@ -255,7 +253,7 @@ describe("GitHub App permission profiles", () => {
   it("recognizes server and runner permission profile names", () => {
     expect(isGitHubAppPermissionProfile("server-checks-read")).toBe(true);
     expect(isGitHubAppPermissionProfile("runner-read")).toBe(true);
-    expect(isGitHubAppPermissionProfile("server-secrets-write")).toBe(true);
+    expect(isGitHubAppPermissionProfile("server-secrets-write")).toBe(false);
     expect(isGitHubAppPermissionProfile("owner")).toBe(false);
   });
 });
@@ -272,15 +270,6 @@ describe("GitHub Actions hosted auth job mapping", () => {
     expect(profile("review.yml", "git-vibe-review-member-1 / security")).toBe("runner-read");
     expect(profile("review.yml", "review / security")).toBeUndefined();
   });
-
-  it("allows legacy Codex auth writeback only for AI execution jobs", () => {
-    expect(canWriteback("validate.yml", "validate / validate")).toBe(true);
-    expect(canWriteback("review.yml", "review / review-matrix")).toBe(true);
-    expect(canWriteback("review.yml", "review / git-vibe-review-member-1 / security")).toBe(true);
-    expect(canWriteback("review.yml", "git-vibe-review-member-1 / security")).toBe(true);
-    expect(canWriteback("validate.yml", "validate / security-review")).toBe(false);
-    expect(canWriteback("review.yml", "review / plan-review-matrix")).toBe(false);
-  });
 });
 
 function testPrivateKey(type = "pkcs8") {
@@ -290,13 +279,6 @@ function testPrivateKey(type = "pkcs8") {
 
 function profile(workflowFile, checkRunName) {
   return runnerPermissionProfileForGitHubActionsJob({
-    checkRunName,
-    jobWorkflowRef: `markhuangai/git-vibe/.github/workflows/${workflowFile}@v3`,
-  });
-}
-
-function canWriteback(workflowFile, checkRunName) {
-  return canWriteBackCodexAuthForGitHubActionsJob({
     checkRunName,
     jobWorkflowRef: `markhuangai/git-vibe/.github/workflows/${workflowFile}@v3`,
   });
