@@ -36863,23 +36863,33 @@ function packedFileBackedContextForPrompt(context, fileContext) {
   return {
     artifact: packedArtifact(context),
     context_files: {
-      full_context: fileContext.full_context,
+      index: fileContext.index,
       manifest: fileContext.manifest,
-      root_dir: fileContext.root_dir,
       units_dir: fileContext.units_dir
     },
     context_manifest: {
       delivery: "file-backed",
+      handoffs: context.handoffs?.length || 0,
+      index_format: "git-vibe.context-index.v1",
+      pull_request_additions: sumPullRequestFileField(context, "additions"),
+      pull_request_deletions: sumPullRequestFileField(context, "deletions"),
+      pull_request_files: context.pullRequestFiles?.length || 0,
+      timeline_items: context.timeline.length,
       total_units: fileContext.units.length,
-      units: fileContext.units.map(fileBackedUnitManifest)
+      units_by_kind: countUnitsByKind(fileContext.units)
     },
     generatedAt: context.generatedAt,
-    handoffs: packedHandoffs(context),
-    pullRequestFiles: packedPullRequestFiles(context),
     repository: context.repository,
-    source: packedSource(context),
-    timeline: context.timeline.map(packedTimelineItem)
+    source: packedSource(context)
   };
+}
+function countUnitsByKind(units) {
+  const counts = {};
+  for (const unitItem of units) counts[unitItem.kind] = (counts[unitItem.kind] || 0) + 1;
+  return counts;
+}
+function sumPullRequestFileField(context, field) {
+  return (context.pullRequestFiles || []).reduce((total, file2) => total + (file2[field] || 0), 0);
 }
 function contextPromptCoverageForContext(context, options = {}) {
   const chunks = chunkContentUnits(contentUnitsForContext(context, options), options);
@@ -37076,23 +37086,6 @@ function unitManifest(unitItem, chunks, includedIds) {
     sourceUrl: unitItem.sourceUrl
   };
 }
-function fileBackedUnitManifest(unitItem) {
-  return {
-    chars: unitItem.chars,
-    file: {
-      chars: unitItem.chars,
-      path: unitItem.path,
-      relative_path: unitItem.relative_path,
-      sha256: unitItem.sha256
-    },
-    id: unitItem.id,
-    kind: unitItem.kind,
-    label: unitItem.label,
-    metadata: unitItem.metadata,
-    path: unitItem.path_in_repository,
-    sourceUrl: unitItem.sourceUrl
-  };
-}
 function packedChunk(chunk) {
   return {
     charEnd: chunk.charEnd,
@@ -37273,8 +37266,8 @@ function writePromptContextFiles(options) {
     path: join3(rootDir, "github-context.json"),
     rootDir
   });
-  const units = contentUnitsForContext(context).map((unit2, index) => {
-    const path3 = join3(unitsDir, unitFilename(unit2.id, index));
+  const units = contentUnitsForContext(context).map((unit2, index2) => {
+    const path3 = join3(unitsDir, unitFilename(unit2.id, index2));
     writeFileSync2(path3, unit2.text);
     return {
       chars: unit2.text.length,
@@ -37289,9 +37282,15 @@ function writePromptContextFiles(options) {
       sourceUrl: unit2.sourceUrl
     };
   });
+  const index = writeTextReference({
+    path: join3(rootDir, "index.jsonl"),
+    rootDir,
+    text: contextIndexText(units)
+  });
   const manifestContent = {
     full_context: fullContext,
     generatedAt: options.context.generatedAt,
+    index,
     repository: options.context.repository,
     total_units: units.length,
     units
@@ -37303,6 +37302,7 @@ function writePromptContextFiles(options) {
   });
   return {
     full_context: fullContext,
+    index,
     manifest,
     root_dir: rootDir,
     units,
@@ -37312,12 +37312,37 @@ function writePromptContextFiles(options) {
 function writeJsonReference(options) {
   const text = `${JSON.stringify(options.content, null, 2)}
 `;
-  writeFileSync2(options.path, text);
+  return writeTextReference({ ...options, text });
+}
+function writeTextReference(options) {
+  writeFileSync2(options.path, options.text);
   return {
-    chars: text.length,
+    chars: options.text.length,
     path: options.path,
     relative_path: relative2(options.rootDir, options.path),
-    sha256: sha2562(text)
+    sha256: sha2562(options.text)
+  };
+}
+function contextIndexText(units) {
+  if (units.length === 0) return "";
+  return `${units.map(contextIndexEntry).map((entry) => JSON.stringify(entry)).join("\n")}
+`;
+}
+function contextIndexEntry(unit2) {
+  const entry = {
+    chars: unit2.chars,
+    file: unit2.relative_path,
+    kind: unit2.kind
+  };
+  if (unit2.kind === "pull-request-file") {
+    return { ...entry, metadata: unit2.metadata, path: unit2.path_in_repository };
+  }
+  return {
+    ...entry,
+    id: unit2.id,
+    label: unit2.label,
+    ...unit2.metadata ? { metadata: unit2.metadata } : {},
+    ...unit2.sourceUrl ? { sourceUrl: unit2.sourceUrl } : {}
   };
 }
 function unitFilename(unitId, index) {
@@ -57209,6 +57234,7 @@ async function runClaudeCodeSdkStage({
     let messageCount = 0;
     for await (const message of VCe({
       options: {
+        ...options.contextFilesRoot ? { additionalDirectories: [options.contextFilesRoot] } : {},
         allowDangerouslySkipPermissions: true,
         allowedTools: mcpConfig.claudeAllowedTools,
         cwd: options.cwd,
@@ -57352,6 +57378,15 @@ function logClaudeSdkMessage(message, logger) {
       permission: message.permissionMode,
       tools: message.tools.length,
       version: message.claude_code_version
+    });
+    return;
+  }
+  if (message.type === "system" && message.subtype === "compact_boundary") {
+    logger?.event("ai.claude.compact", {
+      duration_ms: message.compact_metadata.duration_ms,
+      post_tokens: message.compact_metadata.post_tokens,
+      pre_tokens: message.compact_metadata.pre_tokens,
+      trigger: message.compact_metadata.trigger
     });
     return;
   }
@@ -61780,6 +61815,8 @@ function persistContext(options) {
   });
   options.logger.event("context.persisted", {
     file: `git-vibe-${options.options.stage}-context.json`,
+    index: contextFiles.index.path,
+    index_chars: contextFiles.index.chars,
     manifest: contextFiles.manifest.path,
     units: contextFiles.units.length
   });

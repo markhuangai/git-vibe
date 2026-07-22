@@ -148,7 +148,12 @@ describe("stage runner matrix member profile context", () => {
     expect(prompt).toContain("Focus on token boundaries.");
     expect(prompt).toContain('"context_files"');
     expect(prompt).toContain('"delivery": "file-backed"');
+    expect(prompt).toContain('"index_format": "git-vibe.context-index.v1"');
     expect(prompt).not.toContain('"included_context_chunks"');
+    expect(prompt).not.toContain('"pullRequestFiles"');
+    const indexPath = prompt.match(/"index": \{\n\s+"chars": \d+,\n\s+"path": "([^"]+)"/)?.[1];
+    expect(indexPath).toBeTruthy();
+    expect(readFileSync(indexPath, "utf8")).toContain('"id":"artifact-body"');
     const manifestPath = prompt.match(
       /"manifest": \{\n\s+"chars": \d+,\n\s+"path": "([^"]+)"/,
     )?.[1];

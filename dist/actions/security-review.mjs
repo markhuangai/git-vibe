@@ -52746,6 +52746,7 @@ async function runClaudeCodeSdkStage({
     let messageCount = 0;
     for await (const message of VCe({
       options: {
+        ...options.contextFilesRoot ? { additionalDirectories: [options.contextFilesRoot] } : {},
         allowDangerouslySkipPermissions: true,
         allowedTools: mcpConfig.claudeAllowedTools,
         cwd: options.cwd,
@@ -52889,6 +52890,15 @@ function logClaudeSdkMessage(message, logger) {
       permission: message.permissionMode,
       tools: message.tools.length,
       version: message.claude_code_version
+    });
+    return;
+  }
+  if (message.type === "system" && message.subtype === "compact_boundary") {
+    logger?.event("ai.claude.compact", {
+      duration_ms: message.compact_metadata.duration_ms,
+      post_tokens: message.compact_metadata.post_tokens,
+      pre_tokens: message.compact_metadata.pre_tokens,
+      trigger: message.compact_metadata.trigger
     });
     return;
   }

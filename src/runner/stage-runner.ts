@@ -375,6 +375,8 @@ function persistContext(options: {
   });
   options.logger.event("context.persisted", {
     file: `git-vibe-${options.options.stage}-context.json`,
+    index: contextFiles.index.path,
+    index_chars: contextFiles.index.chars,
     manifest: contextFiles.manifest.path,
     units: contextFiles.units.length,
   });
